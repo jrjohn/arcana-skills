@@ -25,13 +25,13 @@ All skills follow consistent enterprise architecture principles:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  Presentation Layer                  │
+│                  Presentation Layer                 │
 │              UI + MVVM + Navigation                 │
 ├─────────────────────────────────────────────────────┤
-│                    Domain Layer                      │
+│                    Domain Layer                     │
 │          Business Logic + Services + Models         │
 ├─────────────────────────────────────────────────────┤
-│                     Data Layer                       │
+│                     Data Layer                      │
 │         Offline-First Repository + Storage          │
 └─────────────────────────────────────────────────────┘
 ```
@@ -125,7 +125,7 @@ Each skill contains:
 | Android | Kotlin 1.9+ | Compose | Room | Hilt |
 | Angular | TypeScript 5.7+ | Angular 20+ | IndexedDB (Dexie) | Angular DI |
 | Spring Boot | Java 25+ | - | MySQL | Spring |
-| Python | Python 3.14+ | Flask | SQLAlchemy/MySQL | Manual |
+| Python | Python 3.14+ Flask| - | SQLAlchemy/MySQL | Manual |
 | Windows | C# 14+ | WinUI 3 | EF Core/SQLite | Microsoft.Extensions.DI |
 
 ## Related Projects
