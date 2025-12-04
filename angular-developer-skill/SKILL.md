@@ -34,6 +34,16 @@ Professional Angular development skill based on [Arcana Angular](https://github.
 
 When handling Angular development tasks, follow these principles:
 
+### 0. Reference Project Setup
+**IMPORTANT**: Before starting any Angular development task, clone the reference project from GitHub:
+```bash
+git clone https://github.com/jrjohn/arcana-angular.git
+```
+Use this reference project to:
+- Understand the architecture patterns and code structure
+- Copy and adapt code examples for the current task
+- Ensure consistency with enterprise architecture standards
+
 ### 1. Project Structure
 ```
 src/

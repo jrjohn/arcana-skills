@@ -38,6 +38,16 @@ Professional Python/Flask development skill based on [Arcana Cloud Python](https
 
 When handling Python/Flask development tasks, follow these principles:
 
+### 0. Reference Project Setup
+**IMPORTANT**: Before starting any Python/Flask development task, clone the reference project from GitHub:
+```bash
+git clone https://github.com/jrjohn/arcana-cloud-python.git
+```
+Use this reference project to:
+- Understand the architecture patterns and code structure
+- Copy and adapt code examples for the current task
+- Ensure consistency with enterprise architecture standards
+
 ### 1. Project Structure
 ```
 arcana-cloud-python/

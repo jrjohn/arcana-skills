@@ -34,6 +34,16 @@ Professional iOS development skill based on [Arcana iOS](https://github.com/jrjo
 
 When handling iOS development tasks, follow these principles:
 
+### 0. Reference Project Setup
+**IMPORTANT**: Before starting any iOS development task, clone the reference project from GitHub:
+```bash
+git clone https://github.com/jrjohn/arcana-ios.git
+```
+Use this reference project to:
+- Understand the architecture patterns and code structure
+- Copy and adapt code examples for the current task
+- Ensure consistency with enterprise architecture standards
+
 ### 1. Project Structure
 ```
 arcana-ios/

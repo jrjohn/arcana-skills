@@ -44,6 +44,16 @@ Professional Windows desktop development skill based on [Arcana Windows](https:/
 
 When handling Windows desktop development tasks, follow these principles:
 
+### 0. Reference Project Setup
+**IMPORTANT**: Before starting any Windows desktop development task, clone the reference project from GitHub:
+```bash
+git clone https://github.com/jrjohn/arcana-windows.git
+```
+Use this reference project to:
+- Understand the architecture patterns and code structure
+- Copy and adapt code examples for the current task
+- Ensure consistency with enterprise architecture standards
+
 ### 1. Project Structure
 ```
 arcana-windows/

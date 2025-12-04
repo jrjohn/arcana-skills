@@ -34,6 +34,16 @@ Professional Android development skill based on [Arcana Android](https://github.
 
 When handling Android development tasks, follow these principles:
 
+### 0. Reference Project Setup
+**IMPORTANT**: Before starting any Android development task, clone the reference project from GitHub:
+```bash
+git clone https://github.com/jrjohn/arcana-android.git
+```
+Use this reference project to:
+- Understand the architecture patterns and code structure
+- Copy and adapt code examples for the current task
+- Ensure consistency with enterprise architecture standards
+
 ### 1. Project Structure
 ```
 app/
