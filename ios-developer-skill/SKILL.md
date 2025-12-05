@@ -34,17 +34,252 @@ Professional iOS development skill based on [Arcana iOS](https://github.com/jrjo
 
 When handling iOS development tasks, follow these principles:
 
-### 0. Reference Project Setup
-**IMPORTANT**: Before starting any iOS development task, clone the reference project from GitHub:
-```bash
-git clone https://github.com/jrjohn/arcana-ios.git
-```
-Use this reference project to:
-- Understand the architecture patterns and code structure
-- Copy and adapt code examples for the current task
-- Ensure consistency with enterprise architecture standards
+### 0. Project Setup - CRITICAL
 
-### 1. Project Structure
+⚠️ **IMPORTANT**: This reference project has been validated with tested SPM settings and library versions. **NEVER reconfigure project structure or modify Package.swift / project settings**, or it will cause compilation errors.
+
+**Step 1**: Clone the reference project
+```bash
+git clone https://github.com/jrjohn/arcana-ios.git [new-project-directory]
+cd [new-project-directory]
+```
+
+**Step 2**: Reinitialize Git (remove original repo history)
+```bash
+rm -rf .git
+git init
+git add .
+git commit -m "Initial commit from arcana-ios template"
+```
+
+**Step 3**: Modify project name and Bundle ID
+Only modify the following required items:
+- Xcode project name (Rename Project)
+- Bundle Identifier in `Info.plist`
+- Rename main target and scheme
+- Update module name imports in code
+
+**Step 4**: Clean up example code
+The cloned project contains example UI (e.g., Arcana User Management). Clean up and replace with new project screens:
+
+**Core architecture files to KEEP** (do not delete):
+- `Core/` - Common utilities (Analytics, Common, Cache)
+- `Infrastructure/` - DI configuration, Security
+- `Data/Local/` - SwiftData base configuration
+- `Data/Repositories/` - Repository base classes
+- `AppEntry.swift` - App entry point
+- `Navigation/` - Navigation configuration (modify routes)
+
+**Example files to REPLACE**:
+- `Presentation/Views/` - Delete all example screens, create new project UI
+- `Presentation/ViewModels/` - Delete example ViewModel, create new ViewModel
+- `Domain/Models/` - Delete example Models, create new Domain Models
+- `Data/Local/Entities/` - Delete example Entity, create new Entity
+- `Data/Remote/` - Modify API endpoints
+
+**Step 5**: Verify build
+```bash
+xcodebuild -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone 15' build
+```
+
+### ❌ Prohibited Actions
+- **DO NOT** create new Xcode project from scratch
+- **DO NOT** modify version numbers in `Package.swift`
+- **DO NOT** add or remove SPM dependencies (unless explicitly required)
+- **DO NOT** modify Xcode project Build Settings
+- **DO NOT** reconfigure SwiftUI, SwiftData, Alamofire, or other library settings
+
+### ✅ Allowed Modifications
+- Add business-related Swift code (following existing architecture)
+- Add UI screens (using existing SwiftUI settings)
+- Add Domain Models, Repository, ViewModel
+- Modify resources in Assets.xcassets
+- Add navigation routes
+
+### 1. TDD & Spec-Driven Development Workflow - MANDATORY
+
+⚠️ **CRITICAL**: All development MUST follow this TDD workflow. Every Spec requirement must have corresponding tests BEFORE implementation.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TDD Development Workflow                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
+│  Step 2: Create Tests → Write tests for EACH Spec item          │
+│  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
+│  Step 4: Implement → Build features to pass tests               │
+│  Step 5: Mock APIs → Use mock data for unfinished Cloud APIs    │
+│  Step 6: Run All Tests → ALL tests must pass before completion  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Step 1: Analyze Spec Documents (SRS & SDD)
+Before writing any code, extract ALL requirements from both SRS and SDD:
+```swift
+/**
+ * Requirements extracted from specification documents:
+ *
+ * SRS (Software Requirements Specification):
+ * - SRS-001: User must be able to login with email/password
+ * - SRS-002: App must show splash screen for 2 seconds
+ * - SRS-003: Dashboard must display user's stars and coins
+ *
+ * SDD (Software Design Document):
+ * - SDD-001: Use SwiftData for local persistence
+ * - SDD-002: Implement MVVM Input/Output/Effect pattern
+ * - SDD-003: Store tokens in Keychain
+ */
+```
+
+#### Step 2: Create Test Cases for Each Spec Item
+```swift
+// Tests/ViewModels/LoginViewModelTests.swift
+import XCTest
+@testable import YourApp
+
+final class LoginViewModelTests: XCTestCase {
+
+    var viewModel: LoginViewModel!
+    var mockAuthRepository: MockAuthRepository!
+
+    override func setUp() {
+        super.setUp()
+        mockAuthRepository = MockAuthRepository()
+        viewModel = LoginViewModel(authRepository: mockAuthRepository)
+    }
+
+    // SRS-001: User must be able to login with email/password
+    func testLoginWithValidCredentials_ShouldSucceed() async {
+        // Given
+        mockAuthRepository.loginResult = .success(())
+
+        // When
+        viewModel.onInput(.updateEmail("test@test.com"))
+        viewModel.onInput(.updatePassword("password123"))
+        await viewModel.onInput(.submit)
+
+        // Then
+        XCTAssertTrue(viewModel.output.isLoginSuccess)
+        XCTAssertNil(viewModel.output.error)
+    }
+
+    // SRS-001: Invalid credentials should show error
+    func testLoginWithInvalidCredentials_ShouldShowError() async {
+        // Given
+        mockAuthRepository.loginResult = .failure(AuthError.invalidCredentials)
+
+        // When
+        await viewModel.onInput(.submit)
+
+        // Then
+        XCTAssertFalse(viewModel.output.isLoginSuccess)
+        XCTAssertNotNil(viewModel.output.error)
+    }
+}
+```
+
+#### Step 3: Spec Coverage Verification Checklist
+Before implementation, verify ALL SRS and SDD items have tests:
+```swift
+/**
+ * Spec Coverage Checklist - [Project Name]
+ *
+ * SRS Requirements:
+ * [x] SRS-001: Login with email/password - LoginViewModelTests
+ * [x] SRS-002: Splash screen display - SplashViewModelTests
+ * [x] SRS-003: Register new account - RegisterViewModelTests
+ * [x] SRS-010: Display user stars - DashboardViewModelTests
+ * [x] SRS-011: Display S-coins - DashboardViewModelTests
+ * [ ] SRS-020: List training items - TODO
+ *
+ * SDD Design Requirements:
+ * [x] SDD-001: SwiftData persistence - RepositoryTests
+ * [x] SDD-002: MVVM Input/Output/Effect pattern - ViewModelTests
+ * [x] SDD-003: Keychain token storage - KeychainServiceTests
+ * [ ] SDD-004: Offline-first sync - TODO
+ */
+```
+
+#### Step 4: Mock API Implementation
+For APIs not yet available from Cloud team, implement mock repositories:
+```swift
+// Data/Repositories/Mock/MockAuthRepository.swift
+final class MockAuthRepository: AuthRepositoryProtocol {
+
+    // Mock user data for testing
+    private static let mockUsers = [
+        MockUser(email: "test@test.com", password: "password123", name: "Test User"),
+        MockUser(email: "demo@demo.com", password: "demo123", name: "Demo User")
+    ]
+
+    // Injectable result for testing
+    var loginResult: Result<Void, Error> = .success(())
+
+    func login(email: String, password: String) async throws {
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+
+        if let user = Self.mockUsers.first(where: { $0.email == email && $0.password == password }) {
+            // Save mock token
+            UserDefaults.standard.set("mock_token_\(Date().timeIntervalSince1970)", forKey: "access_token")
+            UserDefaults.standard.set(user.name, forKey: "user_name")
+        } else {
+            throw AuthError.invalidCredentials
+        }
+    }
+
+    func isLoggedIn() -> Bool {
+        UserDefaults.standard.string(forKey: "access_token") != nil
+    }
+}
+
+// Infrastructure/DI/RepositoryContainer.swift - Switch between Mock and Real
+struct RepositoryContainer {
+    static func makeAuthRepository() -> AuthRepositoryProtocol {
+        #if DEBUG
+        return MockAuthRepository()  // Development/Testing
+        #else
+        return AuthRepository()      // Production
+        #endif
+    }
+}
+```
+
+#### Step 5: Run All Tests Before Completion
+```bash
+# Run all tests via command line
+xcodebuild test -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone 15'
+
+# Run tests with coverage
+xcodebuild test -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone 15' -enableCodeCoverage YES
+
+# Run specific test class
+xcodebuild test -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone 15' -only-testing:YourAppTests/LoginViewModelTests
+```
+
+#### Test Directory Structure
+```
+YourApp/
+├── Sources/                         # Production code
+├── Tests/
+│   ├── ViewModels/
+│   │   ├── LoginViewModelTests.swift
+│   │   ├── RegisterViewModelTests.swift
+│   │   ├── DashboardViewModelTests.swift
+│   │   └── SplashViewModelTests.swift
+│   ├── Services/
+│   │   └── UserServiceTests.swift
+│   ├── Repositories/
+│   │   └── AuthRepositoryTests.swift
+│   └── Mocks/
+│       ├── MockAuthRepository.swift
+│       └── MockUserService.swift
+└── UITests/
+    ├── LoginUITests.swift
+    └── DashboardUITests.swift
+```
+
+### 2. Project Structure
 ```
 arcana-ios/
 ├── Presentation/          # UI Layer

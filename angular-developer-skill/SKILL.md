@@ -34,17 +34,282 @@ Professional Angular development skill based on [Arcana Angular](https://github.
 
 When handling Angular development tasks, follow these principles:
 
-### 0. Reference Project Setup
-**IMPORTANT**: Before starting any Angular development task, clone the reference project from GitHub:
-```bash
-git clone https://github.com/jrjohn/arcana-angular.git
-```
-Use this reference project to:
-- Understand the architecture patterns and code structure
-- Copy and adapt code examples for the current task
-- Ensure consistency with enterprise architecture standards
+### 0. Project Setup - CRITICAL
 
-### 1. Project Structure
+⚠️ **IMPORTANT**: This reference project has been validated with tested npm/Angular settings and library versions. **NEVER reconfigure project structure or modify package.json / angular.json**, or it will cause compilation errors.
+
+**Step 1**: Clone the reference project
+```bash
+git clone https://github.com/jrjohn/arcana-angular.git [new-project-directory]
+cd [new-project-directory]
+```
+
+**Step 2**: Reinitialize Git (remove original repo history)
+```bash
+rm -rf .git
+git init
+git add .
+git commit -m "Initial commit from arcana-angular template"
+```
+
+**Step 3**: Modify project name
+Only modify the following required items:
+- `name` field in `package.json`
+- Project name in `angular.json`
+- `<title>` in `src/index.html`
+- Update related settings in environment configuration files
+
+**Step 4**: Clean up example code
+The cloned project contains example UI (e.g., Arcana User Management). Clean up and replace with new project screens:
+
+**Core architecture files to KEEP** (do not delete):
+- `src/app/core/` - Common utilities (Guards, Interceptors, Services)
+- `src/app/shared/` - Shared components and Pipes
+- `src/app/data/local/` - IndexedDB (Dexie) base configuration
+- `src/app/data/repositories/` - Repository base classes
+- `src/app/app.component.ts` - App entry point
+- `src/app/app.routes.ts` - Route configuration (modify routes)
+
+**Example files to REPLACE**:
+- `src/app/presentation/` - Delete all example screens, create new project Components
+- `src/app/domain/models/` - Delete example Models, create new Domain Models
+- `src/app/data/remote/` - Modify API endpoints
+- `src/assets/` - Update resource files
+
+**Step 5**: Install dependencies and verify build
+```bash
+npm install
+npm run build
+```
+
+### ❌ Prohibited Actions
+- **DO NOT** create new Angular project from scratch (ng new)
+- **DO NOT** modify version numbers in `package.json`
+- **DO NOT** add or remove npm dependencies (unless explicitly required)
+- **DO NOT** modify build settings in `angular.json`
+- **DO NOT** reconfigure Bootstrap, Dexie, ng-bootstrap, or other library settings
+
+### ✅ Allowed Modifications
+- Add business-related TypeScript code (following existing architecture)
+- Add Components, Services, ViewModels
+- Add Domain Models, Repository
+- Modify resources in `src/assets/`
+- Add routing modules
+
+### 1. TDD & Spec-Driven Development Workflow - MANDATORY
+
+⚠️ **CRITICAL**: All development MUST follow this TDD workflow. Every Spec requirement must have corresponding tests BEFORE implementation.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TDD Development Workflow                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
+│  Step 2: Create Tests → Write tests for EACH Spec item          │
+│  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
+│  Step 4: Implement → Build features to pass tests               │
+│  Step 5: Mock APIs → Use mock data for unfinished Cloud APIs    │
+│  Step 6: Run All Tests → ALL tests must pass before completion  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Step 1: Analyze Spec Documents (SRS & SDD)
+Before writing any code, extract ALL requirements from both SRS and SDD:
+```typescript
+/**
+ * Requirements extracted from specification documents:
+ *
+ * SRS (Software Requirements Specification):
+ * - SRS-001: User must be able to login with email/password
+ * - SRS-002: App must show splash screen for 2 seconds
+ * - SRS-003: Dashboard must display user's stars and coins
+ *
+ * SDD (Software Design Document):
+ * - SDD-001: Use Angular Signals for state management
+ * - SDD-002: Implement MVVM Input/Output/Effect pattern
+ * - SDD-003: Use IndexedDB (Dexie) for offline storage
+ */
+```
+
+#### Step 2: Create Test Cases for Each Spec Item
+```typescript
+// src/app/presentation/auth/login.viewmodel.spec.ts
+import { TestBed } from '@angular/core/testing';
+import { LoginViewModel } from './login.viewmodel';
+import { AuthRepository } from '../../domain/repositories/auth.repository';
+
+describe('LoginViewModel', () => {
+  let viewModel: LoginViewModel;
+  let mockAuthRepository: jasmine.SpyObj<AuthRepository>;
+
+  beforeEach(() => {
+    mockAuthRepository = jasmine.createSpyObj('AuthRepository', ['login', 'isLoggedIn']);
+
+    TestBed.configureTestingModule({
+      providers: [
+        LoginViewModel,
+        { provide: AuthRepository, useValue: mockAuthRepository }
+      ]
+    });
+
+    viewModel = TestBed.inject(LoginViewModel);
+  });
+
+  // SRS-001: User must be able to login with email/password
+  it('should login successfully with valid credentials', async () => {
+    // Given
+    mockAuthRepository.login.and.returnValue(Promise.resolve());
+
+    // When
+    viewModel.onInput({ type: 'updateEmail', value: 'test@test.com' });
+    viewModel.onInput({ type: 'updatePassword', value: 'password123' });
+    await viewModel.onInput({ type: 'submit' });
+
+    // Then
+    expect(viewModel.output().isLoginSuccess).toBeTrue();
+    expect(viewModel.output().error).toBeNull();
+  });
+
+  // SRS-001: Invalid credentials should show error
+  it('should show error with invalid credentials', async () => {
+    // Given
+    mockAuthRepository.login.and.returnValue(Promise.reject(new Error('Invalid credentials')));
+
+    // When
+    await viewModel.onInput({ type: 'submit' });
+
+    // Then
+    expect(viewModel.output().isLoginSuccess).toBeFalse();
+    expect(viewModel.output().error).toBeTruthy();
+  });
+});
+```
+
+#### Step 3: Spec Coverage Verification Checklist
+Before implementation, verify ALL SRS and SDD items have tests:
+```typescript
+/**
+ * Spec Coverage Checklist - [Project Name]
+ *
+ * SRS Requirements:
+ * [x] SRS-001: Login with email/password - login.viewmodel.spec.ts
+ * [x] SRS-002: Splash screen display - splash.component.spec.ts
+ * [x] SRS-003: Register new account - register.viewmodel.spec.ts
+ * [x] SRS-010: Display user stars - dashboard.viewmodel.spec.ts
+ * [x] SRS-011: Display S-coins - dashboard.viewmodel.spec.ts
+ * [ ] SRS-020: List training items - TODO
+ *
+ * SDD Design Requirements:
+ * [x] SDD-001: Angular Signals state - viewmodel.spec.ts
+ * [x] SDD-002: MVVM Input/Output/Effect - viewmodel.spec.ts
+ * [x] SDD-003: IndexedDB offline storage - repository.spec.ts
+ * [ ] SDD-004: 4-layer caching - TODO
+ */
+```
+
+#### Step 4: Mock API Implementation
+For APIs not yet available from Cloud team, implement mock services:
+```typescript
+// src/app/data/repositories/mock/mock-auth.repository.ts
+import { Injectable } from '@angular/core';
+import { AuthRepository } from '../../../domain/repositories/auth.repository';
+
+interface MockUser {
+  email: string;
+  password: string;
+  name: string;
+}
+
+@Injectable()
+export class MockAuthRepository implements AuthRepository {
+
+  // Mock user data for testing
+  private static readonly MOCK_USERS: MockUser[] = [
+    { email: 'test@test.com', password: 'password123', name: 'Test User' },
+    { email: 'demo@demo.com', password: 'demo123', name: 'Demo User' }
+  ];
+
+  async login(email: string, password: string): Promise<void> {
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const user = MockAuthRepository.MOCK_USERS.find(
+      u => u.email === email && u.password === password
+    );
+
+    if (user) {
+      // Save mock token
+      localStorage.setItem('access_token', `mock_token_${Date.now()}`);
+      localStorage.setItem('user_name', user.name);
+    } else {
+      throw new Error('Invalid email or password');
+    }
+  }
+
+  isLoggedIn(): boolean {
+    return !!localStorage.getItem('access_token');
+  }
+}
+
+// src/app/core/providers/repository.providers.ts - Switch between Mock and Real
+import { environment } from '../../../environments/environment';
+
+export const repositoryProviders = [
+  {
+    provide: AuthRepository,
+    useClass: environment.production
+      ? AuthRepositoryImpl  // Production
+      : MockAuthRepository  // Development/Testing
+  }
+];
+```
+
+#### Step 5: Run All Tests Before Completion
+```bash
+# Run all unit tests
+npm run test
+
+# Run tests with coverage report
+npm run test -- --code-coverage
+
+# Run tests in CI mode (single run)
+npm run test -- --watch=false --browsers=ChromeHeadless
+
+# Run e2e tests
+npm run e2e
+
+# Verify all tests pass
+npm run test -- --watch=false && npm run e2e
+```
+
+#### Test Directory Structure
+```
+src/app/
+├── presentation/
+│   ├── auth/
+│   │   ├── login.viewmodel.ts
+│   │   ├── login.viewmodel.spec.ts      # Unit test
+│   │   ├── login.component.ts
+│   │   └── login.component.spec.ts      # Component test
+│   └── dashboard/
+│       ├── dashboard.viewmodel.spec.ts
+│       └── dashboard.component.spec.ts
+├── domain/
+│   └── services/
+│       ├── user.service.ts
+│       └── user.service.spec.ts
+├── data/
+│   └── repositories/
+│       ├── auth.repository.impl.ts
+│       ├── auth.repository.spec.ts
+│       └── mock/
+│           └── mock-auth.repository.ts
+e2e/
+├── login.e2e-spec.ts
+└── dashboard.e2e-spec.ts
+```
+
+### 2. Project Structure
 ```
 src/
 ├── app/
