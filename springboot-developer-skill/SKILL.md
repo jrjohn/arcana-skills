@@ -36,17 +36,292 @@ Professional Spring Boot development skill based on [Arcana Cloud SpringBoot](ht
 
 When handling Spring Boot development tasks, follow these principles:
 
-### 0. Reference Project Setup
-**IMPORTANT**: Before starting any Spring Boot development task, clone the reference project from GitHub:
-```bash
-git clone https://github.com/jrjohn/arcana-cloud-springboot.git
-```
-Use this reference project to:
-- Understand the architecture patterns and code structure
-- Copy and adapt code examples for the current task
-- Ensure consistency with enterprise architecture standards
+### 0. Project Setup - CRITICAL
 
-### 1. Project Structure
+⚠️ **IMPORTANT**: This reference project has been validated with tested Gradle settings and library versions. **NEVER reconfigure project structure or modify build.gradle / gradle.properties**, or it will cause compilation errors.
+
+**Step 1**: Clone the reference project
+```bash
+git clone https://github.com/jrjohn/arcana-cloud-springboot.git [new-project-directory]
+cd [new-project-directory]
+```
+
+**Step 2**: Reinitialize Git (remove original repo history)
+```bash
+rm -rf .git
+git init
+git add .
+git commit -m "Initial commit from arcana-cloud-springboot template"
+```
+
+**Step 3**: Modify project name and package
+Only modify the following required items:
+- `rootProject.name` in `settings.gradle`
+- `group` and `archivesBaseName` in `build.gradle`
+- Rename package directory structure under `src/main/java/`
+- Update application name in `application.yml`
+
+**Step 4**: Clean up example code
+The cloned project contains example API (e.g., Arcana User Management). Clean up and replace with new project business logic:
+
+**Core architecture files to KEEP** (do not delete):
+- `src/main/java/.../config/` - Common configuration (Security, gRPC, Database)
+- `src/main/java/.../common/` - Common utilities
+- `src/main/java/.../exception/` - Exception handling
+- `arcana-plugin-api/` - Plugin interface definitions
+- `arcana-plugin-runtime/` - OSGi runtime
+- `deployment/` - Docker & K8s manifests
+
+**Example files to REPLACE**:
+- `src/main/java/.../controller/` - Delete example Controller, create new REST/gRPC endpoints
+- `src/main/java/.../service/` - Delete example Service, create new business logic
+- `src/main/java/.../repository/` - Delete example Repository, create new data access
+- `src/main/java/.../model/` - Delete example Models, create new Domain Models
+- `src/main/java/.../dto/` - Delete example DTOs, create new DTOs
+- `src/main/proto/` - Modify gRPC proto definitions
+
+**Step 5**: Verify build
+```bash
+./gradlew clean build
+```
+
+### ❌ Prohibited Actions
+- **DO NOT** create new Spring Boot project from scratch (Spring Initializr)
+- **DO NOT** modify version numbers in `gradle.properties` or `libs.versions.toml`
+- **DO NOT** add or remove dependencies (unless explicitly required)
+- **DO NOT** modify Gradle wrapper version
+- **DO NOT** reconfigure gRPC, OSGi, Spring Security, or other library settings
+
+### ✅ Allowed Modifications
+- Add business-related Java code (following existing architecture)
+- Add Controller, Service, Repository
+- Add Domain Models, DTOs
+- Modify settings in `application.yml`
+- Add gRPC proto files (and recompile)
+- Develop new Plugins
+
+### 1. TDD & Spec-Driven Development Workflow - MANDATORY
+
+⚠️ **CRITICAL**: All development MUST follow this TDD workflow. Every SRS/SDD requirement must have corresponding tests BEFORE implementation.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TDD Development Workflow                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
+│  Step 2: Create Tests → Write tests for EACH Spec item          │
+│  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
+│  Step 4: Implement → Build features to pass tests               │
+│  Step 5: Mock APIs → Use mock data for unfinished dependencies  │
+│  Step 6: Run All Tests → ALL tests must pass before completion  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Step 1: Analyze Spec Documents (SRS & SDD)
+Before writing any code, extract ALL requirements from both SRS and SDD:
+```java
+/**
+ * Requirements extracted from specification documents:
+ *
+ * SRS (Software Requirements Specification):
+ * - SRS-001: User must be able to login with email/password
+ * - SRS-002: System must return JWT token upon successful login
+ * - SRS-003: API must support both REST and gRPC protocols
+ *
+ * SDD (Software Design Document):
+ * - SDD-001: Authentication uses JWT with RS256 algorithm
+ * - SDD-002: Token expiration set to 24 hours
+ * - SDD-003: Password hashed using BCrypt with strength 12
+ */
+```
+
+#### Step 2: Create Test Cases for Each Spec Item
+```java
+// src/test/java/.../service/AuthServiceTest.java
+@SpringBootTest
+@Transactional
+class AuthServiceTest {
+
+    @Autowired
+    private AuthService authService;
+
+    @MockBean
+    private UserRepository userRepository;
+
+    @MockBean
+    private PasswordEncoder passwordEncoder;
+
+    // SRS-001: User must be able to login with email/password
+    @Test
+    void login_WithValidCredentials_ShouldSucceed() {
+        // Given
+        User mockUser = new User("1", "test@test.com", "hashedPassword", "Test User");
+        when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(mockUser));
+        when(passwordEncoder.matches("password123", "hashedPassword")).thenReturn(true);
+
+        // When
+        AuthResponse response = authService.login("test@test.com", "password123");
+
+        // Then
+        assertNotNull(response);
+        assertNotNull(response.getAccessToken());
+    }
+
+    // SRS-001: Invalid credentials should throw exception
+    @Test
+    void login_WithInvalidCredentials_ShouldThrowException() {
+        // Given
+        when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
+
+        // When/Then
+        assertThrows(AuthenticationException.class, () -> {
+            authService.login("invalid@test.com", "wrong");
+        });
+    }
+
+    // SDD-001: JWT must use RS256 algorithm
+    @Test
+    void login_ShouldReturnJwtWithRS256Algorithm() {
+        // Given
+        User mockUser = new User("1", "test@test.com", "hashedPassword", "Test User");
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+        when(passwordEncoder.matches(any(), any())).thenReturn(true);
+
+        // When
+        AuthResponse response = authService.login("test@test.com", "password123");
+
+        // Then
+        String token = response.getAccessToken();
+        DecodedJWT jwt = JWT.decode(token);
+        assertEquals("RS256", jwt.getAlgorithm());
+    }
+
+    // SDD-002: Token expiration must be 24 hours
+    @Test
+    void login_TokenShouldExpireIn24Hours() {
+        // Given
+        User mockUser = new User("1", "test@test.com", "hashedPassword", "Test User");
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+        when(passwordEncoder.matches(any(), any())).thenReturn(true);
+
+        // When
+        AuthResponse response = authService.login("test@test.com", "password123");
+
+        // Then
+        DecodedJWT jwt = JWT.decode(response.getAccessToken());
+        long expirationHours = ChronoUnit.HOURS.between(
+            jwt.getIssuedAt().toInstant(),
+            jwt.getExpiresAt().toInstant()
+        );
+        assertEquals(24, expirationHours);
+    }
+}
+```
+
+#### Step 3: Spec Coverage Verification Checklist
+Before implementation, verify ALL SRS and SDD items have tests:
+```java
+/**
+ * Spec Coverage Checklist - [Project Name]
+ *
+ * SRS Requirements:
+ * [x] SRS-001: Login with email/password - AuthServiceTest
+ * [x] SRS-002: Return JWT token - AuthServiceTest
+ * [x] SRS-003: Support REST and gRPC - AuthControllerTest, AuthGrpcServiceTest
+ * [x] SRS-004: User registration - UserServiceTest
+ * [ ] SRS-005: Password reset - TODO
+ *
+ * SDD Design Requirements:
+ * [x] SDD-001: JWT RS256 algorithm - AuthServiceTest
+ * [x] SDD-002: 24-hour token expiration - AuthServiceTest
+ * [x] SDD-003: BCrypt password hashing - UserServiceTest
+ * [ ] SDD-004: Rate limiting - TODO
+ */
+```
+
+#### Step 4: Mock External Dependencies
+For external services or databases not yet available, implement mock classes:
+```java
+// src/test/java/.../mock/MockUserRepository.java
+@Repository
+@Profile("test")
+public class MockUserRepository implements UserRepository {
+
+    private static final List<User> MOCK_USERS = List.of(
+        new User("1", "test@test.com", "$2a$12$...", "Test User"),
+        new User("2", "demo@demo.com", "$2a$12$...", "Demo User")
+    );
+
+    @Override
+    public Optional<User> findByEmail(String email) {
+        return MOCK_USERS.stream()
+            .filter(u -> u.getEmail().equals(email))
+            .findFirst();
+    }
+
+    @Override
+    public Optional<User> findById(String id) {
+        return MOCK_USERS.stream()
+            .filter(u -> u.getId().equals(id))
+            .findFirst();
+    }
+
+    @Override
+    public User save(User user) {
+        // Simulate save operation
+        return user;
+    }
+}
+
+// src/main/resources/application-test.yml
+spring:
+  profiles: test
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+```
+
+#### Step 5: Run All Tests Before Completion
+```bash
+# Run all unit tests
+./gradlew test
+
+# Run all tests with coverage report
+./gradlew test jacocoTestReport
+
+# Run integration tests
+./gradlew integrationTest
+
+# Run specific test class
+./gradlew test --tests "com.example.service.AuthServiceTest"
+
+# Verify all tests pass
+./gradlew check
+```
+
+#### Test Directory Structure
+```
+src/
+├── main/java/...                    # Production code
+├── test/java/...                    # Unit & Integration tests
+│   ├── controller/
+│   │   ├── AuthControllerTest.java
+│   │   └── UserControllerTest.java
+│   ├── service/
+│   │   ├── AuthServiceTest.java
+│   │   └── UserServiceTest.java
+│   ├── repository/
+│   │   └── UserRepositoryTest.java
+│   ├── grpc/
+│   │   └── AuthGrpcServiceTest.java
+│   └── mock/
+│       ├── MockUserRepository.java
+│       └── MockExternalApiClient.java
+└── testFixtures/java/...            # Shared test utilities
+    └── TestDataFactory.java
+```
+
+### 2. Project Structure
 ```
 arcana-cloud-springboot/
 ├── arcana-plugin-api/        # Plugin interface definitions

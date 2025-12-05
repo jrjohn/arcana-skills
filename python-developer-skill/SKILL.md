@@ -38,17 +38,285 @@ Professional Python/Flask development skill based on [Arcana Cloud Python](https
 
 When handling Python/Flask development tasks, follow these principles:
 
-### 0. Reference Project Setup
-**IMPORTANT**: Before starting any Python/Flask development task, clone the reference project from GitHub:
-```bash
-git clone https://github.com/jrjohn/arcana-cloud-python.git
-```
-Use this reference project to:
-- Understand the architecture patterns and code structure
-- Copy and adapt code examples for the current task
-- Ensure consistency with enterprise architecture standards
+### 0. Project Setup - CRITICAL
 
-### 1. Project Structure
+⚠️ **IMPORTANT**: This reference project has been validated with tested requirements.txt and gRPC settings. **NEVER reconfigure project structure or modify requirements.txt / pyproject.toml**, or it will cause runtime errors.
+
+**Step 1**: Clone the reference project
+```bash
+git clone https://github.com/jrjohn/arcana-cloud-python.git [new-project-directory]
+cd [new-project-directory]
+```
+
+**Step 2**: Reinitialize Git (remove original repo history)
+```bash
+rm -rf .git
+git init
+git add .
+git commit -m "Initial commit from arcana-cloud-python template"
+```
+
+**Step 3**: Modify project name
+Only modify the following required items:
+- `name` field in `pyproject.toml` (if applicable)
+- Application name in `app/config/settings.py`
+- Service names in Docker-related configuration files
+- Update settings in `.env` example file
+
+**Step 4**: Clean up example code
+The cloned project contains example API (e.g., Arcana User Management). Clean up and replace with new project business logic:
+
+**Core architecture files to KEEP** (do not delete):
+- `app/config/` - Common configuration (Database, Settings)
+- `app/middleware/` - Middleware (Auth, Error handling)
+- `app/grpc/server.py` - gRPC server configuration
+- `app/__init__.py` - Flask app factory
+- `migrations/` - Alembic configuration
+- `deployment/` - Docker & K8s manifests
+
+**Example files to REPLACE**:
+- `app/controller/` - Delete example Controller, create new HTTP endpoints
+- `app/service/` - Delete example Service, create new business logic
+- `app/repository/` - Delete example Repository, create new data access
+- `app/model/` - Delete example Models, create new Domain Models
+- `app/dto/` - Delete example DTOs, create new DTOs
+- `app/grpc/*.proto` - Modify gRPC proto definitions
+- `tests/` - Update test cases
+
+**Step 5**: Create virtual environment and verify
+```bash
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python -m pytest
+```
+
+### ❌ Prohibited Actions
+- **DO NOT** create new Flask project from scratch
+- **DO NOT** modify version numbers in `requirements.txt`
+- **DO NOT** add or remove dependencies (unless explicitly required)
+- **DO NOT** modify gRPC protobuf compilation settings
+- **DO NOT** reconfigure SQLAlchemy, Marshmallow, Alembic, or other library settings
+
+### ✅ Allowed Modifications
+- Add business-related Python code (following existing architecture)
+- Add Controller, Service, Repository
+- Add Domain Models, DTOs
+- Add Alembic migration scripts
+- Modify gRPC proto files (and recompile)
+
+### 1. TDD & Spec-Driven Development Workflow - MANDATORY
+
+⚠️ **CRITICAL**: All development MUST follow this TDD workflow. Every SRS/SDD requirement must have corresponding tests BEFORE implementation.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TDD Development Workflow                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
+│  Step 2: Create Tests → Write tests for EACH Spec item          │
+│  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
+│  Step 4: Implement → Build features to pass tests               │
+│  Step 5: Mock APIs → Use mock data for unfinished dependencies  │
+│  Step 6: Run All Tests → ALL tests must pass before completion  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Step 1: Analyze Spec Documents (SRS & SDD)
+Before writing any code, extract ALL requirements from both SRS and SDD:
+```python
+"""
+Requirements extracted from specification documents:
+
+SRS (Software Requirements Specification):
+- SRS-001: User must be able to login with email/password
+- SRS-002: System must return JWT token upon successful login
+- SRS-003: API must support both REST and gRPC protocols
+
+SDD (Software Design Document):
+- SDD-001: Authentication uses JWT with HS256 algorithm
+- SDD-002: Token expiration set to 24 hours
+- SDD-003: Password hashed using Werkzeug's pbkdf2
+"""
+```
+
+#### Step 2: Create Test Cases for Each Spec Item
+```python
+# tests/service/test_auth_service.py
+import pytest
+from unittest.mock import Mock, patch
+from app.service.auth_service import AuthService
+from app.model.user import User
+
+
+class TestAuthService:
+
+    @pytest.fixture
+    def mock_repository(self):
+        return Mock()
+
+    @pytest.fixture
+    def auth_service(self, mock_repository):
+        return AuthService(mock_repository)
+
+    # SRS-001: User must be able to login with email/password
+    def test_login_with_valid_credentials_should_succeed(self, auth_service, mock_repository):
+        # Given
+        mock_user = User(
+            id="1",
+            email="test@test.com",
+            password_hash="pbkdf2:sha256:...",
+            name="Test User"
+        )
+        mock_repository.find_by_email.return_value = mock_user
+
+        with patch("werkzeug.security.check_password_hash", return_value=True):
+            # When
+            result = auth_service.authenticate("test@test.com", "password123")
+
+            # Then
+            assert result is not None
+            assert result.email == "test@test.com"
+
+    # SRS-001: Invalid credentials should return None
+    def test_login_with_invalid_credentials_should_return_none(self, auth_service, mock_repository):
+        # Given
+        mock_repository.find_by_email.return_value = None
+
+        # When
+        result = auth_service.authenticate("invalid@test.com", "wrong")
+
+        # Then
+        assert result is None
+
+    # SDD-001: JWT must use HS256 algorithm
+    def test_create_token_should_use_hs256(self, auth_service):
+        # Given
+        user = User(id="1", email="test@test.com", name="Test")
+
+        # When
+        token = auth_service.create_access_token(user)
+
+        # Then
+        import jwt
+        header = jwt.get_unverified_header(token)
+        assert header["alg"] == "HS256"
+
+    # SDD-002: Token expiration must be 24 hours
+    def test_token_should_expire_in_24_hours(self, auth_service):
+        # Given
+        user = User(id="1", email="test@test.com", name="Test")
+
+        # When
+        token = auth_service.create_access_token(user)
+
+        # Then
+        import jwt
+        payload = jwt.decode(token, options={"verify_signature": False})
+        exp_delta = payload["exp"] - payload["iat"]
+        assert exp_delta == 24 * 60 * 60  # 24 hours in seconds
+```
+
+#### Step 3: Spec Coverage Verification Checklist
+Before implementation, verify ALL SRS and SDD items have tests:
+```python
+"""
+Spec Coverage Checklist - [Project Name]
+
+SRS Requirements:
+[x] SRS-001: Login with email/password - test_auth_service.py
+[x] SRS-002: Return JWT token - test_auth_service.py
+[x] SRS-003: Support REST and gRPC - test_auth_controller.py, test_auth_grpc.py
+[x] SRS-004: User registration - test_user_service.py
+[ ] SRS-005: Password reset - TODO
+
+SDD Design Requirements:
+[x] SDD-001: JWT HS256 algorithm - test_auth_service.py
+[x] SDD-002: 24-hour token expiration - test_auth_service.py
+[x] SDD-003: Werkzeug password hashing - test_user_service.py
+[ ] SDD-004: Rate limiting - TODO
+"""
+```
+
+#### Step 4: Mock External Dependencies
+For external services or databases not yet available, implement mock classes:
+```python
+# tests/mock/mock_user_repository.py
+from typing import Optional, List
+from app.model.user import User
+from app.repository.user_repository import UserRepository
+
+
+class MockUserRepository(UserRepository):
+    """Mock repository for testing when database is not available"""
+
+    MOCK_USERS = [
+        User(id="1", email="test@test.com",
+             password_hash="pbkdf2:sha256:260000$...", name="Test User"),
+        User(id="2", email="demo@demo.com",
+             password_hash="pbkdf2:sha256:260000$...", name="Demo User"),
+    ]
+
+    def find_by_email(self, email: str) -> Optional[User]:
+        return next((u for u in self.MOCK_USERS if u.email == email), None)
+
+    def find_by_id(self, user_id: str) -> Optional[User]:
+        return next((u for u in self.MOCK_USERS if u.id == user_id), None)
+
+    def save(self, user: User) -> User:
+        return user
+
+
+# app/config/dependencies.py - Switch between Mock and Real
+import os
+
+def get_user_repository():
+    if os.getenv("FLASK_ENV") == "testing":
+        from tests.mock.mock_user_repository import MockUserRepository
+        return MockUserRepository()
+    else:
+        from app.repository.user_repository import UserRepositoryImpl
+        return UserRepositoryImpl()
+```
+
+#### Step 5: Run All Tests Before Completion
+```bash
+# Run all tests
+python -m pytest
+
+# Run tests with coverage report
+python -m pytest --cov=app --cov-report=html
+
+# Run specific test file
+python -m pytest tests/service/test_auth_service.py
+
+# Run tests with verbose output
+python -m pytest -v
+
+# Verify all tests pass
+python -m pytest --tb=short
+```
+
+#### Test Directory Structure
+```
+tests/
+├── conftest.py                      # Shared fixtures
+├── controller/
+│   ├── test_auth_controller.py
+│   └── test_user_controller.py
+├── service/
+│   ├── test_auth_service.py
+│   └── test_user_service.py
+├── repository/
+│   └── test_user_repository.py
+├── grpc/
+│   └── test_auth_grpc.py
+└── mock/
+    ├── mock_user_repository.py
+    └── mock_external_client.py
+```
+
+### 2. Project Structure
 ```
 arcana-cloud-python/
 ├── app/

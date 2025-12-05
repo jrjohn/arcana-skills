@@ -34,17 +34,271 @@ Professional Android development skill based on [Arcana Android](https://github.
 
 When handling Android development tasks, follow these principles:
 
-### 0. Reference Project Setup
-**IMPORTANT**: Before starting any Android development task, clone the reference project from GitHub:
-```bash
-git clone https://github.com/jrjohn/arcana-android.git
-```
-Use this reference project to:
-- Understand the architecture patterns and code structure
-- Copy and adapt code examples for the current task
-- Ensure consistency with enterprise architecture standards
+### 0. Project Setup - CRITICAL
 
-### 1. Project Structure
+⚠️ **IMPORTANT**: This reference project has been validated with tested Gradle settings and library versions. **NEVER reconfigure project structure or modify build.gradle / libs.versions.toml**, or it will cause compilation errors.
+
+**Step 1**: Clone the reference project
+```bash
+git clone https://github.com/jrjohn/arcana-android.git [new-project-directory]
+cd [new-project-directory]
+```
+
+**Step 2**: Reinitialize Git (remove original repo history)
+```bash
+rm -rf .git
+git init
+git add .
+git commit -m "Initial commit from arcana-android template"
+```
+
+**Step 3**: Modify project name and package
+Only modify the following required items:
+- `rootProject.name` in `settings.gradle.kts`
+- `namespace` and `applicationId` in `app/build.gradle.kts`
+- Rename package directory structure under `app/src/main/java/`
+- Update package-related settings in `AndroidManifest.xml`
+
+**Step 4**: Clean up example code
+The cloned project contains example UI (e.g., Arcana User Management). Clean up and replace with new project screens:
+
+**Core architecture files to KEEP** (do not delete):
+- `core/` - Common utilities (analytics, common, cache)
+- `di/` - Hilt DI modules
+- `sync/` - Sync management
+- `data/local/AppDatabase.kt` - Room database base configuration
+- `data/repository/` - Repository base classes
+- `MainActivity.kt` - Entry Activity
+- `MyApplication.kt` - Application class
+- `nav/NavGraph.kt` - Navigation configuration (modify routes)
+
+**Example files to REPLACE**:
+- `ui/screens/` - Delete all example screens, create new project UI
+- `ui/theme/` - Modify Theme colors and styles
+- `data/model/` - Delete example Models, create new Domain Models
+- `data/local/dao/` - Delete example DAO, create new DAO
+- `data/local/entity/` - Delete example Entity, create new Entity
+- `data/network/` - Modify API endpoints
+- `domain/` - Delete example Service, create new business logic
+
+**Step 5**: Verify build
+```bash
+./gradlew clean build
+```
+
+### ❌ Prohibited Actions
+- **DO NOT** create new build.gradle.kts from scratch
+- **DO NOT** modify version numbers in `gradle/libs.versions.toml`
+- **DO NOT** add or remove dependencies (unless explicitly required)
+- **DO NOT** modify Gradle wrapper version
+- **DO NOT** reconfigure Compose, Hilt, Room, or other library settings
+
+### ✅ Allowed Modifications
+- Add business-related Kotlin code (following existing architecture)
+- Add UI screens (using existing Compose settings)
+- Add Domain Models, Repository, ViewModel
+- Modify strings.xml, colors.xml, and other resource files
+- Add navigation routes
+
+### 1. TDD & Spec-Driven Development Workflow - MANDATORY
+
+⚠️ **CRITICAL**: All development MUST follow this TDD workflow. Every Spec requirement must have corresponding tests BEFORE implementation.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TDD Development Workflow                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
+│  Step 2: Create Tests → Write tests for EACH Spec item          │
+│  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
+│  Step 4: Implement → Build features to pass tests               │
+│  Step 5: Mock APIs → Use mock data for unfinished Cloud APIs    │
+│  Step 6: Run All Tests → ALL tests must pass before completion  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Step 1: Analyze Spec Documents (SRS & SDD)
+Before writing any code, extract ALL requirements from both SRS and SDD:
+```kotlin
+/**
+ * Requirements extracted from specification documents:
+ *
+ * SRS (Software Requirements Specification):
+ * - SRS-001: User must be able to login with email/password
+ * - SRS-002: App must show splash screen for 2 seconds
+ * - SRS-003: Dashboard must display user's stars and coins
+ *
+ * SDD (Software Design Document):
+ * - SDD-001: Use Hilt for dependency injection
+ * - SDD-002: Implement MVVM Input/Output pattern
+ * - SDD-003: Store tokens in encrypted SharedPreferences
+ */
+```
+
+#### Step 2: Create Test Cases for Each Spec Item
+```kotlin
+// test/java/.../ui/screens/auth/LoginViewModelTest.kt
+@HiltAndroidTest
+class LoginViewModelTest {
+
+    @get:Rule
+    val hiltRule = HiltAndroidRule(this)
+
+    private lateinit var viewModel: LoginViewModel
+    private lateinit var mockAuthRepository: AuthRepository
+
+    @Before
+    fun setup() {
+        mockAuthRepository = mockk()
+        viewModel = LoginViewModel(mockAuthRepository)
+    }
+
+    // SRS-001: User must be able to login with email/password
+    @Test
+    fun `login with valid credentials should succeed`() = runTest {
+        // Given
+        coEvery { mockAuthRepository.login("test@test.com", "password123") } returns Result.success(Unit)
+
+        // When
+        viewModel.onInput(LoginViewModel.Input.UpdateEmail("test@test.com"))
+        viewModel.onInput(LoginViewModel.Input.UpdatePassword("password123"))
+        viewModel.onInput(LoginViewModel.Input.Submit)
+
+        // Then
+        assertTrue(viewModel.output.value.isLoginSuccess)
+    }
+
+    // SRS-001: Invalid credentials should show error
+    @Test
+    fun `login with invalid credentials should show error`() = runTest {
+        // Given
+        coEvery { mockAuthRepository.login(any(), any()) } returns Result.failure(Exception("Invalid credentials"))
+
+        // When
+        viewModel.onInput(LoginViewModel.Input.Submit)
+
+        // Then
+        assertNotNull(viewModel.output.value.loginError)
+    }
+}
+```
+
+#### Step 3: Spec Coverage Verification Checklist
+Before implementation, verify ALL SRS and SDD items have tests:
+```kotlin
+/**
+ * Spec Coverage Checklist - [Project Name]
+ *
+ * SRS Requirements:
+ * [x] SRS-001: Login with email/password - LoginViewModelTest
+ * [x] SRS-002: Splash screen display - SplashScreenTest
+ * [x] SRS-003: Register new account - RegisterViewModelTest
+ * [x] SRS-010: Display user stars - DashboardViewModelTest
+ * [x] SRS-011: Display S-coins - DashboardViewModelTest
+ * [ ] SRS-020: List training items - TODO
+ *
+ * SDD Design Requirements:
+ * [x] SDD-001: Hilt DI configuration - AppModuleTest
+ * [x] SDD-002: MVVM Input/Output pattern - ViewModelTest
+ * [x] SDD-003: Encrypted token storage - AuthRepositoryTest
+ * [ ] SDD-004: Offline-first caching - TODO
+ */
+```
+
+#### Step 4: Mock API Implementation
+For APIs not yet available from Cloud team, implement mock repositories:
+```kotlin
+// data/repository/mock/MockAuthRepository.kt
+class MockAuthRepository @Inject constructor(
+    private val sharedPreferences: SharedPreferences
+) : AuthRepository {
+
+    companion object {
+        // Mock user data for testing
+        private val MOCK_USERS = listOf(
+            MockUser("test@test.com", "password123", "Test User"),
+            MockUser("demo@demo.com", "demo123", "Demo User")
+        )
+    }
+
+    override suspend fun login(email: String, password: String): Result<Unit> {
+        // Simulate network delay
+        delay(1000)
+
+        val user = MOCK_USERS.find { it.email == email && it.password == password }
+        return if (user != null) {
+            // Save mock token
+            sharedPreferences.edit()
+                .putString("access_token", "mock_token_${System.currentTimeMillis()}")
+                .putString("user_name", user.name)
+                .apply()
+            Result.success(Unit)
+        } else {
+            Result.failure(Exception("Invalid email or password"))
+        }
+    }
+
+    override suspend fun isLoggedIn(): Boolean {
+        return sharedPreferences.getString("access_token", null) != null
+    }
+}
+
+// di/RepositoryModule.kt - Switch between Mock and Real
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthRepository(
+        // Use MockAuthRepository until Cloud API is ready
+        // impl: AuthRepositoryImpl  // Production
+        impl: MockAuthRepository     // Development/Testing
+    ): AuthRepository
+}
+```
+
+#### Step 5: Run All Tests Before Completion
+```bash
+# Run all unit tests
+./gradlew test
+
+# Run all instrumented tests
+./gradlew connectedAndroidTest
+
+# Generate test coverage report
+./gradlew jacocoTestReport
+
+# Verify all tests pass
+./gradlew check
+```
+
+#### Test Directory Structure
+```
+app/src/
+├── main/java/...                    # Production code
+├── test/java/...                    # Unit tests
+│   ├── ui/screens/
+│   │   ├── auth/
+│   │   │   ├── LoginViewModelTest.kt
+│   │   │   └── RegisterViewModelTest.kt
+│   │   ├── dashboard/
+│   │   │   └── DashboardViewModelTest.kt
+│   │   └── splash/
+│   │       └── SplashViewModelTest.kt
+│   ├── domain/
+│   │   └── service/
+│   │       └── UserServiceTest.kt
+│   └── data/
+│       └── repository/
+│           └── AuthRepositoryTest.kt
+└── androidTest/java/...             # Instrumented tests
+    └── ui/screens/
+        ├── LoginScreenTest.kt
+        └── DashboardScreenTest.kt
+```
+
+### 2. Project Structure
 ```
 app/
 ├── presentation/          # UI Layer

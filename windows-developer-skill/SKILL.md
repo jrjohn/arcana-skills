@@ -44,17 +44,303 @@ Professional Windows desktop development skill based on [Arcana Windows](https:/
 
 When handling Windows desktop development tasks, follow these principles:
 
-### 0. Reference Project Setup
-**IMPORTANT**: Before starting any Windows desktop development task, clone the reference project from GitHub:
-```bash
-git clone https://github.com/jrjohn/arcana-windows.git
-```
-Use this reference project to:
-- Understand the architecture patterns and code structure
-- Copy and adapt code examples for the current task
-- Ensure consistency with enterprise architecture standards
+### 0. Project Setup - CRITICAL
 
-### 1. Project Structure
+⚠️ **IMPORTANT**: This reference project has been validated with tested NuGet settings and library versions. **NEVER reconfigure project structure or modify .csproj / Directory.Build.props**, or it will cause compilation errors.
+
+**Step 1**: Clone the reference project
+```bash
+git clone https://github.com/jrjohn/arcana-windows.git [new-project-directory]
+cd [new-project-directory]
+```
+
+**Step 2**: Reinitialize Git (remove original repo history)
+```bash
+rm -rf .git
+git init
+git add .
+git commit -m "Initial commit from arcana-windows template"
+```
+
+**Step 3**: Modify project name and namespace
+Only modify the following required items:
+- `.sln` solution file name
+- `<RootNamespace>` and `<AssemblyName>` in each `.csproj`
+- Rename project directories under `src/`
+- Update namespace declarations in code
+
+**Step 4**: Clean up example code
+The cloned project contains example UI (e.g., Arcana User Management). Clean up and replace with new project screens:
+
+**Core architecture files to KEEP** (do not delete):
+- `src/Arcana.Infrastructure/` - DI, Security, Settings
+- `src/Arcana.Domain/Services/` - Common Service base classes
+- `src/Arcana.Data/DbContext/` - EF Core base configuration
+- `src/Arcana.Data/Repositories/` - Repository base classes
+- `src/Arcana.Plugins.Contracts/` - Plugin interface definitions
+- `src/Arcana.Plugins/Runtime/` - Plugin runtime
+- `src/Arcana.App/App.xaml` - App entry point
+- `src/Arcana.App/Navigation/` - NavGraph configuration (modify routes)
+
+**Example files to REPLACE**:
+- `src/Arcana.App/Views/` - Delete all example screens, create new project Views
+- `src/Arcana.App/ViewModels/` - Delete example ViewModel, create new ViewModel
+- `src/Arcana.Domain/Entities/` - Delete example Entities, create new Domain Entities
+- `src/Arcana.Data/Configurations/` - Modify EF Core configuration
+- `plugins/` - Delete example Plugin, create new Plugin
+
+**Step 5**: Verify build
+```bash
+dotnet restore
+dotnet build
+dotnet test
+```
+
+### ❌ Prohibited Actions
+- **DO NOT** create new WinUI 3 project from scratch
+- **DO NOT** modify NuGet package version numbers in `.csproj`
+- **DO NOT** add or remove NuGet dependencies (unless explicitly required)
+- **DO NOT** modify shared settings in `Directory.Build.props`
+- **DO NOT** reconfigure WinUI 3, EF Core, CommunityToolkit, or other library settings
+
+### ✅ Allowed Modifications
+- Add business-related C# code (following existing architecture)
+- Add Views, ViewModels
+- Add Domain Entities, Repositories
+- Modify XAML resource files
+- Develop new Plugins (following 18 Plugin types)
+
+### 1. TDD & Spec-Driven Development Workflow - MANDATORY
+
+⚠️ **CRITICAL**: All development MUST follow this TDD workflow. Every SRS/SDD requirement must have corresponding tests BEFORE implementation.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TDD Development Workflow                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
+│  Step 2: Create Tests → Write tests for EACH Spec item          │
+│  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
+│  Step 4: Implement → Build features to pass tests               │
+│  Step 5: Mock APIs → Use mock data for unfinished dependencies  │
+│  Step 6: Run All Tests → ALL tests must pass before completion  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Step 1: Analyze Spec Documents (SRS & SDD)
+Before writing any code, extract ALL requirements from both SRS and SDD:
+```csharp
+/**
+ * Requirements extracted from specification documents:
+ *
+ * SRS (Software Requirements Specification):
+ * - SRS-001: User must be able to login with email/password
+ * - SRS-002: App must show splash screen on startup
+ * - SRS-003: Dashboard must display user statistics
+ *
+ * SDD (Software Design Document):
+ * - SDD-001: Use MVVM UDF pattern for ViewModels
+ * - SDD-002: Implement CRDT-based offline sync
+ * - SDD-003: Use PBKDF2-SHA256 for password hashing
+ */
+```
+
+#### Step 2: Create Test Cases for Each Spec Item
+```csharp
+// tests/Arcana.App.Tests/ViewModels/LoginViewModelTests.cs
+using Xunit;
+using Moq;
+using FluentAssertions;
+
+public class LoginViewModelTests
+{
+    private readonly Mock<IAuthService> _mockAuthService;
+    private readonly LoginViewModel _viewModel;
+
+    public LoginViewModelTests()
+    {
+        _mockAuthService = new Mock<IAuthService>();
+        _viewModel = new LoginViewModel(_mockAuthService.Object);
+    }
+
+    // SRS-001: User must be able to login with email/password
+    [Fact]
+    public async Task Login_WithValidCredentials_ShouldSucceed()
+    {
+        // Given
+        _mockAuthService
+            .Setup(x => x.LoginAsync("test@test.com", "password123"))
+            .ReturnsAsync(new AuthResult { Success = true });
+
+        // When
+        _viewModel.OnInput(new LoginViewModel.Input.UpdateEmail("test@test.com"));
+        _viewModel.OnInput(new LoginViewModel.Input.UpdatePassword("password123"));
+        await _viewModel.OnInput(new LoginViewModel.Input.Submit());
+
+        // Then
+        _viewModel.Out.IsLoginSuccess.Should().BeTrue();
+        _viewModel.Out.Error.Should().BeNull();
+    }
+
+    // SRS-001: Invalid credentials should show error
+    [Fact]
+    public async Task Login_WithInvalidCredentials_ShouldShowError()
+    {
+        // Given
+        _mockAuthService
+            .Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new AuthException("Invalid credentials"));
+
+        // When
+        await _viewModel.OnInput(new LoginViewModel.Input.Submit());
+
+        // Then
+        _viewModel.Out.IsLoginSuccess.Should().BeFalse();
+        _viewModel.Out.Error.Should().NotBeNull();
+    }
+
+    // SDD-001: ViewModel must follow MVVM UDF pattern
+    [Fact]
+    public void ViewModel_ShouldFollowUDFPattern()
+    {
+        // Then - ViewModel has Input, Output, and Effect
+        typeof(LoginViewModel).Should().HaveNestedType("Input");
+        typeof(LoginViewModel).GetProperty("Out").Should().NotBeNull();
+        typeof(LoginViewModel).GetProperty("Fx").Should().NotBeNull();
+    }
+
+    // SDD-003: Password must be hashed with PBKDF2-SHA256
+    [Fact]
+    public void PasswordHasher_ShouldUsePBKDF2SHA256()
+    {
+        // Given
+        var hasher = new PasswordHasher();
+
+        // When
+        var hash = hasher.HashPassword("password123");
+
+        // Then
+        hash.Should().StartWith("pbkdf2:sha256:");
+    }
+}
+```
+
+#### Step 3: Spec Coverage Verification Checklist
+Before implementation, verify ALL SRS and SDD items have tests:
+```csharp
+/**
+ * Spec Coverage Checklist - [Project Name]
+ *
+ * SRS Requirements:
+ * [x] SRS-001: Login with email/password - LoginViewModelTests
+ * [x] SRS-002: Splash screen display - SplashViewModelTests
+ * [x] SRS-003: Dashboard statistics - DashboardViewModelTests
+ * [x] SRS-004: User registration - RegisterViewModelTests
+ * [ ] SRS-005: Settings page - TODO
+ *
+ * SDD Design Requirements:
+ * [x] SDD-001: MVVM UDF pattern - ViewModelTests
+ * [x] SDD-002: CRDT offline sync - CrdtSyncManagerTests
+ * [x] SDD-003: PBKDF2-SHA256 hashing - PasswordHasherTests
+ * [ ] SDD-004: Plugin isolation - TODO
+ */
+```
+
+#### Step 4: Mock External Dependencies
+For external services or databases not yet available, implement mock classes:
+```csharp
+// tests/Arcana.App.Tests/Mocks/MockAuthService.cs
+public class MockAuthService : IAuthService
+{
+    private static readonly List<MockUser> MockUsers = new()
+    {
+        new("1", "test@test.com", "pbkdf2:sha256:...", "Test User"),
+        new("2", "demo@demo.com", "pbkdf2:sha256:...", "Demo User")
+    };
+
+    public async Task<AuthResult> LoginAsync(string email, string password)
+    {
+        await Task.Delay(500); // Simulate network delay
+
+        var user = MockUsers.FirstOrDefault(u => u.Email == email);
+        if (user != null && VerifyPassword(password, user.PasswordHash))
+        {
+            return new AuthResult
+            {
+                Success = true,
+                AccessToken = $"mock_token_{DateTime.UtcNow.Ticks}",
+                UserName = user.Name
+            };
+        }
+
+        throw new AuthException("Invalid email or password");
+    }
+
+    public bool IsLoggedIn() => !string.IsNullOrEmpty(GetAccessToken());
+
+    private string? GetAccessToken() =>
+        Windows.Storage.ApplicationData.Current.LocalSettings.Values["access_token"] as string;
+}
+
+// src/Arcana.Infrastructure/DI/ServiceRegistration.cs - Switch between Mock and Real
+public static class ServiceRegistration
+{
+    public static IServiceCollection AddAuthService(this IServiceCollection services)
+    {
+#if DEBUG
+        services.AddSingleton<IAuthService, MockAuthService>();  // Development
+#else
+        services.AddSingleton<IAuthService, AuthService>();      // Production
+#endif
+        return services;
+    }
+}
+```
+
+#### Step 5: Run All Tests Before Completion
+```bash
+# Run all tests
+dotnet test
+
+# Run tests with coverage
+dotnet test --collect:"XPlat Code Coverage"
+
+# Run specific test project
+dotnet test tests/Arcana.App.Tests/Arcana.App.Tests.csproj
+
+# Run tests with detailed output
+dotnet test --logger "console;verbosity=detailed"
+
+# Verify all tests pass
+dotnet test --no-build
+```
+
+#### Test Directory Structure
+```
+tests/
+├── Arcana.App.Tests/
+│   ├── ViewModels/
+│   │   ├── LoginViewModelTests.cs
+│   │   ├── RegisterViewModelTests.cs
+│   │   ├── DashboardViewModelTests.cs
+│   │   └── SplashViewModelTests.cs
+│   ├── Services/
+│   │   └── AuthServiceTests.cs
+│   └── Mocks/
+│       ├── MockAuthService.cs
+│       └── MockUserRepository.cs
+├── Arcana.Domain.Tests/
+│   └── Services/
+│       └── UserServiceTests.cs
+├── Arcana.Data.Tests/
+│   └── Repositories/
+│       └── UserRepositoryTests.cs
+└── Arcana.Infrastructure.Tests/
+    └── Security/
+        └── PasswordHasherTests.cs
+```
+
+### 2. Project Structure
 ```
 arcana-windows/
 ├── src/
