@@ -2,18 +2,74 @@
 
 Professional Spring Boot development skill based on [Arcana Cloud SpringBoot](https://github.com/jrjohn/arcana-cloud-springboot) enterprise architecture.
 
-## Overview
+## Version
 
-This skill provides comprehensive guidance for Spring Boot development following enterprise-grade architectural patterns. It supports Clean Architecture, dual-protocol communication (gRPC/REST), OSGi Plugin System, and multiple deployment modes.
+**v2.0** - Generalized & Enhanced
+- Removed domain-specific content (usable for any Spring Boot project)
+- Added Quick Reference Card
+- Added Error Handling Pattern
+- Added Priority Labels (🔴/🟡/🟢)
+- Added Test Coverage Targets
+- Added Spec Gap Prediction System
+- Split into multiple files for better organization
 
-## Key Features
+## Structure
 
-- **Clean Architecture** - Three-layer architecture (Controller, Service, Repository)
-- **Dual-Protocol Support** - gRPC (2.5x faster) and REST APIs
-- **OSGi Plugin System** - Hot-swappable modular architecture
-- **5 Deployment Modes** - From monolithic to Kubernetes with gRPC
-- **Server-Side Rendering** - SSR engine for web applications
-- **Enterprise Security** - JWT authentication, RBAC, audit logging
+```
+springboot-developer-skill/
+├── SKILL.md                    # Main skill file (core rules & patterns)
+├── README.md                   # This file
+├── patterns.md                 # Design patterns overview
+├── reference.md                # Technical reference
+├── examples.md                 # Code examples
+├── verification/
+│   └── commands.md             # All verification bash commands
+├── patterns/
+│   └── service-layer.md        # Service layer pattern details
+└── checklists/
+    └── production-ready.md     # Production & code review checklists
+```
+
+## Priority Rules
+
+| Priority | Rule | Description |
+|----------|------|-------------|
+| 🔴 CRITICAL | Zero-Empty Policy | Repository stubs never return empty lists |
+| 🔴 CRITICAL | API Wiring | All Controller endpoints must call existing Service methods |
+| 🔴 CRITICAL | gRPC Implementation | All proto rpc methods must be implemented |
+| 🔴 CRITICAL | Security | All endpoints must have proper authentication |
+| 🟡 IMPORTANT | Input Validation | All endpoints use @Valid annotation |
+| 🟡 IMPORTANT | Mock Data Quality | Realistic data ranges |
+| 🟢 RECOMMENDED | API Documentation | OpenAPI/Swagger annotations |
+| 🟢 RECOMMENDED | Monitoring | Actuator & metrics enabled |
+
+## Quick Reference Card
+
+### New REST Endpoint:
+```
+1. Add Controller method with @GetMapping/@PostMapping
+2. Add Service interface method
+3. Add Service implementation
+4. Add Repository method if needed
+5. Add @Valid for request body validation
+6. Verify mock data is non-empty
+```
+
+### New gRPC Service:
+```
+1. Define service in .proto file
+2. Run ./gradlew generateProto
+3. Create GrpcService extending generated base
+4. Implement all rpc methods
+5. Add @GrpcService annotation
+```
+
+### Quick Diagnosis:
+| Symptom | Check Command |
+|---------|---------------|
+| Empty response | `grep "List.of()\\|emptyList()" *RepositoryImpl.java` |
+| 404 error | Check Service method exists for Controller call |
+| gRPC error | Compare .proto rpc count vs @Override count |
 
 ## Architecture
 
@@ -30,99 +86,43 @@ This skill provides comprehensive guidance for Spring Boot development following
 └─────────────────────────────────────────────────────┘
 ```
 
-## Deployment Modes
+## Key Features
 
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| Monolithic | All layers colocated | Development |
-| Layered + HTTP | Separate containers with HTTP | Simple deployment |
-| Layered + gRPC | Separate containers with gRPC | Performance-critical |
-| Kubernetes + HTTP | K8s deployment with HTTP | Cloud production |
-| Kubernetes + gRPC | K8s with TLS-secured gRPC | Enterprise production |
+- **Clean Architecture** - Three-layer architecture
+- **Dual-Protocol** - gRPC (2.5x faster) and REST support
+- **OSGi Plugin System** - Hot-swappable modular architecture
+- **Spec Gap Prediction** - Auto-detect missing API endpoints
+- **Error Handling Pattern** - Unified ApiException model
+- **Verification Commands** - 22+ diagnostic bash commands
 
 ## Tech Stack
 
 | Technology | Version |
 |------------|---------|
-| Java | 21+ |
-| Spring Boot | 3.2+ |
+| Java | 25+ (OpenJDK) |
+| Spring Boot | 4.0+ |
 | gRPC | 1.60+ |
-| OSGi | Felix 7.0+ |
-| PostgreSQL | 15+ |
+| Apache Felix | 7.0+ |
+| MySQL | 8.0+ |
 | Redis | 7.0+ |
 
-## Documentation
+## Documentation Files
 
 | File | Description |
 |------|-------------|
-| [SKILL.md](SKILL.md) | Core skill instructions and architecture overview |
-| [reference.md](reference.md) | Technical reference for APIs and components |
-| [examples.md](examples.md) | Practical code examples for common scenarios |
-| [patterns.md](patterns.md) | Design patterns and best practices |
+| [SKILL.md](SKILL.md) | Core skill instructions & architecture |
+| [patterns.md](patterns.md) | Design patterns overview |
+| [reference.md](reference.md) | Technical API reference |
+| [examples.md](examples.md) | Practical code examples |
+| [verification/commands.md](verification/commands.md) | All diagnostic commands |
+| [patterns/service-layer.md](patterns/service-layer.md) | Service layer pattern details |
+| [checklists/production-ready.md](checklists/production-ready.md) | Release & review checklists |
 
 ## When to Use This Skill
 
-This skill is ideal for:
-
 - Spring Boot microservices development
 - Architecture design and review
+- Code review
 - gRPC service implementation
 - Plugin-based modular applications
-- Kubernetes deployment configuration
-- Enterprise backend development
-
-## Quick Start
-
-### gRPC Service
-
-```protobuf
-service UserService {
-  rpc GetUser (GetUserRequest) returns (UserResponse);
-  rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);
-  rpc CreateUser (CreateUserRequest) returns (UserResponse);
-}
-```
-
-```java
-@GrpcService
-public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
-
-    private final UserService userService;
-
-    @Override
-    public void getUser(GetUserRequest request, StreamObserver<UserResponse> observer) {
-        User user = userService.findById(request.getId());
-        observer.onNext(toResponse(user));
-        observer.onCompleted();
-    }
-}
-```
-
-### OSGi Plugin
-
-```java
-@Component(
-    immediate = true,
-    service = ArcanaPlugin.class,
-    property = {
-        "plugin.key=analytics-plugin",
-        "plugin.name=Analytics Plugin"
-    }
-)
-public class AnalyticsPlugin implements ArcanaPlugin {
-
-    @Override
-    public void activate(BundleContext context) {
-        // Register services and handlers
-    }
-
-    @Override
-    public void deactivate() {
-        // Cleanup resources
-    }
-}
-```
-
-## License
-
-This skill is part of the Arcana enterprise architecture series.
+- Debugging API issues

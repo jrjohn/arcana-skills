@@ -8,6 +8,224 @@ allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 
 Professional Python/Flask development skill based on [Arcana Cloud Python](https://github.com/jrjohn/arcana-cloud-python) enterprise architecture.
 
+---
+
+## Quick Reference Card
+
+### New Endpoint Checklist:
+```
+1. Add route with @bp.route decorator in controller
+2. Add method to Service interface (Protocol)
+3. Implement method in ServiceImpl
+4. Add Repository method if data access needed
+5. Add Pydantic model for request validation
+6. Verify mock data returns non-empty values
+```
+
+### New gRPC Service Checklist:
+```
+1. Define service in protos/*.proto
+2. Run protoc to generate Python code
+3. Create Servicer class extending generated base
+4. Implement ALL rpc methods (count must match)
+5. Wire to existing Service layer
+```
+
+### Quick Diagnosis:
+| Symptom | Check Command |
+|---------|---------------|
+| Empty response | `grep "\\[\\]\\|list()" app/repository/*_impl.py` |
+| 500 error | `grep "NotImplementedError\\|raise.*Error" app/` |
+| gRPC UNIMPLEMENTED | Compare `rpc ` count in .proto vs `def ` in servicer |
+
+---
+
+## Rules Priority
+
+### 🔴 CRITICAL (Must Fix Immediately)
+
+| Rule | Description | Verification |
+|------|-------------|--------------|
+| Zero-Empty Policy | Repository stubs NEVER return empty lists | `grep "\\[\\]\\|list()" *_impl.py` |
+| API Wiring | ALL routes must call existing Service methods | Check route→service calls |
+| gRPC Implementation | ALL proto rpc methods MUST be implemented | Count rpc vs def |
+| Type Safety | ALL functions have type hints | `mypy app/` |
+
+### 🟡 IMPORTANT (Should Fix Before PR)
+
+| Rule | Description | Verification |
+|------|-------------|--------------|
+| Input Validation | Pydantic models for all requests | Check request models |
+| Mock Data Quality | Realistic, varied values | Review mock data |
+| Error Handling | AppException for all errors | Check exception usage |
+| Logging | Structured logging | Check logger calls |
+
+### 🟢 RECOMMENDED (Nice to Have)
+
+| Rule | Description |
+|------|-------------|
+| API Documentation | OpenAPI/Swagger annotations |
+| Monitoring | Prometheus metrics |
+| Caching | Redis caching for hot data |
+| Rate Limiting | API rate limits |
+
+---
+
+## Error Handling Pattern
+
+### AppException - Unified Error Model
+
+```python
+from enum import Enum
+from dataclasses import dataclass
+from typing import Optional, Dict, Any
+
+class ErrorCode(Enum):
+    # Network errors
+    NETWORK_UNAVAILABLE = "NETWORK_UNAVAILABLE"
+    TIMEOUT = "TIMEOUT"
+    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
+
+    # Auth errors
+    UNAUTHORIZED = "UNAUTHORIZED"
+    TOKEN_EXPIRED = "TOKEN_EXPIRED"
+    INVALID_CREDENTIALS = "INVALID_CREDENTIALS"
+
+    # Data errors
+    NOT_FOUND = "NOT_FOUND"
+    VALIDATION_FAILED = "VALIDATION_FAILED"
+    CONFLICT = "CONFLICT"
+
+    # General errors
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+
+@dataclass
+class AppException(Exception):
+    error_code: ErrorCode
+    message: str
+    http_status: int = 500
+    details: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def not_found(cls, message: str) -> "AppException":
+        return cls(ErrorCode.NOT_FOUND, message, 404)
+
+    @classmethod
+    def unauthorized(cls, message: str) -> "AppException":
+        return cls(ErrorCode.UNAUTHORIZED, message, 401)
+
+    @classmethod
+    def validation(cls, message: str, details: Dict) -> "AppException":
+        return cls(ErrorCode.VALIDATION_FAILED, message, 400, details)
+```
+
+### Global Exception Handler
+
+```python
+@app.errorhandler(AppException)
+def handle_app_exception(e: AppException):
+    return jsonify({
+        "code": e.error_code.value,
+        "message": e.message,
+        "details": e.details,
+        "timestamp": datetime.utcnow().isoformat()
+    }), e.http_status
+```
+
+---
+
+## Test Coverage Targets
+
+### Coverage by Layer
+
+| Layer | Target | Focus Areas |
+|-------|--------|-------------|
+| Service | 90%+ | Business logic, edge cases |
+| Repository | 80%+ | Data mapping, error handling |
+| Controller | 75%+ | Request handling, validation |
+
+### Test Commands
+```bash
+# Run with coverage
+python -m pytest --cov=app --cov-report=html
+
+# View report
+open htmlcov/index.html
+```
+
+---
+
+## Spec Gap Prediction System
+
+When implementing API from incomplete specifications, PROACTIVELY predict missing requirements:
+
+### CRUD Prediction Matrix
+
+When a spec mentions "User management API", predict ALL CRUD operations:
+
+| Entity | Predicted Endpoints | Status |
+|--------|---------------------|--------|
+| User | GET /users | Check |
+| User | GET /users/{id} | Check |
+| User | POST /users | Check |
+| User | PUT /users/{id} | Check |
+| User | DELETE /users/{id} | Check |
+| User | PATCH /users/{id} | Check |
+
+### Response State Prediction
+
+For every endpoint, predict required response states:
+
+```python
+# Predicted states for GET /users/{id}:
+# ✅ 200 OK - User found
+# ✅ 404 Not Found - User doesn't exist
+# ✅ 401 Unauthorized - Not logged in
+# ✅ 403 Forbidden - No permission
+# ✅ 500 Internal Server Error - Server error
+```
+
+### Pagination Prediction
+
+List endpoints SHOULD support pagination:
+
+```python
+# GET /users
+# Predicted query parameters:
+# - page: int = 0
+# - size: int = 10
+# - sort: str = "created_at"
+# - order: str = "desc"
+```
+
+### Filtering Prediction
+
+List endpoints SHOULD support filtering:
+
+```python
+# GET /users
+# Predicted filters:
+# - status: Optional[str] - Filter by status
+# - created_after: Optional[datetime] - Created after date
+# - search: Optional[str] - Search in name/email
+```
+
+### Ask Clarification Prompt
+
+When specs are incomplete, ASK before implementing:
+
+```
+The specification mentions "User API" but doesn't specify:
+1. Should DELETE be soft-delete or hard-delete?
+2. What fields are required for user creation?
+3. Is email verification required?
+4. What roles/permissions exist?
+
+Please clarify before I proceed with implementation.
+```
+
+---
+
 ## Core Architecture Principles
 
 ### Clean Architecture - Three Layers
@@ -37,6 +255,134 @@ Professional Python/Flask development skill based on [Arcana Cloud Python](https
 ## Instructions
 
 When handling Python/Flask development tasks, follow these principles:
+
+### Quick Verification Commands
+
+Use these commands to quickly check for common issues:
+
+```bash
+# 1. Check for unimplemented methods (MUST be empty)
+grep -rn "raise NotImplementedError\|TODO.*implement\|pass\s*#.*TODO" app/
+
+# 2. Check for empty route handlers (MUST be empty)
+grep -rn "def.*():\s*pass$" app/
+
+# 3. Check all routes have handlers (compare route decorators vs function definitions)
+echo "Routes defined:" && grep -c "@.*\.route\|@app\.route\|@bp\.route" app/controller/*.py 2>/dev/null || echo 0
+echo "Handler functions:" && grep -c "^def " app/controller/*.py 2>/dev/null || echo 0
+
+# 4. Check gRPC services are implemented
+echo "gRPC methods defined in proto:" && grep -c "rpc " app/grpc/*.proto 2>/dev/null || echo 0
+echo "gRPC methods implemented:" && grep -c "def " app/grpc/*_servicer.py 2>/dev/null || echo 0
+
+# 5. Verify tests pass
+python -m pytest
+
+# 6. 🚨 Check Controller routes call existing Service methods (CRITICAL!)
+echo "=== Service Methods Called in Controllers ===" && \
+grep -roh "_service\.[a-zA-Z_]*(" app/controller/*.py | sort -u
+echo "=== Service Methods Defined ===" && \
+grep -rh "def [a-zA-Z_]*(" app/service/*.py | grep -oE "def [a-zA-Z_]+\(" | sort -u
+
+# 7. 🚨 Verify ALL Controller endpoints have Service layer implementation
+echo "=== Controller Service Injections ===" && \
+grep -rn "g\.[a-zA-Z_]*_service\|self\._service\|self\._[a-zA-Z_]*_service" app/controller/*.py
+echo "=== Service Class Definitions ===" && \
+grep -rn "class.*Service" app/service/*.py
+
+# 8. 🚨 Check for placeholder returns in route handlers
+grep -rn "@.*\.route" -A10 app/controller/*.py | grep -E "return.*Coming Soon|return.*TODO|raise NotImplementedError"
+
+# 9. 🚨 Check Service→Repository wiring (CRITICAL!)
+echo "=== Repository Methods Called in Services ===" && \
+grep -roh "_repository\.[a-zA-Z_]*(" app/service/*.py | sort -u
+echo "=== Repository Class Methods ===" && \
+grep -rh "def [a-zA-Z_]*(" app/repository/*.py | grep -oE "def [a-zA-Z_]+\(" | sort -u
+
+# 10. 🚨 Verify ALL Repository base class methods have implementations
+echo "=== Repository Base Methods ===" && \
+grep -rh "def [a-zA-Z_]*(" app/repository/*_repository.py | grep -oE "def [a-zA-Z_]+\(" | sort -u
+echo "=== Repository Implementation Methods ===" && \
+grep -rh "def [a-zA-Z_]*(" app/repository/*_repository_impl.py | grep -oE "def [a-zA-Z_]+\(" | sort -u
+```
+
+⚠️ **CRITICAL**: All routes MUST have corresponding handler functions. All gRPC methods defined in .proto files MUST be implemented in servicer classes.
+
+⚠️ **API WIRING CRITICAL**: Commands #6-#8 detect Controller routes that call Service methods that don't exist or raise NotImplementedError. A Controller can call `self._service.get_account_info()` but if the Service class doesn't have this method or raises NotImplementedError, the route fails at runtime!
+
+If any of these return results or counts don't match, FIX THEM before completing the task.
+
+---
+
+## 📊 Mock Data Requirements for Repository Stubs
+
+### The Chart Data Problem
+
+When implementing Repository stubs, **NEVER return empty lists for data that powers UI charts or API responses**. This causes:
+- Frontend charts that render but show nothing
+- API responses with empty data arrays
+- Client applications showing "No data" even when structure exists
+
+### Mock Data Rules
+
+**Rule 1: List data for charts MUST have at least 7 items**
+```python
+# ❌ BAD - Chart will be blank
+def get_current_week_summary(self, user_id: str) -> WeeklySummary:
+    return WeeklySummary(
+        daily_reports=[]  # ← Chart has no data to render!
+    )
+
+# ✅ GOOD - Chart has data to display
+def get_current_week_summary(self, user_id: str) -> WeeklySummary:
+    scores = [72, 78, 85, 80, 76, 88, 82]
+    durations = [390, 420, 450, 410, 380, 460, 435]
+    mock_daily_reports = [
+        self._create_mock_daily_report(score=scores[i], duration=durations[i])
+        for i in range(7)
+    ]
+    return WeeklySummary(daily_reports=mock_daily_reports)
+```
+
+**Rule 2: Use realistic, varied sample values**
+```python
+# ❌ BAD - Monotonous test data
+scores = [80] * 7
+
+# ✅ GOOD - Realistic variation
+scores = [72, 78, 85, 80, 76, 88, 82]  # Shows trend
+```
+
+**Rule 3: Data must match dataclass/Pydantic model exactly**
+```bash
+# Before creating mock data, ALWAYS verify the model definition:
+grep -A 20 "class TherapyData" app/model/*.py
+grep -A 20 "class TherapyData" app/dto/*.py
+```
+
+**Rule 4: Create helper methods for complex mock data**
+```python
+# ✅ Create reusable mock factory
+def _create_mock_daily_report(self, score: int, duration: int) -> DailySleepReport:
+    return DailySleepReport(
+        id=f"mock_{datetime.now().timestamp()}",
+        sleep_score=score,
+        sleep_duration=SleepDuration(total_minutes=duration, ...),
+        # ... all required fields
+    )
+```
+
+### Quick Verification Commands for Mock Data
+
+```bash
+# 11. 🚨 Check for empty list returns in Repository stubs (MUST FIX)
+grep -rn "= \[\]\|return \[\]" app/repository/*_repository_impl.py
+
+# 12. 🚨 Verify chart-related data has mock values
+grep -rn "daily_reports\|weekly_data\|chart_data" app/repository/ | grep -E "= \[\]|return \[\]"
+```
+
+---
 
 ### 0. Project Setup - CRITICAL
 
@@ -109,6 +455,8 @@ python -m pytest
 
 ⚠️ **CRITICAL**: All development MUST follow this TDD workflow. Every SRS/SDD requirement must have corresponding tests BEFORE implementation.
 
+🚨 **ABSOLUTE RULE**: TDD = Tests + Implementation. Writing tests without implementation is **INCOMPLETE**. Every test file MUST have corresponding production code that passes the tests.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TDD Development Workflow                      │
@@ -116,10 +464,47 @@ python -m pytest
 │  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
 │  Step 2: Create Tests → Write tests for EACH Spec item          │
 │  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
-│  Step 4: Implement → Build features to pass tests               │
+│  Step 4: Implement → Build features to pass tests  ⚠️ MANDATORY │
 │  Step 5: Mock APIs → Use mock data for unfinished dependencies  │
 │  Step 6: Run All Tests → ALL tests must pass before completion  │
+│  Step 7: Verify 100% → Tests written = Features implemented     │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+#### ⛔ FORBIDDEN: Tests Without Implementation
+
+```python
+# ❌ WRONG - Test exists but no implementation
+# Test file exists: test_auth_service.py (32 tests)
+# Production file: auth_service.py → MISSING or raises NotImplementedError
+# This is INCOMPLETE TDD!
+
+# ✅ CORRECT - Test AND Implementation both exist
+# Test file: test_auth_service.py (32 tests)
+# Production file: auth_service.py (fully implemented)
+# All 32 tests PASS
+```
+
+#### ⛔ Placeholder Endpoint Policy
+
+Placeholder endpoints are **ONLY** allowed as a temporary route during active development. They are **FORBIDDEN** as a final state.
+
+```python
+# ❌ WRONG - Placeholder endpoint left in production
+@app.route('/training')
+def training():
+    return jsonify({"message": "Coming Soon"})  # FORBIDDEN!
+
+# ✅ CORRECT - Real endpoint implementation
+@app.route('/training')
+def training():
+    return jsonify(training_service.get_all())
+```
+
+**Placeholder Check Command:**
+```bash
+# This command MUST return empty for production-ready code
+grep -rn "NotImplementedError\|raise.*NotImplemented\|TODO.*implement\|Coming Soon\|pass\s*#.*TODO" app/
 ```
 
 #### Step 1: Analyze Spec Documents (SRS & SDD)
@@ -238,7 +623,17 @@ SDD Design Requirements:
 """
 ```
 
-#### Step 4: Mock External Dependencies
+#### Step 4: Mock External Dependencies - MANDATORY
+
+⚠️ **CRITICAL**: Every Repository/Service method MUST return valid mock data. NEVER leave methods with `raise NotImplementedError` or `pass`.
+
+**Rules for Mock Classes:**
+1. ALL methods must return valid mock data
+2. Use `time.sleep()` or `await asyncio.sleep()` to simulate latency (0.5-1 second)
+3. Mock data must match the model structure exactly
+4. Check Enum values exist before using them
+5. Include all required fields for dataclasses/models
+
 For external services or databases not yet available, implement mock classes:
 ```python
 # tests/mock/mock_user_repository.py
@@ -893,6 +1288,101 @@ class TestUserService:
             user_service.create_user(dto)
 ```
 
+## API Wiring Verification Guide
+
+### 🚨 The API Wiring Blind Spot
+
+Flask Controllers often call Service methods that may not exist or raise NotImplementedError:
+
+```python
+# app/controller/settings_controller.py
+settings_bp = Blueprint("settings", __name__, url_prefix="/api/v1/settings")
+
+@settings_bp.route("/account-info", methods=["GET"])
+@jwt_required
+def get_account_info():
+    service: SettingsService = g.settings_service
+    return jsonify(service.get_account_info())  # ⚠️ Does this method exist?
+
+@settings_bp.route("/change-password", methods=["POST"])
+@jwt_required
+def change_password():
+    service: SettingsService = g.settings_service
+    service.change_password(request.json)  # ⚠️ Is this implemented or raises NotImplementedError?
+    return "", 204
+```
+
+**Problem**: If the Service class doesn't have the method or it raises `NotImplementedError`, the route compiles but fails at runtime!
+
+### Detection Patterns
+
+```bash
+# Find methods called on Service classes in Controllers
+grep -roh "_service\.[a-zA-Z_]*(" app/controller/*.py | sort -u
+
+# Find methods defined in Service classes
+grep -rh "def [a-zA-Z_]*(" app/service/*.py | grep -oE "def [a-zA-Z_]+\(" | sort -u
+
+# Find unimplemented methods
+grep -rn "raise NotImplementedError\|pass\s*#.*TODO" app/service/*.py
+
+# Compare: Every Service method called in Controller MUST exist and be implemented
+```
+
+### Verification Checklist
+
+1. **List Service methods called in each Controller**:
+   ```bash
+   grep -oh "settings_service\.[a-zA-Z_]*(" app/controller/settings_controller.py | sort -u
+   ```
+
+2. **List methods implemented in corresponding Service**:
+   ```bash
+   grep -h "def [a-zA-Z_]*(" app/service/settings_service.py | grep -oE "def [a-zA-Z_]+\("
+   ```
+
+3. **Every method called MUST exist in the Service!** Any missing method = runtime failure
+
+### Correct Wiring Example
+
+```python
+# app/controller/settings_controller.py (calls Service methods)
+settings_bp = Blueprint("settings", __name__, url_prefix="/api/v1/settings")
+
+@settings_bp.route("/account-info", methods=["GET"])
+@jwt_required
+def get_account_info():
+    service: SettingsService = g.settings_service
+    return jsonify(service.get_account_info())  # ✅ Method exists
+
+@settings_bp.route("/change-password", methods=["POST"])
+@jwt_required
+def change_password():
+    service: SettingsService = g.settings_service
+    data = request.json
+    service.change_password(data["current_password"], data["new_password"])  # ✅ Method exists
+    return "", 204
+
+
+# app/service/settings_service.py (fully implemented)
+class SettingsService:
+    def __init__(self, user_repository: UserRepository):
+        self._repository = user_repository
+
+    def get_account_info(self) -> dict:  # ✅ Implemented
+        # Real implementation, NOT raising NotImplementedError
+        user = self._get_current_user()
+        return user.to_dict()
+
+    def change_password(self, current_password: str, new_password: str) -> None:  # ✅ Implemented
+        # Real implementation, NOT raising NotImplementedError
+        user = self._get_current_user()
+        if not check_password_hash(user.password_hash, current_password):
+            raise ValueError("Invalid current password")
+        user.password_hash = generate_password_hash(new_password)
+        self._repository.save(user)
+```
+
 ## Code Review Checklist
 
 ### Required Items
@@ -901,6 +1391,10 @@ class TestUserService:
 - [ ] Repository pattern properly implemented
 - [ ] JWT authentication complete
 - [ ] Input validation with Marshmallow
+- [ ] 🚨 ALL Controller Service method calls have corresponding Service implementations
+- [ ] 🚨 ALL gRPC proto methods have servicer implementations
+- [ ] 🚨 ALL Service→Repository method calls exist in Repository classes
+- [ ] 🚨 ALL Repository base class methods have implementations
 
 ### Performance Checks
 - [ ] Use gRPC for internal communication (2.78x faster)

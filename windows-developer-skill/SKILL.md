@@ -8,6 +8,223 @@ allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 
 Professional Windows desktop development skill based on [Arcana Windows](https://github.com/jrjohn/arcana-windows) enterprise architecture.
 
+---
+
+## Quick Reference Card
+
+### New View Checklist:
+```
+1. Add Page.xaml to Presentation/Views/
+2. Create ViewModel with Input/Output/Effect pattern
+3. Add navigation method to INavGraph interface
+4. Implement navigation in NavGraph
+5. Subscribe to ViewModel.Fx in code-behind
+6. Verify mock data returns non-empty values
+```
+
+### New Repository Checklist:
+```
+1. Interface → Domain/Repositories/IXxxRepository.cs
+2. Implementation → Data/Repositories/XxxRepository.cs
+3. DI registration → Infrastructure/DependencyInjection.cs
+4. Mock data (NEVER return empty collections!)
+5. Verify ID consistency across repositories
+```
+
+### Quick Diagnosis:
+| Symptom | Check Command |
+|---------|---------------|
+| Blank screen | `grep "new List<>\\|Empty\\|Array.Empty" src/**/Repositories/*.cs` |
+| Navigation crash | Compare INavGraph methods vs NavGraph implementations |
+| Button does nothing | Check Fx.Subscribe in View code-behind |
+
+---
+
+## Rules Priority
+
+### 🔴 CRITICAL (Must Fix Immediately)
+
+| Rule | Description | Verification |
+|------|-------------|--------------|
+| Zero-Empty Policy | Repository stubs NEVER return empty collections | `grep "Empty\\|new List<>()" *.cs` |
+| Navigation Wiring | ALL INavGraph methods MUST be in NavGraph | Compare interface vs impl |
+| Effect Handling | ALL ViewModel Effects MUST be subscribed | Check Fx.Subscribe |
+| ID Consistency | Cross-repository IDs must match | Check mock data IDs |
+
+### 🟡 IMPORTANT (Should Fix Before PR)
+
+| Rule | Description | Verification |
+|------|-------------|--------------|
+| UI States | Loading/Error/Empty for all views | Check ViewModel Output |
+| Mock Data Quality | Realistic, varied values | Review mock data |
+| Error Messages | User-friendly messages | Check AppError handling |
+| Nullable | Proper null handling | Check ? annotations |
+
+### 🟢 RECOMMENDED (Nice to Have)
+
+| Rule | Description |
+|------|-------------|
+| Animations | Smooth view transitions |
+| Accessibility | AutomationProperties.Name |
+| Dark Mode | Theme support |
+| Telemetry | Analytics tracking |
+
+---
+
+## Error Handling Pattern
+
+### AppException - Unified Error Model
+
+```csharp
+public class AppException : Exception
+{
+    public ErrorCode Code { get; }
+    public Dictionary<string, object>? Details { get; }
+
+    public enum ErrorCode
+    {
+        // Network errors
+        NetworkUnavailable,
+        Timeout,
+        ServiceUnavailable,
+
+        // Auth errors
+        Unauthorized,
+        TokenExpired,
+
+        // Data errors
+        NotFound,
+        ValidationFailed,
+        Conflict,
+
+        // General
+        InternalError
+    }
+
+    public static AppException NotFound(string message)
+        => new(ErrorCode.NotFound, message);
+
+    public static AppException Validation(string message, Dictionary<string, object> details)
+        => new(ErrorCode.ValidationFailed, message) { Details = details };
+}
+```
+
+### Error Handling in ViewModel
+
+```csharp
+private async Task LoadDataAsync()
+{
+    IsLoading = true;
+    Error = null;
+
+    try
+    {
+        Items = await _repository.GetAllAsync();
+    }
+    catch (AppException ex)
+    {
+        Error = ex.Message;
+        if (ex.Code == ErrorCode.Unauthorized)
+            Fx.OnNext(new Effect.NavigateToLogin());
+    }
+    finally
+    {
+        IsLoading = false;
+    }
+}
+```
+
+---
+
+## Test Coverage Targets
+
+### Coverage by Layer
+
+| Layer | Target | Focus Areas |
+|-------|--------|-------------|
+| ViewModel | 90%+ | All intents, state transitions, effects |
+| Service | 85%+ | Business logic, edge cases |
+| Repository | 80%+ | Data mapping, error handling |
+
+### Test Commands
+```bash
+# Run with coverage
+dotnet test --collect:"XPlat Code Coverage"
+
+# Generate report
+reportgenerator -reports:coverage.xml -targetdir:coverage
+```
+
+---
+
+## Spec Gap Prediction System
+
+When implementing UI from incomplete specifications, PROACTIVELY predict missing screens and states:
+
+### Screen Prediction Matrix
+
+When a spec mentions a feature, predict ALL related screens:
+
+| Feature | Predicted Screens | Check |
+|---------|-------------------|-------|
+| User Management | UserListPage | ✅ |
+| User Management | UserDetailPage | ✅ |
+| User Management | UserEditPage | ✅ |
+| User Management | UserCreatePage | ✅ |
+| User Management | UserDeleteConfirmDialog | ✅ |
+
+### UI State Prediction
+
+For every screen, predict required UI states:
+
+```csharp
+// Predicted states for UserListPage:
+// ✅ Loading - Show ProgressRing while fetching
+// ✅ Empty - Show "No users found" message
+// ✅ Error - Show error message with retry button
+// ✅ Success - Show user list
+// ✅ Refreshing - Show pull-to-refresh indicator
+```
+
+### Navigation Prediction
+
+When adding a new feature, predict navigation flow:
+
+```csharp
+// User Management Navigation:
+// Home → UserList → UserDetail → UserEdit
+//                 ↘ UserCreate
+//                 ↘ DeleteConfirmDialog
+```
+
+### Dialog Prediction
+
+CRUD operations need confirmation dialogs:
+
+```csharp
+// Predicted dialogs:
+// ✅ DeleteConfirmDialog - "Are you sure you want to delete?"
+// ✅ UnsavedChangesDialog - "You have unsaved changes"
+// ✅ ErrorDialog - Show error details
+// ✅ SuccessDialog - "Operation completed"
+```
+
+### Ask Clarification Prompt
+
+When specs are incomplete, ASK before implementing:
+
+```
+The specification mentions "User Management" but doesn't specify:
+1. Should the list support multi-select?
+2. What fields are shown in the list vs detail view?
+3. Are there bulk operations (delete multiple)?
+4. What sorting/filtering options are needed?
+
+Please clarify before I proceed with implementation.
+```
+
+---
+
 ## Core Architecture Principles
 
 ### Clean Architecture - Five Layers
@@ -43,6 +260,144 @@ Professional Windows desktop development skill based on [Arcana Windows](https:/
 ## Instructions
 
 When handling Windows desktop development tasks, follow these principles:
+
+### Quick Verification Commands
+
+Use these commands to quickly check for common issues:
+
+```bash
+# 1. Check for unimplemented methods (MUST be empty)
+grep -rn "throw.*NotImplementedException\|TODO.*implement" src/
+
+# 2. Check for empty button click handlers (MUST be empty)
+grep -rn "Click=\"\"\|Command=\"{x:Null}\"" src/
+
+# 3. Check all navigation methods have corresponding pages
+echo "NavGraph methods:" && grep -c "public void To\|public void Navigate" src/**/Navigation/NavGraph.cs 2>/dev/null || echo 0
+echo "Pages registered:" && grep -c "typeof(.*Page)" src/**/Navigation/NavGraph.cs 2>/dev/null || echo 0
+
+# 4. Verify all Views have ViewModels
+echo "Views:" && find src -name "*View.xaml" 2>/dev/null | wc -l
+echo "ViewModels:" && find src -name "*ViewModel.cs" 2>/dev/null | wc -l
+
+# 5. Verify build compiles
+dotnet build
+
+# 6. Run tests
+dotnet test
+
+# 7. 🚨 Check INavGraph interface methods have NavGraph implementations (CRITICAL!)
+echo "=== INavGraph Interface Methods ===" && \
+grep -rh "void To[A-Z]\|Task To[A-Z]" src/**/INavGraph.cs | grep -oE "To[A-Za-z]+" | sort -u
+echo "=== NavGraph Implemented Methods ===" && \
+grep -rh "public void To[A-Z]\|public async Task To[A-Z]" src/**/NavGraph.cs | grep -oE "To[A-Za-z]+" | sort -u
+
+# 8. 🚨 Check ViewModel Effects are handled in Views
+echo "=== ViewModel Effect Types ===" && \
+grep -rh "record Navigate\|record Show\|record Open" src/**/ViewModels/*.cs | grep -oE "record [A-Za-z]+" | sort -u
+echo "=== Effect Subscriptions in Views ===" && \
+grep -rn "Fx.Subscribe\|_viewModel.Fx" src/**/Views/*.cs
+
+# 9. 🚨 Check for navigation callbacks in Views not wired to NavGraph
+grep -rn "OnNavigate\|NavigateTo" src/**/Views/*.xaml.cs | grep -v "INavGraph\|_navGraph"
+
+# 10. 🚨 Check Service→Repository wiring (CRITICAL!)
+echo "=== Repository Methods Called in Services ===" && \
+grep -roh "_repository\.[A-Za-z]*(\|_unitOfWork\.[A-Za-z]*\.[A-Za-z]*(" src/**/Services/*.cs | sort -u
+echo "=== Repository Interface Methods ===" && \
+grep -rh "Task<\|[A-Z][a-zA-Z]* [A-Z]" src/**/IRepository.cs | grep -oE "[A-Z][a-zA-Z]+Async\(" | sort -u
+
+# 11. 🚨 Verify ALL IRepository interface methods have implementations
+echo "=== IRepository Interface Methods ===" && \
+grep -rh "Task<\|void " src/**/Repositories/IRepository.cs | grep -oE "[A-Z][a-zA-Z]+\(" | sort -u
+echo "=== Repository Implementation Methods ===" && \
+grep -rh "public.*async\|public.*override" src/**/Repositories/Repository.cs | grep -oE "[A-Z][a-zA-Z]+\(" | sort -u
+```
+
+⚠️ **CRITICAL**: All NavGraph navigation methods MUST have corresponding Page types registered. Missing pages cause runtime crashes.
+
+⚠️ **NAVIGATION WIRING CRITICAL**: Commands #7-#9 detect INavGraph interface methods not implemented in NavGraph, ViewModel Effects not subscribed in Views, and navigation callbacks not wired. A ViewModel can emit `Fx.OnNext(new Effect.NavigateToSettings())` but if the View doesn't subscribe and call `_navGraph.ToSettings()`, nothing happens!
+
+If any of these return results or counts don't match, FIX THEM before completing the task.
+
+---
+
+## 📊 Mock Data Requirements for Repository Stubs
+
+### The Chart Data Problem
+
+When implementing Repository stubs, **NEVER return empty collections for data that powers UI charts or visualizations**. This causes:
+- Charts that render but show nothing (blank WinUI charts)
+- Line charts that skip rendering (e.g., `if (points.Count < 2) return;`)
+- Empty state views even when data structure exists
+
+### Mock Data Rules
+
+**Rule 1: Collection data for charts MUST have at least 7 items**
+```csharp
+// ❌ BAD - Chart will be blank
+public async Task<WeeklySummary> GetCurrentWeekSummaryAsync(string userId)
+{
+    return new WeeklySummary
+    {
+        DailyReports = new List<DailyReport>()  // ← Chart has no data to render!
+    };
+}
+
+// ✅ GOOD - Chart has data to display
+public async Task<WeeklySummary> GetCurrentWeekSummaryAsync(string userId)
+{
+    var scores = new[] { 72, 78, 85, 80, 76, 88, 82 };
+    var durations = new[] { 390, 420, 450, 410, 380, 460, 435 };
+    var mockDailyReports = Enumerable.Range(0, 7)
+        .Select(i => CreateMockDailyReport(scores[i], durations[i]))
+        .ToList();
+    return new WeeklySummary { DailyReports = mockDailyReports };
+}
+```
+
+**Rule 2: Use realistic, varied sample values**
+```csharp
+// ❌ BAD - Monotonous test data
+var scores = Enumerable.Repeat(80, 7).ToArray();
+
+// ✅ GOOD - Realistic variation
+var scores = new[] { 72, 78, 85, 80, 76, 88, 82 };  // Shows trend
+```
+
+**Rule 3: Data must match entity/DTO class exactly**
+```bash
+# Before creating mock data, ALWAYS verify the class definition:
+grep -A 20 "class TherapyData" src/**/Entities/*.cs
+grep -A 20 "record TherapyData" src/**/DTOs/*.cs
+```
+
+**Rule 4: Create helper methods for complex mock data**
+```csharp
+// ✅ Create reusable mock factory
+private DailyReport CreateMockDailyReport(int score, int duration)
+{
+    return new DailyReport
+    {
+        Id = Guid.NewGuid().ToString(),
+        SleepScore = score,
+        SleepDuration = new SleepDuration { TotalMinutes = duration, ... },
+        // ... all required fields
+    };
+}
+```
+
+### Quick Verification Commands for Mock Data
+
+```bash
+# 12. 🚨 Check for empty collection returns in Repository stubs (MUST FIX)
+grep -rn "new List<\|Enumerable.Empty<\|Array.Empty<" src/**/Repositories/*Repository.cs
+
+# 13. 🚨 Verify chart-related data has mock values
+grep -rn "DailyReports\|WeeklyData\|ChartData" src/**/Repositories/ | grep -E "new List<.*>\(\)|Empty<"
+```
+
+---
 
 ### 0. Project Setup - CRITICAL
 
@@ -114,6 +469,8 @@ dotnet test
 
 ⚠️ **CRITICAL**: All development MUST follow this TDD workflow. Every SRS/SDD requirement must have corresponding tests BEFORE implementation.
 
+🚨 **ABSOLUTE RULE**: TDD = Tests + Implementation. Writing tests without implementation is **INCOMPLETE**. Every test file MUST have corresponding production code that passes the tests.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TDD Development Workflow                      │
@@ -121,10 +478,47 @@ dotnet test
 │  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
 │  Step 2: Create Tests → Write tests for EACH Spec item          │
 │  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
-│  Step 4: Implement → Build features to pass tests               │
+│  Step 4: Implement → Build features to pass tests  ⚠️ MANDATORY │
 │  Step 5: Mock APIs → Use mock data for unfinished dependencies  │
 │  Step 6: Run All Tests → ALL tests must pass before completion  │
+│  Step 7: Verify 100% → Tests written = Features implemented     │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+#### ⛔ FORBIDDEN: Tests Without Implementation
+
+```csharp
+// ❌ WRONG - Test exists but no implementation
+// Test file exists: LoginViewModelTests.cs (32 tests)
+// Production file: LoginViewModel.cs → MISSING or throws NotImplementedException
+// This is INCOMPLETE TDD!
+
+// ✅ CORRECT - Test AND Implementation both exist
+// Test file: LoginViewModelTests.cs (32 tests)
+// Production file: LoginViewModel.cs (fully implemented)
+// All 32 tests PASS
+```
+
+#### ⛔ Placeholder Page Policy
+
+Placeholder pages are **ONLY** allowed as a temporary navigation target during active development. They are **FORBIDDEN** as a final state.
+
+```csharp
+// ❌ WRONG - Placeholder page left in production
+case Route.Training:
+    _frame.Navigate(typeof(PlaceholderPage), "訓練課程"); // FORBIDDEN!
+    break;
+
+// ✅ CORRECT - Real page implementation
+case Route.Training:
+    _frame.Navigate(typeof(TrainingPage));
+    break;
+```
+
+**Placeholder Check Command:**
+```bash
+# This command MUST return empty for production-ready code
+grep -rn "PlaceholderPage\|NotImplementedException\|TODO.*implement\|Coming Soon" src/
 ```
 
 #### Step 1: Analyze Spec Documents (SRS & SDD)
@@ -246,7 +640,17 @@ Before implementation, verify ALL SRS and SDD items have tests:
  */
 ```
 
-#### Step 4: Mock External Dependencies
+#### Step 4: Mock External Dependencies - MANDATORY
+
+⚠️ **CRITICAL**: Every Repository/Service method MUST return valid mock data. NEVER leave methods throwing `NotImplementedException`.
+
+**Rules for Mock Classes:**
+1. ALL methods must return valid mock data
+2. Use `Task.Delay()` to simulate network latency (500-1000ms)
+3. Mock data must match the entity structure exactly
+4. Check enum values exist before using them
+5. Include all required properties for records/classes
+
 For external services or databases not yet available, implement mock classes:
 ```csharp
 // tests/Arcana.App.Tests/Mocks/MockAuthService.cs
@@ -1124,6 +1528,134 @@ public record AuditEntry
 }
 ```
 
+## Navigation Wiring Verification Guide
+
+### 🚨 The Navigation Wiring Blind Spot
+
+WinUI 3 Views with ViewModels often have navigation Effects that need View subscription:
+
+```csharp
+// SettingsViewModel.cs
+public partial class SettingsViewModel : ObservableObject
+{
+    public sealed class Effect
+    {
+        public record NavigateToAccountInfo;  // ⚠️ Needs View subscription!
+        public record NavigateToChangePassword;  // ⚠️ Needs View subscription!
+        public record NavigateToUserList;  // ⚠️ Needs View subscription!
+    }
+
+    public Subject<Effect> Fx { get; } = new();
+
+    private void GoToAccountInfo()
+    {
+        Fx.OnNext(new Effect.NavigateToAccountInfo());  // Does nothing if View doesn't subscribe!
+    }
+}
+```
+
+**Problem**: If the View doesn't subscribe to `Fx` and handle the Effect by calling `INavGraph`, the button appears functional but does nothing when clicked!
+
+### Detection Patterns
+
+```bash
+# Find ViewModel Effect types
+grep -rn "record Navigate\|record Show\|record Open" src/**/ViewModels/*.cs
+
+# Find View subscriptions to Fx
+grep -rn "Fx.Subscribe\|_viewModel.Fx" src/**/Views/*.cs
+
+# Find INavGraph interface methods
+grep -rn "void To[A-Z]" src/**/INavGraph.cs
+
+# Find NavGraph implementations
+grep -rn "public void To[A-Z]" src/**/NavGraph.cs
+
+# Compare: Every Effect.Navigate* MUST have View subscription AND NavGraph method
+```
+
+### Verification Checklist
+
+1. **List Effect types in each ViewModel**:
+   ```bash
+   grep -h "record Navigate" src/Arcana.App/ViewModels/SettingsViewModel.cs
+   ```
+
+2. **List Effect handlers in corresponding View**:
+   ```bash
+   grep -h "NavigateTo\|Effect.Navigate" src/Arcana.App/Views/SettingsPage.xaml.cs
+   ```
+
+3. **Every Effect MUST have View handler AND NavGraph method!** Any missing = dead button
+
+### Correct Wiring Example
+
+```csharp
+// SettingsViewModel.cs (emits Effects)
+public partial class SettingsViewModel : ObservableObject
+{
+    public sealed class Effect
+    {
+        public record NavigateToAccountInfo;
+        public record NavigateToChangePassword;
+        public record NavigateToUserList;
+    }
+
+    public Subject<Effect> Fx { get; } = new();
+
+    public void GoToAccountInfo() => Fx.OnNext(new Effect.NavigateToAccountInfo());
+    public void GoToChangePassword() => Fx.OnNext(new Effect.NavigateToChangePassword());
+    public void GoToUserList() => Fx.OnNext(new Effect.NavigateToUserList());
+}
+
+// SettingsPage.xaml.cs (subscribes and handles Effects)
+public sealed partial class SettingsPage : Page
+{
+    private readonly SettingsViewModel _viewModel;
+    private readonly INavGraph _navGraph;
+    private readonly IDisposable _effectSubscription;
+
+    public SettingsPage(SettingsViewModel viewModel, INavGraph navGraph)
+    {
+        _viewModel = viewModel;
+        _navGraph = navGraph;
+        InitializeComponent();
+
+        _effectSubscription = _viewModel.Fx.Subscribe(effect =>  // ✅ Subscribed
+        {
+            switch (effect)
+            {
+                case SettingsViewModel.Effect.NavigateToAccountInfo:
+                    _navGraph.ToAccountInfo();  // ✅ Calls NavGraph
+                    break;
+                case SettingsViewModel.Effect.NavigateToChangePassword:
+                    _navGraph.ToChangePassword();  // ✅ Calls NavGraph
+                    break;
+                case SettingsViewModel.Effect.NavigateToUserList:
+                    _navGraph.ToUserList();  // ✅ Calls NavGraph
+                    break;
+            }
+        });
+    }
+}
+
+// INavGraph.cs (interface declares methods)
+public interface INavGraph
+{
+    void ToAccountInfo();  // ✅ Declared
+    void ToChangePassword();  // ✅ Declared
+    void ToUserList();  // ✅ Declared
+}
+
+// NavGraph.cs (implements methods)
+public class NavGraph : INavGraph
+{
+    public void ToAccountInfo() => _frame.Navigate(typeof(AccountInfoPage));  // ✅ Implemented
+    public void ToChangePassword() => _frame.Navigate(typeof(ChangePasswordPage));  // ✅ Implemented
+    public void ToUserList() => _frame.Navigate(typeof(UserListPage));  // ✅ Implemented
+}
+```
+
 ## Code Review Checklist
 
 ### Required Items
@@ -1132,6 +1664,10 @@ public record AuditEntry
 - [ ] Type-safe navigation via INavGraph
 - [ ] Repository + Unit of Work pattern implemented
 - [ ] CRDT sync for offline-first scenarios
+- [ ] 🚨 ALL ViewModel Effects are subscribed in Views
+- [ ] 🚨 ALL INavGraph methods have NavGraph implementations
+- [ ] 🚨 ALL Service→Repository/UnitOfWork method calls exist in interfaces
+- [ ] 🚨 ALL IRepository interface methods have Repository implementations
 
 ### Performance Checks
 - [ ] Use async/await properly

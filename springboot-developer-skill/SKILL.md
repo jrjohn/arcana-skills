@@ -8,6 +8,259 @@ allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 
 Professional Spring Boot development skill based on [Arcana Cloud SpringBoot](https://github.com/jrjohn/arcana-cloud-springboot) enterprise architecture.
 
+---
+
+## Quick Reference Card
+
+### New REST Endpoint Checklist:
+```
+1. Add method to Controller with @GetMapping/@PostMapping
+2. Add method signature to Service interface
+3. Implement method in ServiceImpl with @Override
+4. Add Repository method if data access needed
+5. Add @Valid for RequestBody validation
+6. Add @PreAuthorize for security if needed
+7. Verify mock data returns non-empty values
+```
+
+### New gRPC Service Checklist:
+```
+1. Define service in src/main/proto/*.proto
+2. Run ./gradlew generateProto
+3. Create GrpcService class extending generated ImplBase
+4. Add @GrpcService annotation
+5. Implement ALL rpc methods (count must match)
+6. Wire to existing Service layer
+```
+
+### Quick Diagnosis:
+| Symptom | Check Command |
+|---------|---------------|
+| Empty response | `grep "List.of()\\|emptyList()" src/main/java/**/repository/*Impl.java` |
+| 404 on endpoint | Check Service method exists for Controller call |
+| gRPC UNIMPLEMENTED | Compare `rpc ` count in .proto vs `@Override` in GrpcService |
+| 500 error | `grep "throw.*UnsupportedOperationException" src/main/java/` |
+
+---
+
+## Rules Priority
+
+### 🔴 CRITICAL (Must Fix Immediately)
+
+| Rule | Description | Verification |
+|------|-------------|--------------|
+| Zero-Empty Policy | Repository stubs NEVER return empty lists | `grep "emptyList\\|List.of()" *Impl.java` |
+| API Wiring | ALL Controller methods must call existing Service methods | Check Controller→Service calls |
+| gRPC Implementation | ALL proto rpc methods MUST be implemented | Count rpc vs @Override |
+| Security | ALL non-public endpoints MUST have authentication | Check @PreAuthorize usage |
+
+### 🟡 IMPORTANT (Should Fix Before PR)
+
+| Rule | Description | Verification |
+|------|-------------|--------------|
+| Input Validation | All endpoints use @Valid | `grep "@RequestBody" *.java | grep -v "@Valid"` |
+| Mock Data Quality | Realistic, varied values (not all same) | Review mock data |
+| Error Handling | Global exception handler configured | Check @ControllerAdvice |
+| Transaction Management | Service methods have @Transactional | Check ServiceImpl classes |
+
+### 🟢 RECOMMENDED (Nice to Have)
+
+| Rule | Description |
+|------|-------------|
+| API Documentation | OpenAPI/Swagger annotations |
+| Monitoring | Actuator endpoints enabled |
+| Caching | Redis/Caffeine caching for hot data |
+| Rate Limiting | API rate limits configured |
+
+---
+
+## Error Handling Pattern
+
+### ApiException - Unified Error Model
+
+```java
+// exception/ApiException.java
+@Getter
+public class ApiException extends RuntimeException {
+    private final ErrorCode errorCode;
+    private final HttpStatus httpStatus;
+    private final Map<String, Object> details;
+
+    public enum ErrorCode {
+        // Network errors
+        NETWORK_UNAVAILABLE,
+        TIMEOUT,
+        SERVICE_UNAVAILABLE,
+
+        // Auth errors
+        UNAUTHORIZED,
+        TOKEN_EXPIRED,
+        INVALID_CREDENTIALS,
+        ACCESS_DENIED,
+
+        // Data errors
+        NOT_FOUND,
+        VALIDATION_FAILED,
+        CONFLICT,
+        DATA_INTEGRITY_ERROR,
+
+        // General errors
+        INTERNAL_ERROR
+    }
+
+    public static ApiException notFound(String message) {
+        return new ApiException(ErrorCode.NOT_FOUND, HttpStatus.NOT_FOUND, message);
+    }
+
+    public static ApiException unauthorized(String message) {
+        return new ApiException(ErrorCode.UNAUTHORIZED, HttpStatus.UNAUTHORIZED, message);
+    }
+
+    public static ApiException validation(String message, Map<String, Object> details) {
+        return new ApiException(ErrorCode.VALIDATION_FAILED, HttpStatus.BAD_REQUEST, message, details);
+    }
+}
+```
+
+### Error Handling Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Error Flow                                │
+├─────────────────────────────────────────────────────────────────┤
+│  Repository Layer:                                               │
+│    - Catch database exceptions                                   │
+│    - Map to ApiException with appropriate code                   │
+│    - Throw ApiException                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  Service Layer:                                                  │
+│    - Catch repository exceptions                                 │
+│    - Add business context if needed                              │
+│    - Re-throw as ApiException                                    │
+├─────────────────────────────────────────────────────────────────┤
+│  Controller Layer:                                               │
+│    - Let exceptions propagate to GlobalExceptionHandler          │
+│    - Or handle specific cases with try-catch                     │
+├─────────────────────────────────────────────────────────────────┤
+│  GlobalExceptionHandler (@ControllerAdvice):                     │
+│    - Map ApiException to ErrorResponse                           │
+│    - Set appropriate HTTP status                                 │
+│    - Return consistent error format                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Global Exception Handler
+
+```java
+@RestControllerAdvice
+@Slf4j
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<ErrorResponse> handleApiException(ApiException ex) {
+        log.error("API error: {} - {}", ex.getErrorCode(), ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+            .code(ex.getErrorCode().name())
+            .message(ex.getMessage())
+            .details(ex.getDetails())
+            .timestamp(Instant.now())
+            .build();
+
+        return ResponseEntity.status(ex.getHttpStatus()).body(response);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = ex.getBindingResult().getFieldErrors().stream()
+            .collect(Collectors.toMap(
+                FieldError::getField,
+                FieldError::getDefaultMessage,
+                (a, b) -> a
+            ));
+
+        ErrorResponse response = ErrorResponse.builder()
+            .code("VALIDATION_FAILED")
+            .message("Validation failed")
+            .details(Map.of("fields", errors))
+            .timestamp(Instant.now())
+            .build();
+
+        return ResponseEntity.badRequest().body(response);
+    }
+}
+```
+
+---
+
+## Test Coverage Targets
+
+### Coverage by Layer
+
+| Layer | Target | Focus Areas |
+|-------|--------|-------------|
+| Controller | 80%+ | Request mapping, validation, response codes |
+| Service | 90%+ | Business logic, edge cases, transactions |
+| Repository | 75%+ | Query methods, data mapping |
+| Integration | 60%+ | End-to-end flows |
+
+### What to Test
+
+**Controller Tests (MockMvc):**
+```java
+@WebMvcTest(UserController.class)
+class UserControllerTest {
+    @Autowired MockMvc mockMvc;
+    @MockBean UserService userService;
+
+    @Test
+    void getUser_WhenExists_Returns200() throws Exception {
+        when(userService.findById("123")).thenReturn(Optional.of(testUser));
+
+        mockMvc.perform(get("/api/users/123"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value("123"));
+    }
+
+    @Test
+    void createUser_WhenInvalid_Returns400() throws Exception {
+        mockMvc.perform(post("/api/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest());
+    }
+}
+```
+
+**Service Tests (Unit):**
+```java
+@ExtendWith(MockitoExtension.class)
+class UserServiceImplTest {
+    @Mock UserRepository userRepository;
+    @InjectMocks UserServiceImpl userService;
+
+    @Test
+    void create_WhenEmailExists_ThrowsValidationException() {
+        when(userRepository.existsByEmail("test@test.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> userService.create(request))
+            .isInstanceOf(ApiException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CONFLICT);
+    }
+}
+```
+
+### Test Commands
+```bash
+# Run all tests with coverage
+./gradlew test jacocoTestReport
+
+# View coverage report
+open build/reports/jacoco/test/html/index.html
+```
+
+---
+
 ## Core Architecture Principles
 
 ### Clean Architecture - Three Layers
@@ -35,6 +288,136 @@ Professional Spring Boot development skill based on [Arcana Cloud SpringBoot](ht
 ## Instructions
 
 When handling Spring Boot development tasks, follow these principles:
+
+### Quick Verification Commands
+
+Use these commands to quickly check for common issues:
+
+```bash
+# 1. Check for unimplemented methods (MUST be empty)
+grep -rn "throw.*UnsupportedOperationException\|TODO.*implement\|throw.*NotImplementedException" src/main/java/
+
+# 2. Check all REST endpoints have handlers
+echo "REST endpoints:" && grep -c "@GetMapping\|@PostMapping\|@PutMapping\|@DeleteMapping\|@RequestMapping" src/main/java/**/controller/*.java 2>/dev/null || echo 0
+
+# 3. Check all gRPC services are implemented
+echo "gRPC methods in proto:" && grep -c "rpc " src/main/proto/*.proto 2>/dev/null || echo 0
+echo "gRPC methods implemented:" && grep -c "@Override" src/main/java/**/grpc/*GrpcService.java 2>/dev/null || echo 0
+
+# 4. Verify build compiles
+./gradlew clean build
+
+# 5. Run tests
+./gradlew test
+
+# 6. 🚨 Check Controller endpoints call existing Service methods (CRITICAL!)
+echo "=== Service Methods Called in Controllers ===" && \
+grep -roh "[a-zA-Z]*Service\.[a-zA-Z]*(" src/main/java/**/controller/*.java | sort -u
+echo "=== Service Methods Defined ===" && \
+grep -rh "public.*(" src/main/java/**/service/*.java | grep -oE "[a-zA-Z]+\(" | sort -u
+
+# 7. 🚨 Verify ALL Controller endpoints have Service layer implementation
+echo "=== Controller Injection Points ===" && \
+grep -rn "private.*final.*Service" src/main/java/**/controller/*.java
+echo "=== Service Implementation Check ===" && \
+grep -rn "@Service" src/main/java/**/service/*.java
+
+# 8. 🚨 Check for empty endpoint handlers
+grep -rn "@.*Mapping" -A5 src/main/java/**/controller/*.java | grep -E "return null|return ResponseEntity.ok\(\)|// TODO"
+
+# 9. 🚨 Check Service→Repository wiring (CRITICAL!)
+echo "=== Repository Methods Called in Services ===" && \
+grep -roh "[a-zA-Z]*Repository\.[a-zA-Z]*(" src/main/java/**/service/*.java | sort -u
+echo "=== Repository Interface Methods ===" && \
+grep -rh "[A-Za-z]* [a-zA-Z]*(" src/main/java/**/repository/*Repository.java | grep -oE "[a-zA-Z]+\(" | sort -u
+
+# 10. 🚨 Verify ALL Repository interface methods have implementations
+echo "=== Repository Interface Methods ===" && \
+grep -rh "[A-Za-z]* [a-zA-Z]*(" src/main/java/**/repository/*Repository.java | grep -oE "[a-zA-Z]+\(" | sort -u
+echo "=== Repository Implementation Methods ===" && \
+grep -rh "@Override\|public.*(" src/main/java/**/repository/*RepositoryImpl.java | grep -oE "[a-zA-Z]+\(" | sort -u
+```
+
+⚠️ **CRITICAL**: All gRPC methods defined in .proto files MUST be implemented in GrpcService classes. Missing implementations cause runtime errors.
+
+⚠️ **API WIRING CRITICAL**: Commands #6-#8 detect Controller endpoints that call Service methods that don't exist or are not implemented. A Controller can call `userService.getAccountInfo()` but if the Service class doesn't have this method or throws UnsupportedOperationException, the endpoint fails at runtime!
+
+If any of these return results or counts don't match, FIX THEM before completing the task.
+
+---
+
+## 📊 Mock Data Requirements for Repository Stubs
+
+### The Chart Data Problem
+
+When implementing Repository stubs, **NEVER return empty lists for data that powers UI charts or API responses**. This causes:
+- Frontend charts that render but show nothing
+- API responses with empty data arrays
+- Client applications showing "No data" even when structure exists
+
+### Mock Data Rules
+
+**Rule 1: List data for charts MUST have at least 7 items**
+```java
+// ❌ BAD - Chart will be blank
+public WeeklySummary getCurrentWeekSummary(String userId) {
+    return new WeeklySummary(
+        List.of()  // ← Chart has no data to render!
+    );
+}
+
+// ✅ GOOD - Chart has data to display
+public WeeklySummary getCurrentWeekSummary(String userId) {
+    List<DailyReport> mockDailyReports = IntStream.range(0, 7)
+        .mapToObj(i -> createMockDailyReport(
+            new int[]{72, 78, 85, 80, 76, 88, 82}[i],
+            new int[]{390, 420, 450, 410, 380, 460, 435}[i]
+        ))
+        .collect(Collectors.toList());
+    return new WeeklySummary(mockDailyReports);
+}
+```
+
+**Rule 2: Use realistic, varied sample values**
+```java
+// ❌ BAD - Monotonous test data
+List<Integer> scores = Collections.nCopies(7, 80);
+
+// ✅ GOOD - Realistic variation
+int[] scores = {72, 78, 85, 80, 76, 88, 82};  // Shows trend
+```
+
+**Rule 3: Data must match DTO/Entity exactly**
+```bash
+# Before creating mock data, ALWAYS verify the class definition:
+grep -A 20 "class TherapyData" src/main/java/**/dto/*.java
+grep -A 20 "class TherapyData" src/main/java/**/model/*.java
+```
+
+**Rule 4: Create helper methods for complex mock data**
+```java
+// ✅ Create reusable mock factory
+private DailyReport createMockDailyReport(int score, int duration) {
+    return DailyReport.builder()
+        .id(UUID.randomUUID().toString())
+        .sleepScore(score)
+        .sleepDuration(new SleepDuration(duration, ...))
+        // ... all required fields
+        .build();
+}
+```
+
+### Quick Verification Commands for Mock Data
+
+```bash
+# 11. 🚨 Check for empty list returns in Repository stubs (MUST FIX)
+grep -rn "List.of()\|Collections.emptyList()\|new ArrayList<>()" src/main/java/**/repository/*RepositoryImpl.java
+
+# 12. 🚨 Verify chart-related data has mock values
+grep -rn "dailyReports\|weeklyData\|chartData" src/main/java/**/repository/ | grep -E "emptyList|List\.of\(\)"
+```
+
+---
 
 ### 0. Project Setup - CRITICAL
 
@@ -104,6 +487,8 @@ The cloned project contains example API (e.g., Arcana User Management). Clean up
 
 ⚠️ **CRITICAL**: All development MUST follow this TDD workflow. Every SRS/SDD requirement must have corresponding tests BEFORE implementation.
 
+🚨 **ABSOLUTE RULE**: TDD = Tests + Implementation. Writing tests without implementation is **INCOMPLETE**. Every test file MUST have corresponding production code that passes the tests.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TDD Development Workflow                      │
@@ -111,10 +496,49 @@ The cloned project contains example API (e.g., Arcana User Management). Clean up
 │  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
 │  Step 2: Create Tests → Write tests for EACH Spec item          │
 │  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
-│  Step 4: Implement → Build features to pass tests               │
+│  Step 4: Implement → Build features to pass tests  ⚠️ MANDATORY │
 │  Step 5: Mock APIs → Use mock data for unfinished dependencies  │
 │  Step 6: Run All Tests → ALL tests must pass before completion  │
+│  Step 7: Verify 100% → Tests written = Features implemented     │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+#### ⛔ FORBIDDEN: Tests Without Implementation
+
+```java
+// ❌ WRONG - Test exists but no implementation
+// Test file exists: AuthServiceTest.java (32 tests)
+// Production file: AuthService.java → MISSING or throws UnsupportedOperationException
+// This is INCOMPLETE TDD!
+
+// ✅ CORRECT - Test AND Implementation both exist
+// Test file: AuthServiceTest.java (32 tests)
+// Production file: AuthService.java (fully implemented)
+// All 32 tests PASS
+```
+
+#### ⛔ Placeholder Endpoint Policy
+
+Placeholder endpoints are **ONLY** allowed as a temporary route during active development. They are **FORBIDDEN** as a final state.
+
+```java
+// ❌ WRONG - Placeholder endpoint left in production
+@GetMapping("/training")
+public ResponseEntity<?> training() {
+    return ResponseEntity.ok(Map.of("message", "Coming Soon")); // FORBIDDEN!
+}
+
+// ✅ CORRECT - Real endpoint implementation
+@GetMapping("/training")
+public ResponseEntity<List<TrainingDto>> training() {
+    return ResponseEntity.ok(trainingService.getAll());
+}
+```
+
+**Placeholder Check Command:**
+```bash
+# This command MUST return empty for production-ready code
+grep -rn "UnsupportedOperationException\|NotImplementedException\|TODO.*implement\|Coming Soon" src/main/java/
 ```
 
 #### Step 1: Analyze Spec Documents (SRS & SDD)
@@ -239,7 +663,17 @@ Before implementation, verify ALL SRS and SDD items have tests:
  */
 ```
 
-#### Step 4: Mock External Dependencies
+#### Step 4: Mock External Dependencies - MANDATORY
+
+⚠️ **CRITICAL**: Every Repository/Service method MUST return valid mock data. NEVER leave methods throwing `UnsupportedOperationException` or `NotImplementedException`.
+
+**Rules for Mock Classes:**
+1. ALL methods must return valid mock data
+2. Use `Thread.sleep()` or `@Async` with delay to simulate latency (500-1000ms)
+3. Mock data must match the entity/DTO structure exactly
+4. Check Enum values exist before using them
+5. Include all required fields for entities
+
 For external services or databases not yet available, implement mock classes:
 ```java
 // src/test/java/.../mock/MockUserRepository.java
@@ -794,6 +1228,111 @@ public class SSREngine {
 }
 ```
 
+## API Wiring Verification Guide
+
+### 🚨 The API Wiring Blind Spot
+
+Spring Boot Controllers often inject Services and call methods that may not exist or are not implemented:
+
+```java
+// SettingsController.java
+@RestController
+@RequestMapping("/api/v1/settings")
+@RequiredArgsConstructor
+public class SettingsController {
+    private final SettingsService settingsService;
+
+    @GetMapping("/account-info")
+    public ResponseEntity<AccountInfoDto> getAccountInfo() {
+        return ResponseEntity.ok(settingsService.getAccountInfo());  // ⚠️ Does this method exist?
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(@RequestBody ChangePasswordRequest req) {
+        settingsService.changePassword(req);  // ⚠️ Is this implemented or throws UnsupportedOperationException?
+        return ResponseEntity.ok().build();
+    }
+}
+```
+
+**Problem**: If the Service class doesn't have the method or it throws `UnsupportedOperationException`, the endpoint compiles but fails at runtime!
+
+### Detection Patterns
+
+```bash
+# Find methods called on Service classes in Controllers
+grep -roh "[a-zA-Z]*Service\.[a-zA-Z]*(" src/main/java/**/controller/*.java | sort -u
+
+# Find methods defined in Service classes
+grep -rh "public.*(" src/main/java/**/service/*.java | grep -oE "[a-zA-Z]+\(" | sort -u
+
+# Find unimplemented methods
+grep -rn "throw.*UnsupportedOperationException\|TODO.*implement" src/main/java/**/service/*.java
+
+# Compare: Every Service method called in Controller MUST exist and be implemented
+```
+
+### Verification Checklist
+
+1. **List Service methods called in each Controller**:
+   ```bash
+   grep -oh "settingsService\.[a-zA-Z]*(" src/main/java/**/controller/SettingsController.java | sort -u
+   ```
+
+2. **List methods implemented in corresponding Service**:
+   ```bash
+   grep -h "public.*(" src/main/java/**/service/SettingsService.java | grep -oE "[a-zA-Z]+\("
+   ```
+
+3. **Every method called MUST exist in the Service!** Any missing method = runtime failure
+
+### Correct Wiring Example
+
+```java
+// SettingsController.java (calls Service methods)
+@RestController
+@RequestMapping("/api/v1/settings")
+@RequiredArgsConstructor
+public class SettingsController {
+    private final SettingsService settingsService;
+
+    @GetMapping("/account-info")
+    public ResponseEntity<AccountInfoDto> getAccountInfo() {
+        return ResponseEntity.ok(settingsService.getAccountInfo());  // ✅ Method exists
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(@RequestBody ChangePasswordRequest req) {
+        settingsService.changePassword(req.getCurrentPassword(), req.getNewPassword());  // ✅ Method exists
+        return ResponseEntity.ok().build();
+    }
+}
+
+// SettingsService.java (fully implemented)
+@Service
+@RequiredArgsConstructor
+public class SettingsService {
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    public AccountInfoDto getAccountInfo() {  // ✅ Implemented
+        // Real implementation, NOT throwing UnsupportedOperationException
+        User user = getCurrentUser();
+        return AccountInfoDto.from(user);
+    }
+
+    public void changePassword(String currentPassword, String newPassword) {  // ✅ Implemented
+        // Real implementation, NOT throwing UnsupportedOperationException
+        User user = getCurrentUser();
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new BadCredentialsException("Invalid current password");
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
+}
+```
+
 ## Code Review Checklist
 
 ### Required Items
@@ -802,6 +1341,10 @@ public class SSREngine {
 - [ ] Plugin system uses OSGi properly
 - [ ] Security configuration complete (JWT, RBAC)
 - [ ] Circuit breaker configured for external calls
+- [ ] 🚨 ALL Controller Service method calls have corresponding Service implementations
+- [ ] 🚨 ALL gRPC proto methods have GrpcService implementations
+- [ ] 🚨 ALL Service→Repository method calls exist in Repository interfaces
+- [ ] 🚨 ALL Repository interface methods have RepositoryImpl implementations
 
 ### Performance Checks
 - [ ] gRPC for internal communication (2.5x faster)
@@ -832,6 +1375,178 @@ public class SSREngine {
 1. Enable gRPC for internal calls
 2. Configure connection pooling
 3. Review circuit breaker settings
+
+---
+
+## Spec Gap Prediction System
+
+When Spec is incomplete, use these universal rules to predict and supplement missing API endpoints.
+
+### Endpoint Type → Required Elements (Universal)
+
+| Endpoint Type | Required Elements | Auto-Predict |
+|---------------|-------------------|--------------|
+| List endpoint | Pagination, Sorting, Filtering | Search endpoint, Count endpoint |
+| Detail endpoint | ID validation, 404 handling | Related data endpoints |
+| Create endpoint | Validation, 201 response | Duplicate check |
+| Update endpoint | Validation, 404 handling | Partial update (PATCH) |
+| Delete endpoint | 404 handling, Cascade rules | Soft delete option |
+| Auth endpoint | JWT response, Refresh token | Logout, Password reset |
+
+### Flow Completion Prediction
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Flow Completion Rules                         │
+├─────────────────────────────────────────────────────────────────┤
+│  IF Spec has Login endpoint:                                     │
+│    → PREDICT: Register, Logout, Refresh token, Forgot password   │
+│                                                                  │
+│  IF Spec has Register endpoint:                                  │
+│    → PREDICT: Email verification, Onboarding data endpoint       │
+│                                                                  │
+│  IF Spec has List endpoint:                                      │
+│    → PREDICT: Detail endpoint (GET /{id})                        │
+│    → PREDICT: Search endpoint (GET /search)                      │
+│    → PREDICT: Count endpoint (GET /count)                        │
+│                                                                  │
+│  IF Spec has Create endpoint:                                    │
+│    → PREDICT: Update endpoint (PUT /{id})                        │
+│    → PREDICT: Delete endpoint (DELETE /{id})                     │
+│    → PREDICT: Batch create endpoint                              │
+│                                                                  │
+│  IF Spec has User management:                                    │
+│    → PREDICT: Profile endpoint                                   │
+│    → PREDICT: Change password endpoint                           │
+│    → PREDICT: Settings endpoint                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### CRUD Prediction Matrix
+
+| Spec Mentions | Auto-Predict Endpoints |
+|---------------|------------------------|
+| "List items" | GET /items, GET /items/{id}, GET /items/count |
+| "Create item" | POST /items with @Valid, 201 response |
+| "Update item" | PUT /items/{id}, PATCH /items/{id} |
+| "Delete item" | DELETE /items/{id}, soft delete option |
+| "Search items" | GET /items/search with query params |
+| "Filter items" | Query parameters with Specification pattern |
+
+### Response Format Prediction
+
+| Operation | Success Response | Error Response |
+|-----------|-----------------|----------------|
+| GET list | 200 + Page<T> | 400 (bad params) |
+| GET detail | 200 + T | 404 (not found) |
+| POST create | 201 + T + Location header | 400 (validation) |
+| PUT update | 200 + T | 404, 400 |
+| DELETE | 204 No Content | 404 |
+| Auth login | 200 + JWT | 401 |
+
+### Spec Gap Detection Commands
+
+```bash
+# 1. Detect missing CRUD endpoints
+echo "=== CRUD Completeness ===" && \
+echo "GET endpoints:" && grep -c "@GetMapping" src/main/java/**/controller/*.java && \
+echo "POST endpoints:" && grep -c "@PostMapping" src/main/java/**/controller/*.java && \
+echo "PUT endpoints:" && grep -c "@PutMapping" src/main/java/**/controller/*.java && \
+echo "DELETE endpoints:" && grep -c "@DeleteMapping" src/main/java/**/controller/*.java
+
+# 2. Detect endpoints missing validation
+grep -l "@RequestBody" src/main/java/**/controller/*.java | \
+xargs grep -L "@Valid" 2>/dev/null && echo "(endpoints may be missing validation)"
+
+# 3. Detect missing error handling
+grep -L "ResponseEntity.notFound\|ResponseEntity.badRequest" src/main/java/**/controller/*.java
+
+# 4. Detect missing auth flow
+echo "=== Auth Flow Check ===" && \
+grep -q "login\|Login" src/main/java/**/controller/*.java || echo "⚠️ Missing: Login endpoint"
+grep -q "register\|Register" src/main/java/**/controller/*.java || echo "⚠️ Missing: Register endpoint"
+grep -q "logout\|Logout" src/main/java/**/controller/*.java || echo "⚠️ Missing: Logout endpoint"
+grep -q "refresh\|Refresh" src/main/java/**/controller/*.java || echo "⚠️ Missing: Refresh token endpoint"
+
+# 5. Detect missing pagination
+grep -l "@GetMapping" src/main/java/**/controller/*.java | \
+xargs grep -L "Pageable\|Page<" 2>/dev/null && echo "(list endpoints may be missing pagination)"
+```
+
+### Prediction Implementation Example
+
+When implementing a resource API from Spec:
+
+```java
+// Spec says: "Manage user items"
+// Auto-predict required implementation:
+
+@RestController
+@RequestMapping("/api/items")
+@RequiredArgsConstructor
+public class ItemController {
+
+    private final ItemService itemService;
+
+    // 1. LIST - Always needed with pagination
+    @GetMapping
+    public ResponseEntity<Page<ItemResponse>> list(Pageable pageable) {
+        return ResponseEntity.ok(itemService.findAll(pageable).map(this::toResponse));
+    }
+
+    // 2. GET - Detail endpoint for list items
+    @GetMapping("/{id}")
+    public ResponseEntity<ItemResponse> get(@PathVariable String id) {
+        return itemService.findById(id)
+            .map(item -> ResponseEntity.ok(toResponse(item)))
+            .orElse(ResponseEntity.notFound().build());
+    }
+
+    // 3. CREATE - With validation
+    @PostMapping
+    public ResponseEntity<ItemResponse> create(@Valid @RequestBody CreateItemRequest request) {
+        Item item = itemService.create(request);
+        return ResponseEntity
+            .created(URI.create("/api/items/" + item.getId()))
+            .body(toResponse(item));
+    }
+
+    // 4. UPDATE - Full update
+    @PutMapping("/{id}")
+    public ResponseEntity<ItemResponse> update(
+            @PathVariable String id,
+            @Valid @RequestBody UpdateItemRequest request) {
+        return itemService.findById(id)
+            .map(existing -> {
+                Item updated = itemService.update(id, request);
+                return ResponseEntity.ok(toResponse(updated));
+            })
+            .orElse(ResponseEntity.notFound().build());
+    }
+
+    // 5. DELETE - With 404 handling
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable String id) {
+        if (!itemService.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        itemService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // 6. SEARCH - Predicted for list endpoints
+    @GetMapping("/search")
+    public ResponseEntity<Page<ItemResponse>> search(
+            @RequestParam(required = false) String query,
+            Pageable pageable) {
+        return ResponseEntity.ok(
+            itemService.search(query, pageable).map(this::toResponse)
+        );
+    }
+}
+```
+
+---
 
 ## Tech Stack Reference
 

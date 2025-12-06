@@ -2,18 +2,73 @@
 
 Professional Windows desktop development skill based on [Arcana Windows](https://github.com/jrjohn/arcana-windows) enterprise architecture.
 
-## Overview
+## Version
 
-This skill provides comprehensive guidance for Windows desktop development following enterprise-grade architectural patterns. It supports Clean Architecture with 5 layers, WinUI 3, MVVM UDF pattern, Plugin System with 18 plugin types, and CRDT-based offline sync.
+**v2.0** - Generalized & Enhanced
+- Removed domain-specific content (usable for any Windows project)
+- Added Quick Reference Card
+- Added Error Handling Pattern
+- Added Priority Labels (🔴/🟡/🟢)
+- Added Test Coverage Targets
+- Added Spec Gap Prediction System
+- Split into multiple files for better organization
 
-## Key Features
+## Structure
 
-- **Clean Architecture** - Five-layer architecture (Presentation, Infrastructure, Domain, Data, Sync)
-- **WinUI 3** - Modern Windows UI framework
-- **MVVM UDF Pattern** - Unidirectional data flow with CommunityToolkit.Mvvm
-- **Plugin System** - 18 plugin types with assembly isolation
-- **CRDT Sync** - Conflict-free replicated data types for offline sync
-- **Enterprise Security** - PBKDF2-SHA256, RBAC, audit logging
+```
+windows-developer-skill/
+├── SKILL.md                    # Main skill file (core rules & patterns)
+├── README.md                   # This file
+├── patterns.md                 # Design patterns overview
+├── reference.md                # Technical reference
+├── examples.md                 # Code examples
+├── verification/
+│   └── commands.md             # All verification bash commands
+├── patterns/
+│   └── mvvm-udf.md             # MVVM UDF pattern details
+└── checklists/
+    └── production-ready.md     # Production & code review checklists
+```
+
+## Priority Rules
+
+| Priority | Rule | Description |
+|----------|------|-------------|
+| 🔴 CRITICAL | Zero-Empty Policy | Repository stubs never return empty collections |
+| 🔴 CRITICAL | Navigation Wiring | All NavGraph methods must be implemented |
+| 🔴 CRITICAL | Effect Handling | All ViewModel Effects must be subscribed |
+| 🟡 IMPORTANT | UI States | Loading/Error/Empty for all views |
+| 🟡 IMPORTANT | Mock Data Quality | Realistic data ranges |
+| 🟢 RECOMMENDED | Animations | Smooth transitions |
+| 🟢 RECOMMENDED | Accessibility | Screen reader support |
+
+## Quick Reference Card
+
+### New View:
+```
+1. Add Page to Presentation layer
+2. Create ViewModel with Input/Output/Effect
+3. Add navigation method to INavGraph
+4. Implement in NavGraph
+5. Subscribe to Effects in code-behind
+6. Verify mock data is non-empty
+```
+
+### New Repository:
+```
+1. Interface → Domain/Repositories/
+2. Implementation → Data/Repositories/
+3. DI registration → Infrastructure/
+4. Mock data (NEVER return empty!)
+5. Verify ID consistency
+```
+
+### Quick Diagnosis:
+| Symptom | Check Command |
+|---------|---------------|
+| Blank screen | `grep "new List<>\\|Empty" *Repository.cs` |
+| Navigation crash | Check INavGraph vs NavGraph methods |
+| Button does nothing | Check Effect subscriptions |
 
 ## Architecture
 
@@ -36,15 +91,14 @@ This skill provides comprehensive guidance for Windows desktop development follo
 └─────────────────────────────────────────────────────┘
 ```
 
-## Architecture Ratings
+## Key Features
 
-| Category | Score |
-|----------|-------|
-| Clean Architecture | 9.0/10 |
-| Plugin System | 9.5/10 |
-| MVVM Pattern | 9.5/10 |
-| Security | 9.0/10 |
-| **Overall** | **9.0/10** |
+- **Clean Architecture** - Five-layer architecture
+- **MVVM UDF** - Unidirectional data flow
+- **Plugin System** - 18 plugin types
+- **CRDT Sync** - Offline-first with conflict resolution
+- **Spec Gap Prediction** - Auto-detect missing UI states
+- **Verification Commands** - 11+ diagnostic commands
 
 ## Tech Stack
 
@@ -54,136 +108,24 @@ This skill provides comprehensive guidance for Windows desktop development follo
 | C# | 14.0+ |
 | WinUI 3 | 3.0+ |
 | EF Core | 10.0+ |
-| SQLite | Latest |
 | CommunityToolkit.Mvvm | Latest |
-| xUnit | Latest |
 
-## Documentation
+## Documentation Files
 
 | File | Description |
 |------|-------------|
-| [SKILL.md](SKILL.md) | Core skill instructions and architecture overview |
-| [reference.md](reference.md) | Technical reference for APIs and components |
-| [examples.md](examples.md) | Practical code examples for common scenarios |
-| [patterns.md](patterns.md) | Design patterns and best practices |
+| [SKILL.md](SKILL.md) | Core skill instructions & architecture |
+| [patterns.md](patterns.md) | Design patterns overview |
+| [reference.md](reference.md) | Technical reference |
+| [examples.md](examples.md) | Code examples |
+| [verification/commands.md](verification/commands.md) | All diagnostic commands |
+| [patterns/mvvm-udf.md](patterns/mvvm-udf.md) | MVVM UDF pattern |
+| [checklists/production-ready.md](checklists/production-ready.md) | Release checklists |
 
 ## When to Use This Skill
 
-This skill is ideal for:
-
 - Windows desktop application development
-- WinUI 3 application architecture
+- Architecture design and review
+- Code review
 - Plugin-based extensible applications
-- Offline-first desktop applications with sync
-- Enterprise Windows development
-- Code review for Windows applications
-
-## Quick Start
-
-### MVVM UDF ViewModel
-
-```csharp
-public partial class UserViewModel : ObservableObject
-{
-    // Input: User actions as commands
-    public sealed class Input
-    {
-        public record UpdateName(string Name);
-        public record Submit;
-    }
-
-    // Output: Observable state
-    public sealed partial class Output : ObservableObject
-    {
-        [ObservableProperty]
-        private string _name = string.Empty;
-
-        [ObservableProperty]
-        private bool _isLoading;
-    }
-
-    // Effect: Side effects
-    public sealed class Effect
-    {
-        public record NavigateBack;
-        public record ShowError(string Message);
-    }
-
-    public Output Out { get; } = new();
-    public Subject<Effect> Fx { get; } = new();
-
-    public void OnInput(object input)
-    {
-        switch (input)
-        {
-            case Input.UpdateName update:
-                Out.Name = update.Name;
-                break;
-            case Input.Submit:
-                _ = SubmitAsync();
-                break;
-        }
-    }
-}
-```
-
-### Plugin Development
-
-```csharp
-[PluginManifest(
-    Key = "analytics-module",
-    Name = "Analytics Module",
-    Type = PluginType.Analytics)]
-public class AnalyticsPlugin : IArcanaPlugin
-{
-    public async Task OnActivateAsync(IPluginContext context)
-    {
-        // Register views
-        context.Navigation.RegisterView("dashboard", typeof(DashboardView));
-
-        // Subscribe to events
-        context.MessageBus.Subscribe<TrackEventCommand>(OnTrackEvent);
-    }
-
-    public async Task OnDeactivateAsync()
-    {
-        // Cleanup resources
-    }
-}
-```
-
-### CRDT Sync
-
-```csharp
-var syncManager = new CrdtSyncManager(unitOfWork, nodeId, ConflictStrategy.FieldLevelMerge);
-
-// Apply remote change with automatic conflict resolution
-var resolved = await syncManager.ApplyChangeAsync(localEntity, remoteEntity);
-```
-
-## 18 Plugin Types
-
-| Type | Description |
-|------|-------------|
-| Menu | Menu extensions |
-| View | Custom views |
-| Module | Full feature modules |
-| Theme | UI themes |
-| Authentication | Auth providers |
-| Data | Data sources |
-| Command | Custom commands |
-| Service | Background services |
-| Validator | Validation rules |
-| Storage | Storage providers |
-| Export | Export formats |
-| Import | Import formats |
-| Report | Report generators |
-| Notification | Notification channels |
-| Logging | Logging providers |
-| Cache | Cache providers |
-| Search | Search providers |
-| Analytics | Analytics providers |
-
-## License
-
-This skill is part of the Arcana enterprise architecture series.
+- Debugging UI/navigation issues

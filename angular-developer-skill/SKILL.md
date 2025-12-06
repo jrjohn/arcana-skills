@@ -8,6 +8,260 @@ allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 
 Professional Angular development skill based on [Arcana Angular](https://github.com/jrjohn/arcana-angular) enterprise architecture.
 
+---
+
+## Quick Reference Card
+
+### New Screen Checklist:
+```
+1. Add route → app.routes.ts (path + component)
+2. Create Component with ChangeDetectionStrategy.OnPush
+3. Create ViewModel (Input/Output/Effect with Signals)
+4. Create template with Loading/Error/Empty states
+5. Wire @Output events in parent template
+6. Verify mock data returns non-empty values
+```
+
+### New Repository Checklist:
+```
+1. Interface → domain/repositories/xxx.repository.ts
+2. Implementation → data/repositories/xxx.repository.impl.ts
+3. Mock → data/repositories/mock/mock-xxx.repository.ts
+4. Provider binding → core/providers/repository.providers.ts
+5. Mock data (NEVER return [] or null!)
+6. Verify ID consistency across repositories
+```
+
+### Quick Diagnosis:
+| Symptom | Check Command |
+|---------|---------------|
+| Blank screen | `grep "\\[\\]\\|of\\(\\[\\]\\)" src/app/data/repositories/*.impl.ts` |
+| Navigation crash | Compare `app.routes.ts` paths vs component imports |
+| Button does nothing | `grep "(click)=\"\"" src/app/**/*.html` |
+| Data not loading | `grep "throw.*NotImplemented\\|TODO" src/app/data/` |
+
+---
+
+## Rules Priority
+
+### 🔴 CRITICAL (Must Fix Immediately)
+
+| Rule | Description | Verification |
+|------|-------------|--------------|
+| Zero-Empty Policy | Repository stubs NEVER return empty arrays | `grep "\\[\\]\\|of\\(\\[\\]\\)" *.impl.ts` |
+| Navigation Wiring | ALL routes MUST have component imports | Count paths vs components |
+| @Output Binding | ALL @Output events MUST be bound in parent | Check template bindings |
+| ID Consistency | Cross-repository IDs must match | Check mock data IDs |
+
+### 🟡 IMPORTANT (Should Fix Before PR)
+
+| Rule | Description | Verification |
+|------|-------------|--------------|
+| UI States | Loading/Error/Empty for all screens | `grep -L "isLoading" *.component.ts` |
+| Mock Data Quality | Realistic, varied values (not all same) | Review mock data arrays |
+| Error Messages | User-friendly, not technical errors | Check error handling |
+| OnPush Detection | All components use OnPush | Check changeDetection |
+
+### 🟢 RECOMMENDED (Nice to Have)
+
+| Rule | Description |
+|------|-------------|
+| Animations | Smooth route transitions |
+| Accessibility | ARIA labels for interactive elements |
+| Dark Mode | Support system theme preference |
+| PWA | Service worker for offline |
+
+---
+
+## Error Handling Pattern
+
+### AppError - Unified Error Model
+
+```typescript
+// domain/models/app-error.ts
+export type AppError =
+  | { type: 'NETWORK_UNAVAILABLE' }
+  | { type: 'TIMEOUT' }
+  | { type: 'SERVER_ERROR'; statusCode: number }
+  | { type: 'UNAUTHORIZED' }
+  | { type: 'TOKEN_EXPIRED' }
+  | { type: 'INVALID_CREDENTIALS' }
+  | { type: 'NOT_FOUND' }
+  | { type: 'VALIDATION_FAILED'; message: string }
+  | { type: 'DATA_CORRUPTED' }
+  | { type: 'UNKNOWN'; underlying: Error };
+
+export function getErrorMessage(error: AppError): string {
+  switch (error.type) {
+    case 'NETWORK_UNAVAILABLE':
+      return 'No internet connection. Please check your network.';
+    case 'TIMEOUT':
+      return 'Request timed out. Please try again.';
+    case 'SERVER_ERROR':
+      return `Server error (${error.statusCode}). Please try again later.`;
+    case 'UNAUTHORIZED':
+    case 'TOKEN_EXPIRED':
+      return 'Session expired. Please login again.';
+    case 'INVALID_CREDENTIALS':
+      return 'Invalid email or password.';
+    case 'NOT_FOUND':
+      return 'The requested item was not found.';
+    case 'VALIDATION_FAILED':
+      return error.message;
+    case 'DATA_CORRUPTED':
+      return 'Data error. Please contact support.';
+    case 'UNKNOWN':
+      return 'An unexpected error occurred.';
+  }
+}
+
+export function requiresReauth(error: AppError): boolean {
+  return error.type === 'UNAUTHORIZED' || error.type === 'TOKEN_EXPIRED';
+}
+```
+
+### Error Handling Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Error Flow                                │
+├─────────────────────────────────────────────────────────────────┤
+│  Repository Layer:                                               │
+│    - Catch HTTP errors                                           │
+│    - Map to AppError                                             │
+│    - Throw AppError                                              │
+├─────────────────────────────────────────────────────────────────┤
+│  Service Layer:                                                  │
+│    - Catch repository errors                                     │
+│    - Add business context if needed                              │
+│    - Re-throw as AppError                                        │
+├─────────────────────────────────────────────────────────────────┤
+│  ViewModel Layer:                                                │
+│    - Catch all errors                                            │
+│    - Update _error signal with getErrorMessage()                 │
+│    - Check requiresReauth() for auth redirect                    │
+├─────────────────────────────────────────────────────────────────┤
+│  Component Layer:                                                │
+│    - Display error from output().error                           │
+│    - Show retry button                                           │
+│    - Handle auth redirect via effect                             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Error Handling by Layer
+
+**HTTP Interceptor:**
+```typescript
+@Injectable()
+export class ErrorInterceptor implements HttpInterceptor {
+  intercept(req: HttpRequest<unknown>, next: HttpHandler): Observable<HttpEvent<unknown>> {
+    return next.handle(req).pipe(
+      catchError((error: HttpErrorResponse) => {
+        let appError: AppError;
+
+        if (error.status === 0) {
+          appError = { type: 'NETWORK_UNAVAILABLE' };
+        } else if (error.status === 401) {
+          appError = { type: 'UNAUTHORIZED' };
+        } else if (error.status === 404) {
+          appError = { type: 'NOT_FOUND' };
+        } else if (error.status >= 500) {
+          appError = { type: 'SERVER_ERROR', statusCode: error.status };
+        } else {
+          appError = { type: 'UNKNOWN', underlying: error };
+        }
+
+        return throwError(() => appError);
+      })
+    );
+  }
+}
+```
+
+**ViewModel Layer:**
+```typescript
+private async loadData(): Promise<void> {
+  this._isLoading.set(true);
+  this._error.set(null);
+
+  try {
+    const items = await this.repository.getItems();
+    this._items.set(items);
+  } catch (error) {
+    const appError = error as AppError;
+    this._error.set(getErrorMessage(appError));
+    if (requiresReauth(appError)) {
+      this._effect.next({ type: 'NAVIGATE_TO_LOGIN' });
+    }
+  } finally {
+    this._isLoading.set(false);
+  }
+}
+```
+
+---
+
+## Test Coverage Targets
+
+### Coverage by Layer
+
+| Layer | Target | Focus Areas |
+|-------|--------|-------------|
+| ViewModel | 90%+ | All Input handlers, state transitions, effects |
+| Service | 85%+ | Business logic, edge cases |
+| Repository | 80%+ | Data mapping, error handling |
+| Component | 60%+ | Template binding, user interactions |
+
+### What to Test
+
+**ViewModel Tests (Highest Priority):**
+```typescript
+describe('FeatureViewModel', () => {
+  // Test each Input type
+  it('should load items on LOAD input', async () => { });
+  it('should set error on LOAD failure', async () => { });
+  it('should emit toast on REFRESH success', async () => { });
+  it('should navigate on ITEM_CLICKED', () => { });
+
+  // Test state transitions
+  it('should set isLoading true then false', async () => { });
+
+  // Test edge cases
+  it('should show empty state when no items', async () => { });
+});
+```
+
+**Service Tests:**
+```typescript
+describe('UserService', () => {
+  // Test business rules
+  it('should validate email format', () => { });
+  it('should calculate score correctly', () => { });
+});
+```
+
+**Repository Tests:**
+```typescript
+describe('UserRepository', () => {
+  // Test data mapping
+  it('should map DTO to domain model', async () => { });
+
+  // Test offline behavior
+  it('should return cached data when offline', async () => { });
+});
+```
+
+### Test Commands
+```bash
+# Run all tests with coverage
+npm run test -- --code-coverage --watch=false --browsers=ChromeHeadless
+
+# View coverage report
+open coverage/[app-name]/index.html
+```
+
+---
+
 ## Core Architecture Principles
 
 ### Clean Architecture - Three Layers
@@ -33,6 +287,135 @@ Professional Angular development skill based on [Arcana Angular](https://github.
 ## Instructions
 
 When handling Angular development tasks, follow these principles:
+
+### Quick Verification Commands
+
+Use these commands to quickly check for common issues:
+
+```bash
+# 1. Check for unimplemented services (MUST be empty)
+grep -rn "throw.*NotImplemented\|TODO.*implement" src/app/
+
+# 2. Check for empty click handlers (MUST be empty)
+grep -rn "(click)=\"\"\|(click)=\"undefined\"" src/app/
+
+# 3. Check for missing route components (compare routes vs components)
+echo "Routes defined:" && grep -c "path:" src/app/app.routes.ts 2>/dev/null || echo 0
+echo "Components imported:" && grep -c "component:" src/app/app.routes.ts 2>/dev/null || echo 0
+
+# 4. Check NavGraphService has all navigation methods
+grep -c "to\|navigate" src/app/core/services/nav-graph.service.ts 2>/dev/null || echo 0
+
+# 5. Verify build compiles
+npm run build
+
+# 6. 🚨 Check for Output events with no parent binding (CRITICAL!)
+echo "=== Component @Output Events ===" && \
+grep -rh "@Output()" src/app/presentation/ | grep -oE "[a-zA-Z]+\s*=" | sed 's/\s*=//' | sort -u
+echo "=== Bound Events in Templates ===" && \
+grep -rh "([a-zA-Z]*Navigate[a-zA-Z]*)=" src/app/**/*.html 2>/dev/null | grep -oE "\([a-zA-Z]+\)" | tr -d '()' | sort -u
+
+# 7. 🚨 Verify ALL routes have NavGraphService navigation methods
+echo "=== Routes Defined ===" && \
+grep -rh "path:" src/app/app.routes.ts | grep -oE "'[^']+'" | sort -u
+echo "=== NavGraphService Methods ===" && \
+grep -rh "to[A-Z][a-zA-Z]*\(" src/app/core/services/nav-graph.service.ts | grep -oE "to[A-Z][a-zA-Z]*" | sort -u
+
+# 8. 🚨 Check for navigation callbacks in Components not wired in parent
+grep -rn "onNavigate.*:\s*EventEmitter" src/app/presentation/
+
+# 9. 🚨 Check Service→Repository wiring (CRITICAL!)
+echo "=== Repository Methods Called in Services ===" && \
+grep -roh "this\.[a-zA-Z]*Repository\.[a-zA-Z]*(" src/app/domain/services/*.ts | sort -u
+echo "=== Repository Interface Methods ===" && \
+grep -rh "[a-zA-Z]*\(" src/app/domain/repositories/*.repository.ts | grep -oE "[a-zA-Z]+\(" | sort -u
+
+# 10. 🚨 Verify ALL Repository interface methods have implementations
+echo "=== Repository Interface Methods ===" && \
+grep -rh "abstract\|[a-zA-Z]*\(" src/app/domain/repositories/*.repository.ts | grep -oE "[a-zA-Z]+\(" | sort -u
+echo "=== Repository Implementation Methods ===" && \
+grep -rh "[a-zA-Z]*\(" src/app/data/repositories/*.repository.impl.ts | grep -oE "[a-zA-Z]+\(" | sort -u
+```
+
+⚠️ **CRITICAL**: All routes in app.routes.ts MUST have corresponding component imports. Missing components cause runtime errors.
+
+⚠️ **NAVIGATION WIRING CRITICAL**: Commands #6-#8 detect navigation @Output events that exist in Components but aren't bound in parent templates. A Component can declare `@Output() onNavigateToSettings = new EventEmitter()` but if the parent template doesn't bind `(onNavigateToSettings)="handler()"`, the event does nothing!
+
+If any of these return results or counts don't match, FIX THEM before completing the task.
+
+---
+
+## 📊 Mock Data Requirements for Repository Stubs
+
+### The Chart Data Problem
+
+When implementing Repository stubs, **NEVER return empty arrays for data that powers UI charts or visualizations**. This causes:
+- Charts that render but show nothing (blank ng2-charts/D3 canvas)
+- Line charts that skip rendering (e.g., `if (data.length < 2) return;`)
+- Empty state components even when data structure exists
+
+### Mock Data Rules
+
+**Rule 1: Array data for charts MUST have at least 7 items**
+```typescript
+// ❌ BAD - Chart will be blank
+getCurrentWeekSummary(): Observable<WeeklySummary> {
+    return of({
+        dailyReports: []  // ← Chart has no data to render!
+    });
+}
+
+// ✅ GOOD - Chart has data to display
+getCurrentWeekSummary(): Observable<WeeklySummary> {
+    const mockDailyReports = Array.from({ length: 7 }, (_, i) =>
+        this.createMockDailyReport(
+            [72, 78, 85, 80, 76, 88, 82][i],
+            [390, 420, 450, 410, 380, 460, 435][i]
+        )
+    );
+    return of({ dailyReports: mockDailyReports });
+}
+```
+
+**Rule 2: Use realistic, varied sample values**
+```typescript
+// ❌ BAD - Monotonous test data
+const scores = Array(7).fill(80);
+
+// ✅ GOOD - Realistic variation
+const scores = [72, 78, 85, 80, 76, 88, 82];  // Shows trend
+```
+
+**Rule 3: Data must match interface exactly**
+```bash
+# Before creating mock data, ALWAYS verify the interface definition:
+grep -A 20 "interface TherapyData" src/app/domain/models/*.ts
+```
+
+**Rule 4: Create helper functions for complex mock data**
+```typescript
+// ✅ Create reusable mock factory
+private createMockDailyReport(score: number, duration: number): DailySleepReport {
+    return {
+        id: `mock_${Date.now()}`,
+        sleepScore: score,
+        sleepDuration: { totalMinutes: duration, ... },
+        // ... all required fields
+    };
+}
+```
+
+### Quick Verification Commands for Mock Data
+
+```bash
+# 11. 🚨 Check for empty array returns in Repository stubs (MUST FIX)
+grep -rn "\[\]" src/app/data/repositories/*.repository.impl.ts
+
+# 12. 🚨 Verify chart-related data has mock values
+grep -rn "dailyReports\|weeklyData\|chartData" src/app/data/repositories/ | grep -E "= \[\]|of\(\[\]\)"
+```
+
+---
 
 ### 0. Project Setup - CRITICAL
 
@@ -100,6 +483,8 @@ npm run build
 
 ⚠️ **CRITICAL**: All development MUST follow this TDD workflow. Every Spec requirement must have corresponding tests BEFORE implementation.
 
+🚨 **ABSOLUTE RULE**: TDD = Tests + Implementation. Writing tests without implementation is **INCOMPLETE**. Every test file MUST have corresponding production code that passes the tests.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TDD Development Workflow                      │
@@ -107,10 +492,43 @@ npm run build
 │  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
 │  Step 2: Create Tests → Write tests for EACH Spec item          │
 │  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
-│  Step 4: Implement → Build features to pass tests               │
+│  Step 4: Implement → Build features to pass tests  ⚠️ MANDATORY │
 │  Step 5: Mock APIs → Use mock data for unfinished Cloud APIs    │
 │  Step 6: Run All Tests → ALL tests must pass before completion  │
+│  Step 7: Verify 100% → Tests written = Features implemented     │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+#### ⛔ FORBIDDEN: Tests Without Implementation
+
+```typescript
+// ❌ WRONG - Test exists but no implementation
+// Test file exists: login.viewmodel.spec.ts (32 tests)
+// Production file: login.viewmodel.ts → MISSING or throws NotImplementedError
+// This is INCOMPLETE TDD!
+
+// ✅ CORRECT - Test AND Implementation both exist
+// Test file: login.viewmodel.spec.ts (32 tests)
+// Production file: login.viewmodel.ts (fully implemented)
+// All 32 tests PASS
+```
+
+#### ⛔ Placeholder Component Policy
+
+Placeholder components are **ONLY** allowed as a temporary route during active development. They are **FORBIDDEN** as a final state.
+
+```typescript
+// ❌ WRONG - Placeholder component left in production
+{ path: 'training', component: PlaceholderComponent } // FORBIDDEN!
+
+// ✅ CORRECT - Real component implementation
+{ path: 'training', component: TrainingComponent }
+```
+
+**Placeholder Check Command:**
+```bash
+# This command MUST return empty for production-ready code
+grep -rn "PlaceholderComponent\|throw.*NotImplemented\|TODO.*implement\|即將推出\|Coming Soon" src/app/
 ```
 
 #### Step 1: Analyze Spec Documents (SRS & SDD)
@@ -207,7 +625,17 @@ Before implementation, verify ALL SRS and SDD items have tests:
  */
 ```
 
-#### Step 4: Mock API Implementation
+#### Step 4: Mock API Implementation - MANDATORY
+
+⚠️ **CRITICAL**: Every Service/Repository method MUST return valid mock data. NEVER leave methods throwing `NotImplementedError`.
+
+**Rules for Mock Services:**
+1. ALL service methods must return valid mock data (Promise.resolve or Observable.of)
+2. Use `setTimeout()` or `delay()` to simulate network latency (500-1000ms)
+3. Mock data must match the interface structure exactly
+4. Check TypeScript enums exist before using them
+5. Include all required properties for interfaces
+
 For APIs not yet available from Cloud team, implement mock services:
 ```typescript
 // src/app/data/repositories/mock/mock-auth.repository.ts
@@ -833,6 +1261,88 @@ export class FormState {
 }
 ```
 
+## Navigation Wiring Verification Guide
+
+### 🚨 The Navigation Wiring Blind Spot
+
+Angular Components often declare @Output navigation events that need parent binding:
+
+```typescript
+// settings.component.ts
+@Component({...})
+export class SettingsComponent {
+  @Output() onNavigateToAccountInfo = new EventEmitter<void>();  // ⚠️ Needs parent binding!
+  @Output() onNavigateToChangePassword = new EventEmitter<void>();  // ⚠️ Needs parent binding!
+  @Output() onNavigateToUserList = new EventEmitter<void>();  // ⚠️ Needs parent binding!
+
+  goToAccountInfo(): void {
+    this.onNavigateToAccountInfo.emit();  // Does nothing if not bound in parent!
+  }
+}
+```
+
+**Problem**: If the parent Component's template doesn't bind these @Output events, the buttons appear functional but do nothing when clicked!
+
+### Detection Patterns
+
+```bash
+# Find Components with @Output navigation events
+grep -rn "@Output().*Navigate" src/app/presentation/
+
+# Find bound events in templates
+grep -rn "(onNavigate" src/app/**/*.html
+
+# Find routes defined
+grep -rn "path:" src/app/app.routes.ts
+
+# Compare: Every @Output navigation event MUST have corresponding parent binding
+```
+
+### Verification Checklist
+
+1. **Count @Output navigation events in each Component**:
+   ```bash
+   grep -c "@Output().*Navigate" src/app/presentation/settings/settings.component.ts
+   ```
+
+2. **Count bound events where Component is used**:
+   ```bash
+   grep -c "(onNavigate" src/app/presentation/home/home.component.html
+   ```
+
+3. **Counts MUST match!** Any mismatch = unwired navigation
+
+### Correct Wiring Example
+
+```typescript
+// settings.component.ts (Child)
+@Component({ selector: 'app-settings', ... })
+export class SettingsComponent {
+  @Output() onNavigateToAccountInfo = new EventEmitter<void>();
+  @Output() onNavigateToChangePassword = new EventEmitter<void>();
+  @Output() onNavigateToUserList = new EventEmitter<void>();
+}
+
+// home.component.html (Parent - correctly wired)
+<app-settings
+  (onNavigateToAccountInfo)="navGraph.toAccountInfo()"
+  (onNavigateToChangePassword)="navGraph.toChangePassword()"
+  (onNavigateToUserList)="navGraph.toUserList()">
+</app-settings>
+
+// app.routes.ts (routes exist)
+export const routes: Routes = [
+  { path: 'account-info', component: AccountInfoComponent },  // ✅ Route exists
+  { path: 'change-password', component: ChangePasswordComponent },  // ✅ Route exists
+  { path: 'user-list', component: UserListComponent },  // ✅ Route exists
+];
+
+// nav-graph.service.ts (methods exist)
+toAccountInfo(): Promise<boolean> { return this.router.navigate(['/account-info']); }  // ✅
+toChangePassword(): Promise<boolean> { return this.router.navigate(['/change-password']); }  // ✅
+toUserList(): Promise<boolean> { return this.router.navigate(['/user-list']); }  // ✅
+```
+
 ## Code Review Checklist
 
 ### Required Items
@@ -842,6 +1352,10 @@ export class FormState {
 - [ ] Components use OnPush change detection
 - [ ] Type-safe navigation via NavGraphService
 - [ ] No implicit `any` types (strict mode)
+- [ ] 🚨 ALL @Output navigation events are bound in parent templates
+- [ ] 🚨 ALL routes have corresponding NavGraphService methods
+- [ ] 🚨 ALL Service→Repository method calls exist in Repository interfaces
+- [ ] 🚨 ALL Repository interface methods have implementations
 
 ### Performance Checks
 - [ ] Use OnPush change detection across components
@@ -872,6 +1386,181 @@ export class FormState {
 1. Enable production mode
 2. Configure tree shaking
 3. Use lazy loading for feature modules
+
+---
+
+## Spec Gap Prediction System
+
+When Spec is incomplete, use these universal rules to predict and supplement missing UI/UX elements.
+
+### Screen Type → Required States (Universal)
+
+| Screen Type | Required States | Auto-Predict |
+|-------------|-----------------|--------------|
+| List Screen | Loading, Error, Empty, Content | Virtual scroll, Search/Filter |
+| Detail Screen | Loading, Error, Content | Back navigation, Edit action |
+| Form Screen | Validation, Submit Loading, Success, Error | Input validation, Cancel action |
+| Dashboard | Loading, Error, Content | Refresh, Section navigation |
+| Settings | Content | Back navigation, Section headers |
+| Auth Screen | Loading, Error, Success | Forgot password link, Terms link |
+
+### Flow Completion Prediction
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Flow Completion Rules                         │
+├─────────────────────────────────────────────────────────────────┤
+│  IF Spec has Login:                                              │
+│    → PREDICT: Register, Forgot Password, Logout                  │
+│                                                                  │
+│  IF Spec has Register:                                           │
+│    → PREDICT: Onboarding flow after registration                 │
+│    → PREDICT: Email verification (if email-based)                │
+│                                                                  │
+│  IF Spec has List:                                               │
+│    → PREDICT: Detail view for list items                         │
+│    → PREDICT: Search/Filter functionality                        │
+│    → PREDICT: Empty state when no items                          │
+│                                                                  │
+│  IF Spec has Settings:                                           │
+│    → PREDICT: Account info edit                                  │
+│    → PREDICT: Change password                                    │
+│    → PREDICT: Notification preferences                           │
+│    → PREDICT: Logout confirmation                                │
+│                                                                  │
+│  IF Spec has any data display:                                   │
+│    → PREDICT: Offline cached view                                │
+│    → PREDICT: Sync status indicator                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Data Operation Prediction (CRUD)
+
+| Spec Mentions | Auto-Predict Operations |
+|---------------|-------------------------|
+| "Display items" | Read + Loading + Error + Empty states |
+| "Add item" | Create + Validation + Success feedback |
+| "Edit item" | Update + Validation + Optimistic UI |
+| "Delete item" | Delete + Confirmation dialog + Undo option |
+| "Search" | Debounced input + No results state |
+| "Filter" | Filter UI + Clear filter + Active filter indicator |
+
+### Navigation Completeness Prediction
+
+```typescript
+// If app.routes.ts has these paths:
+export const routes: Routes = [
+  { path: 'login', ... },      // → Predict: register, forgot-password
+  { path: 'dashboard', ... },  // → Predict: settings, profile
+  { path: 'items', ... },      // → Predict: items/:id (detail)
+  { path: 'settings', ... },   // → Predict: account, change-password, about
+];
+
+// Auto-check: Every @Output navigation event must be bound in parent
+```
+
+### UI State Prediction Matrix
+
+| Data Source | Success | Empty | Error | Loading |
+|-------------|---------|-------|-------|---------|
+| API Call | Content | Empty view + CTA | Error view + Retry | Spinner |
+| IndexedDB | Content | Empty view + CTA | Error view + Retry | Spinner |
+| User Input | Show result | Prompt input | Validation error | Submit loading |
+
+### Spec Gap Detection Commands
+
+```bash
+# 1. Detect components missing loading state
+grep -L "isLoading\|loading" src/app/presentation/**/*.viewmodel.ts
+
+# 2. Detect components missing error state
+grep -L "error\|Error" src/app/presentation/**/*.viewmodel.ts
+
+# 3. Detect lists missing empty state
+grep -l "ngFor\|*ngFor" src/app/presentation/**/*.html | \
+xargs grep -L "empty\|Empty\|length === 0"
+
+# 4. Detect forms missing validation
+grep -l "formControl\|ngModel" src/app/presentation/**/*.html | \
+xargs grep -L "invalid\|error\|valid"
+
+# 5. Detect missing navigation flows
+echo "=== Auth Flow Check ===" && \
+grep -q "login" src/app/app.routes.ts && \
+(grep -q "register" src/app/app.routes.ts || echo "⚠️ Missing: Register route") && \
+(grep -q "forgot-password" src/app/app.routes.ts || echo "⚠️ Missing: Forgot Password route")
+
+# 6. Detect missing CRUD operations
+echo "=== CRUD Completeness ===" && \
+grep -rh "get.*\|fetch.*\|load.*" src/app/domain/repositories/*.ts | head -5 && \
+grep -rh "create.*\|add.*\|save.*" src/app/domain/repositories/*.ts | head -5 && \
+grep -rh "update.*\|edit.*" src/app/domain/repositories/*.ts | head -5 && \
+grep -rh "delete.*\|remove.*" src/app/domain/repositories/*.ts | head -5
+```
+
+### Prediction Implementation Example
+
+When implementing a List screen from Spec:
+
+```typescript
+// Spec says: "Display user's items"
+// Auto-predict required implementation:
+
+@Component({
+  selector: 'app-item-list',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <!-- 1. LOADING - Always needed for API/DB calls -->
+    @if (vm.output().isLoading) {
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    }
+
+    <!-- 2. ERROR - Always needed for API/DB calls -->
+    @else if (vm.output().error) {
+      <div class="alert alert-danger">
+        {{ vm.output().error }}
+        <button class="btn btn-primary" (click)="onInput({ type: 'RETRY' })">
+          Retry
+        </button>
+      </div>
+    }
+
+    <!-- 3. EMPTY - Always needed for list screens -->
+    @else if (vm.output().items.length === 0) {
+      <div class="empty-state text-center">
+        <h3>No Items</h3>
+        <p>Add your first item to get started</p>
+        <button class="btn btn-primary" (click)="onInput({ type: 'ADD_CLICKED' })">
+          Add Item
+        </button>
+      </div>
+    }
+
+    <!-- 4. CONTENT - The actual list -->
+    @else {
+      <ul class="list-group">
+        @for (item of vm.output().items; track item.id) {
+          <li class="list-group-item" (click)="onInput({ type: 'ITEM_CLICKED', id: item.id })">
+            {{ item.name }}
+          </li>
+        }
+      </ul>
+    }
+  `,
+  providers: [ItemListViewModel],
+})
+export class ItemListComponent {
+  protected readonly vm = inject(ItemListViewModel);
+
+  protected onInput(input: ItemListInput): void {
+    this.vm.onInput(input);
+  }
+}
+```
+
+---
 
 ## Tech Stack Reference
 
