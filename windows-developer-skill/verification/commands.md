@@ -18,6 +18,66 @@ echo "NavGraph methods:" && grep -c "public void To\|public Task To" src/**/NavG
 echo "Pages registered:" && grep -c "typeof(.*Page)" src/**/NavGraph.cs
 ```
 
+## 🚨 Layer Wiring Verification (CRITICAL)
+
+```bash
+# === VIEWMODEL → SERVICE → REPOSITORY PATTERN ===
+
+# 4. 🚨 Check ViewModel should NOT inject Repository directly
+echo "=== ViewModel→Repository Direct Injection Check ===" && \
+VIOLATIONS=$(grep -rln "IRepository\|Repository" src/**/ViewModels/*.cs 2>/dev/null | wc -l) && \
+if [ "$VIOLATIONS" -gt 0 ]; then \
+    echo "❌ VIOLATION: $VIOLATIONS ViewModels inject Repository directly!"; \
+    echo "ViewModels should inject Service, not Repository."; \
+    grep -rln "IRepository\|Repository" src/**/ViewModels/*.cs 2>/dev/null; \
+else \
+    echo "✅ All ViewModels correctly inject Service"; \
+fi
+
+# 5. 🚨 Check Service layer exists
+echo "=== Service Layer Existence Check ===" && \
+SERVICE_COUNT=$(find src -name "*Service.cs" -path "*/Services/*" 2>/dev/null | wc -l) && \
+INTERFACE_COUNT=$(find src -name "I*Service.cs" -path "*/Services/*" 2>/dev/null | wc -l) && \
+echo "Service interfaces (I*Service): $INTERFACE_COUNT" && \
+echo "Service implementations: $SERVICE_COUNT" && \
+if [ "$SERVICE_COUNT" -eq 0 ]; then \
+    echo "❌ CRITICAL: No Service layer found! Architecture violation."; \
+else \
+    echo "✅ Service layer exists"; \
+fi
+
+# 6. 🚨 Check Service→Repository wiring
+echo "=== Service→Repository Wiring Check ===" && \
+echo "Repository methods called in Services:" && \
+grep -roh "_repository\.[A-Za-z]*(\|repository\.[A-Za-z]*(" src/**/Services/*.cs 2>/dev/null | sort -u || echo "(no repository calls found)"
+echo "Repository interface methods:" && \
+grep -rh "[A-Za-z]* [A-Za-z]*(" src/**/Repositories/I*Repository.cs 2>/dev/null | grep -oE "[A-Za-z]+\(" | sort -u
+
+# 7. 🚨 Verify ALL Service interfaces have implementations
+echo "=== Service Interface/Implementation Parity ===" && \
+INTERFACES=$(find src -name "I*Service.cs" -path "*/Services/*" 2>/dev/null | wc -l) && \
+IMPLS=$(find src -name "*Service.cs" -path "*/Services/*" ! -name "I*" 2>/dev/null | wc -l) && \
+echo "Service interfaces: $INTERFACES" && \
+echo "Service implementations: $IMPLS" && \
+if [ "$INTERFACES" -ne "$IMPLS" ]; then \
+    echo "❌ MISMATCH! Missing $(($INTERFACES - $IMPLS)) Service implementations"; \
+else \
+    echo "✅ All Service interfaces have implementations"; \
+fi
+
+# 8. 🚨 Verify ALL Repository interfaces have implementations
+echo "=== Repository Interface/Implementation Parity ===" && \
+REPO_INTERFACES=$(find src -name "I*Repository.cs" 2>/dev/null | wc -l) && \
+REPO_IMPLS=$(find src -name "*Repository.cs" ! -name "I*" 2>/dev/null | wc -l) && \
+echo "Repository interfaces: $REPO_INTERFACES" && \
+echo "Repository implementations: $REPO_IMPLS" && \
+if [ "$REPO_INTERFACES" -ne "$REPO_IMPLS" ]; then \
+    echo "❌ MISMATCH! Missing Repository implementations"; \
+else \
+    echo "✅ All Repository interfaces have implementations"; \
+fi
+```
+
 ## Navigation Verification
 
 ```bash

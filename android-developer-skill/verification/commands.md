@@ -21,6 +21,55 @@ ls app/src/main/java/**/data/repository/*Impl.kt 2>/dev/null | wc -l
 grep -rn "@Binds" app/src/main/java/**/di/*.kt | wc -l
 ```
 
+## 🚨 Layer Wiring Verification (CRITICAL)
+
+```bash
+# === VIEWMODEL → SERVICE → REPOSITORY PATTERN ===
+
+# 4. 🚨 Check ViewModel should NOT inject Repository directly
+echo "=== ViewModel→Repository Direct Injection Check ===" && \
+VIOLATIONS=$(grep -rln "Repository" app/src/main/java/**/ui/screens/**/*ViewModel.kt 2>/dev/null | wc -l) && \
+if [ "$VIOLATIONS" -gt 0 ]; then \
+    echo "❌ VIOLATION: $VIOLATIONS ViewModels inject Repository directly!"; \
+    echo "ViewModels should inject Service, not Repository."; \
+    grep -rln "Repository" app/src/main/java/**/ui/screens/**/*ViewModel.kt 2>/dev/null; \
+else \
+    echo "✅ All ViewModels correctly inject Service"; \
+fi
+
+# 5. 🚨 Check Service layer exists
+echo "=== Service Layer Existence Check ===" && \
+SERVICE_DIR="app/src/main/java/**/domain/service" && \
+SERVICE_COUNT=$(find app/src/main/java -path "*/domain/service/*Service.kt" 2>/dev/null | wc -l) && \
+IMPL_COUNT=$(find app/src/main/java -path "*/domain/service/*ServiceImpl.kt" 2>/dev/null | wc -l) && \
+echo "Service interfaces: $SERVICE_COUNT" && \
+echo "Service implementations: $IMPL_COUNT" && \
+if [ "$SERVICE_COUNT" -eq 0 ]; then \
+    echo "❌ CRITICAL: No Service layer found! Architecture violation."; \
+else \
+    echo "✅ Service layer exists"; \
+fi
+
+# 6. 🚨 Check Service→Repository wiring
+echo "=== Service→Repository Wiring Check ===" && \
+echo "Repository methods called in Services:" && \
+grep -roh "repository\.[a-zA-Z]*(" app/src/main/java/**/domain/service/*.kt 2>/dev/null | sort -u || echo "(no services found)"
+echo "Repository interface methods:" && \
+grep -rh "suspend fun [a-zA-Z]*(\|fun [a-zA-Z]*(" app/src/main/java/**/domain/repository/*.kt 2>/dev/null | grep -oE "fun [a-zA-Z]+\(" | sort -u
+
+# 7. 🚨 Verify ALL Service interfaces have implementations
+echo "=== Service Interface/Implementation Parity ===" && \
+INTERFACES=$(find app/src/main/java -path "*/domain/service/*Service.kt" ! -name "*Impl.kt" 2>/dev/null | wc -l) && \
+IMPLS=$(find app/src/main/java -path "*/domain/service/*ServiceImpl.kt" 2>/dev/null | wc -l) && \
+echo "Service interfaces: $INTERFACES" && \
+echo "Service implementations: $IMPLS" && \
+if [ "$INTERFACES" -ne "$IMPLS" ]; then \
+    echo "❌ MISMATCH! Missing $(($INTERFACES - $IMPLS)) ServiceImpl"; \
+else \
+    echo "✅ All Service interfaces have implementations"; \
+fi
+```
+
 ## Navigation Verification
 
 ```bash

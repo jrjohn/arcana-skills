@@ -21,6 +21,57 @@ ls src/app/data/repositories/*.repository.impl.ts 2>/dev/null | wc -l
 grep -rn "throw.*NotImplemented\|TODO.*implement" src/app/
 ```
 
+## 🚨 Layer Wiring Verification (CRITICAL)
+
+```bash
+# === COMPONENT/VIEWMODEL → SERVICE → REPOSITORY PATTERN ===
+
+# 4. 🚨 Check Component should NOT inject Repository directly
+echo "=== Component→Repository Direct Injection Check ===" && \
+VIOLATIONS=$(grep -rln "Repository" src/app/presentation/**/*.component.ts 2>/dev/null | wc -l) && \
+if [ "$VIOLATIONS" -gt 0 ]; then \
+    echo "❌ VIOLATION: $VIOLATIONS Components inject Repository directly!"; \
+    echo "Components should inject Service, not Repository."; \
+    grep -rln "Repository" src/app/presentation/**/*.component.ts 2>/dev/null; \
+else \
+    echo "✅ All Components correctly inject Service"; \
+fi
+
+# 5. 🚨 Check ViewModel should NOT inject Repository directly (if using MVVM)
+echo "=== ViewModel→Repository Direct Injection Check ===" && \
+VIOLATIONS=$(grep -rln "Repository" src/app/presentation/**/*.viewmodel.ts 2>/dev/null | wc -l) && \
+if [ "$VIOLATIONS" -gt 0 ]; then \
+    echo "❌ VIOLATION: $VIOLATIONS ViewModels inject Repository directly!"; \
+    grep -rln "Repository" src/app/presentation/**/*.viewmodel.ts 2>/dev/null; \
+else \
+    echo "✅ All ViewModels correctly inject Service"; \
+fi
+
+# 6. 🚨 Check Service layer exists
+echo "=== Service Layer Existence Check ===" && \
+SERVICE_COUNT=$(find src/app -path "*/domain/services/*.service.ts" 2>/dev/null | wc -l) && \
+IMPL_COUNT=$(find src/app -path "*/domain/services/*.service.impl.ts" -o -path "*/data/services/*.service.impl.ts" 2>/dev/null | wc -l) && \
+echo "Service interfaces: $SERVICE_COUNT" && \
+echo "Service implementations: $IMPL_COUNT" && \
+if [ "$SERVICE_COUNT" -eq 0 ]; then \
+    echo "❌ CRITICAL: No Service layer found! Architecture violation."; \
+else \
+    echo "✅ Service layer exists"; \
+fi
+
+# 7. 🚨 Verify ALL Service interfaces have implementations
+echo "=== Service Interface/Implementation Parity ===" && \
+INTERFACES=$(find src/app -path "*/domain/services/*.service.ts" ! -name "*.impl.ts" 2>/dev/null | wc -l) && \
+IMPLS=$(find src/app -path "*/*.service.impl.ts" 2>/dev/null | wc -l) && \
+echo "Service interfaces: $INTERFACES" && \
+echo "Service implementations: $IMPLS" && \
+if [ "$INTERFACES" -ne "$IMPLS" ]; then \
+    echo "❌ MISMATCH! Missing $(($INTERFACES - $IMPLS)) ServiceImpl"; \
+else \
+    echo "✅ All Service interfaces have implementations"; \
+fi
+```
+
 ## Navigation Verification
 
 ```bash
