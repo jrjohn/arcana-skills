@@ -2,18 +2,73 @@
 
 Professional Angular development skill based on [Arcana Angular](https://github.com/jrjohn/arcana-angular) enterprise architecture.
 
-## Overview
+## Version
 
-This skill provides comprehensive guidance for Angular development following enterprise-grade architectural patterns. It supports Clean Architecture, Offline-First design with 4-layer caching, Angular Signals, and the MVVM Input/Output/Effect pattern.
+**v2.0** - Generalized & Enhanced
+- Removed domain-specific content (usable for any Angular project)
+- Added Quick Reference Card
+- Added Error Handling Pattern
+- Added Priority Labels (🔴/🟡/🟢)
+- Added Test Coverage Targets
+- Added Spec Gap Prediction System
+- Split into multiple files for better organization
 
-## Key Features
+## Structure
 
-- **Clean Architecture** - Three-layer architecture (Presentation, Domain, Data)
-- **Angular Signals** - Modern reactive state management
-- **4-Layer Caching** - Memory, LRU+TTL, IndexedDB, Remote API
-- **Offline-First Design** - IndexedDB (Dexie.js) as single source of truth
-- **OnPush Change Detection** - Optimized performance with immutable data
-- **MVVM Input/Output/Effect** - Unidirectional data flow pattern
+```
+angular-developer-skill/
+├── SKILL.md                    # Main skill file (core rules & patterns)
+├── README.md                   # This file
+├── patterns.md                 # Design patterns overview
+├── reference.md                # Technical reference
+├── examples.md                 # Code examples
+├── verification/
+│   └── commands.md             # All verification bash commands
+├── patterns/
+│   └── mvvm-input-output.md    # MVVM Input/Output/Effect pattern details
+└── checklists/
+    └── production-ready.md     # Production & code review checklists
+```
+
+## Priority Rules
+
+| Priority | Rule | Description |
+|----------|------|-------------|
+| 🔴 CRITICAL | Zero-Empty Policy | Repository stubs never return empty arrays |
+| 🔴 CRITICAL | Navigation Wiring | All routes must have component imports |
+| 🔴 CRITICAL | ID Consistency | Cross-repository IDs must match |
+| 🔴 CRITICAL | Onboarding Flow | Register/Login must check Onboarding |
+| 🟡 IMPORTANT | UI States | Loading/Error/Empty for all screens |
+| 🟡 IMPORTANT | Mock Data Quality | Realistic data ranges |
+| 🟢 RECOMMENDED | Animations | Smooth transitions |
+| 🟢 RECOMMENDED | Accessibility | ARIA labels |
+
+## Quick Reference Card
+
+### New Screen:
+```
+1. Add route → app.routes.ts
+2. Create Component with ChangeDetectionStrategy.OnPush
+3. Create ViewModel (Input/Output/Effect with Signals)
+4. Implement Loading/Error/Empty states
+5. Verify mock data is non-empty
+```
+
+### New Repository:
+```
+1. Interface → domain/repositories/
+2. Implementation → data/repositories/
+3. Provider binding → core/providers/
+4. Mock data (NEVER return []!)
+5. Verify ID consistency
+```
+
+### Quick Diagnosis:
+| Symptom | Check Command |
+|---------|---------------|
+| Blank screen | `grep "\\[\\]" *repository.impl.ts` |
+| Navigation crash | `grep "path:" app.routes.ts` vs component imports |
+| Button does nothing | `grep "(click)=\"\"" *.html` |
 
 ## Architecture
 
@@ -30,96 +85,44 @@ This skill provides comprehensive guidance for Angular development following ent
 └─────────────────────────────────────────────────────┘
 ```
 
+## Key Features
+
+- **Clean Architecture** - Three-layer architecture
+- **MVVM Input/Output/Effect** - Unidirectional data flow with Signals
+- **4-Layer Caching** - Memory → LRU → IndexedDB → Remote
+- **Offline-First Design** - IndexedDB as single source of truth
+- **Spec Gap Prediction** - Auto-detect missing UI states/flows
+- **Error Handling Pattern** - Unified AppError model
+- **Verification Commands** - 23+ diagnostic bash commands
+
 ## Tech Stack
 
 | Technology | Version |
 |------------|---------|
-| Angular | 17+ |
-| TypeScript | 5.0+ |
+| Angular | 20.3+ |
+| TypeScript | 5.7+ |
 | RxJS | 7.8+ |
-| Dexie.js | 3.2+ |
-| Bootstrap | 5.3+ |
+| Bootstrap | 5.0+ |
+| ng-bootstrap | 19.0+ |
+| Dexie | 4.0+ |
 
-## Documentation
+## Documentation Files
 
 | File | Description |
 |------|-------------|
-| [SKILL.md](SKILL.md) | Core skill instructions and architecture overview |
-| [reference.md](reference.md) | Technical reference for APIs and components |
-| [examples.md](examples.md) | Practical code examples for common scenarios |
-| [patterns.md](patterns.md) | Design patterns and best practices |
+| [SKILL.md](SKILL.md) | Core skill instructions & architecture |
+| [patterns.md](patterns.md) | Design patterns overview |
+| [reference.md](reference.md) | Technical API reference |
+| [examples.md](examples.md) | Practical code examples |
+| [verification/commands.md](verification/commands.md) | All diagnostic commands |
+| [patterns/mvvm-input-output.md](patterns/mvvm-input-output.md) | ViewModel pattern details |
+| [checklists/production-ready.md](checklists/production-ready.md) | Release & review checklists |
 
 ## When to Use This Skill
 
-This skill is ideal for:
-
-- Angular project development from scratch
+- Angular project development
 - Architecture design and review
-- Code review for Angular applications
-- Implementing offline-first features
-- Performance optimization with Signals and OnPush
+- Code review
+- Offline-first features
 - Enterprise web application development
-
-## Quick Start
-
-### ViewModel with Signals
-
-```typescript
-@Injectable()
-export class UserViewModel {
-  // Output: Read-only signals
-  private readonly _name = signal('');
-  private readonly _isLoading = signal(false);
-
-  readonly output = computed(() => ({
-    name: this._name(),
-    isLoading: this._isLoading(),
-  }));
-
-  // Effect: One-time events
-  private readonly _effect = new Subject<UserEffect>();
-  readonly effect$ = this._effect.asObservable();
-
-  // Input handler
-  onInput(input: UserInput): void {
-    switch (input.type) {
-      case 'UPDATE_NAME':
-        this._name.set(input.name);
-        break;
-      case 'SUBMIT':
-        this.submit();
-        break;
-    }
-  }
-}
-```
-
-### 4-Layer Cache
-
-```typescript
-@Injectable({ providedIn: 'root' })
-export class CacheService {
-  // L1: In-memory cache (fastest)
-  private readonly memoryCache = new Map<string, CacheEntry>();
-
-  // L2: LRU cache with TTL
-  private readonly lruCache = new LRUCache<string, any>(100);
-
-  // L3: IndexedDB (persistent)
-  private readonly db = new Dexie('AppCache');
-
-  // L4: Remote API (slowest, source of truth)
-
-  async get<T>(key: string): Promise<T | null> {
-    // Check each layer in order
-    return this.checkMemory(key)
-        ?? this.checkLRU(key)
-        ?? await this.checkIndexedDB(key)
-        ?? await this.fetchRemote(key);
-  }
-}
-```
-
-## License
-
-This skill is part of the Arcana enterprise architecture series.
+- Debugging blank screens / navigation issues

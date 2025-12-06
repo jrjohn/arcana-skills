@@ -2,18 +2,73 @@
 
 Professional Android development skill based on [Arcana Android](https://github.com/jrjohn/arcana-android) enterprise architecture.
 
-## Overview
+## Version
 
-This skill provides comprehensive guidance for Android development following enterprise-grade architectural patterns. It supports Clean Architecture, Offline-First design, Jetpack Compose, Hilt DI, and the MVVM Input/Output pattern.
+**v2.0** - Generalized & Enhanced
+- Removed domain-specific content (usable for any Android project)
+- Added Quick Reference Card
+- Added Error Handling Pattern
+- Added Priority Labels (🔴/🟡/🟢)
+- Added Test Coverage Targets
+- Added Spec Gap Prediction System
+- Split into multiple files for better organization
 
-## Key Features
+## Structure
 
-- **Clean Architecture** - Three-layer architecture (Presentation, Domain, Data)
-- **MVVM Input/Output** - Unidirectional data flow pattern with Kotlin sealed interfaces
-- **Offline-First Design** - Room database as single source of truth
-- **Jetpack Compose** - Modern declarative UI framework
-- **Hilt Dependency Injection** - Type-safe DI with compile-time validation
-- **Kotlin Coroutines & Flow** - Reactive state management
+```
+android-developer-skill/
+├── SKILL.md                    # Main skill file (core rules & patterns)
+├── README.md                   # This file
+├── patterns.md                 # Design patterns overview
+├── reference.md                # Technical reference
+├── examples.md                 # Code examples
+├── verification/
+│   └── commands.md             # All verification bash commands
+├── patterns/
+│   └── mvvm-input-output.md    # MVVM Input/Output pattern details
+└── checklists/
+    └── production-ready.md     # Production & code review checklists
+```
+
+## Priority Rules
+
+| Priority | Rule | Description |
+|----------|------|-------------|
+| 🔴 CRITICAL | Zero-Null Policy | Repository stubs never return null/empty |
+| 🔴 CRITICAL | Navigation Wiring | All NavRoutes must have composable |
+| 🔴 CRITICAL | ID Consistency | Cross-repository IDs must match |
+| 🔴 CRITICAL | Onboarding Flow | Register/Login must check Onboarding |
+| 🟡 IMPORTANT | UI States | Loading/Error/Empty for all screens |
+| 🟡 IMPORTANT | Mock Data Quality | Realistic data ranges |
+| 🟢 RECOMMENDED | Animations | Smooth transitions |
+| 🟢 RECOMMENDED | Accessibility | Content descriptions |
+
+## Quick Reference Card
+
+### New Screen:
+```
+1. Add route → NavRoutes.kt
+2. Add composable → NavGraph.kt
+3. Create ViewModel (Input/Output)
+4. Implement Loading/Error/Empty states
+5. Verify mock data is non-empty
+```
+
+### New Repository:
+```
+1. Interface → domain/repository/
+2. Implementation → data/repository/
+3. Hilt binding → di/
+4. Mock data (NEVER empty!)
+5. Verify ID consistency
+```
+
+### Quick Diagnosis:
+| Symptom | Check Command |
+|---------|---------------|
+| Blank screen | `grep "emptyList()" *RepositoryImpl.kt` |
+| Navigation crash | `grep "NavRoutes\." NavGraph.kt` |
+| Click does nothing | `grep "onClick = { }" *.kt` |
 
 ## Architecture
 
@@ -30,138 +85,43 @@ This skill provides comprehensive guidance for Android development following ent
 └─────────────────────────────────────────────────────┘
 ```
 
+## Key Features
+
+- **Clean Architecture** - Three-layer architecture
+- **MVVM Input/Output** - Unidirectional data flow
+- **Offline-First Design** - Room as single source of truth
+- **Spec Gap Prediction** - Auto-detect missing UI states/flows
+- **Error Handling Pattern** - Unified error model
+- **Verification Commands** - 20+ diagnostic bash commands
+
 ## Tech Stack
 
 | Technology | Version |
 |------------|---------|
-| Kotlin | 1.9+ |
-| Jetpack Compose | 1.5+ |
+| Kotlin | 2.0+ |
+| Jetpack Compose | 1.6+ |
 | Room | 2.6+ |
-| Hilt | 2.48+ |
-| Retrofit | 2.9+ |
-| Coroutines | 1.7+ |
-| Android SDK | 34+ |
+| Hilt | 2.50+ |
+| Ktor | 2.3+ |
+| Coroutines | 1.8+ |
 
-## Documentation
+## Documentation Files
 
 | File | Description |
 |------|-------------|
-| [SKILL.md](SKILL.md) | Core skill instructions and architecture overview |
-| [reference.md](reference.md) | Technical reference for APIs and components |
-| [examples.md](examples.md) | Practical code examples for common scenarios |
-| [patterns.md](patterns.md) | Design patterns and best practices |
+| [SKILL.md](SKILL.md) | Core skill instructions & architecture |
+| [patterns.md](patterns.md) | Design patterns overview |
+| [reference.md](reference.md) | Technical API reference |
+| [examples.md](examples.md) | Practical code examples |
+| [verification/commands.md](verification/commands.md) | All diagnostic commands |
+| [patterns/mvvm-input-output.md](patterns/mvvm-input-output.md) | ViewModel pattern details |
+| [checklists/production-ready.md](checklists/production-ready.md) | Release & review checklists |
 
 ## When to Use This Skill
 
-This skill is ideal for:
-
-- Android project development from scratch
+- Android project development
 - Architecture design and review
-- Code review for Android applications
-- Implementing offline-first features
+- Code review
+- Offline-first features
 - Jetpack Compose UI development
-- Dependency injection setup with Hilt
-
-## Quick Start
-
-### ViewModel Input/Output Pattern
-
-```kotlin
-@HiltViewModel
-class UserViewModel @Inject constructor(
-    private val userService: UserService
-) : ViewModel() {
-
-    // Input: Sealed interface defining all events
-    sealed interface Input {
-        data class UpdateName(val name: String) : Input
-        data object Submit : Input
-    }
-
-    // Output: State container
-    data class Output(
-        val name: String = "",
-        val isLoading: Boolean = false,
-        val error: String? = null
-    )
-
-    // Effect: One-time events
-    sealed interface Effect {
-        data object NavigateBack : Effect
-        data class ShowSnackbar(val message: String) : Effect
-    }
-
-    private val _output = MutableStateFlow(Output())
-    val output: StateFlow<Output> = _output.asStateFlow()
-
-    private val _effect = Channel<Effect>()
-    val effect = _effect.receiveAsFlow()
-
-    fun onInput(input: Input) {
-        when (input) {
-            is Input.UpdateName -> _output.update { it.copy(name = input.name) }
-            is Input.Submit -> submit()
-        }
-    }
-}
-```
-
-### Offline-First Repository
-
-```kotlin
-class UserRepositoryImpl @Inject constructor(
-    private val userDao: UserDao,
-    private val userApi: UserApi
-) : UserRepository {
-
-    override fun getUsers(): Flow<List<User>> = flow {
-        // 1. Emit cached data first
-        emit(userDao.getAll().map { it.toDomain() })
-
-        // 2. Fetch fresh data from API
-        try {
-            val remote = userApi.getUsers()
-            userDao.insertAll(remote.map { it.toEntity() })
-            emit(userDao.getAll().map { it.toDomain() })
-        } catch (e: Exception) {
-            // Return cached data on error
-        }
-    }
-}
-```
-
-### Compose UI with ViewModel
-
-```kotlin
-@Composable
-fun UserScreen(
-    viewModel: UserViewModel = hiltViewModel()
-) {
-    val output by viewModel.output.collectAsStateWithLifecycle()
-
-    LaunchedEffect(Unit) {
-        viewModel.effect.collect { effect ->
-            when (effect) {
-                is Effect.NavigateBack -> navController.popBackStack()
-                is Effect.ShowSnackbar -> snackbarHostState.showSnackbar(effect.message)
-            }
-        }
-    }
-
-    UserContent(
-        output = output,
-        onNameChange = { viewModel.onInput(Input.UpdateName(it)) },
-        onSubmit = { viewModel.onInput(Input.Submit) }
-    )
-}
-```
-
-## Dependency Rules
-
-- **Unidirectional Dependencies**: Presentation → Domain → Data
-- **Interface Segregation**: Decouple layers through interfaces
-- **Dependency Inversion**: Data layer implements Domain layer interfaces
-
-## License
-
-This skill is part of the Arcana enterprise architecture series.
+- Debugging blank screens / navigation issues

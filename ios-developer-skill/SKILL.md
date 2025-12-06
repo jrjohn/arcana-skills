@@ -8,6 +8,271 @@ allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 
 Professional iOS development skill based on [Arcana iOS](https://github.com/jrjohn/arcana-ios) enterprise architecture.
 
+---
+
+## Quick Reference Card
+
+### New Screen Checklist:
+```
+1. Add route → Route.swift (enum case)
+2. Add destination → NavigationRouter.swift (switch case)
+3. Create ViewModel (Input/Output/Effect pattern)
+4. Create View with Loading/Error/Empty states
+5. Wire navigation callbacks in parent
+6. Verify mock data returns non-empty values
+```
+
+### New Repository Checklist:
+```
+1. Protocol → Domain/Repositories/XxxRepository.swift
+2. Implementation → Data/Repositories/XxxRepositoryImpl.swift
+3. Mock → Data/Repositories/Mock/MockXxxRepository.swift
+4. DI binding → Infrastructure/DI/RepositoryContainer.swift
+5. Mock data (NEVER return [] or nil!)
+6. Verify ID consistency across repositories
+```
+
+### Quick Diagnosis:
+| Symptom | Check Command |
+|---------|---------------|
+| Blank screen | `grep "\\[\\]\|Array()" Sources/**/Repositories/*Impl.swift` |
+| Navigation crash | Compare `Route.swift` cases vs `NavigationRouter.swift` destinations |
+| Button does nothing | `grep "action:\s*{\s*}" Sources/**/Views/` |
+| Data not loading | `grep "fatalError\|TODO" Sources/**/Repositories/` |
+
+---
+
+## Rules Priority
+
+### 🔴 CRITICAL (Must Fix Immediately)
+
+| Rule | Description | Verification |
+|------|-------------|--------------|
+| Zero-Null Policy | Repository stubs NEVER return nil/empty | `grep "\\[\\]\|return nil" *Impl.swift` |
+| Navigation Wiring | ALL Route cases MUST have destinations | Count routes vs destinations |
+| ID Consistency | Cross-repository IDs must match | Check mock data IDs |
+| Onboarding Flow | Register/Login must check onboarding status | Check navigation flow |
+
+### 🟡 IMPORTANT (Should Fix Before PR)
+
+| Rule | Description | Verification |
+|------|-------------|--------------|
+| UI States | Loading/Error/Empty for all screens | `grep -L "isLoading\|ProgressView"` |
+| Mock Data Quality | Realistic, varied values (not all same) | Review mock data arrays |
+| Error Messages | User-friendly, not technical errors | Check error handling |
+| Input Validation | All forms validate before submit | Check form logic |
+
+### 🟢 RECOMMENDED (Nice to Have)
+
+| Rule | Description |
+|------|-------------|
+| Animations | Smooth transitions between views |
+| Accessibility | VoiceOver labels for all interactive elements |
+| Dark Mode | Proper color adaptation |
+| iPad Support | Responsive layouts for larger screens |
+
+---
+
+## Error Handling Pattern
+
+### AppError - Unified Error Model
+
+```swift
+// Domain/Models/AppError.swift
+enum AppError: LocalizedError {
+    // Network errors
+    case networkUnavailable
+    case timeout
+    case serverError(statusCode: Int)
+
+    // Auth errors
+    case unauthorized
+    case tokenExpired
+    case invalidCredentials
+
+    // Data errors
+    case notFound
+    case validationFailed(message: String)
+    case dataCorrupted
+
+    // General errors
+    case unknown(underlying: Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .networkUnavailable:
+            return "No internet connection. Please check your network."
+        case .timeout:
+            return "Request timed out. Please try again."
+        case .serverError(let code):
+            return "Server error (\(code)). Please try again later."
+        case .unauthorized, .tokenExpired:
+            return "Session expired. Please login again."
+        case .invalidCredentials:
+            return "Invalid email or password."
+        case .notFound:
+            return "The requested item was not found."
+        case .validationFailed(let message):
+            return message
+        case .dataCorrupted:
+            return "Data error. Please contact support."
+        case .unknown:
+            return "An unexpected error occurred."
+        }
+    }
+
+    var requiresReauth: Bool {
+        switch self {
+        case .unauthorized, .tokenExpired:
+            return true
+        default:
+            return false
+        }
+    }
+}
+```
+
+### Error Handling Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Error Flow                                │
+├─────────────────────────────────────────────────────────────────┤
+│  Repository Layer:                                               │
+│    - Catch network/API errors                                    │
+│    - Map to AppError                                             │
+│    - Throw AppError                                              │
+├─────────────────────────────────────────────────────────────────┤
+│  Service Layer:                                                  │
+│    - Catch repository errors                                     │
+│    - Add business context if needed                              │
+│    - Re-throw as AppError                                        │
+├─────────────────────────────────────────────────────────────────┤
+│  ViewModel Layer:                                                │
+│    - Catch all errors                                            │
+│    - Update output.error = error.localizedDescription            │
+│    - Check requiresReauth for auth redirect                      │
+├─────────────────────────────────────────────────────────────────┤
+│  View Layer:                                                     │
+│    - Display error from output.error                             │
+│    - Show retry button                                           │
+│    - Handle auth redirect via effect                             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Error Handling by Layer
+
+**Repository Layer:**
+```swift
+func getItems() async throws -> [Item] {
+    do {
+        let response = try await apiClient.get("/items")
+        return response.map { $0.toDomain() }
+    } catch let error as URLError {
+        switch error.code {
+        case .notConnectedToInternet:
+            throw AppError.networkUnavailable
+        case .timedOut:
+            throw AppError.timeout
+        default:
+            throw AppError.unknown(underlying: error)
+        }
+    } catch {
+        throw AppError.unknown(underlying: error)
+    }
+}
+```
+
+**ViewModel Layer:**
+```swift
+private func loadData() {
+    Task { @MainActor in
+        output.isLoading = true
+        output.error = nil
+
+        do {
+            let items = try await repository.getItems()
+            output.items = items
+        } catch let appError as AppError {
+            output.error = appError.localizedDescription
+            if appError.requiresReauth {
+                effect = .navigateToLogin
+            }
+        } catch {
+            output.error = AppError.unknown(underlying: error).localizedDescription
+        }
+
+        output.isLoading = false
+    }
+}
+```
+
+---
+
+## Test Coverage Targets
+
+### Coverage by Layer
+
+| Layer | Target | Focus Areas |
+|-------|--------|-------------|
+| ViewModel | 90%+ | All Input handlers, state transitions, effects |
+| Service | 85%+ | Business logic, edge cases |
+| Repository | 80%+ | Data mapping, error handling |
+| View | 60%+ | Snapshot tests, interaction tests |
+
+### What to Test
+
+**ViewModel Tests (Highest Priority):**
+```swift
+final class FeatureViewModelTests: XCTestCase {
+    // Test each Input case
+    func testLoad_Success_UpdatesItems() async { }
+    func testLoad_Failure_SetsError() async { }
+    func testRefresh_Success_ShowsToast() async { }
+    func testItemTapped_NavigatesToDetail() { }
+
+    // Test state transitions
+    func testLoad_SetsLoadingTrue_ThenFalse() async { }
+
+    // Test edge cases
+    func testLoad_EmptyResult_ShowsEmptyState() async { }
+}
+```
+
+**Service Tests:**
+```swift
+final class UserServiceTests: XCTestCase {
+    // Test business rules
+    func testValidateEmail_InvalidFormat_ReturnsFalse() { }
+    func testCalculateScore_WithData_ReturnsCorrectValue() { }
+}
+```
+
+**Repository Tests:**
+```swift
+final class UserRepositoryTests: XCTestCase {
+    // Test data mapping
+    func testGetUsers_MapsCorrectly() async { }
+
+    // Test offline behavior
+    func testGetUsers_NoNetwork_ReturnsCached() async { }
+}
+```
+
+### Test Command
+```bash
+# Run all tests with coverage
+xcodebuild test \
+  -scheme [YourScheme] \
+  -destination 'platform=iOS Simulator,name=iPhone 15' \
+  -enableCodeCoverage YES
+
+# View coverage report
+xcrun xccov view --report Build/Logs/Test/*.xcresult
+```
+
+---
+
 ## Core Architecture Principles
 
 ### Clean Architecture - Three Layers
@@ -33,6 +298,130 @@ Professional iOS development skill based on [Arcana iOS](https://github.com/jrjo
 ## Instructions
 
 When handling iOS development tasks, follow these principles:
+
+### Quick Verification Commands
+
+Use these commands to quickly check for common issues:
+
+```bash
+# 1. Check for unimplemented repositories (MUST be empty)
+grep -rn "fatalError\|TODO.*implement\|throw.*NotImplemented" Sources/
+
+# 2. Check for empty button actions (MUST be empty)
+grep -rn "action:\s*{\s*}\|Button.*{\s*}" Sources/
+
+# 3. Check for missing navigation destinations (compare route count vs view count)
+echo "Routes defined:" && grep -c "case\s" Sources/**/Route.swift 2>/dev/null || echo 0
+echo "Views registered:" && grep -c "destination:" Sources/**/NavigationRouter.swift 2>/dev/null || echo 0
+
+# 4. Verify build compiles
+xcodebuild -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone 15' build
+
+# 5. 🚨 Check for unwired navigation closures (CRITICAL!)
+grep -rn "onNavigate.*:\s*(\s*)\s*->\s*Void\s*=\s*{" Sources/**/Views/
+
+# 6. 🚨 Verify ALL Route cases have NavigationRouter destinations
+echo "=== Route Cases Defined ===" && \
+grep -rh "case\s\+[a-zA-Z]" Sources/**/Route.swift | grep -oE "case\s+[a-zA-Z]+" | sort -u
+echo "=== NavigationRouter Destinations ===" && \
+grep -rh "case\s\.\|case\slet\s\." Sources/**/NavigationRouter.swift | grep -oE "\.[a-zA-Z]+" | sort -u
+
+# 7. 🚨 Check for navigation callbacks in Views not wired in parent/caller
+echo "=== View Navigation Callbacks ===" && \
+grep -rh "var onNavigate\|let onNavigate" Sources/**/Views/*.swift | grep -oE "onNavigate[A-Za-z]+" | sort -u
+
+# 8. 🚨 Check Service→Repository wiring (CRITICAL!)
+echo "=== Repository Methods Called in Services ===" && \
+grep -roh "repository\.[a-zA-Z]*(" Sources/**/Services/*.swift | sort -u
+echo "=== Repository Protocol Methods ===" && \
+grep -rh "func [a-zA-Z]*(" Sources/**/Repositories/*Repository.swift | grep -oE "func [a-zA-Z]+\(" | sort -u
+
+# 9. 🚨 Verify ALL Repository protocol methods have implementations
+echo "=== Repository Protocol Methods ===" && \
+grep -rh "func " Sources/**/Domain/Repositories/*Repository.swift | grep -oE "func [a-zA-Z]+" | sort -u
+echo "=== Repository Implementation Methods ===" && \
+grep -rh "func " Sources/**/Data/Repositories/*RepositoryImpl.swift | grep -oE "func [a-zA-Z]+" | sort -u
+```
+
+⚠️ **CRITICAL**: Route count MUST equal View count. If not, you have missing navigation destinations that will cause runtime crashes.
+
+⚠️ **NAVIGATION WIRING CRITICAL**: Commands #5-#7 detect navigation callbacks that exist in Views but aren't connected. A View can declare `var onNavigateToSettings: () -> Void = {}` with a default empty closure, but if the parent View doesn't pass a real implementation, the button does nothing!
+
+If any of these return results or counts don't match, FIX THEM before completing the task.
+
+---
+
+## 📊 Mock Data Requirements for Repository Stubs
+
+### The Chart Data Problem
+
+When implementing Repository stubs, **NEVER return empty arrays for data that powers UI charts or visualizations**. This causes:
+- Charts that render but show nothing (blank Canvas/Chart views)
+- Line charts that skip rendering (e.g., `guard points.count >= 2 else { return }`)
+- Empty state views even when data structure exists
+
+### Mock Data Rules
+
+**Rule 1: Array data for charts MUST have at least 7 items**
+```swift
+// ❌ BAD - Chart will be blank
+func getCurrentWeekSummary() async throws -> WeeklySummary {
+    return WeeklySummary(
+        dailyReports: []  // ← Chart has no data to render!
+    )
+}
+
+// ✅ GOOD - Chart has data to display
+func getCurrentWeekSummary() async throws -> WeeklySummary {
+    let mockDailyReports = (0..<7).map { dayOffset in
+        createMockDailyReport(
+            score: [72, 78, 85, 80, 76, 88, 82][dayOffset],
+            duration: [390, 420, 450, 410, 380, 460, 435][dayOffset]
+        )
+    }
+    return WeeklySummary(dailyReports: mockDailyReports)
+}
+```
+
+**Rule 2: Use realistic, varied sample values**
+```swift
+// ❌ BAD - Monotonous test data
+let scores = Array(repeating: 80, count: 7)
+
+// ✅ GOOD - Realistic variation
+let scores = [72, 78, 85, 80, 76, 88, 82]  // Shows trend
+```
+
+**Rule 3: Data must match model struct exactly**
+```bash
+# Before creating mock data, ALWAYS verify the struct definition:
+grep -A 20 "struct TherapyData" Sources/**/Models/*.swift
+```
+
+**Rule 4: Create helper functions for complex mock data**
+```swift
+// ✅ Create reusable mock factory
+private func createMockDailyReport(score: Int, duration: Int) -> DailySleepReport {
+    DailySleepReport(
+        id: UUID().uuidString,
+        sleepScore: score,
+        sleepDuration: SleepDuration(totalMinutes: duration, ...),
+        // ... all required fields
+    )
+}
+```
+
+### Quick Verification Commands for Mock Data
+
+```bash
+# 10. 🚨 Check for empty array returns in Repository stubs (MUST FIX)
+grep -rn "\[\]\|Array()" Sources/**/Repositories/*RepositoryImpl.swift
+
+# 11. 🚨 Verify chart-related data has mock values
+grep -rn "dailyReports\|weeklyData\|chartData" Sources/**/Repositories/ | grep -E "= \[\]|\.init\(\)"
+```
+
+---
 
 ### 0. Project Setup - CRITICAL
 
@@ -100,6 +489,8 @@ xcodebuild -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone
 
 ⚠️ **CRITICAL**: All development MUST follow this TDD workflow. Every Spec requirement must have corresponding tests BEFORE implementation.
 
+🚨 **ABSOLUTE RULE**: TDD = Tests + Implementation. Writing tests without implementation is **INCOMPLETE**. Every test file MUST have corresponding production code that passes the tests.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TDD Development Workflow                      │
@@ -107,10 +498,45 @@ xcodebuild -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone
 │  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
 │  Step 2: Create Tests → Write tests for EACH Spec item          │
 │  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
-│  Step 4: Implement → Build features to pass tests               │
+│  Step 4: Implement → Build features to pass tests  ⚠️ MANDATORY │
 │  Step 5: Mock APIs → Use mock data for unfinished Cloud APIs    │
 │  Step 6: Run All Tests → ALL tests must pass before completion  │
+│  Step 7: Verify 100% → Tests written = Features implemented     │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+#### ⛔ FORBIDDEN: Tests Without Implementation
+
+```swift
+// ❌ WRONG - Test exists but no implementation
+// Test file exists: LoginViewModelTests.swift (32 tests)
+// Production file: LoginViewModel.swift → MISSING or uses fatalError()
+// This is INCOMPLETE TDD!
+
+// ✅ CORRECT - Test AND Implementation both exist
+// Test file: LoginViewModelTests.swift (32 tests)
+// Production file: LoginViewModel.swift (fully implemented)
+// All 32 tests PASS
+```
+
+#### ⛔ Placeholder View Policy
+
+Placeholder views are **ONLY** allowed as a temporary navigation target during active development. They are **FORBIDDEN** as a final state.
+
+```swift
+// ❌ WRONG - Placeholder view left in production
+case .training:
+    PlaceholderView(title: "訓練課程") // FORBIDDEN!
+
+// ✅ CORRECT - Real view implementation
+case .training:
+    TrainingView(viewModel: TrainingViewModel())
+```
+
+**Placeholder Check Command:**
+```bash
+# This command MUST return empty for production-ready code
+grep -rn "PlaceholderView\|fatalError\|TODO.*implement\|即將推出\|Coming Soon" Sources/
 ```
 
 #### Step 1: Analyze Spec Documents (SRS & SDD)
@@ -200,7 +626,17 @@ Before implementation, verify ALL SRS and SDD items have tests:
  */
 ```
 
-#### Step 4: Mock API Implementation
+#### Step 4: Mock API Implementation - MANDATORY
+
+⚠️ **CRITICAL**: Every Repository method MUST return valid mock data. NEVER leave methods with `fatalError()` or `throw NotImplementedError`.
+
+**Rules for Mock Repositories:**
+1. ALL repository methods must return valid mock data
+2. Use `Task.sleep()` to simulate network latency (0.5-1 second)
+3. Mock data must match the domain model structure exactly
+4. Check enum cases exist before using them
+5. Include all required properties for structs/classes
+
 For APIs not yet available from Cloud team, implement mock repositories:
 ```swift
 // Data/Repositories/Mock/MockAuthRepository.swift
@@ -674,6 +1110,82 @@ final class PaginatedListViewModel<T> {
 }
 ```
 
+## Navigation Wiring Verification Guide
+
+### 🚨 The Navigation Wiring Blind Spot
+
+SwiftUI Views often declare navigation callbacks with default empty closures:
+
+```swift
+// SettingsView.swift
+struct SettingsView: View {
+    var onNavigateToAccountInfo: () -> Void = {}  // ⚠️ Default empty!
+    var onNavigateToChangePassword: () -> Void = {}  // ⚠️ Default empty!
+    var onNavigateToUserList: () -> Void = {}  // ⚠️ Default empty!
+
+    var body: some View {
+        List {
+            Button("帳號資訊") { onNavigateToAccountInfo() }  // Does nothing if not wired!
+            Button("變更密碼") { onNavigateToChangePassword() }  // Does nothing if not wired!
+        }
+    }
+}
+```
+
+**Problem**: If the parent View/NavigationRouter doesn't pass real implementations, buttons appear functional but do nothing when tapped!
+
+### Detection Patterns
+
+```bash
+# Find Views with navigation callbacks
+grep -rn "var onNavigate.*:\s*(\s*)\s*->\s*Void" Sources/**/Views/
+
+# Find Route cases
+grep -rn "case\s\+[a-zA-Z]" Sources/**/Route.swift
+
+# Find NavigationRouter destinations
+grep -rn "destination:" Sources/**/NavigationRouter.swift
+
+# Compare: Every navigation callback in a View MUST have corresponding wiring
+```
+
+### Verification Checklist
+
+1. **Count navigation callbacks in each View**:
+   ```bash
+   grep -c "onNavigateTo" Sources/Presentation/Views/SettingsView.swift
+   ```
+
+2. **Count wired callbacks where View is used**:
+   ```bash
+   grep -c "onNavigateTo.*:" Sources/Presentation/Navigation/NavigationRouter.swift | grep "SettingsView"
+   ```
+
+3. **Counts MUST match!** Any mismatch = unwired navigation
+
+### Correct Wiring Example
+
+```swift
+// NavigationRouter.swift
+@ViewBuilder
+func destination(for route: Route) -> some View {
+    switch route {
+    case .settings:
+        SettingsView(
+            onNavigateToAccountInfo: { navigate(to: .accountInfo) },  // ✅ Wired
+            onNavigateToChangePassword: { navigate(to: .changePassword) },  // ✅ Wired
+            onNavigateToUserList: { navigate(to: .userList) }  // ✅ Wired
+        )
+    case .accountInfo:
+        AccountInfoView()  // ✅ Route exists AND View exists
+    case .changePassword:
+        ChangePasswordView()  // ✅ Route exists AND View exists
+    case .userList:
+        UserListView()  // ✅ Route exists AND View exists
+    }
+}
+```
+
 ## Code Review Checklist
 
 ### Required Items
@@ -683,6 +1195,10 @@ final class PaginatedListViewModel<T> {
 - [ ] SwiftUI views have no side effects
 - [ ] Properly handle Swift Concurrency lifecycle
 - [ ] Dependency injection configured correctly
+- [ ] 🚨 ALL navigation callbacks in Views are wired in NavigationRouter
+- [ ] 🚨 ALL Route cases have corresponding View destinations
+- [ ] 🚨 ALL Service→Repository method calls exist in Repository protocols
+- [ ] 🚨 ALL Repository protocol methods have RepositoryImpl implementations
 
 ### Performance Checks
 - [ ] Avoid unnecessary SwiftUI redraws
@@ -712,6 +1228,168 @@ final class PaginatedListViewModel<T> {
 1. Ensure dependencies are properly mocked
 2. Use #Preview macro
 3. Use mock data in Preview
+
+---
+
+## Spec Gap Prediction System
+
+When Spec is incomplete, use these universal rules to predict and supplement missing UI/UX elements.
+
+### Screen Type → Required States (Universal)
+
+| Screen Type | Required States | Auto-Predict |
+|-------------|-----------------|--------------|
+| List Screen | Loading, Error, Empty, Content | Pull-to-refresh, Pagination |
+| Detail Screen | Loading, Error, Content | Back navigation, Share action |
+| Form Screen | Validation, Submit Loading, Success, Error | Input validation, Cancel action |
+| Dashboard | Loading, Error, Content | Refresh, Section navigation |
+| Settings | Content | Back navigation, Section headers |
+| Auth Screen | Loading, Error, Success | Forgot password link, Terms link |
+
+### Flow Completion Prediction
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Flow Completion Rules                         │
+├─────────────────────────────────────────────────────────────────┤
+│  IF Spec has Login:                                              │
+│    → PREDICT: Register, Forgot Password, Logout                  │
+│                                                                  │
+│  IF Spec has Register:                                           │
+│    → PREDICT: Onboarding flow after registration                 │
+│    → PREDICT: Email verification (if email-based)                │
+│                                                                  │
+│  IF Spec has List:                                               │
+│    → PREDICT: Detail view for list items                         │
+│    → PREDICT: Search/Filter functionality                        │
+│    → PREDICT: Empty state when no items                          │
+│                                                                  │
+│  IF Spec has Settings:                                           │
+│    → PREDICT: Account info edit                                  │
+│    → PREDICT: Change password                                    │
+│    → PREDICT: Notification preferences                           │
+│    → PREDICT: Logout confirmation                                │
+│                                                                  │
+│  IF Spec has any data display:                                   │
+│    → PREDICT: Offline cached view                                │
+│    → PREDICT: Sync status indicator                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Data Operation Prediction (CRUD)
+
+| Spec Mentions | Auto-Predict Operations |
+|---------------|-------------------------|
+| "Display items" | Read + Loading + Error + Empty states |
+| "Add item" | Create + Validation + Success feedback |
+| "Edit item" | Update + Validation + Optimistic UI |
+| "Delete item" | Delete + Confirmation dialog + Undo option |
+| "Search" | Debounced input + No results state |
+| "Filter" | Filter UI + Clear filter + Active filter indicator |
+
+### Navigation Completeness Prediction
+
+```swift
+// If Route has these cases:
+enum Route {
+    case login        // → Predict: register, forgotPassword
+    case dashboard    // → Predict: settings, profile
+    case itemList     // → Predict: itemDetail(id)
+    case settings     // → Predict: accountInfo, changePassword, about
+}
+
+// Auto-check: Every navigation callback in Views must be wired
+```
+
+### UI State Prediction Matrix
+
+| Data Source | Success | Empty | Error | Loading |
+|-------------|---------|-------|-------|---------|
+| API Call | Content view | Empty view + CTA | Error view + Retry | ProgressView |
+| Local DB | Content view | Empty view + CTA | Error view + Retry | ProgressView |
+| User Input | Show result | Prompt input | Validation error | Submit loading |
+
+### Spec Gap Detection Commands
+
+```bash
+# 1. Detect screens missing loading state
+grep -L "isLoading\|ProgressView" Sources/**/Views/*Screen.swift
+
+# 2. Detect screens missing error state
+grep -L "error\|Error" Sources/**/Views/*Screen.swift
+
+# 3. Detect lists missing empty state
+grep -l "ForEach\|List" Sources/**/Views/*.swift | \
+xargs grep -L "isEmpty\|empty\|Empty"
+
+# 4. Detect forms missing validation
+grep -l "TextField\|SecureField" Sources/**/Views/*.swift | \
+xargs grep -L "isValid\|validate\|error"
+
+# 5. Detect missing navigation flows
+echo "=== Auth Flow Check ===" && \
+grep -q "login\|Login" Sources/**/Route.swift && \
+(grep -q "register\|Register" Sources/**/Route.swift || echo "⚠️ Missing: Register screen") && \
+(grep -q "forgotPassword\|ForgotPassword" Sources/**/Route.swift || echo "⚠️ Missing: Forgot Password screen")
+
+# 6. Detect missing CRUD operations
+echo "=== CRUD Completeness ===" && \
+grep -rh "func get\|func fetch\|func load" Sources/**/Repositories/*.swift | head -5 && \
+grep -rh "func create\|func add\|func save" Sources/**/Repositories/*.swift | head -5 && \
+grep -rh "func update\|func edit" Sources/**/Repositories/*.swift | head -5 && \
+grep -rh "func delete\|func remove" Sources/**/Repositories/*.swift | head -5
+```
+
+### Prediction Implementation Example
+
+When implementing a List screen from Spec:
+
+```swift
+// Spec says: "Display user's items"
+// Auto-predict required implementation:
+
+struct ItemListScreen: View {
+    @State private var viewModel: ItemListViewModel
+
+    var body: some View {
+        Group {
+            // 1. LOADING - Always needed for API/DB calls
+            if viewModel.output.isLoading {
+                ProgressView()
+            }
+            // 2. ERROR - Always needed for API/DB calls
+            else if let error = viewModel.output.error {
+                ErrorView(
+                    message: error,
+                    onRetry: { viewModel.onInput(.retry) }
+                )
+            }
+            // 3. EMPTY - Always needed for list screens
+            else if viewModel.output.items.isEmpty {
+                EmptyStateView(
+                    title: "No Items",
+                    message: "Add your first item to get started",
+                    action: ("Add Item", { viewModel.onInput(.addTapped) })
+                )
+            }
+            // 4. CONTENT - The actual list
+            else {
+                List(viewModel.output.items) { item in
+                    ItemRow(item: item)
+                        .onTapGesture {
+                            viewModel.onInput(.itemTapped(id: item.id))
+                        }
+                }
+                .refreshable {
+                    viewModel.onInput(.refresh)
+                }
+            }
+        }
+    }
+}
+```
+
+---
 
 ## Tech Stack Reference
 

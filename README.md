@@ -110,11 +110,20 @@ Each skill contains:
 
 ```
 *-developer-skill/
-├── SKILL.md        # Main skill definition with patterns and examples
-├── README.md       # Skill-specific documentation
-├── reference.md    # API reference and tech stack details
-├── examples.md     # Code examples and templates
-└── patterns.md     # Design patterns and best practices
+├── SKILL.md                      # Main skill definition with patterns and examples
+├── README.md                     # Skill-specific documentation
+├── reference.md                  # API reference and tech stack details
+├── examples.md                   # Code examples and templates
+├── patterns.md                   # Design patterns and best practices
+├── checklists/
+│   └── production-ready.md       # Production readiness checklist
+├── patterns/
+│   └── [pattern].md              # Platform-specific pattern guides
+│       • mvvm-input-output.md    # iOS, Android, Angular
+│       • service-layer.md        # Spring Boot, Python
+│       • mvvm-udf.md             # Windows
+└── verification/
+    └── commands.md               # Verification commands and tests
 ```
 
 ## Tech Stack Summary
