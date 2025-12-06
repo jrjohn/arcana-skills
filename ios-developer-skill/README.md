@@ -19,15 +19,15 @@ Professional iOS development skill based on [Arcana iOS](https://github.com/jrjo
 ios-developer-skill/
 ├── SKILL.md                    # Main skill file (core rules & patterns)
 ├── README.md                   # This file
-├── patterns.md                 # Design patterns overview
-├── reference.md                # Technical reference
-├── examples.md                 # Code examples
 ├── verification/
 │   └── commands.md             # All verification bash commands
 ├── patterns/
+│   ├── patterns.md             # Design patterns (original)
 │   └── mvvm-input-output.md    # MVVM Input/Output/Effect pattern details
-└── checklists/
-    └── production-ready.md     # Production & code review checklists
+├── checklists/
+│   └── production-ready.md     # Production & code review checklists
+├── reference.md                # Technical reference
+└── examples.md                 # Code examples
 ```
 
 ## Priority Rules
@@ -109,12 +109,11 @@ ios-developer-skill/
 | File | Description |
 |------|-------------|
 | [SKILL.md](SKILL.md) | Core skill instructions & architecture |
-| [patterns.md](patterns.md) | Design patterns overview |
-| [reference.md](reference.md) | Technical API reference |
-| [examples.md](examples.md) | Practical code examples |
 | [verification/commands.md](verification/commands.md) | All diagnostic commands |
 | [patterns/mvvm-input-output.md](patterns/mvvm-input-output.md) | ViewModel pattern details |
 | [checklists/production-ready.md](checklists/production-ready.md) | Release & review checklists |
+| [reference.md](reference.md) | Technical API reference |
+| [examples.md](examples.md) | Practical code examples |
 
 ## When to Use This Skill
 

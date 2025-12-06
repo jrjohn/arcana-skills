@@ -19,15 +19,15 @@ Professional Windows desktop development skill based on [Arcana Windows](https:/
 windows-developer-skill/
 ├── SKILL.md                    # Main skill file (core rules & patterns)
 ├── README.md                   # This file
-├── patterns.md                 # Design patterns overview
-├── reference.md                # Technical reference
-├── examples.md                 # Code examples
 ├── verification/
 │   └── commands.md             # All verification bash commands
 ├── patterns/
+│   ├── patterns.md             # Design patterns (original)
 │   └── mvvm-udf.md             # MVVM UDF pattern details
-└── checklists/
-    └── production-ready.md     # Production & code review checklists
+├── checklists/
+│   └── production-ready.md     # Production & code review checklists
+├── reference.md                # Technical reference
+└── examples.md                 # Code examples
 ```
 
 ## Priority Rules
@@ -115,12 +115,11 @@ windows-developer-skill/
 | File | Description |
 |------|-------------|
 | [SKILL.md](SKILL.md) | Core skill instructions & architecture |
-| [patterns.md](patterns.md) | Design patterns overview |
-| [reference.md](reference.md) | Technical reference |
-| [examples.md](examples.md) | Code examples |
 | [verification/commands.md](verification/commands.md) | All diagnostic commands |
 | [patterns/mvvm-udf.md](patterns/mvvm-udf.md) | MVVM UDF pattern |
 | [checklists/production-ready.md](checklists/production-ready.md) | Release checklists |
+| [reference.md](reference.md) | Technical reference |
+| [examples.md](examples.md) | Code examples |
 
 ## When to Use This Skill
 

@@ -18,6 +18,54 @@ grep -rn "raise NotImplementedError\|TODO.*implement\|pass\s*#.*TODO" app/
 grep -rn "def.*():\s*pass$" app/controller/
 ```
 
+## 🚨 Layer Wiring Verification (CRITICAL)
+
+```bash
+# === CONTROLLER → SERVICE → REPOSITORY PATTERN ===
+
+# 4. 🚨 Check Controller should NOT inject Repository directly
+echo "=== Controller→Repository Direct Injection Check ===" && \
+VIOLATIONS=$(grep -rln "_repository\|Repository" app/controller/*.py 2>/dev/null | wc -l) && \
+if [ "$VIOLATIONS" -gt 0 ]; then \
+    echo "❌ VIOLATION: $VIOLATIONS Controllers inject Repository directly!"; \
+    echo "Controllers should inject Service, not Repository."; \
+    grep -rln "_repository\|Repository" app/controller/*.py 2>/dev/null; \
+else \
+    echo "✅ All Controllers correctly inject Service"; \
+fi
+
+# 5. 🚨 Check Service layer exists
+echo "=== Service Layer Existence Check ===" && \
+SERVICE_COUNT=$(find app -path "*/service/*_service.py" 2>/dev/null | wc -l) && \
+IMPL_COUNT=$(find app -path "*/service/*_service_impl.py" -o -path "*/service/*_impl.py" 2>/dev/null | wc -l) && \
+echo "Service interfaces: $SERVICE_COUNT" && \
+echo "Service implementations: $IMPL_COUNT" && \
+if [ "$SERVICE_COUNT" -eq 0 ]; then \
+    echo "❌ CRITICAL: No Service layer found! Architecture violation."; \
+else \
+    echo "✅ Service layer exists"; \
+fi
+
+# 6. 🚨 Check Service→Repository wiring
+echo "=== Service→Repository Wiring Check ===" && \
+echo "Repository methods called in Services:" && \
+grep -roh "_repository\.[a-zA-Z_]*(" app/service/*.py 2>/dev/null | sort -u || echo "(no repository calls found)"
+echo "Repository interface methods:" && \
+grep -rh "def [a-zA-Z_]*(" app/repository/*.py 2>/dev/null | grep -oE "def [a-zA-Z_]+\(" | sort -u
+
+# 7. 🚨 Verify ALL Service interfaces have implementations
+echo "=== Service Interface/Implementation Parity ===" && \
+INTERFACES=$(find app -path "*/service/*_service.py" ! -name "*_impl.py" 2>/dev/null | wc -l) && \
+IMPLS=$(find app -path "*/*_service_impl.py" -o -path "*/service/*_impl.py" 2>/dev/null | wc -l) && \
+echo "Service interfaces: $INTERFACES" && \
+echo "Service implementations: $IMPLS" && \
+if [ "$INTERFACES" -ne "$IMPLS" ]; then \
+    echo "❌ MISMATCH! Missing implementations"; \
+else \
+    echo "✅ All Service interfaces have implementations"; \
+fi
+```
+
 ## API Endpoint Verification
 
 ```bash

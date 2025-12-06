@@ -21,6 +21,47 @@ ls Sources/**/Data/Repositories/*Impl.swift 2>/dev/null | wc -l
 grep -rn "fatalError\|TODO.*implement\|throw.*NotImplemented" Sources/
 ```
 
+## 🚨 Layer Wiring Verification (CRITICAL)
+
+```bash
+# === VIEWMODEL → SERVICE → REPOSITORY PATTERN ===
+
+# 4. 🚨 Check ViewModel should NOT inject Repository directly
+echo "=== ViewModel→Repository Direct Injection Check ===" && \
+VIOLATIONS=$(grep -rln "Repository" Sources/**/Presentation/ViewModels/*.swift 2>/dev/null | wc -l) && \
+if [ "$VIOLATIONS" -gt 0 ]; then \
+    echo "❌ VIOLATION: $VIOLATIONS ViewModels inject Repository directly!"; \
+    echo "ViewModels should inject Service, not Repository."; \
+    grep -rln "Repository" Sources/**/Presentation/ViewModels/*.swift 2>/dev/null; \
+else \
+    echo "✅ All ViewModels correctly inject Service"; \
+fi
+
+# 5. 🚨 Check Service layer exists
+echo "=== Service Layer Existence Check ===" && \
+SERVICE_COUNT=$(find Sources -path "*/Domain/Services/*Service.swift" 2>/dev/null | wc -l) && \
+IMPL_COUNT=$(find Sources -path "*/Domain/Services/*ServiceImpl.swift" -o -path "*/Data/Services/*ServiceImpl.swift" 2>/dev/null | wc -l) && \
+echo "Service protocols: $SERVICE_COUNT" && \
+echo "Service implementations: $IMPL_COUNT" && \
+if [ "$SERVICE_COUNT" -eq 0 ]; then \
+    echo "❌ CRITICAL: No Service layer found! Architecture violation."; \
+else \
+    echo "✅ Service layer exists"; \
+fi
+
+# 6. 🚨 Verify ALL Service protocols have implementations
+echo "=== Service Protocol/Implementation Parity ===" && \
+PROTOCOLS=$(find Sources -path "*/Domain/Services/*Service.swift" ! -name "*Impl.swift" 2>/dev/null | wc -l) && \
+IMPLS=$(find Sources -path "*/*ServiceImpl.swift" 2>/dev/null | wc -l) && \
+echo "Service protocols: $PROTOCOLS" && \
+echo "Service implementations: $IMPLS" && \
+if [ "$PROTOCOLS" -ne "$IMPLS" ]; then \
+    echo "❌ MISMATCH! Missing $(($PROTOCOLS - $IMPLS)) ServiceImpl"; \
+else \
+    echo "✅ All Service protocols have implementations"; \
+fi
+```
+
 ## Navigation Verification
 
 ```bash

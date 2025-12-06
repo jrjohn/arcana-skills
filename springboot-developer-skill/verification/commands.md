@@ -21,6 +21,47 @@ ls src/main/java/**/repository/*RepositoryImpl.java 2>/dev/null | wc -l
 grep -rn "throw.*UnsupportedOperationException\|TODO.*implement\|throw.*NotImplementedException" src/main/java/
 ```
 
+## 🚨 Layer Wiring Verification (CRITICAL)
+
+```bash
+# === CONTROLLER → SERVICE → REPOSITORY PATTERN ===
+
+# 4. 🚨 Check Controller should NOT inject Repository directly
+echo "=== Controller→Repository Direct Injection Check ===" && \
+VIOLATIONS=$(grep -rln "Repository" src/main/java/**/controller/*.java 2>/dev/null | wc -l) && \
+if [ "$VIOLATIONS" -gt 0 ]; then \
+    echo "❌ VIOLATION: $VIOLATIONS Controllers inject Repository directly!"; \
+    echo "Controllers should inject Service, not Repository."; \
+    grep -rln "Repository" src/main/java/**/controller/*.java 2>/dev/null; \
+else \
+    echo "✅ All Controllers correctly inject Service"; \
+fi
+
+# 5. 🚨 Check Service layer exists
+echo "=== Service Layer Existence Check ===" && \
+SERVICE_COUNT=$(find src/main/java -name "*Service.java" -path "*/service/*" 2>/dev/null | wc -l) && \
+IMPL_COUNT=$(find src/main/java -name "*ServiceImpl.java" -path "*/service/*" 2>/dev/null | wc -l) && \
+echo "Service interfaces: $SERVICE_COUNT" && \
+echo "Service implementations: $IMPL_COUNT" && \
+if [ "$SERVICE_COUNT" -eq 0 ]; then \
+    echo "❌ CRITICAL: No Service layer found! Architecture violation."; \
+else \
+    echo "✅ Service layer exists"; \
+fi
+
+# 6. 🚨 Verify ALL Service interfaces have implementations
+echo "=== Service Interface/Implementation Parity ===" && \
+INTERFACES=$(find src/main/java -name "*Service.java" -path "*/service/*" ! -name "*Impl.java" 2>/dev/null | wc -l) && \
+IMPLS=$(find src/main/java -name "*ServiceImpl.java" 2>/dev/null | wc -l) && \
+echo "Service interfaces: $INTERFACES" && \
+echo "Service implementations: $IMPLS" && \
+if [ "$INTERFACES" -ne "$IMPLS" ]; then \
+    echo "❌ MISMATCH! Missing $(($INTERFACES - $IMPLS)) ServiceImpl"; \
+else \
+    echo "✅ All Service interfaces have implementations"; \
+fi
+```
+
 ## API Endpoint Verification
 
 ```bash
