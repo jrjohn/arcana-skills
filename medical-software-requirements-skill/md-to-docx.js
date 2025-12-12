@@ -93,7 +93,24 @@ function createMermaidConfig(tempDir) {
   const configPath = path.join(tempDir, 'mermaid-config.json');
 
   const config = {
-    "theme": "default",
+    "theme": "base",
+    "themeVariables": {
+      "primaryColor": "#2196F3",
+      "primaryTextColor": "#ffffff",
+      "primaryBorderColor": "#1976D2",
+      "lineColor": "#757575",
+      "secondaryColor": "#FFC107",
+      "secondaryTextColor": "#5D4037",
+      "tertiaryColor": "#FFF9C4",
+      "tertiaryTextColor": "#5D4037",
+      "nodeBorder": "#1976D2",
+      "clusterBkg": "#E3F2FD",
+      "clusterBorder": "#90CAF9",
+      "defaultLinkColor": "#757575",
+      "titleColor": "#5D4037",
+      "edgeLabelBackground": "#FFC107",
+      "classText": "#1565C0"
+    },
     "flowchart": {
       "htmlLabels": false,
       "useMaxWidth": true
@@ -125,6 +142,267 @@ function createMermaidConfig(tempDir) {
 
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
   return configPath;
+}
+
+/**
+ * 從 Mermaid 代碼中解析樣式定義
+ * 解析 style NodeId fill:#xxx,stroke:#xxx,color:#xxx 格式
+ * @param {string} mermaidCode - Mermaid 圖表代碼
+ * @returns {Map<string, {fill: string, color: string}>} - 節點ID對應的樣式
+ */
+function parseMermaidStyles(mermaidCode) {
+  const styles = new Map();
+
+  // 匹配 style NodeId fill:#xxx,stroke:#xxx,color:#xxx
+  const styleRegex = /style\s+(\w+)\s+fill:(#[0-9A-Fa-f]{3,6})[^,]*(?:,stroke:[^,]*)?(?:,color:(#[0-9A-Fa-f]{3,6}|#\w+))?/g;
+  let match;
+
+  while ((match = styleRegex.exec(mermaidCode)) !== null) {
+    const nodeId = match[1];
+    const fill = match[2];
+    const color = match[3] || null;
+    styles.set(nodeId, { fill, color });
+  }
+
+  // 也解析 classDef 定義
+  const classDefRegex = /classDef\s+(\w+)\s+fill:(#[0-9A-Fa-f]{3,6})[^,]*(?:,stroke:[^,]*)?(?:,color:(#[0-9A-Fa-f]{3,6}|#\w+))?/g;
+  while ((match = classDefRegex.exec(mermaidCode)) !== null) {
+    const className = match[1];
+    const fill = match[2];
+    const color = match[3] || null;
+    styles.set(`class:${className}`, { fill, color });
+  }
+
+  return styles;
+}
+
+/**
+ * 根據背景色決定適當的文字顏色
+ * 使用 WCAG 對比度演算法
+ * @param {string} bgColor - 背景色 (hex 格式)
+ * @returns {string} - 建議的文字顏色
+ */
+function getContrastTextColor(bgColor) {
+  // 定義顏色對應表 (依據參考圖片的配色)
+  const colorMap = {
+    '#2196F3': '#ffffff',  // 藍色 → 白字
+    '#2196f3': '#ffffff',
+    '#1976D2': '#ffffff',  // 深藍 → 白字
+    '#1976d2': '#ffffff',
+    '#FFC107': '#5D4037',  // 金色 → 深棕字
+    '#ffc107': '#5D4037',
+    '#FFA000': '#5D4037',  // 深金 → 深棕字
+    '#ffa000': '#5D4037',
+    '#A8E6CF': '#2E7D32',  // 薄荷綠 → 深綠字
+    '#a8e6cf': '#2E7D32',
+    '#81C784': '#1B5E20',  // 綠色 → 深綠字
+    '#81c784': '#1B5E20',
+    '#9E9E9E': '#ffffff',  // 灰色 → 白字
+    '#9e9e9e': '#ffffff',
+    '#757575': '#ffffff',  // 深灰 → 白字
+    '#FFCDD2': '#5D4037',  // 粉紅 → 深棕字
+    '#ffcdd2': '#5D4037',
+    '#B3E5FC': '#01579B',  // 淺藍 → 深藍字
+    '#b3e5fc': '#01579B',
+    '#FFF9C4': '#5D4037',  // 淺黃 → 深棕字
+    '#fff9c4': '#5D4037',
+    '#ECEFF1': '#546E7A',  // 淺灰 → 深灰字
+    '#eceff1': '#546E7A',
+    '#EF5350': '#ffffff',  // 紅色 → 白字
+    '#ef5350': '#ffffff',
+    '#26A69A': '#ffffff',  // 青綠 → 白字
+    '#26a69a': '#ffffff',
+    '#FFA726': '#5D4037',  // 橙色 → 深棕字
+    '#ffa726': '#5D4037',
+    '#64B5F6': '#0D47A1',  // 天藍 → 深藍字
+    '#64b5f6': '#0D47A1',
+  };
+
+  if (colorMap[bgColor]) {
+    return colorMap[bgColor];
+  }
+
+  // 未知顏色，使用亮度計算
+  const hex = bgColor.replace('#', '');
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+  return luminance > 0.5 ? '#333333' : '#ffffff';
+}
+
+/**
+ * 後處理 SVG 文字顏色
+ * 根據背景色設定適當的文字顏色
+ * @param {string} svgContent - SVG 內容
+ * @param {string} mermaidCode - 原始 Mermaid 代碼
+ * @returns {string} - 處理後的 SVG 內容
+ */
+function postProcessSvgTextColors(svgContent, mermaidCode) {
+  const styles = parseMermaidStyles(mermaidCode);
+
+  // 為每個已定義樣式的節點，注入 CSS 樣式
+  let cssRules = [];
+
+  styles.forEach((style, key) => {
+    if (key.startsWith('class:')) {
+      return; // classDef 稍後處理
+    }
+
+    const textColor = style.color || getContrastTextColor(style.fill);
+    // Mermaid 產生的 SVG 中，節點文字通常在 .nodeLabel 或直接是 text 元素
+    cssRules.push(`#${key} .nodeLabel { fill: ${textColor} !important; color: ${textColor} !important; }`);
+    cssRules.push(`#${key} text { fill: ${textColor} !important; }`);
+    cssRules.push(`#${key} tspan { fill: ${textColor} !important; }`);
+    // 也處理 foreignObject 內的 div
+    cssRules.push(`#${key} foreignObject div { color: ${textColor} !important; }`);
+  });
+
+  // 處理 classDef
+  styles.forEach((style, key) => {
+    if (!key.startsWith('class:')) {
+      return;
+    }
+    const className = key.replace('class:', '');
+    const textColor = style.color || getContrastTextColor(style.fill);
+    cssRules.push(`.${className} .nodeLabel { fill: ${textColor} !important; color: ${textColor} !important; }`);
+    cssRules.push(`.${className} text { fill: ${textColor} !important; }`);
+    cssRules.push(`.${className} tspan { fill: ${textColor} !important; }`);
+    cssRules.push(`.${className} foreignObject div { color: ${textColor} !important; }`);
+  });
+
+  if (cssRules.length === 0) {
+    return svgContent;
+  }
+
+  // 注入 CSS 樣式到 SVG
+  const styleTag = `<style type="text/css">\n${cssRules.join('\n')}\n</style>`;
+
+  // 在 <svg> 標籤後插入 style
+  if (svgContent.includes('</defs>')) {
+    svgContent = svgContent.replace('</defs>', `</defs>\n${styleTag}`);
+  } else if (svgContent.includes('<svg')) {
+    svgContent = svgContent.replace(/<svg([^>]*)>/, `<svg$1>\n${styleTag}`);
+  }
+
+  return svgContent;
+}
+
+/**
+ * 解析 SVG transformation matrix 並計算實際座標
+ * @param {string} transform - transformation 字串，如 "matrix(a,b,c,d,e,f)"
+ * @param {number} x - 原始 x 座標
+ * @param {number} y - 原始 y 座標
+ * @returns {{x: number, y: number}} - 轉換後的座標
+ */
+function applyTransform(transform, x, y) {
+  const matrixMatch = transform.match(/matrix\(([^)]+)\)/);
+  if (matrixMatch) {
+    const [a, b, c, d, e, f] = matrixMatch[1].split(',').map(parseFloat);
+    return {
+      x: a * x + c * y + e,
+      y: b * x + d * y + f
+    };
+  }
+  return { x, y };
+}
+
+/**
+ * 從 path 的 d 屬性提取邊界框
+ * @param {string} d - path 的 d 屬性
+ * @returns {{minX: number, minY: number, maxX: number, maxY: number}|null}
+ */
+function getPathBounds(d) {
+  // 矩形 path 格式: "M x1 y1 H x2 V y2 H x3 Z" (可能沒有空格)
+  // 例如: "M-84.11719-39H84.11719V39H-84.11719Z"
+  // 提取所有數字（包括負數和小數）
+  const numbers = d.match(/-?\d+\.?\d*/g);
+  if (numbers && numbers.length >= 4) {
+    // numbers[0] = x1, numbers[1] = y1, numbers[2] = x2, numbers[3] = y2
+    const x1 = parseFloat(numbers[0]);
+    const y1 = parseFloat(numbers[1]);
+    const x2 = parseFloat(numbers[2]);
+    const y2 = parseFloat(numbers[3]);
+    return {
+      minX: Math.min(x1, x2),
+      minY: Math.min(y1, y2),
+      maxX: Math.max(x1, x2),
+      maxY: Math.max(y1, y2)
+    };
+  }
+  return null;
+}
+
+/**
+ * 後處理 mutool 產生的 SVG，修正藍色方框內的文字顏色
+ * @param {string} svgContent - SVG 內容
+ * @returns {string} - 處理後的 SVG 內容
+ */
+function postProcessMutoolSvg(svgContent) {
+  // 需要白色文字的背景色列表（藍色系）
+  const blueBackgrounds = ['#2196f3', '#42a5f5', '#1976d2'];
+  // 需要白色文字的其他背景色（深色）
+  const darkBackgrounds = ['#ffa726', '#26a69a', '#00897b'];
+  const allWhiteTextBackgrounds = [...blueBackgrounds, ...darkBackgrounds];
+
+  // 找到所有藍色/深色方框的位置
+  const boxBounds = [];
+
+  // 匹配 path 元素（方框）
+  const pathRegex = /<path\s+transform="([^"]+)"\s+d="([^"]+)"\s+fill="(#[0-9a-fA-F]{6})"/g;
+  let match;
+  while ((match = pathRegex.exec(svgContent)) !== null) {
+    const [, transform, d, fill] = match;
+    if (allWhiteTextBackgrounds.includes(fill.toLowerCase())) {
+      const bounds = getPathBounds(d);
+      if (bounds) {
+        // 應用 transform 到邊界
+        const topLeft = applyTransform(transform, bounds.minX, bounds.minY);
+        const bottomRight = applyTransform(transform, bounds.maxX, bounds.maxY);
+        boxBounds.push({
+          minX: Math.min(topLeft.x, bottomRight.x),
+          minY: Math.min(topLeft.y, bottomRight.y),
+          maxX: Math.max(topLeft.x, bottomRight.x),
+          maxY: Math.max(topLeft.y, bottomRight.y),
+          fill: fill.toLowerCase()
+        });
+      }
+    }
+  }
+
+  // 如果沒有找到藍色方框，直接返回
+  if (boxBounds.length === 0) {
+    return svgContent;
+  }
+
+  // 找到所有文字元素並檢查是否在藍色方框內
+  // 文字元素格式: <use data-text="X" xlink:href="..." transform="matrix(...)" fill="#ababab"/>
+  // 或: <path transform="matrix(...)" d="..." fill="#ababab"/>（字形路徑）
+
+  const textRegex = /<(use|path)\s+([^>]*transform="matrix\(([^)]+)\)"[^>]*fill="#ababab"[^>]*)\/>/g;
+
+  svgContent = svgContent.replace(textRegex, (fullMatch, tag, attrs, matrixValues) => {
+    // 從 transform 提取位置
+    const [a, b, c, d, e, f] = matrixValues.split(',').map(parseFloat);
+    const textX = e;
+    const textY = f;
+
+    // 檢查文字是否在任何藍色方框內
+    const isInBox = boxBounds.some(box =>
+      textX >= box.minX && textX <= box.maxX &&
+      textY >= box.minY && textY <= box.maxY
+    );
+
+    if (isInBox) {
+      // 將 fill="#ababab" 替換為 fill="#ffffff"
+      return fullMatch.replace('fill="#ababab"', 'fill="#ffffff"');
+    }
+
+    return fullMatch;
+  });
+
+  return svgContent;
 }
 
 /**
@@ -166,12 +444,13 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
   let svgPath = null;
   let pngPath = null;
 
-  // 1. 渲染 SVG：先產生 PDF，再轉換為 SVG (確保文字使用原生 SVG text 元素)
-  // 這是 Mermaid 官方建議的解決方案，因為直接產生的 SVG 節點標籤仍會使用 foreignObject
+  // 使用 PDF→mutool 路徑（文字轉為向量路徑，確保 Word 相容性）
+  // 這是 Mermaid 官方建議的解決方案，因為直接產生的 SVG 節點標籤會使用 foreignObject
+  // Word 不支援 foreignObject，所以需要將文字轉為路徑
   // 參考：https://github.com/mermaid-js/mermaid/issues/2688
   const pdfFile = path.join(tempDir, `mermaid-${hash}.pdf`);
   try {
-    // Step 1: 產生 PDF (Mermaid 的 PDF 輸出會將文字轉為路徑)
+    // Step 1: 產生 PDF (Mermaid 的 PDF 輸出會將文字轉為路徑，並套用 style 指定的顏色)
     execSync(`mmdc -i "${inputFile}" -o "${pdfFile}" -c "${configPath}" --pdfFit 2>/dev/null`, {
       stdio: 'pipe',
       timeout: 60000
@@ -192,11 +471,15 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
         // mutool 產生的檔名帶頁碼，需要重命名
         if (fs.existsSync(mutoolSvgFile)) {
           fs.renameSync(mutoolSvgFile, svgFile);
+          // 後處理 SVG：修正藍色方框內的文字顏色
+          let svgContent = fs.readFileSync(svgFile, 'utf-8');
+          svgContent = postProcessMutoolSvg(svgContent);
+          fs.writeFileSync(svgFile, svgContent);
           svgPath = svgFile;
         }
       } catch (mutoolError) {
-        // 沒有 mutool，fallback 到直接 SVG (部分文字可能不顯示)
-        console.warn(`  ⚠ mutool 未安裝，使用直接 SVG 輸出 (節點文字可能不顯示)`);
+        // 沒有 mutool，fallback 到直接 SVG (文字可能不顯示)
+        console.warn(`  ⚠ mutool 未安裝，使用直接 SVG 輸出 (Word 中文字可能不顯示)`);
         console.warn(`    安裝方式: brew install mupdf-tools`);
         execSync(`mmdc -i "${inputFile}" -o "${svgFile}" -c "${configPath}" -b white 2>/dev/null`, {
           stdio: 'pipe',
@@ -1841,7 +2124,7 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
   console.log(`Created ${outputPath} (${Math.round(buffer.length/1024)} KB)`);
 
   // 清理 Mermaid 暫存檔案
-  cleanupMermaidTemp(outputDir);
+  // cleanupMermaidTemp(outputDir);  // DEBUG
 }
 
 // ============================================
