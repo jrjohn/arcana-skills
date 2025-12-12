@@ -108,7 +108,8 @@ function createMermaidConfig(tempDir) {
       "clusterBorder": "#90CAF9",
       "defaultLinkColor": "#757575",
       "titleColor": "#5D4037",
-      "edgeLabelBackground": "#FFC107",
+      "edgeLabelBackground": "transparent",
+      "textColor": "#1565C0",
       "classText": "#1565C0"
     },
     "flowchart": {
@@ -316,8 +317,8 @@ function applyTransform(transform, x, y) {
 function getPathBounds(d) {
   // 矩形 path 格式: "M x1 y1 H x2 V y2 H x3 Z" (可能沒有空格)
   // 例如: "M-84.11719-39H84.11719V39H-84.11719Z"
-  // 提取所有數字（包括負數和小數）
-  const numbers = d.match(/-?\d+\.?\d*/g);
+  // 提取所有數字（包括負數和小數）- 使用正確的浮點數正則
+  const numbers = d.match(/-?\d+(?:\.\d+)?/g);
   if (numbers && numbers.length >= 4) {
     // numbers[0] = x1, numbers[1] = y1, numbers[2] = x2, numbers[3] = y2
     const x1 = parseFloat(numbers[0]);
@@ -340,13 +341,14 @@ function getPathBounds(d) {
  * @returns {string} - 處理後的 SVG 內容
  */
 function postProcessMutoolSvg(svgContent) {
-  // 需要白色文字的背景色列表（藍色系）
+  // 需要白色文字的背景色列表（深藍色系）
   const blueBackgrounds = ['#2196f3', '#42a5f5', '#1976d2'];
-  // 需要白色文字的其他背景色（深色）
-  const darkBackgrounds = ['#ffa726', '#26a69a', '#00897b'];
+  // 需要白色文字的其他深色背景
+  const darkBackgrounds = ['#26a69a', '#00897b'];
+  // 注意：淺色背景如 #a8e6cf（淺綠）、#ffa726（淺橙）不需要白色文字
   const allWhiteTextBackgrounds = [...blueBackgrounds, ...darkBackgrounds];
 
-  // 找到所有藍色/深色方框的位置
+  // 找到所有深色節點方框的位置（排除大型子群組背景）
   const boxBounds = [];
 
   // 匹配 path 元素（方框）
@@ -360,18 +362,25 @@ function postProcessMutoolSvg(svgContent) {
         // 應用 transform 到邊界
         const topLeft = applyTransform(transform, bounds.minX, bounds.minY);
         const bottomRight = applyTransform(transform, bounds.maxX, bounds.maxY);
-        boxBounds.push({
-          minX: Math.min(topLeft.x, bottomRight.x),
-          minY: Math.min(topLeft.y, bottomRight.y),
-          maxX: Math.max(topLeft.x, bottomRight.x),
-          maxY: Math.max(topLeft.y, bottomRight.y),
-          fill: fill.toLowerCase()
-        });
+        const width = Math.abs(bottomRight.x - topLeft.x);
+        const height = Math.abs(bottomRight.y - topLeft.y);
+
+        // 只考慮小型節點方框（寬度 < 300，高度 < 150）
+        // 排除大型子群組背景
+        if (width < 300 && height < 150) {
+          boxBounds.push({
+            minX: Math.min(topLeft.x, bottomRight.x),
+            minY: Math.min(topLeft.y, bottomRight.y),
+            maxX: Math.max(topLeft.x, bottomRight.x),
+            maxY: Math.max(topLeft.y, bottomRight.y),
+            fill: fill.toLowerCase()
+          });
+        }
       }
     }
   }
 
-  // 如果沒有找到藍色方框，直接返回
+  // 如果沒有找到深色方框，直接返回
   if (boxBounds.length === 0) {
     return svgContent;
   }
@@ -380,26 +389,74 @@ function postProcessMutoolSvg(svgContent) {
   // 文字元素格式: <use data-text="X" xlink:href="..." transform="matrix(...)" fill="#ababab"/>
   // 或: <path transform="matrix(...)" d="..." fill="#ababab"/>（字形路徑）
 
-  const textRegex = /<(use|path)\s+([^>]*transform="matrix\(([^)]+)\)"[^>]*fill="#ababab"[^>]*)\/>/g;
+  // 匹配灰色文字 (#ababab)
+  const grayTextRegex = /<(use|path)\s+([^>]*transform="matrix\(([^)]+)\)"[^>]*fill="#ababab"[^>]*)\/>/g;
+  // 匹配棕色文字 (#5d4037) - 這是邊緣標籤和淺色方框內的文字
+  const brownTextRegex = /<(use|path)\s+([^>]*transform="matrix\(([^)]+)\)"[^>]*fill="#5d4037"[^>]*)\/>/g;
 
-  svgContent = svgContent.replace(textRegex, (fullMatch, tag, attrs, matrixValues) => {
-    // 從 transform 提取位置
+  let whiteCount = 0, blueCount = 0;
+
+  // 處理灰色文字 (#ababab) - 深色方框內的文字
+  svgContent = svgContent.replace(grayTextRegex, (fullMatch, tag, attrs, matrixValues) => {
     const [a, b, c, d, e, f] = matrixValues.split(',').map(parseFloat);
     const textX = e;
     const textY = f;
 
-    // 檢查文字是否在任何藍色方框內
-    const isInBox = boxBounds.some(box =>
-      textX >= box.minX && textX <= box.maxX &&
-      textY >= box.minY && textY <= box.maxY
-    );
+    const isInBox = boxBounds.some(box => {
+      const margin = 5;
+      return textX >= (box.minX + margin) && textX <= (box.maxX - margin) &&
+             textY >= (box.minY + margin) && textY <= (box.maxY - margin);
+    });
 
     if (isInBox) {
-      // 將 fill="#ababab" 替換為 fill="#ffffff"
+      whiteCount++;
       return fullMatch.replace('fill="#ababab"', 'fill="#ffffff"');
+    } else {
+      blueCount++;
+      return fullMatch.replace('fill="#ababab"', 'fill="#1565C0"');
+    }
+  });
+
+  // 處理棕色文字 (#5d4037) - 邊緣標籤和淺色方框內的文字
+  // 全部轉換為深藍色
+  svgContent = svgContent.replace(brownTextRegex, (fullMatch) => {
+    blueCount++;
+    return fullMatch.replace('fill="#5d4037"', 'fill="#1565C0"');
+  });
+
+  // 處理 #1976d2 文字 - ER 圖關係標籤
+  // 這個顏色與邊框同色，在某些背景上不易閱讀，轉換為更深的藍色
+  const borderBlueTextRegex = /<(use|path)\s+([^>]*transform="matrix\(([^)]+)\)"[^>]*fill="#1976d2"[^>]*)\/>/g;
+  svgContent = svgContent.replace(borderBlueTextRegex, (fullMatch) => {
+    blueCount++;
+    return fullMatch.replace('fill="#1976d2"', 'fill="#1565C0"');
+  });
+
+  // 處理白色文字 (#ffffff) - 在深色方框外的白色文字應該變成深藍色
+  // 這是因為 Mermaid 的邊緣標籤在 PDF 輸出時會變成白色
+  const whiteTextRegex = /<(use|path)\s+([^>]*transform="matrix\(([^)]+)\)"[^>]*fill="#ffffff"[^>]*)\/>/g;
+  svgContent = svgContent.replace(whiteTextRegex, (fullMatch, tag, attrs, matrixValues) => {
+    const [a, b, c, d, e, f] = matrixValues.split(',').map(parseFloat);
+    const textX = e;
+    const textY = f;
+
+    // 檢查是否是背景矩形（大型白色方框）- scale > 0.1 且包含 M0 0H 模式
+    if (Math.abs(a) > 0.1 && attrs.includes('d="M0 0H')) {
+      return fullMatch; // 保留背景矩形為白色
     }
 
-    return fullMatch;
+    const isInBox = boxBounds.some(box => {
+      const margin = 5;
+      return textX >= (box.minX + margin) && textX <= (box.maxX - margin) &&
+             textY >= (box.minY + margin) && textY <= (box.maxY - margin);
+    });
+
+    if (isInBox) {
+      return fullMatch; // 在深色方框內保持白色
+    } else {
+      blueCount++;
+      return fullMatch.replace('fill="#ffffff"', 'fill="#1565C0"');
+    }
   });
 
   return svgContent;
