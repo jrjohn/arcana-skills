@@ -1,0 +1,74 @@
+{
+  "typography": {
+    "fontFamily": {
+      "ios": "SF Pro Text",
+      "android": "Roboto",
+      "web": "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+      "monospace": "SF Mono, Roboto Mono, Consolas, monospace"
+    },
+    "fontSize": {
+      "displayLarge": 57,
+      "displayMedium": 45,
+      "displaySmall": 36,
+      "headlineLarge": 32,
+      "headlineMedium": 28,
+      "headlineSmall": 24,
+      "titleLarge": 22,
+      "titleMedium": 16,
+      "titleSmall": 14,
+      "bodyLarge": 16,
+      "bodyMedium": 14,
+      "bodySmall": 12,
+      "labelLarge": 14,
+      "labelMedium": 12,
+      "labelSmall": 11
+    },
+    "fontWeight": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700
+    },
+    "lineHeight": {
+      "displayLarge": 64,
+      "displayMedium": 52,
+      "displaySmall": 44,
+      "headlineLarge": 40,
+      "headlineMedium": 36,
+      "headlineSmall": 32,
+      "titleLarge": 28,
+      "titleMedium": 24,
+      "titleSmall": 20,
+      "bodyLarge": 24,
+      "bodyMedium": 20,
+      "bodySmall": 16,
+      "labelLarge": 20,
+      "labelMedium": 16,
+      "labelSmall": 16
+    }
+  },
+  "spacing": {
+    "0": 0,
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48,
+    "16": 64,
+    "20": 80,
+    "24": 96
+  },
+  "borderRadius": {
+    "none": 0,
+    "sm": 4,
+    "md": 8,
+    "lg": 12,
+    "xl": 16,
+    "2xl": 24,
+    "full": 9999
+  }
+}
