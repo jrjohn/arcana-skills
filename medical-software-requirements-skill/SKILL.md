@@ -757,6 +757,55 @@ classDiagram
     style UserRepository fill:#CCCCFF
 ```
 
+### State Machine 顏色標準
+
+Mermaid State Diagram 使用以下顏色標準區分狀態類型：
+
+| 狀態類型 | 顏色 | Hex Code | 文字色 | 用途 |
+|---------|------|----------|--------|------|
+| **初始/未啟用** | 暖米灰 | `#E8E0D8` | `#5D4037` | 尚未開始的狀態 (Idle, Disconnected) |
+| **處理中/進行中** | 暖金黃 | `#F4A940` | `#5D4037` | 正在執行的過渡狀態 (Processing, Scanning) |
+| **成功/完成** | 草綠 | `#8BC34A` | `#fff` | 成功完成的狀態 (Authenticated, Connected) |
+| **錯誤/失敗** | 暖珊瑚 | `#E57373` | `#fff` | 發生錯誤的狀態 (Failed, Error) |
+| **警告/鎖定** | 琥珀黃 | `#FFB74D` | `#5D4037` | 需要注意的警告狀態 (Locked, Timeout) |
+
+#### State Machine 著色範例
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Idle
+    Idle --> Processing: start
+    Processing --> Success: complete
+    Processing --> Failed: error
+    Failed --> Idle: retry
+    Failed --> Locked: 5x failed
+
+    classDef initial fill:#E8E0D8,stroke:#D4C8BC,color:#5D4037
+    classDef processing fill:#F4A940,stroke:#E09830,color:#5D4037
+    classDef success fill:#8BC34A,stroke:#7CB342,color:#fff
+    classDef error fill:#E57373,stroke:#D32F2F,color:#fff
+    classDef warning fill:#FFB74D,stroke:#FFA726,color:#5D4037
+
+    class Idle initial
+    class Processing processing
+    class Success success
+    class Failed error
+    class Locked warning
+```
+
+### C4 Model 架構圖顏色標準
+
+Context View、Container View 等架構圖使用 **暖色系配色** (溫暖友善風格)：
+
+| 元素類型 | 顏色 | Hex Code | 文字色 | 用途 |
+|---------|------|----------|--------|------|
+| **Person** | 深棕橘 | `#A1664A` | `#fff` | 使用者、角色 |
+| **Software System** | 橘色 | `#E67E22` | `#fff` | 主系統 (當前開發中) |
+| **Container** | 暖金黃 | `#F4A940` | `#5D4037` | App、Database、Server |
+| **Component** | 淺杏色 | `#FDEBD0` | `#5D4037` | 內部元件 |
+| **External System** | 暖灰棕 | `#8D7B6B` | `#fff` | 外部系統、第三方服務 |
+
 ---
 
 ## SDD 標準畫面流程規範
@@ -1416,6 +1465,8 @@ node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SDD-Proj
 - ✅ **語法高亮** ⭐：基於 VSCode Light+ 配色，支援多語言 (Swift/Kotlin/Python/JS/TS)
 - ✅ **標題不分離 (keepNext)**：粗體子標題自動與後續內容綁定，避免孤立標題
 - ✅ **Peter Coad 四色原型**：Class Diagram 依 MI/Role/Thing/Description 分類著色
+- ✅ **狀態機顏色標準**：State Machine 依狀態類型著色 (初始/處理中/成功/失敗/警告)
+- ✅ **C4 Model 架構圖顏色**：Context/Container View 依 C4 官方色彩 (Person/System/Container)
 
 **⚠️ 圖片格式強制規範：**
 | 圖片類型 | 格式 | 說明 |
