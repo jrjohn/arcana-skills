@@ -1,7 +1,7 @@
 ---
 name: medical-software-requirements-skill
 description: |
-  醫療器材軟體 IEC 62304 開發文件工具。當用戶提到以下任一關鍵字時，Claude 應主動啟用此 Skill：
+  醫療器材軟體 IEC 62304 開發文件工具。當用戶提到以下任一關鍵字時，應主動啟用此 Skill：
 
   【自動觸發關鍵字】SRS、SDD、SWD、STP、STC、SVV、RTM、軟體需求、軟體設計、需求規格、設計規格、
   測試計畫、測試案例、追溯矩陣、IEC 62304、醫療軟體、DOCX 產出、文件產出、check compliance、
@@ -104,7 +104,7 @@ description: |
 
 ## 🧠 心理學自動套用流程 (執行時必讀)
 
-**當此 Skill 被觸發時，Claude 必須自動執行以下步驟：**
+**當此 Skill 被觸發時，必須自動執行以下步驟：**
 
 ### Step 1: 讀取心理學指南
 

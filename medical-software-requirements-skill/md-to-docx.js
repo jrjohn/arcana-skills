@@ -8,86 +8,86 @@ const { execSync } = require('child_process');
 const crypto = require('crypto');
 
 // ============================================
-// 字型設定 - 中文使用微軟正黑體，英文使用 Arial
+// Font Settings - Chinese uses Microsoft JhengHei, English uses Arial
 // ============================================
-const FONT_CN = '微軟正黑體';  // 中文字體 (繁體/簡體中文統一使用)
-const FONT_EN = 'Arial';       // 英文字體
-const FONT_CODE = 'Consolas';  // 程式碼字體 (等寬字體，較易閱讀)
+const FONT_CN = '微軟正黑體';  // Chinese font (Traditional/Simplified Chinese)
+const FONT_EN = 'Arial';       // English font
+const FONT_CODE = 'Consolas';  // Code font (monospace, better readability)
 
-// 字型大小設定 (單位: half-points, 24 = 12pt)
-// 針對 A4 頁面與 IEC 62304 文件可讀性優化
+// Font size settings (unit: half-points, 24 = 12pt)
+// Optimized for A4 pages and IEC 62304 document readability
 const FONT_SIZE = {
-  H1: 36,        // 18pt - 主標題
-  H2: 32,        // 16pt - 大章節
-  H3: 28,        // 14pt - 小節
-  H4: 26,        // 13pt - 子節
-  H5: 24,        // 12pt - 細節
-  BODY: 22,      // 11pt - 內文
-  TABLE: 22,     // 11pt - 表格內文 (從 10pt 調整為 11pt，提高可讀性)
-  TABLE_HEADER: 22, // 11pt - 表格標題 (粗體，與內文一致)
-  SMALL: 18,     // 9pt - 小字
-  FOOTER: 18     // 9pt - 頁尾
+  H1: 36,        // 18pt - Main title
+  H2: 32,        // 16pt - Major section
+  H3: 28,        // 14pt - Subsection
+  H4: 26,        // 13pt - Sub-subsection
+  H5: 24,        // 12pt - Details
+  BODY: 22,      // 11pt - Body text
+  TABLE: 22,     // 11pt - Table content (adjusted from 10pt for better readability)
+  TABLE_HEADER: 22, // 11pt - Table header (bold, consistent with body)
+  SMALL: 18,     // 9pt - Small text
+  FOOTER: 18     // 9pt - Footer
 };
 
 /**
- * 檢測文字是否包含中文
+ * Check if text contains Chinese characters
  */
 function containsChinese(text) {
   return /[\u4e00-\u9fff]/.test(text);
 }
 
 /**
- * 取得適合的字體物件（根據文字內容）
- * 返回 docx 庫需要的字型物件格式，確保中英文字型正確分離
+ * Get appropriate font object (based on text content)
+ * Returns font object format required by docx library, ensuring correct Chinese/English font separation
  */
 function getFont(text) {
-  // 無論內容如何，都使用統一的字型設定：
-  // - 英文/半形字元使用 Arial
-  // - 中文/全形字元使用微軟正黑體 (繁體/簡體中文統一)
+  // Use unified font settings regardless of content:
+  // - English/half-width characters use Arial
+  // - Chinese/full-width characters use Microsoft JhengHei
   return {
-    ascii: FONT_EN,      // 英文字元
-    eastAsia: FONT_CN,   // 中文字元 (東亞語系) - 微軟正黑體
-    hAnsi: FONT_EN,      // 高位 ANSI 字元
-    cs: FONT_EN          // 複雜腳本字元
+    ascii: FONT_EN,      // English characters
+    eastAsia: FONT_CN,   // Chinese characters (East Asian) - Microsoft JhengHei
+    hAnsi: FONT_EN,      // High ANSI characters
+    cs: FONT_EN          // Complex script characters
   };
 }
 
 /**
- * 取得純英文字型（用於明確只需要英文的場合）
+ * Get English-only font (for cases explicitly requiring English font)
  */
 function getFontEnglishOnly() {
   return FONT_EN;
 }
 
 // ============================================
-// Mermaid 圖表渲染器
+// Mermaid Diagram Renderer
 // ============================================
 
 /**
- * 判斷 Mermaid 圖表類型，決定渲染寬度
- * block-beta (UI wireframe) 使用較窄寬度，其他圖表使用較寬寬度
+ * Determine Mermaid diagram type and select render width
+ * block-beta (UI wireframe) uses narrower width, other diagrams use wider width
  */
 function getMermaidRenderWidth(mermaidCode) {
   const firstLine = mermaidCode.trim().split('\n')[0].toLowerCase();
 
-  // block-beta 是 UI wireframe，通常是垂直手機畫面，用窄寬度
+  // block-beta is UI wireframe, typically vertical mobile screen, use narrow width
   if (firstLine.includes('block-beta')) {
-    return 500;  // 窄寬度適合手機 wireframe
+    return 500;  // Narrow width for mobile wireframe
   }
 
-  // 其他圖表類型使用標準寬度
+  // Other diagram types use standard width
   return 1200;
 }
 
 /**
- * 建立 Mermaid 配置檔案
- * 設定 htmlLabels: false 以使用原生 SVG <text> 元素，確保 Word 相容性
+ * Create Mermaid configuration file
+ * Set htmlLabels: false to use native SVG <text> elements for Word compatibility
  *
- * 問題背景：Mermaid 預設使用 foreignObject 內嵌 HTML 文字，
- * Word/Inkscape 等應用無法正確渲染 foreignObject 中的文字。
- * 解決方案：設定 htmlLabels: false 改用原生 SVG text 元素。
+ * Background: Mermaid defaults to using foreignObject for embedded HTML text,
+ * but Word/Inkscape cannot render text inside foreignObject correctly.
+ * Solution: Set htmlLabels: false to use native SVG text elements.
  *
- * 參考：https://github.com/mermaid-js/mermaid/issues/2688
+ * Reference: https://github.com/mermaid-js/mermaid/issues/2688
  */
 function createMermaidConfig(tempDir) {
   const configPath = path.join(tempDir, 'mermaid-config.json');
@@ -146,15 +146,15 @@ function createMermaidConfig(tempDir) {
 }
 
 /**
- * 從 Mermaid 代碼中解析樣式定義
- * 解析 style NodeId fill:#xxx,stroke:#xxx,color:#xxx 格式
- * @param {string} mermaidCode - Mermaid 圖表代碼
- * @returns {Map<string, {fill: string, color: string}>} - 節點ID對應的樣式
+ * Parse style definitions from Mermaid code
+ * Parse style NodeId fill:#xxx,stroke:#xxx,color:#xxx format
+ * @param {string} mermaidCode - Mermaid diagram code
+ * @returns {Map<string, {fill: string, color: string}>} - Node ID to style mapping
  */
 function parseMermaidStyles(mermaidCode) {
   const styles = new Map();
 
-  // 匹配 style NodeId fill:#xxx,stroke:#xxx,color:#xxx
+  // Match style NodeId fill:#xxx,stroke:#xxx,color:#xxx
   const styleRegex = /style\s+(\w+)\s+fill:(#[0-9A-Fa-f]{3,6})[^,]*(?:,stroke:[^,]*)?(?:,color:(#[0-9A-Fa-f]{3,6}|#\w+))?/g;
   let match;
 
@@ -165,7 +165,7 @@ function parseMermaidStyles(mermaidCode) {
     styles.set(nodeId, { fill, color });
   }
 
-  // 也解析 classDef 定義
+  // Also parse classDef definitions
   const classDefRegex = /classDef\s+(\w+)\s+fill:(#[0-9A-Fa-f]{3,6})[^,]*(?:,stroke:[^,]*)?(?:,color:(#[0-9A-Fa-f]{3,6}|#\w+))?/g;
   while ((match = classDefRegex.exec(mermaidCode)) !== null) {
     const className = match[1];
@@ -178,44 +178,44 @@ function parseMermaidStyles(mermaidCode) {
 }
 
 /**
- * 根據背景色決定適當的文字顏色
- * 使用 WCAG 對比度演算法
- * @param {string} bgColor - 背景色 (hex 格式)
- * @returns {string} - 建議的文字顏色
+ * Determine appropriate text color based on background color
+ * Uses WCAG contrast ratio algorithm
+ * @param {string} bgColor - Background color (hex format)
+ * @returns {string} - Recommended text color
  */
 function getContrastTextColor(bgColor) {
-  // 定義顏色對應表 (依據參考圖片的配色)
+  // Define color mapping table (based on reference image colors)
   const colorMap = {
-    '#2196F3': '#ffffff',  // 藍色 → 白字
+    '#2196F3': '#ffffff',  // Blue -> White text
     '#2196f3': '#ffffff',
-    '#1976D2': '#ffffff',  // 深藍 → 白字
+    '#1976D2': '#ffffff',  // Dark blue -> White text
     '#1976d2': '#ffffff',
-    '#FFC107': '#5D4037',  // 金色 → 深棕字
+    '#FFC107': '#5D4037',  // Gold -> Dark brown text
     '#ffc107': '#5D4037',
-    '#FFA000': '#5D4037',  // 深金 → 深棕字
+    '#FFA000': '#5D4037',  // Dark gold -> Dark brown text
     '#ffa000': '#5D4037',
-    '#A8E6CF': '#2E7D32',  // 薄荷綠 → 深綠字
+    '#A8E6CF': '#2E7D32',  // Mint green -> Dark green text
     '#a8e6cf': '#2E7D32',
-    '#81C784': '#1B5E20',  // 綠色 → 深綠字
+    '#81C784': '#1B5E20',  // Green -> Dark green text
     '#81c784': '#1B5E20',
-    '#9E9E9E': '#ffffff',  // 灰色 → 白字
+    '#9E9E9E': '#ffffff',  // Gray -> White text
     '#9e9e9e': '#ffffff',
-    '#757575': '#ffffff',  // 深灰 → 白字
-    '#FFCDD2': '#5D4037',  // 粉紅 → 深棕字
+    '#757575': '#ffffff',  // Dark gray -> White text
+    '#FFCDD2': '#5D4037',  // Pink -> Dark brown text
     '#ffcdd2': '#5D4037',
-    '#B3E5FC': '#01579B',  // 淺藍 → 深藍字
+    '#B3E5FC': '#01579B',  // Light blue -> Dark blue text
     '#b3e5fc': '#01579B',
-    '#FFF9C4': '#5D4037',  // 淺黃 → 深棕字
+    '#FFF9C4': '#5D4037',  // Light yellow -> Dark brown text
     '#fff9c4': '#5D4037',
-    '#ECEFF1': '#546E7A',  // 淺灰 → 深灰字
+    '#ECEFF1': '#546E7A',  // Light gray -> Dark gray text
     '#eceff1': '#546E7A',
-    '#EF5350': '#ffffff',  // 紅色 → 白字
+    '#EF5350': '#ffffff',  // Red -> White text
     '#ef5350': '#ffffff',
-    '#26A69A': '#ffffff',  // 青綠 → 白字
+    '#26A69A': '#ffffff',  // Teal -> White text
     '#26a69a': '#ffffff',
-    '#FFA726': '#5D4037',  // 橙色 → 深棕字
+    '#FFA726': '#5D4037',  // Orange -> Dark brown text
     '#ffa726': '#5D4037',
-    '#64B5F6': '#0D47A1',  // 天藍 → 深藍字
+    '#64B5F6': '#0D47A1',  // Sky blue -> Dark blue text
     '#64b5f6': '#0D47A1',
   };
 
@@ -223,7 +223,7 @@ function getContrastTextColor(bgColor) {
     return colorMap[bgColor];
   }
 
-  // 未知顏色，使用亮度計算
+  // Unknown color, calculate using luminance
   const hex = bgColor.replace('#', '');
   const r = parseInt(hex.substr(0, 2), 16);
   const g = parseInt(hex.substr(2, 2), 16);
@@ -234,33 +234,33 @@ function getContrastTextColor(bgColor) {
 }
 
 /**
- * 後處理 SVG 文字顏色
- * 根據背景色設定適當的文字顏色
- * @param {string} svgContent - SVG 內容
- * @param {string} mermaidCode - 原始 Mermaid 代碼
- * @returns {string} - 處理後的 SVG 內容
+ * Post-process SVG text colors
+ * Set appropriate text color based on background color
+ * @param {string} svgContent - SVG content
+ * @param {string} mermaidCode - Original Mermaid code
+ * @returns {string} - Processed SVG content
  */
 function postProcessSvgTextColors(svgContent, mermaidCode) {
   const styles = parseMermaidStyles(mermaidCode);
 
-  // 為每個已定義樣式的節點，注入 CSS 樣式
+  // Inject CSS styles for each node with defined styles
   let cssRules = [];
 
   styles.forEach((style, key) => {
     if (key.startsWith('class:')) {
-      return; // classDef 稍後處理
+      return; // classDef will be processed later
     }
 
     const textColor = style.color || getContrastTextColor(style.fill);
-    // Mermaid 產生的 SVG 中，節點文字通常在 .nodeLabel 或直接是 text 元素
+    // In Mermaid-generated SVG, node text is usually in .nodeLabel or directly in text elements
     cssRules.push(`#${key} .nodeLabel { fill: ${textColor} !important; color: ${textColor} !important; }`);
     cssRules.push(`#${key} text { fill: ${textColor} !important; }`);
     cssRules.push(`#${key} tspan { fill: ${textColor} !important; }`);
-    // 也處理 foreignObject 內的 div
+    // Also handle div inside foreignObject
     cssRules.push(`#${key} foreignObject div { color: ${textColor} !important; }`);
   });
 
-  // 處理 classDef
+  // Process classDef
   styles.forEach((style, key) => {
     if (!key.startsWith('class:')) {
       return;
@@ -277,10 +277,10 @@ function postProcessSvgTextColors(svgContent, mermaidCode) {
     return svgContent;
   }
 
-  // 注入 CSS 樣式到 SVG
+  // Inject CSS styles into SVG
   const styleTag = `<style type="text/css">\n${cssRules.join('\n')}\n</style>`;
 
-  // 在 <svg> 標籤後插入 style
+  // Insert style after <svg> tag
   if (svgContent.includes('</defs>')) {
     svgContent = svgContent.replace('</defs>', `</defs>\n${styleTag}`);
   } else if (svgContent.includes('<svg')) {
@@ -291,11 +291,11 @@ function postProcessSvgTextColors(svgContent, mermaidCode) {
 }
 
 /**
- * 解析 SVG transformation matrix 並計算實際座標
- * @param {string} transform - transformation 字串，如 "matrix(a,b,c,d,e,f)"
- * @param {number} x - 原始 x 座標
- * @param {number} y - 原始 y 座標
- * @returns {{x: number, y: number}} - 轉換後的座標
+ * Parse SVG transformation matrix and calculate actual coordinates
+ * @param {string} transform - transformation string, e.g., "matrix(a,b,c,d,e,f)"
+ * @param {number} x - Original x coordinate
+ * @param {number} y - Original y coordinate
+ * @returns {{x: number, y: number}} - Transformed coordinates
  */
 function applyTransform(transform, x, y) {
   const matrixMatch = transform.match(/matrix\(([^)]+)\)/);
@@ -310,14 +310,14 @@ function applyTransform(transform, x, y) {
 }
 
 /**
- * 從 path 的 d 屬性提取邊界框
- * @param {string} d - path 的 d 屬性
+ * Extract bounding box from path's d attribute
+ * @param {string} d - path's d attribute
  * @returns {{minX: number, minY: number, maxX: number, maxY: number}|null}
  */
 function getPathBounds(d) {
-  // 矩形 path 格式: "M x1 y1 H x2 V y2 H x3 Z" (可能沒有空格)
-  // 例如: "M-84.11719-39H84.11719V39H-84.11719Z"
-  // 提取所有數字（包括負數和小數）- 使用正確的浮點數正則
+  // Rectangle path format: "M x1 y1 H x2 V y2 H x3 Z" (may have no spaces)
+  // Example: "M-84.11719-39H84.11719V39H-84.11719Z"
+  // Extract all numbers (including negative and decimal) - using correct floating point regex
   const numbers = d.match(/-?\d+(?:\.\d+)?/g);
   if (numbers && numbers.length >= 4) {
     // numbers[0] = x1, numbers[1] = y1, numbers[2] = x2, numbers[3] = y2
@@ -336,22 +336,22 @@ function getPathBounds(d) {
 }
 
 /**
- * 後處理 mutool 產生的 SVG，修正藍色方框內的文字顏色
- * @param {string} svgContent - SVG 內容
- * @returns {string} - 處理後的 SVG 內容
+ * Post-process SVG generated by mutool, fix text color inside blue boxes
+ * @param {string} svgContent - SVG content
+ * @returns {string} - Processed SVG content
  */
 function postProcessMutoolSvg(svgContent) {
-  // 需要白色文字的背景色列表（深藍色系）
+  // List of background colors requiring white text (dark blue series)
   const blueBackgrounds = ['#2196f3', '#42a5f5', '#1976d2'];
-  // 需要白色文字的其他深色背景
+  // Other dark backgrounds requiring white text
   const darkBackgrounds = ['#26a69a', '#00897b'];
-  // 注意：淺色背景如 #a8e6cf（淺綠）、#ffa726（淺橙）不需要白色文字
+  // Note: Light backgrounds like #a8e6cf (light green), #ffa726 (light orange) don't need white text
   const allWhiteTextBackgrounds = [...blueBackgrounds, ...darkBackgrounds];
 
-  // 找到所有深色節點方框的位置（排除大型子群組背景）
+  // Find all dark node box positions (exclude large subgraph backgrounds)
   const boxBounds = [];
 
-  // 匹配 path 元素（方框）
+  // Match path elements (boxes)
   const pathRegex = /<path\s+transform="([^"]+)"\s+d="([^"]+)"\s+fill="(#[0-9a-fA-F]{6})"/g;
   let match;
   while ((match = pathRegex.exec(svgContent)) !== null) {
@@ -359,14 +359,14 @@ function postProcessMutoolSvg(svgContent) {
     if (allWhiteTextBackgrounds.includes(fill.toLowerCase())) {
       const bounds = getPathBounds(d);
       if (bounds) {
-        // 應用 transform 到邊界
+        // Apply transform to bounds
         const topLeft = applyTransform(transform, bounds.minX, bounds.minY);
         const bottomRight = applyTransform(transform, bounds.maxX, bounds.maxY);
         const width = Math.abs(bottomRight.x - topLeft.x);
         const height = Math.abs(bottomRight.y - topLeft.y);
 
-        // 只考慮小型節點方框（寬度 < 300，高度 < 150）
-        // 排除大型子群組背景
+        // Only consider small node boxes (width < 300, height < 150)
+        // Exclude large subgraph backgrounds
         if (width < 300 && height < 150) {
           boxBounds.push({
             minX: Math.min(topLeft.x, bottomRight.x),
@@ -380,23 +380,23 @@ function postProcessMutoolSvg(svgContent) {
     }
   }
 
-  // 如果沒有找到深色方框，直接返回
+  // If no dark boxes found, return directly
   if (boxBounds.length === 0) {
     return svgContent;
   }
 
-  // 找到所有文字元素並檢查是否在藍色方框內
-  // 文字元素格式: <use data-text="X" xlink:href="..." transform="matrix(...)" fill="#ababab"/>
-  // 或: <path transform="matrix(...)" d="..." fill="#ababab"/>（字形路徑）
+  // Find all text elements and check if they're inside blue boxes
+  // Text element format: <use data-text="X" xlink:href="..." transform="matrix(...)" fill="#ababab"/>
+  // Or: <path transform="matrix(...)" d="..." fill="#ababab"/> (glyph path)
 
-  // 匹配灰色文字 (#ababab)
+  // Match gray text (#ababab)
   const grayTextRegex = /<(use|path)\s+([^>]*transform="matrix\(([^)]+)\)"[^>]*fill="#ababab"[^>]*)\/>/g;
-  // 匹配棕色文字 (#5d4037) - 這是邊緣標籤和淺色方框內的文字
+  // Match brown text (#5d4037) - edge labels and text inside light boxes
   const brownTextRegex = /<(use|path)\s+([^>]*transform="matrix\(([^)]+)\)"[^>]*fill="#5d4037"[^>]*)\/>/g;
 
   let whiteCount = 0, blueCount = 0;
 
-  // 處理灰色文字 (#ababab) - 深色方框內的文字
+  // Process gray text (#ababab) - text inside dark boxes
   svgContent = svgContent.replace(grayTextRegex, (fullMatch, tag, attrs, matrixValues) => {
     const [a, b, c, d, e, f] = matrixValues.split(',').map(parseFloat);
     const textX = e;
@@ -417,32 +417,32 @@ function postProcessMutoolSvg(svgContent) {
     }
   });
 
-  // 處理棕色文字 (#5d4037) - 邊緣標籤和淺色方框內的文字
-  // 全部轉換為深藍色
+  // Process brown text (#5d4037) - edge labels and text inside light boxes
+  // Convert all to dark blue
   svgContent = svgContent.replace(brownTextRegex, (fullMatch) => {
     blueCount++;
     return fullMatch.replace('fill="#5d4037"', 'fill="#1565C0"');
   });
 
-  // 處理 #1976d2 文字 - ER 圖關係標籤
-  // 這個顏色與邊框同色，在某些背景上不易閱讀，轉換為更深的藍色
+  // Process #1976d2 text - ER diagram relationship labels
+  // This color matches border color, hard to read on some backgrounds, convert to darker blue
   const borderBlueTextRegex = /<(use|path)\s+([^>]*transform="matrix\(([^)]+)\)"[^>]*fill="#1976d2"[^>]*)\/>/g;
   svgContent = svgContent.replace(borderBlueTextRegex, (fullMatch) => {
     blueCount++;
     return fullMatch.replace('fill="#1976d2"', 'fill="#1565C0"');
   });
 
-  // 處理白色文字 (#ffffff) - 在深色方框外的白色文字應該變成深藍色
-  // 這是因為 Mermaid 的邊緣標籤在 PDF 輸出時會變成白色
+  // Process white text (#ffffff) - white text outside dark boxes should become dark blue
+  // This is because Mermaid's edge labels become white in PDF output
   const whiteTextRegex = /<(use|path)\s+([^>]*transform="matrix\(([^)]+)\)"[^>]*fill="#ffffff"[^>]*)\/>/g;
   svgContent = svgContent.replace(whiteTextRegex, (fullMatch, tag, attrs, matrixValues) => {
     const [a, b, c, d, e, f] = matrixValues.split(',').map(parseFloat);
     const textX = e;
     const textY = f;
 
-    // 檢查是否是背景矩形（大型白色方框）- scale > 0.1 且包含 M0 0H 模式
+    // Check if this is a background rectangle (large white box) - scale > 0.1 and contains M0 0H pattern
     if (Math.abs(a) > 0.1 && attrs.includes('d="M0 0H')) {
-      return fullMatch; // 保留背景矩形為白色
+      return fullMatch; // Keep background rectangle as white
     }
 
     const isInBox = boxBounds.some(box => {
@@ -452,7 +452,7 @@ function postProcessMutoolSvg(svgContent) {
     });
 
     if (isInBox) {
-      return fullMatch; // 在深色方框內保持白色
+      return fullMatch; // Keep white inside dark boxes
     } else {
       blueCount++;
       return fullMatch.replace('fill="#ffffff"', 'fill="#1565C0"');
@@ -463,12 +463,12 @@ function postProcessMutoolSvg(svgContent) {
 }
 
 /**
- * 將 Mermaid 代碼渲染為 SVG + PNG (SVG 為主，PNG 作為 fallback)
- * 使用 htmlLabels: false 確保 SVG 文字使用原生 <text> 元素，Word 可正確顯示
+ * Render Mermaid code to SVG + PNG (SVG primary, PNG as fallback)
+ * Use htmlLabels: false to ensure SVG text uses native <text> elements for Word compatibility
  *
- * @param {string} mermaidCode - Mermaid 圖表代碼
- * @param {string} outputDir - 輸出目錄
- * @returns {{svg: string|null, png: string|null}} - SVG 和 PNG 圖片路徑
+ * @param {string} mermaidCode - Mermaid diagram code
+ * @param {string} outputDir - Output directory
+ * @returns {{svg: string|null, png: string|null}} - SVG and PNG image paths
  */
 function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
   const hash = crypto.createHash('md5').update(mermaidCode).digest('hex').substring(0, 8);
@@ -477,67 +477,67 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
   const svgFile = path.join(tempDir, `mermaid-${hash}.svg`);
   const pngFile = path.join(tempDir, `mermaid-${hash}.png`);
 
-  // 建立暫存目錄
+  // Create temp directory
   if (!fs.existsSync(tempDir)) {
     fs.mkdirSync(tempDir, { recursive: true });
   }
 
-  // 如果已存在快取，直接回傳
+  // If cache exists, return directly
   const hasSvg = fs.existsSync(svgFile);
   const hasPng = fs.existsSync(pngFile);
   if (hasSvg && hasPng) {
     return { svg: svgFile, png: pngFile };
   }
 
-  // 建立 Mermaid 配置檔 (htmlLabels: false)
+  // Create Mermaid config file (htmlLabels: false)
   const configPath = createMermaidConfig(tempDir);
 
-  // 寫入 Mermaid 代碼
+  // Write Mermaid code
   fs.writeFileSync(inputFile, mermaidCode);
 
-  // 根據圖表類型決定渲染寬度
+  // Determine render width based on diagram type
   const renderWidth = getMermaidRenderWidth(mermaidCode);
 
   let svgPath = null;
   let pngPath = null;
 
-  // 使用 PDF→mutool 路徑（文字轉為向量路徑，確保 Word 相容性）
-  // 這是 Mermaid 官方建議的解決方案，因為直接產生的 SVG 節點標籤會使用 foreignObject
-  // Word 不支援 foreignObject，所以需要將文字轉為路徑
-  // 參考：https://github.com/mermaid-js/mermaid/issues/2688
+  // Use PDF->mutool path (text converted to vector paths for Word compatibility)
+  // This is the Mermaid official recommended solution, as direct SVG output uses foreignObject for node labels
+  // Word doesn't support foreignObject, so text needs to be converted to paths
+  // Reference: https://github.com/mermaid-js/mermaid/issues/2688
   const pdfFile = path.join(tempDir, `mermaid-${hash}.pdf`);
   try {
-    // Step 1: 產生 PDF (Mermaid 的 PDF 輸出會將文字轉為路徑，並套用 style 指定的顏色)
+    // Step 1: Generate PDF (Mermaid PDF output converts text to paths and applies style-specified colors)
     execSync(`mmdc -i "${inputFile}" -o "${pdfFile}" -c "${configPath}" --pdfFit 2>/dev/null`, {
       stdio: 'pipe',
       timeout: 60000
     });
 
     if (fs.existsSync(pdfFile)) {
-      // Step 2: 使用 mutool 將 PDF 轉換為 SVG (文字會轉為路徑，確保相容性)
-      // 需要先檢查是否有 mutool
-      // 注意：mutool 會在輸出檔名加上頁碼，如 output.svg -> output1.svg
+      // Step 2: Use mutool to convert PDF to SVG (text becomes paths for compatibility)
+      // Need to check if mutool is available first
+      // Note: mutool adds page number to output filename, e.g., output.svg -> output1.svg
       const mutoolOutputBase = path.join(tempDir, `svg-${hash}`);
-      const mutoolSvgFile = `${mutoolOutputBase}1.svg`;  // mutool 會產生這個檔名
+      const mutoolSvgFile = `${mutoolOutputBase}1.svg`;  // mutool generates this filename
       try {
         execSync(`which mutool`, { stdio: 'pipe' });
         execSync(`mutool draw -F svg -o "${mutoolOutputBase}.svg" "${pdfFile}" 2>/dev/null`, {
           stdio: 'pipe',
           timeout: 60000
         });
-        // mutool 產生的檔名帶頁碼，需要重命名
+        // mutool output filename has page number, need to rename
         if (fs.existsSync(mutoolSvgFile)) {
           fs.renameSync(mutoolSvgFile, svgFile);
-          // 後處理 SVG：修正藍色方框內的文字顏色
+          // Post-process SVG: fix text color inside blue boxes
           let svgContent = fs.readFileSync(svgFile, 'utf-8');
           svgContent = postProcessMutoolSvg(svgContent);
           fs.writeFileSync(svgFile, svgContent);
           svgPath = svgFile;
         }
       } catch (mutoolError) {
-        // 沒有 mutool，fallback 到直接 SVG (文字可能不顯示)
-        console.warn(`  ⚠ mutool 未安裝，使用直接 SVG 輸出 (Word 中文字可能不顯示)`);
-        console.warn(`    安裝方式: brew install mupdf-tools`);
+        // No mutool, fallback to direct SVG (text may not display)
+        console.warn(`  Warning: mutool not installed, using direct SVG output (text may not display in Word)`);
+        console.warn(`    Install with: brew install mupdf-tools`);
         execSync(`mmdc -i "${inputFile}" -o "${svgFile}" -c "${configPath}" -b white 2>/dev/null`, {
           stdio: 'pipe',
           timeout: 60000
@@ -546,14 +546,14 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
           svgPath = svgFile;
         }
       }
-      // 清理 PDF 暫存檔
+      // Clean up PDF temp file
       if (fs.existsSync(pdfFile)) {
         fs.unlinkSync(pdfFile);
       }
     }
   } catch (error) {
-    // PDF 產生失敗，fallback 到直接 SVG
-    console.warn(`PDF 渲染失敗 [${hash}]: ${error.message}`);
+    // PDF generation failed, fallback to direct SVG
+    console.warn(`PDF render failed [${hash}]: ${error.message}`);
     try {
       execSync(`mmdc -i "${inputFile}" -o "${svgFile}" -c "${configPath}" -b white 2>/dev/null`, {
         stdio: 'pipe',
@@ -563,11 +563,11 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
         svgPath = svgFile;
       }
     } catch (svgError) {
-      console.warn(`SVG 渲染也失敗 [${hash}]: ${svgError.message}`);
+      console.warn(`SVG render also failed [${hash}]: ${svgError.message}`);
     }
   }
 
-  // 2. 渲染 PNG (作為 fallback，供舊版 Word 使用)
+  // 2. Render PNG (as fallback for older Word versions)
   try {
     execSync(`mmdc -i "${inputFile}" -o "${pngFile}" -c "${configPath}" -b white -w ${renderWidth} -s 2`, {
       stdio: 'pipe',
@@ -577,15 +577,15 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
       pngPath = pngFile;
     }
   } catch (error) {
-    console.warn(`PNG 渲染失敗 [${hash}]: ${error.message}`);
+    console.warn(`PNG render failed [${hash}]: ${error.message}`);
   }
 
   return { svg: svgPath, png: pngPath };
 }
 
 /**
- * 向下相容函數：將 Mermaid 代碼渲染為 PNG 圖片
- * @deprecated 請使用 renderMermaidToSvgAndPng
+ * Backward compatible function: Render Mermaid code to PNG image
+ * @deprecated Use renderMermaidToSvgAndPng instead
  */
 function renderMermaidToPng(mermaidCode, outputDir) {
   const result = renderMermaidToSvgAndPng(mermaidCode, outputDir);
@@ -593,8 +593,8 @@ function renderMermaidToPng(mermaidCode, outputDir) {
 }
 
 /**
- * 讀取 PNG 圖片尺寸
- * PNG 檔案格式：前 8 bytes 為簽名，IHDR chunk 包含寬高資訊
+ * Read PNG image dimensions
+ * PNG file format: first 8 bytes are signature, IHDR chunk contains width/height info
  */
 function getPngDimensions(buffer) {
   // PNG signature: 89 50 4E 47 0D 0A 1A 0A
@@ -608,10 +608,10 @@ function getPngDimensions(buffer) {
 }
 
 /**
- * 從 SVG 內容解析 viewBox 或 width/height 來取得尺寸
+ * Parse viewBox or width/height from SVG content to get dimensions
  */
 function getSvgDimensions(svgContent) {
-  // 嘗試從 viewBox 解析
+  // Try to parse from viewBox
   const viewBoxMatch = svgContent.match(/viewBox\s*=\s*["']([^"']+)["']/);
   if (viewBoxMatch) {
     const parts = viewBoxMatch[1].split(/[\s,]+/);
@@ -623,7 +623,7 @@ function getSvgDimensions(svgContent) {
     }
   }
 
-  // 嘗試從 width/height 屬性解析
+  // Try to parse from width/height attributes
   const widthMatch = svgContent.match(/width\s*=\s*["'](\d+)/);
   const heightMatch = svgContent.match(/height\s*=\s*["'](\d+)/);
   if (widthMatch && heightMatch) {
@@ -637,32 +637,32 @@ function getSvgDimensions(svgContent) {
 }
 
 /**
- * 建立 Mermaid 圖片段落 - 使用 SVG with PNG fallback
- * SVG 為向量格式，確保任意縮放不失真 (需 Office 2019+ 或 Microsoft 365)
- * PNG 作為舊版 Word 的 fallback
- * 保持原始比例，最大寬度 550px (A4 頁面寬度約 6 吋 = 576px)
- * 圖片置中顯示
+ * Create Mermaid image paragraph - using SVG with PNG fallback
+ * SVG is vector format, ensures no quality loss at any scale (requires Office 2019+ or Microsoft 365)
+ * PNG as fallback for older Word versions
+ * Maintains original aspect ratio, max width 550px (A4 page width ~6 inches = 576px)
+ * Image centered
  */
 function createMermaidImageWithSvg(svgPath, pngPath) {
   const svgBuffer = fs.readFileSync(svgPath);
   const pngBuffer = fs.readFileSync(pngPath);
   const svgContent = svgBuffer.toString('utf-8');
 
-  // 從 SVG 或 PNG 取得尺寸
+  // Get dimensions from SVG or PNG
   let dimensions = getSvgDimensions(svgContent);
   if (!dimensions) {
     dimensions = getPngDimensions(pngBuffer);
   }
 
   let displayWidth, displayHeight;
-  const maxWidth = 550;  // 最大寬度限制，A4 頁面寬度 (含邊距) 約 6 吋
-  const maxHeight = 600; // 最大高度限制，避免超出單頁
+  const maxWidth = 550;  // Max width limit, A4 page width (with margins) ~6 inches
+  const maxHeight = 600; // Max height limit, avoid exceeding single page
 
   if (dimensions) {
     const { width, height } = dimensions;
     const aspectRatio = width / height;
 
-    // 根據最大限制計算縮放後的尺寸
+    // Calculate scaled dimensions based on max limits
     if (width > maxWidth) {
       displayWidth = maxWidth;
       displayHeight = Math.round(maxWidth / aspectRatio);
@@ -671,25 +671,25 @@ function createMermaidImageWithSvg(svgPath, pngPath) {
       displayHeight = height;
     }
 
-    // 如果高度仍超過限制，再次縮放
+    // If height still exceeds limit, scale again
     if (displayHeight > maxHeight) {
       displayHeight = maxHeight;
       displayWidth = Math.round(maxHeight * aspectRatio);
     }
 
-    // 確保圖片有最小尺寸 (避免過小圖片)
+    // Ensure image has minimum size (avoid too small images)
     const minWidth = 200;
     if (displayWidth < minWidth && width >= minWidth) {
       displayWidth = minWidth;
       displayHeight = Math.round(minWidth / aspectRatio);
     }
   } else {
-    // 無法讀取尺寸時使用預設值
+    // Use default values when dimensions cannot be read
     displayWidth = 450;
     displayHeight = 350;
   }
 
-  // 使用 SVG with PNG fallback (docx 庫 v9.x 支援)
+  // Use SVG with PNG fallback (docx library v9.x support)
   return new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { before: 200, after: 200 },
@@ -711,24 +711,24 @@ function createMermaidImageWithSvg(svgPath, pngPath) {
 }
 
 /**
- * 建立 Mermaid 圖片段落 - 僅使用 PNG (向下相容)
- * @deprecated 請使用 createMermaidImageWithSvg
+ * Create Mermaid image paragraph - PNG only (backward compatible)
+ * @deprecated Use createMermaidImageWithSvg instead
  */
 function createMermaidImage(imagePath) {
   const imageBuffer = fs.readFileSync(imagePath);
 
-  // 讀取實際圖片尺寸
+  // Read actual image dimensions
   const dimensions = getPngDimensions(imageBuffer);
 
   let displayWidth, displayHeight;
-  const maxWidth = 550;  // 最大寬度限制，A4 頁面寬度 (含邊距) 約 6 吋
-  const maxHeight = 600; // 最大高度限制，避免超出單頁
+  const maxWidth = 550;  // Max width limit, A4 page width (with margins) ~6 inches
+  const maxHeight = 600; // Max height limit, avoid exceeding single page
 
   if (dimensions) {
     const { width, height } = dimensions;
     const aspectRatio = width / height;
 
-    // 根據最大限制計算縮放後的尺寸
+    // Calculate scaled dimensions based on max limits
     if (width > maxWidth) {
       displayWidth = maxWidth;
       displayHeight = Math.round(maxWidth / aspectRatio);
@@ -737,20 +737,20 @@ function createMermaidImage(imagePath) {
       displayHeight = height;
     }
 
-    // 如果高度仍超過限制，再次縮放
+    // If height still exceeds limit, scale again
     if (displayHeight > maxHeight) {
       displayHeight = maxHeight;
       displayWidth = Math.round(maxHeight * aspectRatio);
     }
 
-    // 確保圖片有最小尺寸 (避免過小圖片)
+    // Ensure image has minimum size (avoid too small images)
     const minWidth = 200;
     if (displayWidth < minWidth && width >= minWidth) {
       displayWidth = minWidth;
       displayHeight = Math.round(minWidth / aspectRatio);
     }
   } else {
-    // 無法讀取尺寸時使用預設值
+    // Use default values when dimensions cannot be read
     displayWidth = 450;
     displayHeight = 350;
   }
@@ -772,7 +772,7 @@ function createMermaidImage(imagePath) {
 }
 
 /**
- * 清理 Mermaid 暫存檔案
+ * Clean up Mermaid temp files
  */
 function cleanupMermaidTemp(outputDir) {
   const tempDir = path.join(outputDir, '.mermaid-temp');
@@ -782,36 +782,36 @@ function cleanupMermaidTemp(outputDir) {
 }
 
 // ============================================
-// 需求項目表格化轉換器
+// Requirement Item Table Converter
 // ============================================
 
 /**
- * 檢測是否為需求項目標題
- * 支援格式：
- *   - #### SRS-AUTH-001 使用者註冊 (舊格式)
- *   - ##### REQ-FUNC-001 使用者登入 (新格式，空格分隔)
- *   - #### REQ-FUNC-001: 使用者登入 (新格式，冒號分隔)
+ * Check if line is a requirement item heading
+ * Supported formats:
+ *   - #### SRS-AUTH-001 User Registration (old format)
+ *   - ##### REQ-FUNC-001 User Login (new format, space separated)
+ *   - #### REQ-FUNC-001: User Login (new format, colon separated)
  */
 function isRequirementHeading(line) {
-  // 支援 SRS/SWD/SDD/STC/REQ 前綴，3-5個#
+  // Support SRS/SWD/SDD/STC/REQ prefix, 3-5 # symbols
   return line.match(/^#{3,5}\s+(SRS|SWD|SDD|STC|REQ)-[A-Z]+-\d+/);
 }
 
 /**
- * 解析需求項目區塊，轉換為表格式結構
- * 支援多種輸入格式：
+ * Parse requirement item block, convert to table structure
+ * Supports multiple input formats:
  *
- * 舊格式 (中文欄位)：
- *   #### SRS-AUTH-001 使用者註冊
- *   **描述：** 系統必須...
- *   **優先級：** 必要
- *   **驗收標準：**
+ * Old format (Chinese fields):
+ *   #### SRS-AUTH-001 User Registration
+ *   **Description:** System must...
+ *   **Priority:** Required
+ *   **Acceptance Criteria:**
  *   - AC1: Given...
  *
- * 新格式 (英文欄位)：
- *   ##### REQ-FUNC-001 使用者登入
- *   **Statement:** 系統應...
- *   **Rationale:** 理由...
+ * New format (English fields):
+ *   ##### REQ-FUNC-001 User Login
+ *   **Statement:** System shall...
+ *   **Rationale:** Reason...
  *   **Acceptance Criteria:**
  *   - AC1: Given...
  *   **Verification Method:** Test
@@ -819,7 +819,7 @@ function isRequirementHeading(line) {
 function parseRequirementBlock(lines, startIndex) {
   const headerLine = lines[startIndex];
 
-  // 嘗試匹配：ID + 空格 + 名稱，或 ID + 冒號 + 名稱
+  // Try to match: ID + space + name, or ID + colon + name
   let match = headerLine.match(/^#{3,5}\s+((SRS|SWD|SDD|STC|REQ)-[A-Z]+-\d+)[:：]?\s*(.+)/);
 
   if (!match) return null;
@@ -830,10 +830,10 @@ function parseRequirementBlock(lines, startIndex) {
   const requirement = {
     id: reqId,
     name: reqName,
-    // 支援中英文欄位
-    description: '',      // 描述 (舊)
-    statement: '',        // Statement (新)
-    rationale: '',        // Rationale (新)
+    // Support both Chinese and English fields
+    description: '',      // Description (old format)
+    statement: '',        // Statement (new format)
+    rationale: '',        // Rationale (new format)
     priority: '',
     safetyClass: '',
     verificationMethod: '',
@@ -848,19 +848,19 @@ function parseRequirementBlock(lines, startIndex) {
   while (i < lines.length) {
     const line = lines[i].trim();
 
-    // 遇到下一個標題或分隔線則結束
+    // End when encountering next heading or separator line
     if (line.startsWith('#') || line.match(/^-{3,}$/)) {
       break;
     }
 
-    // 解析 **欄位：** 值 或 **欄位:** 值 格式
+    // Parse **Field:** value or **Field:** value format
     const fieldMatch = line.match(/^\*\*(.+?)[:：]\*\*\s*(.*)$/);
 
     if (fieldMatch) {
       const fieldName = fieldMatch[1].trim();
       const fieldValue = fieldMatch[2].trim();
 
-      // 中文欄位
+      // Chinese fields
       if (fieldName === '描述') {
         requirement.description = fieldValue;
         currentField = 'description';
@@ -877,7 +877,7 @@ function parseRequirementBlock(lines, startIndex) {
         inAcceptanceCriteria = true;
         currentField = 'acceptanceCriteria';
       }
-      // 英文欄位
+      // English fields
       else if (fieldName === 'Statement') {
         requirement.statement = fieldValue;
         currentField = 'statement';
@@ -899,10 +899,10 @@ function parseRequirementBlock(lines, startIndex) {
         inAcceptanceCriteria = false;
       }
     } else if (inAcceptanceCriteria && line.startsWith('- ')) {
-      // 驗收標準項目
+      // Acceptance criteria item
       requirement.acceptanceCriteria.push(line.substring(2));
     } else if (line && currentField) {
-      // 延續上一個欄位的內容
+      // Continue previous field content
       if (currentField === 'description') {
         requirement.description += ' ' + line;
       } else if (currentField === 'statement') {
@@ -919,19 +919,19 @@ function parseRequirementBlock(lines, startIndex) {
 }
 
 /**
- * 建立需求項目表格
- * 自動判斷使用中文或英文欄位標籤，並套用適當字體
+ * Create requirement item table
+ * Auto-detect Chinese or English field labels and apply appropriate font
  */
 function createRequirementTable(req) {
   const tableBorder = { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' };
   const cellBorders = { top: tableBorder, bottom: tableBorder, left: tableBorder, right: tableBorder };
 
-  const labelWidth = 2200;  // 標籤欄寬度（加寬以容納中文）
-  const valueWidth = 7160;  // 值欄寬度
+  const labelWidth = 2200;  // Label column width (wider for Chinese)
+  const valueWidth = 7160;  // Value column width
 
   const rows = [];
 
-  // 標題列 (合併儲存格效果用背景色區分)
+  // Header row (merged cell effect using background color)
   rows.push(new TableRow({
     children: [
       new TableCell({
@@ -955,7 +955,7 @@ function createRequirementTable(req) {
     ]
   }));
 
-  // 新格式欄位 (Statement/Rationale)
+  // New format fields (Statement/Rationale)
   if (req.statement) {
     rows.push(createFieldRow('Statement', req.statement, labelWidth, valueWidth, cellBorders));
   }
@@ -964,29 +964,29 @@ function createRequirementTable(req) {
     rows.push(createFieldRow('Rationale', req.rationale, labelWidth, valueWidth, cellBorders));
   }
 
-  // 舊格式欄位 (描述)
+  // Old format field (Description)
   if (req.description) {
     rows.push(createFieldRow('描述', req.description, labelWidth, valueWidth, cellBorders));
   }
 
-  // 優先級
+  // Priority
   if (req.priority) {
     rows.push(createFieldRow('優先級', req.priority, labelWidth, valueWidth, cellBorders));
   }
 
-  // 安全分類
+  // Safety Class
   if (req.safetyClass) {
     rows.push(createFieldRow('安全分類', req.safetyClass, labelWidth, valueWidth, cellBorders));
   }
 
-  // 其他欄位
+  // Other fields
   for (const [key, value] of Object.entries(req.otherFields)) {
     rows.push(createFieldRow(key, value, labelWidth, valueWidth, cellBorders));
   }
 
-  // 驗收標準 (Acceptance Criteria)
+  // Acceptance Criteria
   if (req.acceptanceCriteria.length > 0) {
-    // 判斷使用中文還是英文標籤
+    // Determine Chinese or English label
     const acLabel = req.statement ? 'Acceptance Criteria' : '驗收標準';
     const acParagraphs = req.acceptanceCriteria.map(ac =>
       new Paragraph({
@@ -1017,7 +1017,7 @@ function createRequirementTable(req) {
     }));
   }
 
-  // Verification Method (新格式)
+  // Verification Method (new format)
   if (req.verificationMethod) {
     rows.push(createFieldRow('Verification', req.verificationMethod, labelWidth, valueWidth, cellBorders));
   }
@@ -1055,29 +1055,30 @@ function createFieldRow(label, value, labelWidth, valueWidth, cellBorders) {
 }
 
 // ============================================
-// 主要解析函式
+// Main Parsing Functions
 // ============================================
 
 /**
- * 檢查是否為「孤立標題群」的第一個標題
- * 當連續多個標題（沒有中間內容）最後接著需求表格時，只在第一個標題前分頁
- * 避免標題群落在頁尾，但又不會每個標題都分頁造成空頁
+ * Check if this is the first heading in an "orphan heading group"
+ * When multiple consecutive headings (no content in between) are followed by requirement tables,
+ * only add page break before the first heading
+ * Avoids headings at page bottom, but doesn't create empty pages with breaks before each heading
  */
 function shouldBreakBeforeHeading(lines, currentIndex) {
   const currentLine = lines[currentIndex];
 
-  // 檢查前一個非空行是否也是標題
+  // Check if previous non-empty line is also a heading
   let prevIndex = currentIndex - 1;
   while (prevIndex >= 0 && lines[prevIndex].trim() === '') {
     prevIndex--;
   }
 
-  // 如果前面也是標題，則不分頁（讓標題群保持在一起）
+  // If previous line is also a heading, don't break (keep heading group together)
   if (prevIndex >= 0 && lines[prevIndex].startsWith('#')) {
     return false;
   }
 
-  // 往後看，找到這個標題群的結尾
+  // Look ahead to find the end of this heading group
   let j = currentIndex + 1;
   let headingCount = 1;
 
@@ -1089,19 +1090,19 @@ function shouldBreakBeforeHeading(lines, currentIndex) {
       continue;
     }
 
-    // 如果是另一個標題，繼續往後看
+    // If it's another heading, continue looking
     if (line.startsWith('#') && !isRequirementHeading(lines[j])) {
       headingCount++;
       j++;
       continue;
     }
 
-    // 如果是需求項目或其他內容，停止
+    // If it's a requirement item or other content, stop
     break;
   }
 
-  // 只有當有連續多個標題（標題群）時，才在第一個標題前分頁
-  // 這樣可以避免標題群被分頁切開
+  // Only break before first heading when there are multiple consecutive headings (heading group)
+  // This prevents heading groups from being split across pages
   return headingCount > 1;
 }
 
@@ -1119,34 +1120,34 @@ function parseMarkdown(content, outputDir = '.') {
   while (i < lines.length) {
     const line = lines[i];
 
-    // 處理程式碼區塊
+    // Process code blocks
     if (line.startsWith('```')) {
       if (inCodeBlock) {
-        // 結束程式碼區塊
+        // End code block
         if (codeBlockLang === 'mermaid') {
-          // Mermaid 圖表 - 渲染為 SVG + PNG (SVG 為主)
+          // Mermaid diagram - render to SVG + PNG (SVG primary)
           const mermaidCode = codeBlockContent.join('\n');
           const { svg: svgPath, png: pngPath } = renderMermaidToSvgAndPng(mermaidCode, outputDir);
           if (svgPath && pngPath) {
-            // 使用 SVG with PNG fallback (向量品質)
+            // Use SVG with PNG fallback (vector quality)
             elements.push(createMermaidImageWithSvg(svgPath, pngPath));
           } else if (pngPath) {
-            // SVG 失敗，僅使用 PNG
+            // SVG failed, use PNG only
             elements.push(createMermaidImage(pngPath));
           } else {
-            // 渲染完全失敗，fallback 為程式碼區塊
-            console.warn('Mermaid 渲染失敗，使用程式碼區塊顯示');
+            // Render completely failed, fallback to code block
+            console.warn('Mermaid render failed, displaying as code block');
             elements.push(...createCodeBlock(mermaidCode));
           }
         } else {
-          // 一般程式碼區塊 (傳入語言參數以支援語法高亮)
+          // Regular code block (pass language param for syntax highlighting)
           elements.push(...createCodeBlock(codeBlockContent.join('\n'), codeBlockLang));
         }
         codeBlockContent = [];
         codeBlockLang = '';
         inCodeBlock = false;
       } else {
-        // 開始程式碼區塊，擷取語言
+        // Start code block, extract language
         codeBlockLang = line.substring(3).trim().toLowerCase();
         inCodeBlock = true;
       }
@@ -1160,7 +1161,7 @@ function parseMarkdown(content, outputDir = '.') {
       continue;
     }
 
-    // 處理 Markdown 表格
+    // Process Markdown tables
     if (line.startsWith('|') && line.endsWith('|')) {
       if (!inTable) {
         inTable = true;
@@ -1181,42 +1182,42 @@ function parseMarkdown(content, outputDir = '.') {
       inTable = false;
     }
 
-    // 檢查是否為需求項目標題 - 轉換為表格式
+    // Check if it's a requirement item heading - convert to table format
     if (isRequirementHeading(line)) {
       const result = parseRequirementBlock(lines, i);
       if (result) {
-        elements.push(new Paragraph({ spacing: { before: 240 }, children: [] })); // 間距
+        elements.push(new Paragraph({ spacing: { before: 240 }, children: [] })); // spacing
         elements.push(createRequirementTable(result.requirement));
-        elements.push(new Paragraph({ spacing: { after: 120 }, children: [] })); // 間距
+        elements.push(new Paragraph({ spacing: { after: 120 }, children: [] })); // spacing
         i = result.endIndex + 1;
         continue;
       }
     }
 
-    // 標題處理
-    // Heading 1 (# ) - 主標題 (封面標題不編號)
+    // Heading processing
+    // Heading 1 (# ) - Main title (cover title not numbered)
     if (line.startsWith('# ') && !line.startsWith('## ')) {
       const headingText = line.substring(2);
-      // 封面標題（Software Requirements Specification, Software Design Description 等）不使用自動編號
+      // Cover titles (Software Requirements Specification, Software Design Description, etc.) don't use auto numbering
       const isCoverTitle = headingText.match(/^(Software|For\s)/i);
-      elements.push(createHeading(headingText, HeadingLevel.HEADING_1, true, !isCoverTitle)); // 分頁
+      elements.push(createHeading(headingText, HeadingLevel.HEADING_1, true, !isCoverTitle)); // page break
       i++;
       continue;
     }
-    // Heading 2 (## ) - 大章節，每個大章節前分頁
+    // Heading 2 (## ) - Major section, page break before each major section
     if (line.startsWith('## ')) {
       const headingText = line.substring(3);
-      // 檢查是否為主要章節（如 "Introduction", "Product Overview" 等，已移除手動編號）
-      // 特殊標題（Table of Contents, Revision History, 目錄, 修訂歷史）不使用自動編號
+      // Check if it's a main section (e.g., "Introduction", "Product Overview", manual numbering removed)
+      // Special titles (Table of Contents, Revision History, etc.) don't use auto numbering
       const isSpecialSection = headingText.match(/^(Table of Contents|Revision History|目錄|修訂歷史|For\s)/i);
-      const isMainSection = !isSpecialSection; // 非特殊章節則在前面分頁
+      const isMainSection = !isSpecialSection; // Non-special sections get page break before
       elements.push(createHeading(headingText, HeadingLevel.HEADING_2, isMainSection, !isSpecialSection));
       i++;
       continue;
     }
-    // Heading 3 (### ) - 小節
+    // Heading 3 (### ) - Subsection
     if (line.startsWith('### ')) {
-      // 檢查標題後是否緊接需求表格或只有空行，若是則在標題前分頁避免標題落單
+      // Check if heading is followed by requirement table or only empty lines, if so add page break to avoid orphan heading
       const shouldPageBreak = shouldBreakBeforeHeading(lines, i);
       elements.push(createHeading(line.substring(4), HeadingLevel.HEADING_3, shouldPageBreak, true));
       i++;
@@ -1224,7 +1225,7 @@ function parseMarkdown(content, outputDir = '.') {
     }
     // Heading 4 (#### )
     if (line.startsWith('#### ')) {
-      // 檢查標題後是否緊接需求表格或只有空行，若是則在標題前分頁避免標題落單
+      // Check if heading is followed by requirement table or only empty lines, if so add page break to avoid orphan heading
       const shouldPageBreak = shouldBreakBeforeHeading(lines, i);
       elements.push(createHeading(line.substring(5), HeadingLevel.HEADING_4, shouldPageBreak, true));
       i++;
@@ -1237,24 +1238,24 @@ function parseMarkdown(content, outputDir = '.') {
       continue;
     }
 
-    // 分隔線
+    // Horizontal rule
     if (line.match(/^-{3,}$/) || line.match(/^\*{3,}$/)) {
       i++;
       continue;
     }
 
-    // 空白行
+    // Empty line
     if (line.trim() === '') {
       i++;
       continue;
     }
 
-    // 一般段落
+    // Regular paragraph
     elements.push(createParagraph(line));
     i++;
   }
 
-  // 關閉未結束的表格
+  // Close unclosed table
   if (inTable && tableHeaders.length > 0) {
     elements.push(createTable(tableHeaders, tableRows));
   }
@@ -1267,7 +1268,7 @@ function parseTableRow(line) {
 }
 
 /**
- * 根據標題層級取得字型大小
+ * Get font size based on heading level
  */
 function getHeadingSize(level) {
   switch (level) {
@@ -1281,42 +1282,42 @@ function getHeadingSize(level) {
 }
 
 /**
- * 建立標題段落
- * @param {string} text - 標題文字
- * @param {HeadingLevel} level - 標題層級
- * @param {boolean} pageBreakBefore - 是否在標題前分頁（用於大章節）
- * @param {boolean} useNumbering - 是否使用自動編號（預設 true）
+ * Create heading paragraph
+ * @param {string} text - Heading text
+ * @param {HeadingLevel} level - Heading level
+ * @param {boolean} pageBreakBefore - Whether to add page break before heading (for major sections)
+ * @param {boolean} useNumbering - Whether to use auto numbering (default true)
  */
 function createHeading(text, level, pageBreakBefore = false, useNumbering = true) {
   const trimmedText = text.trim();
   const fontSize = getHeadingSize(level);
 
-  // 將 HeadingLevel 轉換為 numbering level (0-based)
-  // 注意：對於 IEC 62304 文件 (SRS/SDD/SWD 等)：
-  //   - # (H1) 用於封面標題（不編號）
-  //   - ## (H2) 用於主章節 → 編號 1., 2., 3. (level 0)
-  //   - ### (H3) 用於子章節 → 編號 1.1, 1.2 (level 1)
-  //   - #### (H4) → 編號 1.1.1 (level 2)
-  //   - ##### (H5) → 編號 1.1.1.1 (level 3)
-  // 因此 H1 不使用編號，H2~H5 對應 level 0~3
+  // Convert HeadingLevel to numbering level (0-based)
+  // Note: For IEC 62304 documents (SRS/SDD/SWD, etc.):
+  //   - # (H1) used for cover title (not numbered)
+  //   - ## (H2) used for main sections -> numbering 1., 2., 3. (level 0)
+  //   - ### (H3) used for subsections -> numbering 1.1, 1.2 (level 1)
+  //   - #### (H4) -> numbering 1.1.1 (level 2)
+  //   - ##### (H5) -> numbering 1.1.1.1 (level 3)
+  // Therefore H1 has no numbering, H2~H5 correspond to level 0~3
   const numberingLevel = {
-    [HeadingLevel.HEADING_1]: undefined,  // H1 封面標題不編號
-    [HeadingLevel.HEADING_2]: 0,  // ## → 1., 2., 3.
-    [HeadingLevel.HEADING_3]: 1,  // ### → 1.1, 1.2
-    [HeadingLevel.HEADING_4]: 2,  // #### → 1.1.1
-    [HeadingLevel.HEADING_5]: 3   // ##### → 1.1.1.1
+    [HeadingLevel.HEADING_1]: undefined,  // H1 cover title not numbered
+    [HeadingLevel.HEADING_2]: 0,  // ## -> 1., 2., 3.
+    [HeadingLevel.HEADING_3]: 1,  // ### -> 1.1, 1.2
+    [HeadingLevel.HEADING_4]: 2,  // #### -> 1.1.1
+    [HeadingLevel.HEADING_5]: 3   // ##### -> 1.1.1.1
   }[level];
 
   const paragraphOptions = {
     heading: level,
     spacing: { before: pageBreakBefore ? 0 : 240, after: 120 },
-    pageBreakBefore: pageBreakBefore,  // 大章節前分頁
-    keepNext: true,  // 標題與下一段落保持在同一頁（避免標題落單）
-    keepLines: true, // 標題本身不拆行
+    pageBreakBefore: pageBreakBefore,  // Page break before major sections
+    keepNext: true,  // Keep heading with next paragraph on same page (avoid orphan headings)
+    keepLines: true, // Don't split heading across lines
     children: [new TextRun({ text: trimmedText, bold: true, size: fontSize, font: getFont(trimmedText) })]
   };
 
-  // 如果啟用自動編號，且 level 有對應的 numbering level
+  // If auto numbering enabled and level has corresponding numbering level
   if (useNumbering && numberingLevel !== undefined) {
     paragraphOptions.numbering = {
       reference: 'heading-numbering',
@@ -1330,23 +1331,23 @@ function createHeading(text, level, pageBreakBefore = false, useNumbering = true
 function createParagraph(text) {
   const runs = parseInlineFormatting(text);
 
-  // 判斷是否為「小標題段落」：以 `:` 或 `：` 結尾的粗體段落
-  // 例如：「**iOS 架構分層：**」、「**互動行為**」
-  // 這類段落應與下一個內容（圖片、程式碼區塊）保持在同一頁
+  // Check if this is a "sub-heading paragraph": bold paragraph ending with `:` or `:`
+  // Example: "**iOS Architecture Layers:**", "**Interaction Behavior**"
+  // Such paragraphs should stay on same page with next content (images, code blocks)
   const isSubHeading = /\*\*[^*]+[：:]\*\*\s*$/.test(text.trim()) ||
                        /\*\*[^*]+\*\*\s*$/.test(text.trim());
 
   return new Paragraph({
     spacing: { after: 120 },
-    keepNext: isSubHeading,  // 小標題段落與下一內容保持同頁
+    keepNext: isSubHeading,  // Keep sub-heading paragraph with next content on same page
     children: runs
   });
 }
 
 /**
- * 解析行內格式（粗體、程式碼）
- * @param {string} text - 原始文字
- * @param {number} fontSize - 字型大小，預設為 BODY 大小
+ * Parse inline formatting (bold, code)
+ * @param {string} text - Original text
+ * @param {number} fontSize - Font size, defaults to BODY size
  */
 function parseInlineFormatting(text, fontSize = FONT_SIZE.BODY) {
   const runs = [];
@@ -1394,33 +1395,33 @@ function parseInlineFormatting(text, fontSize = FONT_SIZE.BODY) {
 }
 
 // ============================================
-// 語法高亮配色 (基於 VSCode Light+ / GitHub 標準)
-// 參考: https://code.visualstudio.com/api/extension-guides/color-theme
+// Syntax Highlighting Colors (based on VSCode Light+ / GitHub standard)
+// Reference: https://code.visualstudio.com/api/extension-guides/color-theme
 // ============================================
 const SYNTAX_COLORS = {
-  keyword: '0000FF',      // 藍色 - 關鍵字 (function, class, if, return, async, etc.)
-  string: 'A31515',       // 深紅色 - 字串
-  comment: '008000',      // 綠色 - 註解
-  number: '098658',       // 深青色 - 數字
-  type: '267F99',         // 青藍色 - 類型/類別名稱
-  property: '001080',     // 深藍色 - 屬性/變數
-  decorator: 'AF00DB',    // 紫色 - 裝飾器/註解 (@xxx)
-  operator: '000000',     // 黑色 - 運算子
-  punctuation: '000000',  // 黑色 - 標點符號
-  default: '000000'       // 黑色 - 預設
+  keyword: '0000FF',      // Blue - keywords (function, class, if, return, async, etc.)
+  string: 'A31515',       // Dark red - strings
+  comment: '008000',      // Green - comments
+  number: '098658',       // Dark cyan - numbers
+  type: '267F99',         // Cyan blue - types/class names
+  property: '001080',     // Dark blue - properties/variables
+  decorator: 'AF00DB',    // Purple - decorators/annotations (@xxx)
+  operator: '000000',     // Black - operators
+  punctuation: '000000',  // Black - punctuation
+  default: '000000'       // Black - default
 };
 
 /**
- * 簡化版語法高亮解析器
- * 支援多種程式語言的基本語法高亮
- * @param {string} line - 程式碼行
- * @param {string} lang - 程式語言 (javascript, python, swift, kotlin, typescript, etc.)
- * @returns {Array} TextRun 陣列
+ * Simplified syntax highlighting parser
+ * Supports basic syntax highlighting for multiple programming languages
+ * @param {string} line - Code line
+ * @param {string} lang - Programming language (javascript, python, swift, kotlin, typescript, etc.)
+ * @returns {Array} TextRun array
  */
 function tokenizeLine(line, lang, fontSize) {
   const tokens = [];
 
-  // 各語言的關鍵字定義
+  // Keyword definitions for each language
   const keywords = {
     javascript: /\b(function|const|let|var|if|else|for|while|return|class|extends|new|this|async|await|import|export|from|default|try|catch|throw|typeof|instanceof|null|undefined|true|false)\b/g,
     typescript: /\b(function|const|let|var|if|else|for|while|return|class|extends|new|this|async|await|import|export|from|default|try|catch|throw|typeof|instanceof|null|undefined|true|false|interface|type|enum|implements|public|private|protected|readonly|abstract|static)\b/g,
@@ -1429,29 +1430,29 @@ function tokenizeLine(line, lang, fontSize) {
     kotlin: /\b(fun|class|object|interface|val|var|if|else|when|for|while|return|import|this|null|true|false|suspend|async|await|try|catch|throw|public|private|protected|internal|override|open|abstract|sealed|data|companion|init|lateinit|by|lazy)\b/g
   };
 
-  // 通用 regex 模式
+  // Common regex patterns
   const patterns = [
-    { regex: /(\/\/.*$|#.*$)/gm, type: 'comment' },           // 單行註解
-    { regex: /(\/\*[\s\S]*?\*\/)/g, type: 'comment' },        // 多行註解
-    { regex: /("""[\s\S]*?"""|'''[\s\S]*?''')/g, type: 'string' },  // Python 多行字串
-    { regex: /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g, type: 'string' },  // 字串
-    { regex: /(@\w+)/g, type: 'decorator' },                  // 裝飾器
-    { regex: /\b(\d+\.?\d*)\b/g, type: 'number' },            // 數字
-    { regex: /\b([A-Z][a-zA-Z0-9_]*)\b/g, type: 'type' },     // 類型名稱 (首字母大寫)
+    { regex: /(\/\/.*$|#.*$)/gm, type: 'comment' },           // Single-line comments
+    { regex: /(\/\*[\s\S]*?\*\/)/g, type: 'comment' },        // Multi-line comments
+    { regex: /("""[\s\S]*?"""|'''[\s\S]*?''')/g, type: 'string' },  // Python multi-line strings
+    { regex: /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g, type: 'string' },  // Strings
+    { regex: /(@\w+)/g, type: 'decorator' },                  // Decorators
+    { regex: /\b(\d+\.?\d*)\b/g, type: 'number' },            // Numbers
+    { regex: /\b([A-Z][a-zA-Z0-9_]*)\b/g, type: 'type' },     // Type names (capitalized)
   ];
 
-  // 簡化處理：逐字元分析
+  // Simplified processing: character-by-character analysis
   let result = [];
   let remaining = line;
   let lastIndex = 0;
 
-  // 取得該語言的關鍵字 regex
+  // Get keyword regex for this language
   const keywordRegex = keywords[lang] || keywords.javascript;
 
-  // Token 收集
+  // Token collection
   const allMatches = [];
 
-  // 收集所有匹配
+  // Collect all matches
   patterns.forEach(({ regex, type }) => {
     regex.lastIndex = 0;
     let match;
@@ -1460,17 +1461,17 @@ function tokenizeLine(line, lang, fontSize) {
     }
   });
 
-  // 關鍵字匹配
+  // Keyword matching
   keywordRegex.lastIndex = 0;
   let match;
   while ((match = keywordRegex.exec(line)) !== null) {
     allMatches.push({ start: match.index, end: match.index + match[0].length, text: match[0], type: 'keyword' });
   }
 
-  // 按位置排序
+  // Sort by position
   allMatches.sort((a, b) => a.start - b.start);
 
-  // 移除重疊的匹配 (優先保留較早開始或較長的)
+  // Remove overlapping matches (prefer earlier start or longer match)
   const filteredMatches = [];
   let lastEnd = 0;
   for (const m of allMatches) {
@@ -1480,17 +1481,17 @@ function tokenizeLine(line, lang, fontSize) {
     }
   }
 
-  // 建立 TextRun
+  // Create TextRuns
   let pos = 0;
   for (const m of filteredMatches) {
-    // 加入匹配前的普通文字
+    // Add plain text before match
     if (m.start > pos) {
       const text = line.substring(pos, m.start).replace(/^ +/, match => '\u00A0'.repeat(match.length));
       if (text) {
         result.push(new TextRun({ text, font: FONT_CODE, size: fontSize, color: SYNTAX_COLORS.default }));
       }
     }
-    // 加入匹配的 token
+    // Add matched token
     const tokenText = m.text.replace(/^ +/, match => '\u00A0'.repeat(match.length));
     const isBold = m.type === 'keyword';
     result.push(new TextRun({
@@ -1503,7 +1504,7 @@ function tokenizeLine(line, lang, fontSize) {
     pos = m.end;
   }
 
-  // 加入剩餘的普通文字
+  // Add remaining plain text
   if (pos < line.length) {
     const text = line.substring(pos).replace(/^ +/, match => '\u00A0'.repeat(match.length));
     if (text) {
@@ -1511,7 +1512,7 @@ function tokenizeLine(line, lang, fontSize) {
     }
   }
 
-  // 如果沒有任何 token，返回整行
+  // If no tokens, return whole line
   if (result.length === 0) {
     const text = line.replace(/^ +/, match => '\u00A0'.repeat(match.length)) || '\u00A0';
     result.push(new TextRun({ text, font: FONT_CODE, size: fontSize, color: SYNTAX_COLORS.default }));
@@ -1521,39 +1522,39 @@ function tokenizeLine(line, lang, fontSize) {
 }
 
 /**
- * 建立程式碼區塊
- * 參考: https://bo-sgoldhouse.blogspot.com/2021/07/word-editormd.html
- * - 使用 Consolas 等寬字體 (較易閱讀程式碼)
- * - 固定行高 (緊湊顯示)
- * - 行號 + 斑馬條紋背景 (奇偶行不同色)
- * - 語法高亮 (基於 VSCode Light+ 配色)
+ * Create code block
+ * Reference: https://bo-sgoldhouse.blogspot.com/2021/07/word-editormd.html
+ * - Uses Consolas monospace font (better readability for code)
+ * - Fixed line height (compact display)
+ * - Line numbers + zebra stripe background (alternating row colors)
+ * - Syntax highlighting (based on VSCode Light+ colors)
  */
 function createCodeBlock(content, lang = '') {
-  const CODE_FONT_SIZE = 20;  // 10pt - 程式碼字型大小
-  const LINE_NUMBER_SIZE = 18;  // 9pt - 行號字型大小
-  const CODE_LINE_HEIGHT = 280;  // 固定行高 14pt
+  const CODE_FONT_SIZE = 20;  // 10pt - code font size
+  const LINE_NUMBER_SIZE = 18;  // 9pt - line number font size
+  const CODE_LINE_HEIGHT = 280;  // Fixed line height 14pt
 
-  // 斑馬條紋背景色
-  const BG_ODD = 'FFFFFF';   // 奇數行：白色
-  const BG_EVEN = 'F5F5F5';  // 偶數行：淺灰色
-  const LINE_NUM_COLOR = '999999';  // 行號顏色：灰色
+  // Zebra stripe background colors
+  const BG_ODD = 'FFFFFF';   // Odd rows: white
+  const BG_EVEN = 'F5F5F5';  // Even rows: light gray
+  const LINE_NUM_COLOR = '999999';  // Line number color: gray
 
   const lines = content.split('\n');
 
-  // 建立每行的表格列 (行號 | 程式碼)
+  // Create table row for each line (line number | code)
   const codeRows = lines.map((line, index) => {
     const lineNum = index + 1;
     const isEven = lineNum % 2 === 0;
     const bgColor = isEven ? BG_EVEN : BG_ODD;
 
-    // 語法高亮解析
+    // Syntax highlighting parsing
     const tokenizedRuns = tokenizeLine(line, lang, CODE_FONT_SIZE);
 
     return new TableRow({
       children: [
-        // 行號欄位
+        // Line number column
         new TableCell({
-          width: { size: 600, type: WidthType.DXA },  // 固定寬度約 0.4 吋
+          width: { size: 600, type: WidthType.DXA },  // Fixed width ~0.4 inches
           shading: { fill: bgColor, type: ShadingType.CLEAR },
           verticalAlign: VerticalAlign.CENTER,
           margins: {
@@ -1571,7 +1572,7 @@ function createCodeBlock(content, lang = '') {
             })]
           })]
         }),
-        // 程式碼欄位 (含語法高亮)
+        // Code column (with syntax highlighting)
         new TableCell({
           shading: { fill: bgColor, type: ShadingType.CLEAR },
           verticalAlign: VerticalAlign.CENTER,
@@ -1588,7 +1589,7 @@ function createCodeBlock(content, lang = '') {
     });
   });
 
-  // 建立程式碼表格
+  // Create code table
   const codeTable = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     borders: {
@@ -1606,22 +1607,22 @@ function createCodeBlock(content, lang = '') {
 }
 
 /**
- * 計算表格欄寬 - 根據內容長度智慧分配
- * 針對 SDD 文件優化，確保表格在 A4 頁面中適當顯示
- * @param {string[]} headers - 表格標題
- * @param {string[][]} rows - 表格資料列
- * @param {number} totalWidth - 總表格寬度 (DXA 單位)
- * @param {boolean[]} noWrapColumns - 各欄是否為不換行欄位（ID 欄位）
+ * Calculate table column widths - smart allocation based on content length
+ * Optimized for SDD documents, ensures proper display on A4 pages
+ * @param {string[]} headers - Table headers
+ * @param {string[][]} rows - Table data rows
+ * @param {number} totalWidth - Total table width (DXA units)
+ * @param {boolean[]} noWrapColumns - Whether each column is no-wrap (ID columns)
  */
 function calculateColumnWidths(headers, rows, totalWidth = 9360, noWrapColumns = []) {
   const numCols = headers.length;
 
-  // 計算每欄最大內容長度 (考慮中文字元佔用較多空間)
+  // Calculate max content length per column (Chinese chars take more space)
   const maxLengths = headers.map((h, i) => {
     let max = getTextDisplayLength(h);
     rows.forEach(row => {
       if (row[i]) {
-        // 移除粗體標記後計算長度
+        // Remove bold markers before calculating length
         const cleanText = row[i].replace(/\*\*/g, '');
         max = Math.max(max, getTextDisplayLength(cleanText));
       }
@@ -1631,36 +1632,36 @@ function calculateColumnWidths(headers, rows, totalWidth = 9360, noWrapColumns =
 
   const totalLength = maxLengths.reduce((a, b) => a + b, 0);
 
-  // 根據欄數設定不同的最小/最大寬度策略
+  // Set different min/max width strategy based on column count
   let minWidth, maxWidth;
   if (numCols <= 2) {
-    minWidth = 2000;  // 2 欄表格：較寬的欄位
+    minWidth = 2000;  // 2-column table: wider columns
     maxWidth = 7000;
   } else if (numCols <= 4) {
-    minWidth = 1500;  // 3-4 欄表格：適中
+    minWidth = 1500;  // 3-4 column table: moderate
     maxWidth = 5000;
   } else {
-    minWidth = 1000;  // 5+ 欄表格：較窄的欄位
+    minWidth = 1000;  // 5+ column table: narrower columns
     maxWidth = 3500;
   }
 
-  // ID 欄位需要更大的最小寬度（SDD-TRAIN-008 約需 1800 DXA）
+  // ID columns need larger minimum width (SDD-TRAIN-008 needs ~1800 DXA)
   const idMinWidth = 1800;
 
-  // 根據內容長度比例分配寬度
+  // Allocate width based on content length ratio
   let widths = maxLengths.map((len, i) => {
     const ratio = totalLength > 0 ? len / totalLength : 1 / numCols;
     let width = Math.floor(ratio * totalWidth);
-    // ID 欄位使用更大的最小寬度
+    // ID columns use larger minimum width
     const colMinWidth = (noWrapColumns[i]) ? idMinWidth : minWidth;
     return Math.max(colMinWidth, Math.min(maxWidth, width));
   });
 
-  // 調整總寬度以符合頁面寬度
+  // Adjust total width to fit page width
   let currentTotal = widths.reduce((a, b) => a + b, 0);
 
   if (currentTotal > totalWidth) {
-    // 超過總寬度時，先保護 ID 欄位，縮減其他欄位
+    // When exceeding total width, protect ID columns, reduce other columns
     const nonIdIndices = widths.map((w, i) => i).filter(i => !noWrapColumns[i]);
     const idTotal = widths.filter((w, i) => noWrapColumns[i]).reduce((a, b) => a + b, 0);
     const nonIdTotal = widths.filter((w, i) => !noWrapColumns[i]).reduce((a, b) => a + b, 0);
@@ -1674,17 +1675,17 @@ function calculateColumnWidths(headers, rows, totalWidth = 9360, noWrapColumns =
     }
   }
 
-  // 最後調整差異
+  // Final adjustment for difference
   currentTotal = widths.reduce((a, b) => a + b, 0);
   if (currentTotal !== totalWidth) {
     const diff = totalWidth - currentTotal;
-    // 將差異分配給最寬的非 ID 欄位
+    // Allocate difference to widest non-ID column
     const nonIdWidths = widths.map((w, i) => noWrapColumns[i] ? 0 : w);
     const maxNonIdIndex = nonIdWidths.indexOf(Math.max(...nonIdWidths));
     if (maxNonIdIndex >= 0) {
       widths[maxNonIdIndex] += diff;
     } else {
-      // 全都是 ID 欄位時，調整最後一欄
+      // If all are ID columns, adjust the last column
       widths[widths.length - 1] += diff;
     }
   }
@@ -1693,32 +1694,32 @@ function calculateColumnWidths(headers, rows, totalWidth = 9360, noWrapColumns =
 }
 
 /**
- * 計算文字顯示長度 (中文字算 2 個單位)
+ * Calculate text display length (Chinese chars count as 2 units)
  */
 function getTextDisplayLength(text) {
   let length = 0;
   for (const char of text) {
     if (/[\u4e00-\u9fff]/.test(char)) {
-      length += 2;  // 中文字
+      length += 2;  // Chinese character
     } else {
-      length += 1;  // 英文/數字/符號
+      length += 1;  // English/numbers/symbols
     }
   }
   return length;
 }
 
 /**
- * 檢測是否為 ID 欄位（不應換行）
- * ID 格式：SRS-XXX-NNN, SDD-XXX-NNN, REQ-XXX-NNN, SCR-XXX-NNN 等
+ * Check if column is an ID column (should not wrap)
+ * ID formats: SRS-XXX-NNN, SDD-XXX-NNN, REQ-XXX-NNN, SCR-XXX-NNN, etc.
  */
 function isIdColumn(headerText, cellText) {
-  // 檢查標題是否為 ID 相關（忽略大小寫和空格）
+  // Check if header is ID-related (case-insensitive, ignore spaces)
   const headerNormalized = headerText.toLowerCase().replace(/\s+/g, '');
   const idHeaders = ['id', '設計id', '需求id', '編號', 'identifier', 'designid', 'requirementid'];
   if (idHeaders.some(h => headerNormalized.includes(h))) {
     return true;
   }
-  // 檢查內容是否符合 ID 格式（移除 ** 粗體標記後檢查）
+  // Check if content matches ID format (remove ** bold markers before checking)
   const cleanCell = cellText ? cellText.replace(/\*\*/g, '').trim() : '';
   if (cleanCell && /^(SRS|SDD|SWD|STC|REQ|SCR)-[A-Z]+-\d+/.test(cleanCell)) {
     return true;
@@ -1731,14 +1732,14 @@ function createTable(headers, rows) {
   const cellBorders = { top: tableBorder, bottom: tableBorder, left: tableBorder, right: tableBorder };
   const numCols = headers.length;
 
-  // 判斷哪些欄位是 ID 欄位（不應換行）
+  // Determine which columns are ID columns (should not wrap)
   const noWrapColumns = headers.map((header, i) => {
-    // 檢查標題或第一列資料是否為 ID
+    // Check header or first row data for ID format
     const firstRowCell = rows.length > 0 ? rows[0][i] : '';
     return isIdColumn(header, firstRowCell);
   });
 
-  // 計算欄寬時考慮 ID 欄位需要更大的最小寬度
+  // Calculate column widths considering ID columns need larger minimum width
   const columnWidths = calculateColumnWidths(headers, rows, 9360, noWrapColumns);
 
   const tableRows = [
@@ -1775,7 +1776,7 @@ function createTable(headers, rows) {
 }
 
 /**
- * 解析文件結構，分離封面、目錄、修訂歷史與主要內容
+ * Parse document structure, separate cover, TOC, revision history and main content
  */
 function parseDocumentStructure(content, outputDir) {
   const lines = content.split('\n');
@@ -1793,7 +1794,7 @@ function parseDocumentStructure(content, outputDir) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    // 檢測封面資訊（文件開頭到 Table of Contents 之前）
+    // Detect cover info (from document start to before Table of Contents)
     if (section === 'cover') {
       if (trimmed.startsWith('# ')) {
         structure.coverInfo.title = trimmed.substring(2).trim();
@@ -1814,27 +1815,27 @@ function parseDocumentStructure(content, outputDir) {
       continue;
     }
 
-    // 檢測目錄區塊
+    // Detect TOC section
     if (section === 'toc') {
       if (trimmed.startsWith('## Revision History') || trimmed.toLowerCase().includes('revision history') || trimmed === '## 修訂歷史') {
         section = 'revision';
         i++;
         continue;
       } else if (trimmed.startsWith('## 1') || trimmed.startsWith('## 1.') || trimmed === '---') {
-        // 跳過目錄，進入主要內容 (如果遇到分隔線 --- 也可能表示目錄結束)
+        // Skip TOC, enter main content (separator --- may also indicate TOC end)
         if (trimmed === '---') {
           i++;
           continue;
         }
         section = 'main';
-        continue;  // 不 i++，讓 main section 處理這行
+        continue;  // Don't i++, let main section handle this line
       }
       structure.tocLines.push(line);
       i++;
       continue;
     }
 
-    // 檢測修訂歷史
+    // Detect revision history
     if (section === 'revision') {
       if (trimmed.startsWith('## 1') || trimmed === '---' || (trimmed.startsWith('## ') && !trimmed.toLowerCase().includes('revision') && !trimmed.includes('修訂'))) {
         if (trimmed === '---') {
@@ -1842,7 +1843,7 @@ function parseDocumentStructure(content, outputDir) {
           continue;
         }
         section = 'main';
-        continue;  // 不 i++，讓 main section 處理這行
+        continue;  // Don't i++, let main section handle this line
       }
       if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
         structure.revisionHistory.push(line);
@@ -1851,7 +1852,7 @@ function parseDocumentStructure(content, outputDir) {
       continue;
     }
 
-    // 主要內容
+    // Main content
     if (section === 'main') {
       structure.mainContent.push(line);
     }
@@ -1862,17 +1863,17 @@ function parseDocumentStructure(content, outputDir) {
 }
 
 /**
- * 建立封面頁元素
+ * Create cover page elements
  */
 function createCoverPage(coverInfo) {
   const elements = [];
 
-  // 空白間距
+  // Blank spacing
   for (let i = 0; i < 6; i++) {
     elements.push(new Paragraph({ children: [] }));
   }
 
-  // 主標題
+  // Main title
   elements.push(new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { after: 400 },
@@ -1884,7 +1885,7 @@ function createCoverPage(coverInfo) {
     })]
   }));
 
-  // 副標題
+  // Subtitle
   if (coverInfo.subtitle) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -1897,12 +1898,12 @@ function createCoverPage(coverInfo) {
     }));
   }
 
-  // 空白間距
+  // Blank spacing
   for (let i = 0; i < 4; i++) {
     elements.push(new Paragraph({ children: [] }));
   }
 
-  // 版本
+  // Version
   if (coverInfo.version) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -1911,7 +1912,7 @@ function createCoverPage(coverInfo) {
     }));
   }
 
-  // 作者
+  // Author
   if (coverInfo.author) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -1920,7 +1921,7 @@ function createCoverPage(coverInfo) {
     }));
   }
 
-  // 組織
+  // Organization
   if (coverInfo.organization) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -1929,7 +1930,7 @@ function createCoverPage(coverInfo) {
     }));
   }
 
-  // 日期
+  // Date
   if (coverInfo.date) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -1942,20 +1943,20 @@ function createCoverPage(coverInfo) {
 }
 
 /**
- * 建立目錄頁元素
- * 使用 Word 原生 TOC 功能，開啟文件後需按 F9 或右鍵「更新欄位」以顯示頁碼
+ * Create TOC page elements
+ * Uses Word native TOC feature, need to press F9 or right-click "Update Field" to show page numbers
  */
 function createTocPage() {
   const elements = [];
 
-  // 目錄標題
+  // TOC title
   elements.push(new Paragraph({
     heading: HeadingLevel.HEADING_1,
     spacing: { after: 300 },
     children: [new TextRun({ text: 'Table of Contents', bold: true, size: FONT_SIZE.H1, font: FONT_EN })]
   }));
 
-  // 使用 Word 原生目錄功能（包含頁碼）
+  // Use Word native TOC feature (includes page numbers)
   elements.push(new TableOfContents('Table of Contents', {
     hyperlink: true,
     headingStyleRange: '1-4',
@@ -1967,15 +1968,15 @@ function createTocPage() {
     ]
   }));
 
-  // 提示訊息
+  // Hint message
   elements.push(new Paragraph({
     spacing: { before: 400 },
     children: [new TextRun({
-      text: '※ 請在 Word 中按 F9 或右鍵選擇「更新欄位」以顯示目錄內容與頁碼',
+      text: 'Note: Press F9 in Word or right-click and select "Update Field" to display TOC content and page numbers',
       italics: true,
       size: FONT_SIZE.SMALL,
       color: '888888',
-      font: FONT_CN
+      font: FONT_EN
     })]
   }));
 
@@ -1983,7 +1984,7 @@ function createTocPage() {
 }
 
 /**
- * 建立修訂歷史頁
+ * Create revision history page
  */
 function createRevisionHistoryPage(revisionLines) {
   const elements = [];
@@ -2027,17 +2028,17 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
   const content = fs.readFileSync(inputPath, 'utf8');
   const outputDir = path.dirname(outputPath);
 
-  // 解析文件結構
+  // Parse document structure
   const structure = parseDocumentStructure(content, outputDir);
 
-  // 解析主要內容
+  // Parse main content
   const mainContentText = structure.mainContent.join('\n');
   const mainElements = parseMarkdown(mainContentText, outputDir).flat();
 
-  // 頁面邊距設定
+  // Page margin settings
   const pageMargins = { top: 1440, right: 1440, bottom: 1440, left: 1440 };
 
-  // 建立頁首頁尾
+  // Create header and footer
   const defaultHeader = new Header({
     children: [new Paragraph({
       alignment: AlignmentType.RIGHT,
@@ -2058,16 +2059,16 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
   });
 
   const doc = new Document({
-    features: { updateFields: true },  // 自動更新目錄
-    // 標題自動編號設定
-    // IEC 62304 文件結構：## → 1., ### → 1.1, #### → 1.1.1, ##### → 1.1.1.1
+    features: { updateFields: true },  // Auto-update TOC
+    // Heading auto-numbering settings
+    // IEC 62304 document structure: ## -> 1., ### -> 1.1, #### -> 1.1.1, ##### -> 1.1.1.1
     numbering: {
       config: [
         {
           reference: 'heading-numbering',
           levels: [
             {
-              level: 0,  // ## 主章節 → 1., 2., 3.
+              level: 0,  // ## Main section -> 1., 2., 3.
               format: LevelFormat.DECIMAL,
               text: '%1.',
               alignment: AlignmentType.START,
@@ -2078,7 +2079,7 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
               }
             },
             {
-              level: 1,  // ### 子章節 → 1.1, 1.2
+              level: 1,  // ### Subsection -> 1.1, 1.2
               format: LevelFormat.DECIMAL,
               text: '%1.%2',
               alignment: AlignmentType.START,
@@ -2089,7 +2090,7 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
               }
             },
             {
-              level: 2,  // #### → 1.1.1
+              level: 2,  // #### -> 1.1.1
               format: LevelFormat.DECIMAL,
               text: '%1.%2.%3',
               alignment: AlignmentType.START,
@@ -2100,7 +2101,7 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
               }
             },
             {
-              level: 3,  // ##### → 1.1.1.1
+              level: 3,  // ##### -> 1.1.1.1
               format: LevelFormat.DECIMAL,
               text: '%1.%2.%3.%4',
               alignment: AlignmentType.START,
@@ -2119,8 +2120,8 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
         document: {
           run: {
             font: {
-              ascii: FONT_EN,       // 英文字使用 Arial
-              eastAsia: FONT_CN,    // 中文字使用圓黑體
+              ascii: FONT_EN,       // English uses Arial
+              eastAsia: FONT_CN,    // Chinese uses Microsoft JhengHei
               hAnsi: FONT_EN,
               cs: FONT_EN
             },
@@ -2143,30 +2144,43 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
           paragraph: { spacing: { before: 200, after: 100 }, outlineLevel: 3 } },
         { id: 'Heading5', name: 'Heading 5', basedOn: 'Normal', next: 'Normal', quickFormat: true,
           run: { size: FONT_SIZE.H5, bold: true, font: { ascii: FONT_EN, eastAsia: FONT_CN, hAnsi: FONT_EN } },
-          paragraph: { spacing: { before: 160, after: 80 }, outlineLevel: 4 } }
+          paragraph: { spacing: { before: 160, after: 80 }, outlineLevel: 4 } },
+        // TOC styles - increase spacing between TOC entries
+        { id: 'Toc1', name: 'TOC 1', basedOn: 'Normal', next: 'Normal',
+          run: { size: FONT_SIZE.BODY, font: { ascii: FONT_EN, eastAsia: FONT_CN, hAnsi: FONT_EN } },
+          paragraph: { spacing: { before: 120, after: 60 } } },
+        { id: 'Toc2', name: 'TOC 2', basedOn: 'Normal', next: 'Normal',
+          run: { size: FONT_SIZE.BODY, font: { ascii: FONT_EN, eastAsia: FONT_CN, hAnsi: FONT_EN } },
+          paragraph: { spacing: { before: 80, after: 40 }, indent: { left: 240 } } },
+        { id: 'Toc3', name: 'TOC 3', basedOn: 'Normal', next: 'Normal',
+          run: { size: FONT_SIZE.BODY, font: { ascii: FONT_EN, eastAsia: FONT_CN, hAnsi: FONT_EN } },
+          paragraph: { spacing: { before: 60, after: 30 }, indent: { left: 480 } } },
+        { id: 'Toc4', name: 'TOC 4', basedOn: 'Normal', next: 'Normal',
+          run: { size: FONT_SIZE.BODY, font: { ascii: FONT_EN, eastAsia: FONT_CN, hAnsi: FONT_EN } },
+          paragraph: { spacing: { before: 40, after: 20 }, indent: { left: 720 } } }
       ]
     },
     sections: [
-      // Section 1: 封面頁 (無頁首頁尾)
+      // Section 1: Cover page (no header/footer)
       {
         properties: { page: { margin: pageMargins } },
         children: createCoverPage(structure.coverInfo)
       },
-      // Section 2: 目錄頁
+      // Section 2: TOC page
       {
         properties: { page: { margin: pageMargins } },
         headers: { default: defaultHeader },
         footers: { default: defaultFooter },
         children: createTocPage()
       },
-      // Section 3: 修訂歷史頁
+      // Section 3: Revision history page
       {
         properties: { page: { margin: pageMargins } },
         headers: { default: defaultHeader },
         footers: { default: defaultFooter },
         children: createRevisionHistoryPage(structure.revisionHistory)
       },
-      // Section 4: 主要內容
+      // Section 4: Main content
       {
         properties: { page: { margin: pageMargins } },
         headers: { default: defaultHeader },
@@ -2180,17 +2194,17 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
   fs.writeFileSync(outputPath, buffer);
   console.log(`Created ${outputPath} (${Math.round(buffer.length/1024)} KB)`);
 
-  // 清理 Mermaid 暫存檔案
+  // Clean up Mermaid temp files
   // cleanupMermaidTemp(outputDir);  // DEBUG
 }
 
 // ============================================
-// 命令列介面
+// Command Line Interface
 // ============================================
 
-// 使用方式: node md-to-docx.js <input.md> [output.docx]
-// 範例: node md-to-docx.js SRS-SomniLand-1.0.md
-// 範例: node md-to-docx.js SDD-Project.md SDD-Project-v1.docx
+// Usage: node md-to-docx.js <input.md> [output.docx]
+// Example: node md-to-docx.js SRS-SomniLand-1.0.md
+// Example: node md-to-docx.js SDD-Project.md SDD-Project-v1.docx
 
 const args = process.argv.slice(2);
 
