@@ -608,6 +608,150 @@ function getPngDimensions(buffer) {
 }
 
 /**
+ * Read JPEG image dimensions
+ * JPEG uses SOF0 marker (0xFF 0xC0) to store dimensions
+ */
+function getJpgDimensions(buffer) {
+  if (buffer.length < 2) return null;
+
+  // Check JPEG signature (0xFF 0xD8)
+  if (buffer[0] !== 0xFF || buffer[1] !== 0xD8) return null;
+
+  let offset = 2;
+  while (offset < buffer.length - 1) {
+    if (buffer[offset] !== 0xFF) {
+      offset++;
+      continue;
+    }
+
+    const marker = buffer[offset + 1];
+
+    // SOF0 (Start of Frame) markers: C0-C3, C5-C7, C9-CB, CD-CF
+    if ((marker >= 0xC0 && marker <= 0xC3) ||
+        (marker >= 0xC5 && marker <= 0xC7) ||
+        (marker >= 0xC9 && marker <= 0xCB) ||
+        (marker >= 0xCD && marker <= 0xCF)) {
+      // SOF structure: marker(2) + length(2) + precision(1) + height(2) + width(2)
+      if (offset + 9 <= buffer.length) {
+        const height = buffer.readUInt16BE(offset + 5);
+        const width = buffer.readUInt16BE(offset + 7);
+        return { width, height };
+      }
+    }
+
+    // Skip to next marker
+    if (offset + 3 < buffer.length) {
+      const length = buffer.readUInt16BE(offset + 2);
+      offset += 2 + length;
+    } else {
+      break;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Get image dimensions based on file extension
+ */
+function getImageDimensions(buffer, ext) {
+  ext = ext.toLowerCase();
+  if (ext === '.png') {
+    return getPngDimensions(buffer);
+  } else if (ext === '.jpg' || ext === '.jpeg') {
+    return getJpgDimensions(buffer);
+  }
+  return null;
+}
+
+/**
+ * Create local image paragraph from file path
+ * Supports PNG and JPEG formats
+ */
+function createLocalImage(imagePath, baseDir) {
+  // Resolve relative path
+  const fullPath = path.resolve(baseDir, imagePath);
+
+  if (!fs.existsSync(fullPath)) {
+    console.warn(`Image not found: ${fullPath}`);
+    return new Paragraph({
+      children: [new TextRun({ text: `[Image not found: ${imagePath}]`, italics: true, color: 'FF0000' })]
+    });
+  }
+
+  const imageBuffer = fs.readFileSync(fullPath);
+  const ext = path.extname(fullPath).toLowerCase();
+
+  // Determine image type
+  let imageType;
+  if (ext === '.png') {
+    imageType = 'png';
+  } else if (ext === '.jpg' || ext === '.jpeg') {
+    imageType = 'jpg';
+  } else {
+    console.warn(`Unsupported image format: ${ext}`);
+    return new Paragraph({
+      children: [new TextRun({ text: `[Unsupported image format: ${ext}]`, italics: true, color: 'FF0000' })]
+    });
+  }
+
+  // Read image dimensions
+  const dimensions = getImageDimensions(imageBuffer, ext);
+
+  let displayWidth, displayHeight;
+  const maxWidth = 500;  // Max width for UI screenshots
+  const maxHeight = 650; // Max height
+
+  if (dimensions) {
+    const { width, height } = dimensions;
+    const aspectRatio = width / height;
+
+    // Calculate scaled dimensions
+    if (width > maxWidth) {
+      displayWidth = maxWidth;
+      displayHeight = Math.round(maxWidth / aspectRatio);
+    } else {
+      displayWidth = width;
+      displayHeight = height;
+    }
+
+    // Scale if height exceeds limit
+    if (displayHeight > maxHeight) {
+      displayHeight = maxHeight;
+      displayWidth = Math.round(maxHeight * aspectRatio);
+    }
+
+    // Ensure minimum size
+    const minWidth = 200;
+    if (displayWidth < minWidth && width >= minWidth) {
+      displayWidth = minWidth;
+      displayHeight = Math.round(minWidth / aspectRatio);
+    }
+  } else {
+    // Default dimensions
+    displayWidth = 400;
+    displayHeight = 300;
+  }
+
+  console.log(`Embedding image: ${imagePath} (${displayWidth}x${displayHeight})`);
+
+  return new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 200, after: 200 },
+    children: [
+      new ImageRun({
+        data: imageBuffer,
+        transformation: {
+          width: displayWidth,
+          height: displayHeight
+        },
+        type: imageType
+      })
+    ]
+  });
+}
+
+/**
  * Parse viewBox or width/height from SVG content to get dimensions
  */
 function getSvgDimensions(svgContent) {
@@ -1225,15 +1369,28 @@ function parseMarkdown(content, outputDir = '.') {
     }
     // Heading 4 (#### )
     if (line.startsWith('#### ')) {
+      const headingText = line.substring(5);
+      // Screen Design sections always start on new page
+      const isScreenDesign = headingText.includes('Screen Design:') || headingText.includes('SCR-');
       // Check if heading is followed by requirement table or only empty lines, if so add page break to avoid orphan heading
-      const shouldPageBreak = shouldBreakBeforeHeading(lines, i);
-      elements.push(createHeading(line.substring(5), HeadingLevel.HEADING_4, shouldPageBreak, true));
+      const shouldPageBreak = isScreenDesign || shouldBreakBeforeHeading(lines, i);
+      elements.push(createHeading(headingText, HeadingLevel.HEADING_4, shouldPageBreak, true));
       i++;
       continue;
     }
     // Heading 5 (##### )
     if (line.startsWith('##### ')) {
       elements.push(createHeading(line.substring(6), HeadingLevel.HEADING_5, false, true));
+      i++;
+      continue;
+    }
+
+    // Markdown image syntax: ![alt](path)
+    const imageMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)\s*$/);
+    if (imageMatch) {
+      const altText = imageMatch[1];
+      const imagePath = imageMatch[2];
+      elements.push(createLocalImage(imagePath, outputDir));
       i++;
       continue;
     }
@@ -1539,6 +1696,11 @@ function createCodeBlock(content, lang = '') {
   const BG_EVEN = 'F5F5F5';  // Even rows: light gray
   const LINE_NUM_COLOR = '999999';  // Line number color: gray
 
+  // Fixed column widths (DXA units) to prevent Google Drive editing issues
+  // Total page width ~9360 DXA (6.5 inches)
+  const LINE_NUM_COL_WIDTH = 720;   // Fixed width ~0.5 inches for line numbers
+  const CODE_COL_WIDTH = 8640;      // Remaining width for code
+
   const lines = content.split('\n');
 
   // Create table row for each line (line number | code)
@@ -1551,19 +1713,24 @@ function createCodeBlock(content, lang = '') {
     const tokenizedRuns = tokenizeLine(line, lang, CODE_FONT_SIZE);
 
     return new TableRow({
+      tableHeader: false,
+      cantSplit: true,  // Prevent row from splitting across pages
       children: [
-        // Line number column
+        // Line number column - fixed width with explicit settings
         new TableCell({
-          width: { size: 600, type: WidthType.DXA },  // Fixed width ~0.4 inches
+          width: { size: LINE_NUM_COL_WIDTH, type: WidthType.DXA },
           shading: { fill: bgColor, type: ShadingType.CLEAR },
           verticalAlign: VerticalAlign.CENTER,
           margins: {
             top: 20, bottom: 20,
             left: 80, right: 80
           },
+          // Set text direction to LR_TB to ensure horizontal text flow
+          textDirection: 'lrTb',
           children: [new Paragraph({
             alignment: AlignmentType.RIGHT,
             spacing: { after: 0, line: CODE_LINE_HEIGHT, lineRule: 'exact' },
+            keepNext: true,
             children: [new TextRun({
               text: String(lineNum) + '.',
               font: FONT_CODE,
@@ -1572,16 +1739,20 @@ function createCodeBlock(content, lang = '') {
             })]
           })]
         }),
-        // Code column (with syntax highlighting)
+        // Code column (with syntax highlighting) - explicit width
         new TableCell({
+          width: { size: CODE_COL_WIDTH, type: WidthType.DXA },
           shading: { fill: bgColor, type: ShadingType.CLEAR },
           verticalAlign: VerticalAlign.CENTER,
           margins: {
             top: 20, bottom: 20,
             left: 120, right: 80
           },
+          // Set text direction to LR_TB to ensure horizontal text flow
+          textDirection: 'lrTb',
           children: [new Paragraph({
             spacing: { after: 0, line: CODE_LINE_HEIGHT, lineRule: 'exact' },
+            keepNext: true,
             children: tokenizedRuns
           })]
         })
@@ -1589,9 +1760,11 @@ function createCodeBlock(content, lang = '') {
     });
   });
 
-  // Create code table
+  // Create code table with explicit columnWidths and layout settings
   const codeTable = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: [LINE_NUM_COL_WIDTH, CODE_COL_WIDTH],  // Explicit column widths
+    layout: 'fixed',  // Fixed table layout prevents column resizing
     borders: {
       top: { style: BorderStyle.SINGLE, size: 4, color: 'DDDDDD' },
       bottom: { style: BorderStyle.SINGLE, size: 4, color: 'DDDDDD' },
