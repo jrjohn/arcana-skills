@@ -1,100 +1,100 @@
-# 畫面與需求對應表 (Screen-Requirement Mapping)
+# Screen and Requirement Mapping Table
 
-本文件定義如何建立畫面 (UI) 與需求 (SRS) 之間的追溯關係。
+This document defines how to create traceability relationships between screens (UI) and requirements (SRS).
 
-## 畫面編號規則
+## Screen Numbering Rules
 
-### 畫面 ID 格式
+### Screen ID Format
 
 ```
-SCR-{模組代碼}-{序號}
+SCR-{ModuleCode}-{Number}
 
-模組代碼:
-- AUTH: 認證模組 (Authentication)
-- HOME: 首頁模組 (Home/Dashboard)
-- PAT:  病患模組 (Patient)
-- CLN:  臨床模組 (Clinical)
-- RPT:  報表模組 (Report)
-- SET:  設定模組 (Settings)
-- COM:  共用元件 (Common)
+ModuleCode:
+- AUTH: Authentication Module
+- HOME: Home Module (Home/Dashboard)
+- PAT:  Patient Module
+- CLN:  Clinical Module
+- RPT:  Report Module
+- SET:  Settings Module
+- COM:  Common Component
 
-範例:
-- SCR-AUTH-001: 登入畫面
-- SCR-PAT-010:  病患列表
-- SCR-CLN-020:  用藥紀錄
+Example:
+- SCR-AUTH-001: Login Screen
+- SCR-PAT-010:  Patients List
+- SCR-CLN-020:  Medication Record
 ```
 
-## 對應表範本
+## Mapping Table Template
 
-### 畫面清單
+### Screen List
 
 ```markdown
-| 畫面 ID | 畫面名稱 | 模組 | 對應需求 | Figma | 狀態 |
+| Screen ID | Screen Name | Module | Corresponding Requirement | Figma | Status |
 |---------|----------|------|----------|-------|------|
-| SCR-AUTH-001 | 登入畫面 | AUTH | SRS-001, SRS-002 | [連結]() | ✅ |
-| SCR-AUTH-002 | 註冊畫面 | AUTH | SRS-003~005 | [連結]() | ✅ |
-| SCR-AUTH-003 | 忘記密碼 | AUTH | SRS-006 | [連結]() | 🔄 |
-| SCR-HOME-001 | 首頁 | HOME | SRS-010~015 | [連結]() | 📝 |
+| SCR-AUTH-001 | Login Screen | AUTH | SRS-001, SRS-002 | [Link]() | ✅ |
+| SCR-AUTH-002 | Register Screen | AUTH | SRS-003~005 | [Link]() | ✅ |
+| SCR-AUTH-003 | Forgot Password | AUTH | SRS-006 | [Link]() | 🔄 |
+| SCR-HOME-001 | Home | HOME | SRS-010~015 | [Link]() | 📝 |
 ```
 
-### 詳細對應表
+### Detailed Mapping Table
 
-針對每個畫面建立詳細對應：
+Create detailed mapping for each screen:
 
 ```markdown
-## SCR-AUTH-001 登入畫面
+## SCR-AUTH-001 Login Screen
 
-### 基本資訊
-- **畫面名稱:** 登入畫面 (Login Screen)
-- **模組:** Authentication
-- **Figma:** [連結](https://figma.com/...)
-- **設計版本:** v1.2
-- **最後更新:** 2024-01-15
+### Basic Information
+- **Screen Name:** Login Screen
+- **Module:** Authentication
+- **Figma:** [Link](https://figma.com/...)
+- **Design Version:** v1.2
+- **Last Update:** 2024-01-15
 
-### 需求追溯
+### Requirement Traceability
 
-| 需求編號 | 需求描述 | UI 元素 | 驗收標準 |
+| Requirement ID | Requirement Description | UI Element | Verification Standard |
 |----------|----------|---------|----------|
-| SRS-001 | 帳號密碼登入 | 帳號輸入框, 密碼輸入框, 登入按鈕 | AC1, AC2 |
-| SRS-002 | 記住帳號功能 | 記住我核取方塊 | AC1 |
-| SRS-003 | 生物辨識登入 | Face ID/指紋按鈕 | AC1, AC2 |
+| SRS-001 | Account Password Login | Account input field, Password input field, Login button | AC1, AC2 |
+| SRS-002 | Remember Account Function | Remember me checkbox | AC1 |
+| SRS-003 | Biometric Login | Face ID/Fingerprint button | AC1, AC2 |
 
-### UI 元素清單
+### UI Element List
 
-| 元素 ID | 元素類型 | 說明 | 對應需求 |
+| Element ID | Element Type | Description | Corresponding Requirement |
 |---------|----------|------|----------|
-| txt_account | TextField | 帳號輸入框 | SRS-001 |
-| txt_password | TextField | 密碼輸入框 | SRS-001 |
-| btn_login | Button | 登入按鈕 | SRS-001 |
-| chk_remember | Checkbox | 記住我 | SRS-002 |
-| btn_biometric | IconButton | 生物辨識 | SRS-003 |
-| lnk_forgot | TextLink | 忘記密碼連結 | SRS-006 |
+| txt_account | TextField | Account input field | SRS-001 |
+| txt_password | TextField | Password input field | SRS-001 |
+| btn_login | Button | Login button | SRS-001 |
+| chk_remember | Checkbox | Remember me | SRS-002 |
+| btn_biometric | IconButton | Biometric | SRS-003 |
+| lnk_forgot | TextLink | Forgot password link | SRS-006 |
 
-### 使用的資產
+### Used Assets
 
-| 資產類型 | 檔案名稱 | 路徑 |
+| Asset Type | File Name | Path |
 |----------|----------|------|
 | Icon | ic_visibility.svg | 03-assets/icons/svg/ |
 | Icon | ic_fingerprint.svg | 03-assets/icons/svg/ |
 | Icon | ic_face_id.svg | 03-assets/icons/svg/ |
 | Image | bg_login.png | 03-assets/images/source/ |
 
-### 畫面狀態
+### Screen States
 
-| 狀態 | 說明 | 截圖 |
+| State | Description | Screenshot |
 |------|------|------|
-| Default | 預設狀態 | [圖片]() |
-| Loading | 登入中 | [圖片]() |
-| Error | 登入失敗 | [圖片]() |
-| Biometric | 生物辨識提示 | [圖片]() |
+| Default | Default state | [Image]() |
+| Loading | Login in progress | [Image]() |
+| Error | Login failed | [Image]() |
+| Biometric | Biometric prompt | [Image]() |
 ```
 
-## 追溯矩陣整合
+## Traceability Matrix Integration
 
-### 與 RTM 的對應
+### RTM Mapping
 
 ```markdown
-需求追溯矩陣 (RTM) 擴展:
+Requirement Traceability Matrix (RTM) expansion:
 
 | SRS ID | SDD ID | SWD ID | Screen ID | STC ID | SVV ID |
 |--------|--------|--------|-----------|--------|--------|
@@ -103,16 +103,16 @@ SCR-{模組代碼}-{序號}
 | SRS-010 | SDD-010 | SWD-010 | SCR-HOME-001 | STC-010 | SVV-002 |
 ```
 
-### 完整追溯路徑
+### Complete Traceability Path
 
 ```
-SRS-001 (需求: 帳號密碼登入)
+SRS-001 (Requirement: Account Password Login)
     │
-    ├── SDD-001 (設計: 認證模組)
+    ├── SDD-001 (Design: Authentication Module)
     │       │
-    │       └── SWD-001 (詳細設計: AuthenticationService)
+    │       └── SWD-001 (Detailed Design: AuthenticationService)
     │
-    ├── SCR-AUTH-001 (畫面: 登入畫面)
+    ├── SCR-AUTH-001 (Screen: Login Screen)
     │       │
     │       ├── Figma Frame: "SCR-AUTH-001 - Login"
     │       │
@@ -125,70 +125,70 @@ SRS-001 (需求: 帳號密碼登入)
     │           ├── ic_visibility.svg
     │           └── bg_login.png
     │
-    └── STC-001 (測試: 登入功能測試)
+    └── STC-001 (Test: Login Function Test)
             │
-            └── SVV-001 (驗證: 認證模組驗證)
+            └── SVV-001 (Validation: Authentication Module Validation)
 ```
 
-## 資產與畫面對應
+## Asset and Screen Mapping
 
-### 資產使用矩陣
+### Asset Usage Matrix
 
-追蹤每個資產被哪些畫面使用：
+Track which screens use each asset:
 
 ```markdown
-| 資產名稱 | 類型 | 使用畫面 | 對應需求 |
+| Asset Name | Type | Used in Screens | Corresponding Requirement |
 |----------|------|----------|----------|
 | ic_home.svg | Icon | SCR-HOME-001, SCR-COM-001 | SRS-010 |
 | ic_patient.svg | Icon | SCR-PAT-001~010 | SRS-020~030 |
 | ic_alert_critical.svg | Icon | SCR-CLN-*, SCR-HOME-001 | SRS-040 |
 | bg_login.png | Image | SCR-AUTH-001 | SRS-001 |
-| app_icon.png | AppIcon | 全域 | - |
+| app_icon.png | AppIcon | All | - |
 ```
 
-### 元件使用矩陣
+### Component Usage Matrix
 
-追蹤共用元件的使用情況：
+Track common component usage:
 
 ```markdown
-| 元件名稱 | Figma Component | 使用畫面 | 說明 |
+| Component Name | Figma Component | Used in Screens | Description |
 |----------|-----------------|----------|------|
-| PatientCard | Card/Patient/Default | SCR-PAT-001, SCR-HOME-001 | 病患資訊卡片 |
-| AlertBanner | Alert/Critical/Default | SCR-CLN-*, SCR-HOME-001 | 危急值警示 |
-| VitalSign | Display/VitalSign | SCR-PAT-002, SCR-CLN-010 | 生命徵象顯示 |
+| PatientCard | Card/Patient/Default | SCR-PAT-001, SCR-HOME-001 | Patient information card |
+| AlertBanner | Alert/Critical/Default | SCR-CLN-*, SCR-HOME-001 | Critical value alert |
+| VitalSign | Display/VitalSign | SCR-PAT-002, SCR-CLN-010 | Vital signs display |
 ```
 
-## 醫療特定考量
+## Medical-Specific Considerations
 
-### 臨床安全相關畫面標記
+### Clinical Safety Related Screen Labels
 
 ```markdown
-| 畫面 ID | 安全等級 | 說明 | 特殊要求 |
+| Screen ID | Safety Level | Description | Special Requirements |
 |---------|----------|------|----------|
-| SCR-CLN-001 | ⚠️ High | 用藥畫面 | 雙重確認、大字體 |
-| SCR-CLN-010 | 🔴 Critical | 劑量計算 | 不可編輯結果、稽核紀錄 |
-| SCR-PAT-001 | ⚠️ High | 病患辨識 | 照片+文字雙確認 |
+| SCR-CLN-001 | ⚠️ High | Medication Screen | Double confirmation, large font |
+| SCR-CLN-010 | 🔴 Critical | Dosage Calculation | Non-editable results, audit log |
+| SCR-PAT-001 | ⚠️ High | Patient Identification | Photo + text double confirmation |
 ```
 
-### 無障礙需求標記
+### Accessibility Requirement Labels
 
 ```markdown
-| 畫面 ID | WCAG 等級 | 對比度 | 字體大小 | 備註 |
+| Screen ID | WCAG Level | Contrast Ratio | Font Size | Note |
 |---------|-----------|--------|----------|------|
-| SCR-AUTH-001 | AA | ✅ 7:1 | 16px+ | 支援放大 200% |
-| SCR-CLN-001 | AAA | ✅ 10:1 | 18px+ | 臨床環境需求 |
+| SCR-AUTH-001 | AA | ✅ 7:1 | 16px+ | Support zoom 200% |
+| SCR-CLN-001 | AAA | ✅ 10:1 | 18px+ | Clinical environment requirement |
 ```
 
-## 版本控制
+## Version Control
 
-### 畫面版本紀錄
+### Screen Version History
 
 ```markdown
-## SCR-AUTH-001 版本歷史
+## SCR-AUTH-001 Version History
 
-| 版本 | 日期 | 變更說明 | 影響需求 | 設計師 |
+| Version | Date | Change Description | Affected Requirement | Designer |
 |------|------|----------|----------|--------|
-| v1.0 | 2024-01-01 | 初版設計 | SRS-001 | @designer |
-| v1.1 | 2024-01-10 | 新增生物辨識 | SRS-003 | @designer |
-| v1.2 | 2024-01-15 | 調整按鈕位置 | - | @designer |
+| v1.0 | 2024-01-01 | Initial design | SRS-001 | @designer |
+| v1.1 | 2024-01-10 | Add biometric authentication | SRS-003 | @designer |
+| v1.2 | 2024-01-15 | Adjust button position | - | @designer |
 ```

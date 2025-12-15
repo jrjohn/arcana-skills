@@ -1,2 +1,25 @@
-medical-software-requirements-skill/.DS_Store
+# Dependencies
+node_modules/
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temp files
+*.tmp
+*.temp
+.cache/
+
+# Build outputs
+dist/
+build/

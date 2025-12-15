@@ -2,15 +2,15 @@
 /**
  * MD to DOCX Converter with Mermaid Support
  *
- * 功能：
- * 1. 解析 Markdown 文件
- * 2. 渲染 Mermaid 圖表為 PNG 圖片
- * 3. 產生包含圖片的 DOCX 文件
+ * Features:
+ * 1. Parse Markdown documents
+ * 2. Render Mermaid diagrams as PNG images
+ * 3. Generate DOCX documents with embedded images
  *
- * 使用方式：
+ * Usage:
  *   node md-to-docx-with-mermaid.js SDD-SomniLand-1.0.md
  *
- * 依賴：
+ * Dependencies:
  *   npm install docx
  *   npm install -g @mermaid-js/mermaid-cli
  */
@@ -32,14 +32,14 @@ const DRAWIO_OUTPUT_DIR = './drawio-diagrams';
 // Image settings - ULTRA HIGH RESOLUTION for print quality
 // Strategy: Render at VERY HIGH resolution, display at normal size in DOCX
 // This ensures sharp images even when zoomed to 400% or printed
-const MERMAID_WIDTH = 2400;      // PNG 渲染寬度 (超高解析度)
-const MERMAID_HEIGHT = 1800;     // PNG 渲染高度 (超高解析度)
-const MERMAID_SCALE = 3;         // 3x 縮放 (印刷品質)
-const DOCX_IMAGE_WIDTH = 480;    // DOCX 內顯示寬度 (A4 適合，約 6.5 吋)
-const DOCX_IMAGE_HEIGHT = 360;   // DOCX 內顯示高度 (自動依比例調整)
-const USE_SVG_DEFAULT = true;    // 同時產生 SVG (供後續編輯)
-// Note: docx npm library 目前不支援原生 SVG 嵌入
-// SVG 檔案供後續用 draw.io/Inkscape 編輯，DOCX 內嵌入高解析度 PNG
+const MERMAID_WIDTH = 2400;      // PNG render width (super high resolution)
+const MERMAID_HEIGHT = 1800;     // PNG render height (super high resolution)
+const MERMAID_SCALE = 3;         // 3x scaling (print quality)
+const DOCX_IMAGE_WIDTH = 480;    // DOCX display width (A4 suitable, approx 6.5 inches)
+const DOCX_IMAGE_HEIGHT = 360;   // DOCX display height (auto aspect ratio adjustment)
+const USE_SVG_DEFAULT = true;    // Also generate SVG (for future editing)
+// Note: docx npm library currently doesn't support native SVG embedding
+// SVG files for future editing with draw.io/Inkscape, DOCX embeds high resolution PNG
 
 // Styles
 const tableBorder = { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" };
@@ -314,7 +314,7 @@ function createImage(imagePath, caption = '') {
         return [new Paragraph({
             shading: { fill: "fff3cd", type: ShadingType.CLEAR },
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: `[圖片載入失敗: ${path.basename(imagePath)}]`, italics: true, color: "856404" })]
+            children: [new TextRun({ text: `[Image Load Failed: ${path.basename(imagePath)}]`, italics: true, color: "856404" })]
         })];
     }
 }
@@ -388,7 +388,7 @@ children.push(
         heading: HeadingLevel.TITLE,
         alignment: AlignmentType.CENTER,
         spacing: { before: 2000, after: 400 },
-        children: [new TextRun({ text: "軟體設計規格書 (SDD)", size: 56, bold: true, color: "1a365d" })]
+        children: [new TextRun({ text: "Software Design Specification (SDD)", size: 56, bold: true, color: "1a365d" })]
     }),
     new Paragraph({
         alignment: AlignmentType.CENTER,
@@ -397,13 +397,13 @@ children.push(
     new Paragraph({ spacing: { before: 400 } })
 );
 
-// Document Info from YAML front matter or defaults
-const docInfo = {
+// Document Information from YAML front matter or defaults
+const docInformation = {
     docId: 'SDD-SomniLand-1.0',
     project: 'SomniLand (iNAP Kids App)',
     version: '2.0',
     date: new Date().toISOString().split('T')[0],
-    status: '草稿',
+    status: 'Draft',
     classification: 'Class B'
 };
 
@@ -411,12 +411,12 @@ const docInfo = {
 children.push(new Table({
     columnWidths: [2500, 6500],
     rows: [
-        ["文件編號", docInfo.docId],
-        ["專案名稱", docInfo.project],
-        ["版本", docInfo.version],
-        ["日期", docInfo.date],
-        ["狀態", docInfo.status],
-        ["安全分類", docInfo.classification]
+        ["Document ID", docInformation.docId],
+        ["Project Name", docInformation.project],
+        ["Version", docInformation.version],
+        ["Date", docInformation.date],
+        ["Status", docInformation.status],
+        ["Safety Classification", docInformation.classification]
     ].map(([label, value]) => new TableRow({
         children: [
             new TableCell({
@@ -436,7 +436,7 @@ children.push(new Paragraph({ children: [new PageBreak()] }));
 
 // Add Table of Contents
 children.push(
-    new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("目錄")] }),
+    new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("Table of Contents")] }),
     new TableOfContents("Table of Contents", { hyperlink: true, headingStyleRange: "1-3" }),
     new Paragraph({ children: [new PageBreak()] })
 );
@@ -469,7 +469,7 @@ while (i < lines.length) {
             const diagramPath = path.join(MERMAID_OUTPUT_DIR, `diagram-${currentMermaidIndex}.png`);
 
             if (fs.existsSync(diagramPath)) {
-                const imageElements = createImage(diagramPath, `圖表 ${currentMermaidIndex + 1}`);
+                const imageElements = createImage(diagramPath, `Diagram ${currentMermaidIndex + 1}`);
                 children.push(...imageElements);
             } else {
                 // Fallback: show code block placeholder
@@ -477,7 +477,7 @@ while (i < lines.length) {
                     shading: { fill: "e2e8f0", type: ShadingType.CLEAR },
                     alignment: AlignmentType.CENTER,
                     spacing: { before: 100, after: 100 },
-                    children: [new TextRun({ text: `[Mermaid 圖表 ${currentMermaidIndex + 1}]`, italics: true, color: "4a5568" })]
+                    children: [new TextRun({ text: `[Mermaid Diagram ${currentMermaidIndex + 1}]`, italics: true, color: "4a5568" })]
                 }));
             }
 
@@ -632,7 +632,7 @@ children.push(
     new Paragraph({ spacing: { before: 600 } }),
     new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: "— 文件結束 —", italics: true, color: "666666" })]
+        children: [new TextRun({ text: "— End of Document —", italics: true, color: "666666" })]
     })
 );
 
@@ -679,7 +679,7 @@ const doc = new Document({
             default: new Header({
                 children: [new Paragraph({
                     alignment: AlignmentType.RIGHT,
-                    children: [new TextRun({ text: `${docInfo.docId} | v${docInfo.version}`, size: 18, color: "666666" })]
+                    children: [new TextRun({ text: `${docInformation.docId} | v${docInformation.version}`, size: 18, color: "666666" })]
                 })]
             })
         },

@@ -526,7 +526,7 @@ Placeholder views are **ONLY** allowed as a temporary navigation target during a
 ```swift
 // ❌ WRONG - Placeholder view left in production
 case .training:
-    PlaceholderView(title: "訓練課程") // FORBIDDEN!
+    PlaceholderView(title: "Training Courses") // FORBIDDEN!
 
 // ✅ CORRECT - Real view implementation
 case .training:
@@ -536,7 +536,7 @@ case .training:
 **Placeholder Check Command:**
 ```bash
 # This command MUST return empty for production-ready code
-grep -rn "PlaceholderView\|fatalError\|TODO.*implement\|即將推出\|Coming Soon" Sources/
+grep -rn "PlaceholderView\|fatalError\|TODO.*implement\|Coming Soon" Sources/
 ```
 
 #### Step 1: Analyze Spec Documents (SRS & SDD)
@@ -1125,8 +1125,8 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            Button("帳號資訊") { onNavigateToAccountInfo() }  // Does nothing if not wired!
-            Button("變更密碼") { onNavigateToChangePassword() }  // Does nothing if not wired!
+            Button("Account Info") { onNavigateToAccountInfo() }  // Does nothing if not wired!
+            Button("Change Password") { onNavigateToChangePassword() }  // Does nothing if not wired!
         }
     }
 }

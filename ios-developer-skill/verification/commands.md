@@ -118,7 +118,7 @@ grep -L "error\|Error" Sources/**/Views/*.swift 2>/dev/null | \
 head -5 && echo "(views may be missing error state)"
 
 # 14. Check for placeholder text
-grep -rn "TODO\|Coming Soon\|即將推出\|Placeholder" Sources/**/Views/ && \
+grep -rn "TODO\|Coming Soon\|Placeholder" Sources/**/Views/ && \
 echo "⚠️ Found placeholder text"
 ```
 

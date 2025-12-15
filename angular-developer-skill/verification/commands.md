@@ -126,7 +126,7 @@ grep -L "error\|Error" src/app/presentation/**/*.component.ts 2>/dev/null | \
 head -5 && echo "(components may be missing error state)"
 
 # 14. Check for placeholder text
-grep -rn "TODO\|Coming Soon\|即將推出\|Placeholder" src/app/presentation/ && \
+grep -rn "TODO\|Coming Soon\|Placeholder" src/app/presentation/ && \
 echo "⚠️ Found placeholder text"
 ```
 

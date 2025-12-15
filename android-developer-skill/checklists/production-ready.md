@@ -87,7 +87,7 @@ echo "3. Empty handlers..." && \
 (grep -rqn "onClick = { }" app/src/main/java/ && echo "❌ Empty handlers found" || echo "✅ No empty handlers") && \
 
 echo "4. Placeholder screens..." && \
-(grep -rqn "PlaceholderScreen\|Coming Soon\|即將推出" app/src/main/java/ && echo "❌ Placeholders found" || echo "✅ No placeholders") && \
+(grep -rqn "PlaceholderScreen\|Coming Soon" app/src/main/java/ && echo "❌ Placeholders found" || echo "✅ No placeholders") && \
 
 echo "5. Hardcoded secrets..." && \
 (grep -rqn "api_key.*=.*\"\|password.*=.*\"\|secret.*=.*\"" app/src/main/java/ && echo "❌ Hardcoded secrets found" || echo "✅ No hardcoded secrets") && \
