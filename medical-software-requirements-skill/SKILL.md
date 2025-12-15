@@ -691,8 +691,21 @@ DOCX 輸出的程式碼區塊具備以下特性：
 |------|------|
 | **行號顯示** | 左側顯示行號，方便定位程式碼位置 |
 | **斑馬紋背景** | 奇數行白色 (FFFFFF)，偶數行淺灰 (F5F5F5) |
-| **固定行高** | 12pt 行高，確保對齊整齊 |
+| **固定行高** | 14pt 行高，確保對齊整齊 |
 | **語法高亮** | 基於 VSCode Light+ 配色方案 |
+| **固定表格佈局** | 使用 `layout: fixed` 防止欄寬被重新調整 |
+| **明確欄寬設定** | 行號欄 720 DXA，程式碼欄 8640 DXA |
+| **文字方向鎖定** | `textDirection: lrTb` 確保水平文字流向 |
+
+> **⚠️ Google Drive 編輯兼容性說明**
+>
+> 當 DOCX 在 Google Drive 直接編輯後，程式碼區塊可能會出現垂直直行顯示問題。
+> 這是因為 Google Docs 對 Word 表格格式的兼容性限制。
+>
+> **解決方案：**
+> 1. 使用最新版 `md-to-docx.js` 重新產生 DOCX（已加入固定表格佈局）
+> 2. 或下載 DOCX 後用 Microsoft Word 編輯，避免使用 Google Docs
+> 3. 若需在線協作，建議編輯 MD 檔案後重新轉換
 
 #### 語法高亮色彩標準 (VSCode Light+ Theme)
 
@@ -1467,12 +1480,16 @@ node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SDD-Proj
 - ✅ **Peter Coad 四色原型**：Class Diagram 依 MI/Role/Thing/Description 分類著色
 - ✅ **狀態機顏色標準**：State Machine 依狀態類型著色 (初始/處理中/成功/失敗/警告)
 - ✅ **C4 Model 架構圖顏色**：Context/Container View 依 C4 官方色彩 (Person/System/Container)
+- ✅ **本地圖片嵌入** ⭐：支援 `![alt](./images/xxx.png)` 語法，自動嵌入 PNG/JPEG 圖片
+- ✅ **圖片尺寸自動調整**：讀取實際圖片尺寸，按比例縮放至最大寬度 500px
+- ✅ **Screen Design 自動分頁** ⭐：含 `Screen Design:` 或 `SCR-` 的標題自動從新頁開始
 
 **⚠️ 圖片格式強制規範：**
 | 圖片類型 | 格式 | 說明 |
 |---------|------|------|
 | Mermaid 圖表 | **SVG** (強制) | 向量格式，無限縮放不失真 |
-| UI 畫面設計 | **SVG** (優先) | 或 PNG @2x/@3x |
+| UI 畫面設計 | **PNG/JPEG** | 使用 `![alt](./images/xxx.png)` 語法嵌入 |
+| 本地圖片 | **PNG/JPEG** | 自動讀取尺寸、按比例縮放、置中顯示 |
 | 外部匯入圖片 | **SVG** (優先) | 或高解析度 PNG |
 
 **字型設定 (IEC 62304 可讀性優化)：**

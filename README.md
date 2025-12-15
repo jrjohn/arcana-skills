@@ -19,6 +19,12 @@ These skills provide Claude Code with comprehensive guidance for enterprise-grad
 | [nodejs-developer-skill](./nodejs-developer-skill/) | Node.js/Express | InversifyJS DI, gRPC (1.80x faster), Prisma ORM, Dual-Protocol |
 | [windows-developer-skill](./windows-developer-skill/) | Windows | WinUI 3, 18 Plugin Types, CRDT Sync, EF Core |
 
+### Documentation & Compliance Skills
+
+| Skill | Domain | Key Features |
+|-------|--------|--------------|
+| [medical-software-requirements-skill](./medical-software-requirements-skill/) | IEC 62304 | SRS/SDD/SWD/STP/STC/SVV/RTM, MD→DOCX Export, Design Psychology, Traceability Matrix |
+
 ## Architecture Principles
 
 All skills follow consistent enterprise architecture principles:
@@ -114,6 +120,11 @@ Create a gRPC service with Express REST fallback using InversifyJS dependency in
 **Windows Development:**
 ```
 Create a plugin module with MVVM UDF pattern and type-safe navigation
+```
+
+**Medical Software Requirements (IEC 62304):**
+```
+Help me create SRS document for a patient monitoring system with requirements traceability
 ```
 
 ## Skill Structure
