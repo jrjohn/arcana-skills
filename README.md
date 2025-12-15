@@ -4,13 +4,15 @@ Enterprise-grade development skills collection for Claude Code CLI.
 
 ## Quick Installation
 
-### Option 1: One-Line Install (Recommended)
+### macOS / Linux
+
+#### Option 1: One-Line Install (Recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.sh | bash
 ```
 
-### Option 2: Clone and Install
+#### Option 2: Clone and Install
 
 ```bash
 git clone https://github.com/jrjohn/arcana-skills.git
@@ -18,7 +20,7 @@ cd arcana-skills
 ./install.sh
 ```
 
-### Installation Options
+#### Installation Options
 
 ```bash
 # Interactive installation (select skills to install)
@@ -27,6 +29,62 @@ cd arcana-skills
 # Install all skills
 ./install.sh --all
 ```
+
+### Windows
+
+#### Option 1: PowerShell One-Line Install (Recommended)
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.ps1 | iex
+```
+
+#### Option 2: Clone and Install
+
+```powershell
+git clone https://github.com/jrjohn/arcana-skills.git
+cd arcana-skills
+.\install.ps1
+```
+
+#### Option 3: Batch File (Double-click)
+
+Download and double-click `install.bat`, or run from Command Prompt:
+
+```cmd
+git clone https://github.com/jrjohn/arcana-skills.git
+cd arcana-skills
+install.bat
+```
+
+#### Windows Installation Options
+
+```powershell
+# Interactive installation (select skills to install)
+.\install.ps1
+
+# Install all skills
+.\install.ps1 -All
+
+# Install to WSL2 (uses bash installer in WSL)
+.\install.ps1 -WSL
+
+# Install all skills to WSL2
+.\install.ps1 -WSL -All
+```
+
+### WSL2 (Windows Subsystem for Linux)
+
+If you prefer using WSL2, you can either:
+
+1. **From Windows PowerShell** - Use the `-WSL` flag:
+   ```powershell
+   .\install.ps1 -WSL
+   ```
+
+2. **From WSL2 Terminal** - Use the bash installer directly:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.sh | bash
+   ```
 
 ## Included Skills
 
@@ -51,6 +109,8 @@ cd arcana-skills
 
 ## Uninstallation
 
+### macOS / Linux
+
 ```bash
 # Interactive uninstall
 ./uninstall.sh
@@ -59,20 +119,38 @@ cd arcana-skills
 ./uninstall.sh --all
 ```
 
+### Windows
+
+```powershell
+# Manual uninstall - remove skills directory
+Remove-Item -Recurse -Force "$env:USERPROFILE\.claude\skills"
+```
+
 ## Manual Installation
 
 If you only want to install a specific skill, you can manually copy it:
+
+### macOS / Linux
 
 ```bash
 # Copy a single skill to Claude Code skills directory
 cp -r ios-developer-skill ~/.claude/skills/
 ```
 
+### Windows
+
+```powershell
+# Copy a single skill to Claude Code skills directory
+Copy-Item -Recurse ios-developer-skill "$env:USERPROFILE\.claude\skills\"
+```
+
 ## Directory Structure
 
 ```
 arcana-skills/
-├── install.sh                          # Installation script
+├── install.sh                          # Installation script (macOS/Linux)
+├── install.ps1                         # Installation script (Windows PowerShell)
+├── install.bat                         # Installation script (Windows Batch)
 ├── uninstall.sh                        # Uninstallation script
 ├── README.md                           # This file
 ├── ios-developer-skill/                # iOS Development Skill
@@ -96,7 +174,9 @@ arcana-skills/
 
 ## System Requirements
 
-- macOS / Linux / Windows (WSL)
+- **macOS / Linux**: Bash, Git
+- **Windows**: PowerShell 5.1+ or PowerShell Core, Git
+- **Windows (WSL2)**: WSL2 with Ubuntu or other Linux distribution
 - Git
 - Claude Code CLI (`npm install -g @anthropic-ai/claude-code`)
 - Node.js 18+ (required for some skills)
@@ -117,10 +197,20 @@ Use ios-developer-skill to help me create a new iOS project
 
 ## Update Skills
 
+### macOS / Linux
+
 ```bash
 cd arcana-skills
 git pull
 ./install.sh --all
+```
+
+### Windows
+
+```powershell
+cd arcana-skills
+git pull
+.\install.ps1 -All
 ```
 
 ## License
