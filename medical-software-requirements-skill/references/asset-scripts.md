@@ -1,14 +1,14 @@
-# 資產處理腳本
+# Asset Processing Scripts
 
-本文件包含用於處理設計資產的 Python 腳本。
+This document includes Python scripts used for processing design assets.
 
-## 環境準備
+## Environment Preparation
 
 ```bash
-# 安裝依賴
+# Install dependencies
 pip install Pillow cairosvg
 
-# 或使用 requirements.txt
+# Or use requirements.txt
 pip install -r requirements.txt
 ```
 
@@ -21,15 +21,15 @@ cairosvg>=2.7.0
 
 ---
 
-## App Icon 匯出腳本
+## App Icon Export Script
 
 ### app_icon_export.py
 
 ```python
 #!/usr/bin/env python3
 """
-App Icon 多尺寸匯出腳本
-用法: python app_icon_export.py <source_1024.png> <output_dir>
+App Icon multi-size export script
+Usage: python app_icon_export.py <source_1024.png> <output_dir>
 """
 
 from PIL import Image
@@ -37,7 +37,7 @@ import os
 import json
 import sys
 
-# 尺寸配置
+# Size configuration
 ANDROID_SIZES = {
     'mipmap-mdpi': 48,
     'mipmap-hdpi': 72,
@@ -81,12 +81,12 @@ IOS_CONTENTS = {
 
 
 def resize_image(img, size):
-    """高品質縮放圖片"""
+    """High quality image resizing"""
     return img.resize((size, size), Image.LANCZOS)
 
 
 def export_android(source_img, output_dir):
-    """匯出 Android 資源"""
+    """Export Android resources"""
     print("\n🤖 Android:")
     android_dir = os.path.join(output_dir, 'android')
 
@@ -108,12 +108,12 @@ def export_android(source_img, output_dir):
 
 
 def export_ios(source_img, output_dir):
-    """匯出 iOS 資源"""
+    """Export iOS resources"""
     print("\n🍎 iOS:")
     ios_dir = os.path.join(output_dir, 'ios', 'AppIcon.appiconset')
     os.makedirs(ios_dir, exist_ok=True)
 
-    # iOS 不支援透明背景
+    # iOS does not support transparent background
     if source_img.mode == 'RGBA':
         bg = Image.new('RGB', source_img.size, (255, 255, 255))
         bg.paste(source_img, mask=source_img.split()[3])
@@ -132,25 +132,25 @@ def export_ios(source_img, output_dir):
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python app_icon_export.py <source_image> [output_dir]")
+        print("Usage: python app_icon_export.py <source_image> [output_dir]")
         sys.exit(1)
 
     source_path = sys.argv[1]
     output_dir = sys.argv[2] if len(sys.argv) > 2 else './app-icons'
 
-    print(f"\n📱 App Icon 匯出工具")
-    print(f"來源: {source_path}")
-    print(f"輸出: {output_dir}")
+    print(f"\n📱 App Icon Export Tool")
+    print(f"Source: {source_path}")
+    print(f"Output: {output_dir}")
 
     img = Image.open(source_path)
     if img.size != (1024, 1024):
-        print(f"\n⚠️  調整來源圖片從 {img.size} 到 1024x1024")
+        print(f"\n⚠️  Adjusting source image from {img.size} to 1024x1024")
         img = resize_image(img, 1024)
 
     export_android(img, output_dir)
     export_ios(img, output_dir)
 
-    print(f"\n✅ 完成！")
+    print(f"\n✅ Complete!")
 
 
 if __name__ == '__main__':
@@ -159,22 +159,22 @@ if __name__ == '__main__':
 
 ---
 
-## 圖片多解析度匯出腳本
+## Image Multi-Resolution Export Script
 
 ### image_export.py
 
 ```python
 #!/usr/bin/env python3
 """
-圖片多解析度匯出腳本
-用法: python image_export.py <source_image> <output_dir> [base_size]
+Image multi-resolution export script
+Usage: python image_export.py <source_image> <output_dir> [base_size]
 """
 
 from PIL import Image
 import os
 import sys
 
-# Android 密度配置
+# Android density configuration
 ANDROID_DENSITIES = {
     'drawable-mdpi': 1.0,
     'drawable-hdpi': 1.5,
@@ -183,12 +183,12 @@ ANDROID_DENSITIES = {
     'drawable-xxxhdpi': 4.0,
 }
 
-# iOS scale 配置
+# iOS scale configuration
 IOS_SCALES = [1, 2, 3]
 
 
 def export_android(source_img, output_dir, base_name, base_size):
-    """匯出 Android 多密度圖片"""
+    """Export Android multi-density images"""
     print("\n🤖 Android:")
     android_dir = os.path.join(output_dir, 'android')
 
@@ -208,7 +208,7 @@ def export_android(source_img, output_dir, base_name, base_size):
 
 
 def export_ios(source_img, output_dir, base_name, base_size):
-    """匯出 iOS 多 scale 圖片"""
+    """Export iOS multi-scale images"""
     print("\n🍎 iOS:")
     ios_dir = os.path.join(output_dir, 'ios', 'Images.xcassets', f'{base_name}.imageset')
     os.makedirs(ios_dir, exist_ok=True)
@@ -249,8 +249,8 @@ def export_ios(source_img, output_dir, base_name, base_size):
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python image_export.py <source_image> [output_dir] [base_width] [base_height]")
-        print("範例: python image_export.py bg_login.png ./images 360 640")
+        print("Usage: python image_export.py <source_image> [output_dir] [base_width] [base_height]")
+        print("Example: python image_export.py bg_login.png ./images 360 640")
         sys.exit(1)
 
     source_path = sys.argv[1]
@@ -259,22 +259,22 @@ def main():
     img = Image.open(source_path)
     base_name = os.path.splitext(os.path.basename(source_path))[0]
 
-    # 使用提供的 base_size 或從圖片計算
+    # Use provided base_size or calculate from image
     if len(sys.argv) >= 5:
         base_size = (int(sys.argv[3]), int(sys.argv[4]))
     else:
-        # 假設來源是 3x 尺寸
+        # Assume source is 3x size
         base_size = (img.width // 3, img.height // 3)
 
-    print(f"\n🖼️  圖片匯出工具")
-    print(f"來源: {source_path} ({img.width}x{img.height})")
-    print(f"基準尺寸: {base_size[0]}x{base_size[1]}")
-    print(f"輸出: {output_dir}")
+    print(f"\n🖼️  Image Export Tool")
+    print(f"Source: {source_path} ({img.width}x{img.height})")
+    print(f"Base resolution size: {base_size[0]}x{base_size[1]}")
+    print(f"Output: {output_dir}")
 
     export_android(img, output_dir, base_name, base_size)
     export_ios(img, output_dir, base_name, base_size)
 
-    print(f"\n✅ 完成！")
+    print(f"\n✅ Complete!")
 
 
 if __name__ == '__main__':
@@ -283,15 +283,15 @@ if __name__ == '__main__':
 
 ---
 
-## SVG 轉 PNG 腳本
+## SVG to PNG Script
 
 ### svg_to_png.py
 
 ```python
 #!/usr/bin/env python3
 """
-SVG 轉 PNG 多尺寸腳本
-用法: python svg_to_png.py <source.svg> <output_dir> [sizes]
+SVG to PNG multi-size script
+Usage: python svg_to_png.py <source.svg> <output_dir> [sizes]
 """
 
 import cairosvg
@@ -300,7 +300,7 @@ import sys
 
 
 def svg_to_png(svg_path, output_dir, sizes):
-    """將 SVG 轉換為多尺寸 PNG"""
+    """Convert SVG to multi-size PNG"""
     base_name = os.path.splitext(os.path.basename(svg_path))[0]
     os.makedirs(output_dir, exist_ok=True)
 
@@ -317,22 +317,22 @@ def svg_to_png(svg_path, output_dir, sizes):
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python svg_to_png.py <source.svg> [output_dir] [size1,size2,...]")
-        print("範例: python svg_to_png.py ic_home.svg ./icons 24,48,72,96")
+        print("Usage: python svg_to_png.py <source.svg> [output_dir] [size1,size2,...]")
+        print("Example: python svg_to_png.py ic_home.svg ./icons 24,48,72,96")
         sys.exit(1)
 
     svg_path = sys.argv[1]
     output_dir = sys.argv[2] if len(sys.argv) > 2 else './icons'
     sizes = [int(s) for s in sys.argv[3].split(',')] if len(sys.argv) > 3 else [24, 48, 72, 96]
 
-    print(f"\n🔄 SVG to PNG 轉換")
-    print(f"來源: {svg_path}")
-    print(f"尺寸: {sizes}")
-    print(f"輸出: {output_dir}\n")
+    print(f"\n🔄 SVG to PNG Conversion")
+    print(f"Source: {svg_path}")
+    print(f"Sizes: {sizes}")
+    print(f"Output: {output_dir}\n")
 
     svg_to_png(svg_path, output_dir, sizes)
 
-    print(f"\n✅ 完成！")
+    print(f"\n✅ Complete!")
 
 
 if __name__ == '__main__':
@@ -341,15 +341,15 @@ if __name__ == '__main__':
 
 ---
 
-## 批次處理腳本
+## Batch Processing Script
 
 ### batch_export.py
 
 ```python
 #!/usr/bin/env python3
 """
-批次匯出資源腳本
-用法: python batch_export.py <source_dir> <output_dir>
+Batch export resources script
+Usage: python batch_export.py <source_dir> <output_dir>
 """
 
 import os
@@ -357,46 +357,46 @@ import sys
 from PIL import Image
 import json
 
-# 從上面的腳本引入函數
-# 這裡簡化為獨立實作
+# Import functions from above scripts
+# Simplified here for independent implementation
 
 
 def process_app_icon(source_path, output_dir):
-    """處理 App Icon"""
-    # ... (使用 app_icon_export.py 的邏輯)
+    """Process App Icon"""
+    # ... (Use logic from app_icon_export.py)
     pass
 
 
 def process_image(source_path, output_dir):
-    """處理一般圖片"""
-    # ... (使用 image_export.py 的邏輯)
+    """Process general image"""
+    # ... (Use logic from image_export.py)
     pass
 
 
 def main():
     if len(sys.argv) < 3:
-        print("用法: python batch_export.py <source_dir> <output_dir>")
+        print("Usage: python batch_export.py <source_dir> <output_dir>")
         sys.exit(1)
 
     source_dir = sys.argv[1]
     output_dir = sys.argv[2]
 
-    print(f"\n📦 批次匯出工具")
-    print(f"來源目錄: {source_dir}")
-    print(f"輸出目錄: {output_dir}\n")
+    print(f"\n📦 Batch Export Tool")
+    print(f"Source directory: {source_dir}")
+    print(f"Output directory: {output_dir}\n")
 
-    # 處理所有圖片
+    # Process all images
     for filename in os.listdir(source_dir):
         if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
             source_path = os.path.join(source_dir, filename)
-            print(f"處理: {filename}")
+            print(f"Processing: {filename}")
 
             if 'app-icon' in filename.lower() or 'appicon' in filename.lower():
                 process_app_icon(source_path, output_dir)
             else:
                 process_image(source_path, output_dir)
 
-    print(f"\n✅ 批次處理完成！")
+    print(f"\n✅ Batch processing complete!")
 
 
 if __name__ == '__main__':
@@ -405,39 +405,39 @@ if __name__ == '__main__':
 
 ---
 
-## 使用範例
+## Usage Examples
 
-### 1. App Icon 匯出
+### 1. App Icon Export
 
 ```bash
-# 從 1024x1024 原圖產生所有尺寸
+# Generate all sizes from 1024x1024 source image
 python app_icon_export.py ./source/app-icon-1024.png ./03-assets/app-icons/
 ```
 
-### 2. 圖片匯出
+### 2. Image Export
 
 ```bash
-# 從 @3x 圖片產生所有解析度
+# Generate all resolutions from @3x image
 python image_export.py ./source/bg_login@3x.png ./03-assets/images/ 360 640
 ```
 
-### 3. SVG 轉 PNG
+### 3. SVG to PNG
 
 ```bash
-# 將 SVG 轉換為多尺寸 PNG
+# Convert SVG to multi-size PNG
 python svg_to_png.py ./source/ic_home.svg ./03-assets/icons/ 24,48,72,96
 ```
 
-### 4. 批次處理
+### 4. Batch Processing
 
 ```bash
-# 批次處理整個資料夾
+# Batch process a folder
 python batch_export.py ./source/ ./03-assets/
 ```
 
 ---
 
-## 整合到專案
+## Integration into Project
 
 ### Makefile
 

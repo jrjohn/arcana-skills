@@ -506,7 +506,7 @@ Placeholder pages are **ONLY** allowed as a temporary navigation target during a
 ```csharp
 // ❌ WRONG - Placeholder page left in production
 case Route.Training:
-    _frame.Navigate(typeof(PlaceholderPage), "訓練課程"); // FORBIDDEN!
+    _frame.Navigate(typeof(PlaceholderPage), "Training Course"); // FORBIDDEN!
     break;
 
 // ✅ CORRECT - Real page implementation

@@ -1,71 +1,71 @@
-# 醫療軟體專案目錄結構
+# Medical Software Project Directory Structure
 
-此結構確保需求文件 (SRS) 與設計資產 (UI/UX) 和開發資產 (Android/iOS) 能完整串連追溯。
+This structure ensures Requirement Documents (SRS) and Design Assets (UI/UX) and Development Assets (Android/iOS) can achieve complete traceability.
 
-## 完整目錄結構
+## Complete Directory Structure
 
 ```
 {project-name}/
 │
-├── 01-requirements/                    # 需求文件 (第一階段產出)
-│   ├── SRS/                           # 軟體需求規格書
+├── 01-requirements/                    # Requirement Documents (Phase 1 Output)
+│   ├── SRS/                           # Software Requirements Specification
 │   │   ├── SRS-v1.0.md
-│   │   └── attachments/               # SRS 附件 (流程圖、Wireframe)
-│   ├── interviews/                    # 訪談紀錄
+│   │   └── attachments/               # SRS Attachments (Flow diagrams, Wireframes)
+│   ├── interviews/                    # Interview Records
 │   │   ├── 2024-01-15-stakeholder-A.md
 │   │   └── 2024-01-16-clinical-team.md
-│   └── analysis/                      # 分析文件
+│   └── analysis/                      # Analysis Documents
 │       ├── stakeholder-analysis.md
-│       ├── risk-analysis.md           # ISO 14971 風險分析
-│       └── safety-classification.md   # IEC 62304 安全分類
+│       ├── risk-analysis.md           # ISO 14971 Risk Analysis
+│       └── safety-classification.md   # IEC 62304 Safety Classification
 │
-├── 02-design/                         # 設計文件 (第二階段產出)
-│   ├── SDD/                           # 軟體設計規格書
+├── 02-design/                         # Design Documents (Phase 2 Output)
+│   ├── SDD/                           # Software Design Specification
 │   │   └── SDD-v1.0.md
-│   ├── SWD/                           # 軟體詳細設計書
+│   ├── SWD/                           # Software Detailed Design
 │   │   └── SWD-v1.0.md
-│   ├── architecture/                  # 架構設計
+│   ├── architecture/                  # Architecture Design
 │   │   ├── system-architecture.md
 │   │   ├── data-model.md
 │   │   └── api-design.md
-│   └── ui-ux/                         # UI/UX 設計
-│       ├── design-system.md           # 設計系統說明
-│       ├── figma-links.md             # Figma 連結清單
-│       └── screen-mapping.md          # 畫面與需求對應表
+│   └── ui-ux/                         # UI/UX Design
+│       ├── design-system.md           # Design System Description
+│       ├── figma-links.md             # Figma Link List
+│       └── screen-mapping.md          # Screen and Requirement Mapping Table
 │
-├── 03-assets/                         # 設計資產 (與 Figma 同步)
+├── 03-assets/                         # Design Assets (with Figma Synchronization)
 │   │
-│   ├── design-tokens/                 # 設計 Token (從 Figma 匯出)
-│   │   ├── colors.json                # 色彩定義
-│   │   ├── typography.json            # 字型定義
-│   │   ├── spacing.json               # 間距定義
-│   │   └── shadows.json               # 陰影定義
+│   ├── design-tokens/                 # Design Tokens (Exported from Figma)
+│   │   ├── colors.json                # Color Definitions
+│   │   ├── typography.json            # Font Definitions
+│   │   ├── spacing.json               # Spacing Definitions
+│   │   └── shadows.json               # Shadow Definitions
 │   │
-│   ├── icons/                         # 圖標資源
-│   │   ├── svg/                       # 原始 SVG (設計用)
+│   ├── icons/                         # Icon Resources
+│   │   ├── svg/                       # Original SVG (for Design)
 │   │   │   ├── ic_home.svg
 │   │   │   ├── ic_patient.svg
 │   │   │   └── ic_alert.svg
-│   │   ├── android/                   # Android 格式
+│   │   ├── android/                   # Android Format
 │   │   │   └── drawable/
 │   │   │       ├── ic_home.xml        # Vector Drawable
 │   │   │       └── ic_patient.xml
-│   │   └── ios/                       # iOS 格式
+│   │   └── ios/                       # iOS Format
 │   │       └── Icons.xcassets/
 │   │           ├── ic_home.imageset/
 │   │           └── ic_patient.imageset/
 │   │
-│   ├── app-icons/                     # App 圖標
-│   │   ├── source/                    # 原始設計檔
-│   │   │   └── app-icon-1024.png      # 1024x1024 原圖
-│   │   ├── android/                   # Android 各尺寸
+│   ├── app-icons/                     # App Icons
+│   │   ├── source/                    # Original Design Files
+│   │   │   └── app-icon-1024.png      # 1024x1024 Original
+│   │   ├── android/                   # Android All Sizes
 │   │   │   ├── mipmap-mdpi/           # 48x48
 │   │   │   ├── mipmap-hdpi/           # 72x72
 │   │   │   ├── mipmap-xhdpi/          # 96x96
 │   │   │   ├── mipmap-xxhdpi/         # 144x144
 │   │   │   ├── mipmap-xxxhdpi/        # 192x192
 │   │   │   └── playstore-icon.png     # 512x512 (Play Store)
-│   │   └── ios/                       # iOS 各尺寸
+│   │   └── ios/                       # iOS All Sizes
 │   │       └── AppIcon.appiconset/
 │   │           ├── Contents.json
 │   │           ├── Icon-20@2x.png     # 40x40
@@ -78,60 +78,60 @@
 │   │           ├── Icon-60@3x.png     # 180x180
 │   │           └── Icon-1024.png      # 1024x1024 (App Store)
 │   │
-│   ├── images/                        # 圖片資源
-│   │   ├── source/                    # 原始設計檔
-│   │   ├── android/                   # Android 格式
+│   ├── images/                        # Image Resources
+│   │   ├── source/                    # Original Design Files
+│   │   ├── android/                   # Android Format
 │   │   │   ├── drawable-mdpi/
 │   │   │   ├── drawable-hdpi/
 │   │   │   ├── drawable-xhdpi/
 │   │   │   ├── drawable-xxhdpi/
 │   │   │   └── drawable-xxxhdpi/
-│   │   └── ios/                       # iOS 格式
+│   │   └── ios/                       # iOS Format
 │   │       └── Images.xcassets/
 │   │
-│   ├── splash/                        # 啟動畫面
+│   ├── splash/                        # Splash Screen
 │   │   ├── source/
 │   │   ├── android/
 │   │   └── ios/
 │   │
-│   └── screenshots/                   # 螢幕截圖 (用於文件/商店)
+│   └── screenshots/                   # Screenshots (for Documents/Store)
 │       ├── android/
 │       └── ios/
 │
-├── 04-testing/                        # 測試文件
-│   ├── STP/                           # 軟體測試計畫
+├── 04-testing/                        # Test Documents
+│   ├── STP/                           # Software Test Plan
 │   │   └── STP-v1.0.md
-│   ├── STC/                           # 軟體測試案例
+│   ├── STC/                           # Software Test Cases
 │   │   └── STC-v1.0.md
-│   └── test-reports/                  # 測試報告
+│   └── test-reports/                  # Test Reports
 │
-├── 05-validation/                     # 驗證文件
-│   ├── SVV/                           # 軟體驗證與確認
+├── 05-validation/                     # Validation Documents
+│   ├── SVV/                           # Software Verification & Validation
 │   │   └── SVV-v1.0.md
-│   └── RTM/                           # 需求追溯矩陣
+│   └── RTM/                           # Requirement Traceability Matrix
 │       └── RTM-v1.0.md
 │
-├── 06-regulatory/                     # 法規文件
-│   ├── risk-management/               # ISO 14971 風險管理
-│   ├── cybersecurity/                 # 網路安全文件
-│   └── submissions/                   # 送審文件
+├── 06-regulatory/                     # Regulatory Documents
+│   ├── risk-management/               # ISO 14971 Risk Management
+│   ├── cybersecurity/                 # Cybersecurity Documents
+│   └── submissions/                   # Submission Documents
 │
-└── _config/                           # 專案設定
-    ├── figma-config.md                # Figma 專案設定
-    ├── asset-export-guide.md          # 資產匯出指南
-    └── naming-conventions.md          # 命名規範
+└── _config/                           # Project Configuration
+    ├── figma-config.md                # Figma Project Configuration
+    ├── asset-export-guide.md          # Asset Export Guide
+    └── naming-conventions.md          # Naming Conventions
 ```
 
-## 需求與資產追溯對應
+## Requirement and Asset Traceability Mapping
 
-### 追溯關係圖
+### Traceability Relationship Diagram
 
 ```
-SRS-001 (需求)
+SRS-001 (Requirement)
     │
-    ├──→ SDD-001 (設計)
+    ├──→ SDD-001 (Design)
     │        │
-    │        └──→ UI Screen: SCR-001 (畫面)
+    │        └──→ UI Screen: SCR-001 (Screen)
     │                  │
     │                  ├──→ Figma Frame: "Login Screen"
     │                  │
@@ -140,51 +140,51 @@ SRS-001 (需求)
     │                        ├── images/bg_login.png
     │                        └── design-tokens/colors.json
     │
-    └──→ STC-001 (測試)
+    └──→ STC-001 (Test)
              │
              └──→ Screenshots: login_success.png
 ```
 
-### 畫面與需求對應表範例
+### Screen and Requirement Mapping Table Example
 
-| 畫面 ID | 畫面名稱 | 對應需求 | Figma Frame | 相關資產 |
+| Screen ID | Screen Name | Related Requirements | Figma Frame | Related Assets |
 |---------|----------|----------|-------------|----------|
-| SCR-001 | 登入畫面 | SRS-001, SRS-002 | [Login Screen](figma-link) | ic_login, bg_login |
-| SCR-002 | 首頁 | SRS-010~015 | [Home Dashboard](figma-link) | ic_home, ic_patient |
-| SCR-003 | 病患資料 | SRS-020~025 | [Patient Detail](figma-link) | ic_patient, ic_alert |
+| SCR-001 | Login Screen | SRS-001, SRS-002 | [Login Screen](figma-link) | ic_login, bg_login |
+| SCR-002 | Home Dashboard | SRS-010~015 | [Home Dashboard](figma-link) | ic_home, ic_patient |
+| SCR-003 | Patient Data | SRS-020~025 | [Patient Detail](figma-link) | ic_patient, ic_alert |
 
-## 命名規範
+## Naming Conventions
 
-### 文件命名
+### Document Naming
 
 ```
-{文件類型}-v{版本號}.md
+{DocumentType}-v{Version}.md
 
-範例:
+Example:
 - SRS-v1.0.md
-- SRS-v1.1.md (小改版)
-- SRS-v2.0.md (大改版)
+- SRS-v1.1.md (minor version)
+- SRS-v2.0.md (major version)
 ```
 
-### 資產命名
+### Asset Naming
 
 ```
-{類型}_{描述}_{狀態}.{格式}
+{Type}_{Description}_{Status}.{Format}
 
-類型:
-- ic_ : 圖標 (icon)
-- bg_ : 背景 (background)
-- img_: 圖片 (image)
-- btn_: 按鈕 (button)
-- logo_: 標誌
+Type:
+- ic_ : Icon
+- bg_ : Background
+- img_: Image
+- btn_: Button
+- logo_: Logo
 
-狀態 (可選):
+Status (Optional):
 - _normal
 - _pressed
 - _disabled
 - _selected
 
-範例:
+Example:
 - ic_home_normal.svg
 - btn_submit_pressed.png
 - bg_login.png
@@ -193,28 +193,28 @@ SRS-001 (需求)
 ### Figma 命名
 
 ```
-頁面: {模組名稱}
-Frame: {畫面ID} - {畫面名稱}
-Component: {類型}/{名稱}/{狀態}
+Page: {ModuleName}
+Frame: {ScreenID} - {Screen Name}
+Component: {Type}/{Name}/{Status}
 
-範例:
-頁面: Authentication
+Example:
+Page: Authentication
 Frame: SCR-001 - Login Screen
 Component: Button/Primary/Normal
 ```
 
 ---
 
-## Android / iOS 資產尺寸規格
+## Android / iOS Asset Size Specifications
 
-詳細尺寸規格請參考 [references/asset-specifications.md](../../references/asset-specifications.md)
+For detailed size specifications, please refer to [references/asset-specifications.md](../../references/asset-specifications.md)
 
-### 快速參考
+### Quick Reference
 
-#### App Icon 尺寸
+#### App Icon Sizes
 
 **Android (mipmap):**
-| 密度 | 目錄 | 尺寸 |
+| Density | Directory | Size |
 |------|------|------|
 | mdpi | `mipmap-mdpi/` | 48 × 48 |
 | hdpi | `mipmap-hdpi/` | 72 × 72 |
@@ -224,7 +224,7 @@ Component: Button/Primary/Normal
 | Play Store | - | 512 × 512 |
 
 **iOS (AppIcon.appiconset):**
-| 用途 | @2x | @3x |
+| Purpose | @2x | @3x |
 |------|-----|-----|
 | Notification (20pt) | 40×40 | 60×60 |
 | Settings (29pt) | 58×58 | 87×87 |
@@ -232,26 +232,26 @@ Component: Button/Primary/Normal
 | App (60pt) | 120×120 | 180×180 |
 | App Store | 1024×1024 | - |
 
-#### Icons 尺寸
+#### Icon Sizes
 
-**Android：推薦使用 Vector Drawable (.xml)**
-- 從 SVG 轉換，無需多解析度
+**Android: Recommend Using Vector Drawable (.xml)**
+- Converted from SVG, no need for multiple resolutions
 
-**iOS：推薦使用 PDF**
-- 單一 PDF，系統自動縮放
+**iOS: Recommend Using PDF**
+- Single PDF, system auto-scales
 
-若使用 PNG：
-| 密度/Scale | Android | iOS |
+If Using PNG:
+| Density/Scale | Android | iOS |
 |------------|---------|-----|
 | 1x / mdpi | 24×24 | 22×22 |
 | 2x / xhdpi / @2x | 48×48 | 44×44 |
 | 3x / xxhdpi / @3x | 72×72 | 66×66 |
 | 4x / xxxhdpi | 96×96 | - |
 
-#### Images 尺寸
+#### Image Sizes
 
 **Android (drawable):**
-| 密度 | 比例 | 範例 (100pt 設計) |
+| Density | Ratio | Example (100pt Design) |
 |------|------|-------------------|
 | mdpi | 1x | 100×100 px |
 | hdpi | 1.5x | 150×150 px |
@@ -260,26 +260,26 @@ Component: Button/Primary/Normal
 | xxxhdpi | 4x | 400×400 px |
 
 **iOS (xcassets):**
-| Scale | 範例 (100pt 設計) |
+| Scale | Example (100pt Design) |
 |-------|-------------------|
-| @1x | 100×100 px (可省略) |
+| @1x | 100×100 px (Can Omit) |
 | @2x | 200×200 px |
 | @3x | 300×300 px |
 
 ---
 
-## 資產目錄詳細結構
+## Asset Directory Detailed Structure
 
 ```
 03-assets/
 │
-├── design-tokens/                      # 設計 Token
+├── design-tokens/                      # Design Tokens
 │   ├── colors.json
 │   ├── typography.json
 │   └── spacing.json
 │
-├── icons/                              # 圖標
-│   ├── svg/                            # 原始 SVG
+├── icons/                              # Icons
+│   ├── svg/                            # Original SVG
 │   │   ├── ic_home.svg
 │   │   └── ic_patient.svg
 │   │
@@ -292,10 +292,10 @@ Component: Button/Primary/Normal
 │       └── Icons.xcassets/
 │           ├── ic_home.imageset/
 │           │   ├── Contents.json
-│           │   └── ic_home.pdf         # 或 PNG @1x/@2x/@3x
+│           │   └── ic_home.pdf         # or PNG @1x/@2x/@3x
 │           └── ic_patient.imageset/
 │
-├── app-icons/                          # App 圖標
+├── app-icons/                          # App Icons
 │   ├── source/
 │   │   └── app-icon-1024.png
 │   │
@@ -326,7 +326,7 @@ Component: Button/Primary/Normal
 │           ├── Icon-60@3x.png          # 180×180
 │           └── Icon-1024.png           # 1024×1024
 │
-├── images/                             # 圖片
+├── images/                             # Images
 │   ├── source/
 │   │   └── bg_login.png
 │   │
@@ -346,12 +346,12 @@ Component: Button/Primary/Normal
 │       └── Images.xcassets/
 │           └── bg_login.imageset/
 │               ├── Contents.json
-│               ├── bg_login.png        # @1x (可省略)
+│               ├── bg_login.png        # @1x (Can Omit)
 │               ├── bg_login@2x.png     # @2x
 │               └── bg_login@3x.png     # @3x
 │
-└── splash/                             # 啟動畫面
+└── splash/                             # Splash Screen
     ├── source/
-    ├── android/                        # 建議用 Splash Screen API
-    └── ios/                            # 建議用 LaunchScreen.storyboard
+    ├── android/                        # Recommend Using Splash Screen API
+    └── ios/                            # Recommend Using LaunchScreen.storyboard
 ```

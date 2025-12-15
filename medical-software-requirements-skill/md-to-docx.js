@@ -10,7 +10,7 @@ const crypto = require('crypto');
 // ============================================
 // Font Settings - Chinese uses Microsoft JhengHei, English uses Arial
 // ============================================
-const FONT_CN = '微軟正黑體';  // Chinese font (Traditional/Simplified Chinese)
+const FONT_CN = 'Microsoft JhengHei';  // Chinese font (Traditional/Simplified Chinese)
 const FONT_EN = 'Arial';       // English font
 const FONT_CODE = 'Consolas';  // Code font (monospace, better readability)
 
@@ -30,9 +30,9 @@ const FONT_SIZE = {
 };
 
 /**
- * Check if text contains Chinese characters
+ * Check if text Include Chinese characters
  */
-function containsChinese(text) {
+function IncludeChinese(text) {
   return /[\u4e00-\u9fff]/.test(text);
 }
 
@@ -440,7 +440,7 @@ function postProcessMutoolSvg(svgContent) {
     const textX = e;
     const textY = f;
 
-    // Check if this is a background rectangle (large white box) - scale > 0.1 and contains M0 0H pattern
+    // Check if this is a background rectangle (large white box) - scale > 0.1 and Include M0 0H pattern
     if (Math.abs(a) > 0.1 && attrs.includes('d="M0 0H')) {
       return fullMatch; // Keep background rectangle as white
     }
@@ -594,7 +594,7 @@ function renderMermaidToPng(mermaidCode, outputDir) {
 
 /**
  * Read PNG image dimensions
- * PNG file format: first 8 bytes are signature, IHDR chunk contains width/height info
+ * PNG file format: first 8 bytes are signature, IHDR chunk Include width/height info
  */
 function getPngDimensions(buffer) {
   // PNG signature: 89 50 4E 47 0D 0A 1A 0A
@@ -937,7 +937,7 @@ function cleanupMermaidTemp(outputDir) {
  *   - #### REQ-FUNC-001: User Login (new format, colon separated)
  */
 function isRequirementHeading(line) {
-  // Support SRS/SWD/SDD/STC/REQ prefix, 3-5 # symbols
+  // Support SRS/SWD/SDD/STC/REQ Prefix, 3-5 # symbols
   return line.match(/^#{3,5}\s+(SRS|SWD|SDD|STC|REQ)-[A-Z]+-\d+/);
 }
 
@@ -980,7 +980,7 @@ function parseRequirementBlock(lines, startIndex) {
     rationale: '',        // Rationale (new format)
     priority: '',
     safetyClass: '',
-    verificationMethod: '',
+    VerificationMethod: '',
     acceptanceCriteria: [],
     otherFields: {}
   };
@@ -1005,19 +1005,19 @@ function parseRequirementBlock(lines, startIndex) {
       const fieldValue = fieldMatch[2].trim();
 
       // Chinese fields
-      if (fieldName === '描述') {
+      if (fieldName === 'Description') {
         requirement.description = fieldValue;
         currentField = 'description';
         inAcceptanceCriteria = false;
-      } else if (fieldName === '優先級') {
+      } else if (fieldName === 'Prioritylevel') {
         requirement.priority = fieldValue;
         currentField = 'priority';
         inAcceptanceCriteria = false;
-      } else if (fieldName === '安全分類') {
+      } else if (fieldName === 'Safety Classification') {
         requirement.safetyClass = fieldValue;
         currentField = 'safetyClass';
         inAcceptanceCriteria = false;
-      } else if (fieldName === '驗收標準') {
+      } else if (fieldName === 'Validation Standard') {
         inAcceptanceCriteria = true;
         currentField = 'acceptanceCriteria';
       }
@@ -1034,8 +1034,8 @@ function parseRequirementBlock(lines, startIndex) {
         inAcceptanceCriteria = true;
         currentField = 'acceptanceCriteria';
       } else if (fieldName === 'Verification Method') {
-        requirement.verificationMethod = fieldValue;
-        currentField = 'verificationMethod';
+        requirement.VerificationMethod = fieldValue;
+        currentField = 'VerificationMethod';
         inAcceptanceCriteria = false;
       } else {
         requirement.otherFields[fieldName] = fieldValue;
@@ -1110,17 +1110,17 @@ function createRequirementTable(req) {
 
   // Old format field (Description)
   if (req.description) {
-    rows.push(createFieldRow('描述', req.description, labelWidth, valueWidth, cellBorders));
+    rows.push(createFieldRow('Description', req.description, labelWidth, valueWidth, cellBorders));
   }
 
   // Priority
   if (req.priority) {
-    rows.push(createFieldRow('優先級', req.priority, labelWidth, valueWidth, cellBorders));
+    rows.push(createFieldRow('Prioritylevel', req.priority, labelWidth, valueWidth, cellBorders));
   }
 
   // Safety Class
   if (req.safetyClass) {
-    rows.push(createFieldRow('安全分類', req.safetyClass, labelWidth, valueWidth, cellBorders));
+    rows.push(createFieldRow('Safety Classification', req.safetyClass, labelWidth, valueWidth, cellBorders));
   }
 
   // Other fields
@@ -1131,7 +1131,7 @@ function createRequirementTable(req) {
   // Acceptance Criteria
   if (req.acceptanceCriteria.length > 0) {
     // Determine Chinese or English label
-    const acLabel = req.statement ? 'Acceptance Criteria' : '驗收標準';
+    const acLabel = req.statement ? 'Acceptance Criteria' : 'Validation Standard';
     const acParagraphs = req.acceptanceCriteria.map(ac =>
       new Paragraph({
         spacing: { after: 80 },
@@ -1162,8 +1162,8 @@ function createRequirementTable(req) {
   }
 
   // Verification Method (new format)
-  if (req.verificationMethod) {
-    rows.push(createFieldRow('Verification', req.verificationMethod, labelWidth, valueWidth, cellBorders));
+  if (req.VerificationMethod) {
+    rows.push(createFieldRow('Verification', req.VerificationMethod, labelWidth, valueWidth, cellBorders));
   }
 
   return new Table({
@@ -1253,7 +1253,7 @@ function shouldBreakBeforeHeading(lines, currentIndex) {
 function parseMarkdown(content, outputDir = '.') {
   const lines = content.split('\n');
   const elements = [];
-  let inCodeBlock = false;
+  let inCode Block = false;
   let codeBlockContent = [];
   let codeBlockLang = '';
   let inTable = false;
@@ -1266,7 +1266,7 @@ function parseMarkdown(content, outputDir = '.') {
 
     // Process code blocks
     if (line.startsWith('```')) {
-      if (inCodeBlock) {
+      if (inCode Block) {
         // End code block
         if (codeBlockLang === 'mermaid') {
           // Mermaid diagram - render to SVG + PNG (SVG primary)
@@ -1281,25 +1281,25 @@ function parseMarkdown(content, outputDir = '.') {
           } else {
             // Render completely failed, fallback to code block
             console.warn('Mermaid render failed, displaying as code block');
-            elements.push(...createCodeBlock(mermaidCode));
+            elements.push(...createCode Block(mermaidCode));
           }
         } else {
           // Regular code block (pass language param for syntax highlighting)
-          elements.push(...createCodeBlock(codeBlockContent.join('\n'), codeBlockLang));
+          elements.push(...createCode Block(codeBlockContent.join('\n'), codeBlockLang));
         }
         codeBlockContent = [];
         codeBlockLang = '';
-        inCodeBlock = false;
+        inCode Block = false;
       } else {
         // Start code block, extract language
         codeBlockLang = line.substring(3).trim().toLowerCase();
-        inCodeBlock = true;
+        inCode Block = true;
       }
       i++;
       continue;
     }
 
-    if (inCodeBlock) {
+    if (inCode Block) {
       codeBlockContent.push(line);
       i++;
       continue;
@@ -1353,7 +1353,7 @@ function parseMarkdown(content, outputDir = '.') {
       const headingText = line.substring(3);
       // Check if it's a main section (e.g., "Introduction", "Product Overview", manual numbering removed)
       // Special titles (Table of Contents, Revision History, etc.) don't use auto numbering
-      const isSpecialSection = headingText.match(/^(Table of Contents|Revision History|目錄|修訂歷史|For\s)/i);
+      const isSpecialSection = headingText.match(/^(Table of Contents|Revision History|Directory|For\s)/i);
       const isMainSection = !isSpecialSection; // Non-special sections get page break before
       elements.push(createHeading(headingText, HeadingLevel.HEADING_2, isMainSection, !isSpecialSection));
       i++;
@@ -1686,7 +1686,7 @@ function tokenizeLine(line, lang, fontSize) {
  * - Line numbers + zebra stripe background (alternating row colors)
  * - Syntax highlighting (based on VSCode Light+ colors)
  */
-function createCodeBlock(content, lang = '') {
+function createCode Block(content, lang = '') {
   const CODE_FONT_SIZE = 20;  // 10pt - code font size
   const LINE_NUMBER_SIZE = 18;  // 9pt - line number font size
   const CODE_LINE_HEIGHT = 280;  // Fixed line height 14pt
@@ -1888,7 +1888,7 @@ function getTextDisplayLength(text) {
 function isIdColumn(headerText, cellText) {
   // Check if header is ID-related (case-insensitive, ignore spaces)
   const headerNormalized = headerText.toLowerCase().replace(/\s+/g, '');
-  const idHeaders = ['id', '設計id', '需求id', '編號', 'identifier', 'designid', 'requirementid'];
+  const idHeaders = ['id', 'Designid', 'Requirementid', 'Numbering', 'identifier', 'designid', 'requirementid'];
   if (idHeaders.some(h => headerNormalized.includes(h))) {
     return true;
   }
@@ -1926,7 +1926,7 @@ function createTable(headers, rows) {
         margins: { top: 40, bottom: 40, left: 80, right: 80 },
         children: [new Paragraph({
           alignment: AlignmentType.CENTER,
-          keepLines: noWrapColumns[i],  // ID 欄位不換行
+          keepLines: noWrapColumns[i],  // ID FieldsNotLine break
           children: [new TextRun({ text: header, bold: true, size: FONT_SIZE.TABLE_HEADER, font: getFont(header) })]
         })]
       }))
@@ -1938,7 +1938,7 @@ function createTable(headers, rows) {
         margins: { top: 40, bottom: 40, left: 80, right: 80 },
         children: [new Paragraph({
           spacing: { after: 0 },
-          keepLines: noWrapColumns[i],  // ID 欄位不換行
+          keepLines: noWrapColumns[i],  // ID FieldsNotLine break
           children: parseInlineFormatting(cell, FONT_SIZE.TABLE)
         })]
       }))
@@ -1954,7 +1954,7 @@ function createTable(headers, rows) {
 function parseDocumentStructure(content, outputDir) {
   const lines = content.split('\n');
   const structure = {
-    coverInfo: { title: '', subtitle: '', version: '', author: '', organization: '', date: '' },
+    coverInformation: { title: '', subtitle: '', version: '', author: '', organization: '', date: '' },
     tocLines: [],
     revisionHistory: [],
     mainContent: []
@@ -1970,18 +1970,18 @@ function parseDocumentStructure(content, outputDir) {
     // Detect cover info (from document start to before Table of Contents)
     if (section === 'cover') {
       if (trimmed.startsWith('# ')) {
-        structure.coverInfo.title = trimmed.substring(2).trim();
+        structure.coverInformation.title = trimmed.substring(2).trim();
       } else if (trimmed.startsWith('## For ') || trimmed.startsWith('**For ')) {
-        structure.coverInfo.subtitle = trimmed.replace(/^##\s*For\s*|^\*\*For\s*|\*\*$/g, '').trim();
-      } else if (trimmed.toLowerCase().includes('version') || trimmed.includes('版本')) {
-        structure.coverInfo.version = trimmed.replace(/^Version\s*/i, '').replace(/版本\s*/, '').trim();
-      } else if (trimmed.toLowerCase().includes('prepared by') || trimmed.includes('作者')) {
-        structure.coverInfo.author = trimmed.replace(/^Prepared by\s*/i, '').replace(/作者\s*/, '').trim();
+        structure.coverInformation.subtitle = trimmed.replace(/^##\s*For\s*|^\*\*For\s*|\*\*$/g, '').trim();
+      } else if (trimmed.toLowerCase().includes('version') || trimmed.includes('Version')) {
+        structure.coverInformation.version = trimmed.replace(/^Version\s*/i, '').replace(/Version\s*/, '').trim();
+      } else if (trimmed.toLowerCase().includes('prepared by') || trimmed.includes('Author')) {
+        structure.coverInformation.author = trimmed.replace(/^Prepared by\s*/i, '').replace(/Author\s*/, '').trim();
       } else if (trimmed.match(/^[A-Z].*\s+(Inc\.|Corp\.|Ltd\.|Co\.)$/i) || trimmed.match(/^SOMNICS/i)) {
-        structure.coverInfo.organization = trimmed;
+        structure.coverInformation.organization = trimmed;
       } else if (trimmed.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        structure.coverInfo.date = trimmed;
-      } else if (trimmed.toLowerCase().includes('table of contents') || trimmed.startsWith('## Table of Contents') || trimmed === '## 目錄') {
+        structure.coverInformation.date = trimmed;
+      } else if (trimmed.toLowerCase().includes('table of contents') || trimmed.startsWith('## Table of Contents') || trimmed === '## Directory') {
         section = 'toc';
       }
       i++;
@@ -1990,7 +1990,7 @@ function parseDocumentStructure(content, outputDir) {
 
     // Detect TOC section
     if (section === 'toc') {
-      if (trimmed.startsWith('## Revision History') || trimmed.toLowerCase().includes('revision history') || trimmed === '## 修訂歷史') {
+      if (trimmed.startsWith('## Revision History') || trimmed.toLowerCase().includes('revision history')) {
         section = 'revision';
         i++;
         continue;
@@ -2010,7 +2010,7 @@ function parseDocumentStructure(content, outputDir) {
 
     // Detect revision history
     if (section === 'revision') {
-      if (trimmed.startsWith('## 1') || trimmed === '---' || (trimmed.startsWith('## ') && !trimmed.toLowerCase().includes('revision') && !trimmed.includes('修訂'))) {
+      if (trimmed.startsWith('## 1') || trimmed === '---' || (trimmed.startsWith('## ') && !trimmed.toLowerCase().includes('revision') && !trimmed.includes('repairset'))) {
         if (trimmed === '---') {
           i++;
           continue;
@@ -2038,7 +2038,7 @@ function parseDocumentStructure(content, outputDir) {
 /**
  * Create cover page elements
  */
-function createCoverPage(coverInfo) {
+function createCoverPage(coverInformation) {
   const elements = [];
 
   // Blank spacing
@@ -2051,22 +2051,22 @@ function createCoverPage(coverInfo) {
     alignment: AlignmentType.CENTER,
     spacing: { after: 400 },
     children: [new TextRun({
-      text: coverInfo.title || 'Document Title',
+      text: coverInformation.title || 'Document Title',
       bold: true,
       size: 56,
-      font: getFont(coverInfo.title)
+      font: getFont(coverInformation.title)
     })]
   }));
 
   // Subtitle
-  if (coverInfo.subtitle) {
+  if (coverInformation.subtitle) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 600 },
       children: [new TextRun({
-        text: `For ${coverInfo.subtitle}`,
+        text: `For ${coverInformation.subtitle}`,
         size: 36,
-        font: getFont(coverInfo.subtitle)
+        font: getFont(coverInformation.subtitle)
       })]
     }));
   }
@@ -2077,38 +2077,38 @@ function createCoverPage(coverInfo) {
   }
 
   // Version
-  if (coverInfo.version) {
+  if (coverInformation.version) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
-      children: [new TextRun({ text: `Version ${coverInfo.version}`, size: 28, font: FONT_EN })]
+      children: [new TextRun({ text: `Version ${coverInformation.version}`, size: 28, font: FONT_EN })]
     }));
   }
 
   // Author
-  if (coverInfo.author) {
+  if (coverInformation.author) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
-      children: [new TextRun({ text: `Prepared by ${coverInfo.author}`, size: 28, font: FONT_EN })]
+      children: [new TextRun({ text: `Prepared by ${coverInformation.author}`, size: 28, font: FONT_EN })]
     }));
   }
 
   // Organization
-  if (coverInfo.organization) {
+  if (coverInformation.organization) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
-      children: [new TextRun({ text: coverInfo.organization, size: 28, font: FONT_EN })]
+      children: [new TextRun({ text: coverInformation.organization, size: 28, font: FONT_EN })]
     }));
   }
 
   // Date
-  if (coverInfo.date) {
+  if (coverInformation.date) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
-      children: [new TextRun({ text: coverInfo.date, size: 28, font: FONT_EN })]
+      children: [new TextRun({ text: coverInformation.date, size: 28, font: FONT_EN })]
     }));
   }
 
@@ -2169,7 +2169,7 @@ function createRevisionHistoryPage(revisionLines) {
   }));
 
   if (revisionLines.length > 0) {
-    // 解析修訂歷史表格
+    // Parse Revision History table
     const headers = [];
     const rows = [];
     let isHeader = true;
@@ -2337,7 +2337,7 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
       // Section 1: Cover page (no header/footer)
       {
         properties: { page: { margin: pageMargins } },
-        children: createCoverPage(structure.coverInfo)
+        children: createCoverPage(structure.coverInformation)
       },
       // Section 2: TOC page
       {

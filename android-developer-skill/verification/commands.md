@@ -125,7 +125,7 @@ grep -L "Error\|error" app/src/main/java/**/ui/screens/*.kt 2>/dev/null | \
 head -5 && echo "(screens may be missing error state)"
 
 # 13. Check for placeholder text
-grep -rn "尚無\|暫無\|即將\|Coming Soon\|TODO" app/src/main/java/**/ui/ && \
+grep -rn "Coming Soon\|TODO\|Placeholder" app/src/main/java/**/ui/ && \
 echo "⚠️ Found placeholder text"
 ```
 

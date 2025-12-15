@@ -1,77 +1,77 @@
-# Figma 整合與設計資產管理指南
+# Figma Integration and Design Assets Management Guide
 
-## Figma 專案結構
+## Figma Project Structure
 
-### 建議的 Figma 檔案組織
+### Recommended Figma File Organization
 
 ```
-{專案名稱} - Medical App
+{Project Name} - Medical App
 │
-├── 📄 Cover                          # 封面頁
-├── 📄 Design System                  # 設計系統
-│   ├── Colors                        # 色彩系統
-│   ├── Typography                    # 字型系統
-│   ├── Spacing & Grid                # 間距與格線
-│   ├── Icons                         # 圖標庫
-│   ├── Components                    # 元件庫
-│   └── Patterns                      # 設計模式
+├── 📄 Cover                          # Cover Page
+├── 📄 Design System                  # Design System
+│   ├── Colors                        # Color System
+│   ├── Typography                    # Font System
+│   ├── Spacing & Grid                # Spacing and Grid Lines
+│   ├── Icons                         # Icon Library
+│   ├── Components                    # Component Library
+│   └── Patterns                      # Design Patterns
 │
-├── 📄 App Icons                      # App 圖標設計
-├── 📄 Splash & Onboarding           # 啟動畫面
+├── 📄 App Icons                      # App Icon Design
+├── 📄 Splash & Onboarding           # Start Screen
 │
-├── 📄 Authentication                 # 認證模組
+├── 📄 Authentication                 # Authentication Module
 │   ├── SCR-001 - Login
 │   ├── SCR-002 - Register
 │   └── SCR-003 - Forgot Password
 │
-├── 📄 Home & Dashboard              # 首頁模組
+├── 📄 Home & Dashboard              # Home Module
 │   ├── SCR-010 - Home Dashboard
 │   └── SCR-011 - Quick Actions
 │
-├── 📄 Patient Management            # 病患管理模組
+├── 📄 Patient Management            # Patient Management Module
 │   ├── SCR-020 - Patient List
 │   ├── SCR-021 - Patient Detail
 │   └── SCR-022 - Patient History
 │
-├── 📄 Clinical Features             # 臨床功能模組
+├── 📄 Clinical Features             # Clinical Function Module
 │   └── ...
 │
-└── 📄 Settings & Profile            # 設定模組
+└── 📄 Settings & Profile            # Settings Module
     └── ...
 ```
 
-## Design System 設計規範
+## Design System Design Specification
 
-### 色彩系統 (Colors)
+### Color System (Colors)
 
-#### 醫療軟體建議色彩
+#### Medical Software Recommended Colors
 
 ```
-Primary Colors (主色)
-├── primary-50:  #E3F2FD    (最淺)
+Primary Colors
+├── primary-50:  #E3F2FD    (Lightest)
 ├── primary-100: #BBDEFB
 ├── primary-200: #90CAF9
 ├── primary-300: #64B5F6
 ├── primary-400: #42A5F5
-├── primary-500: #2196F3    (主要)
+├── primary-500: #2196F3    (Primary)
 ├── primary-600: #1E88E5
 ├── primary-700: #1976D2
 ├── primary-800: #1565C0
-└── primary-900: #0D47A1    (最深)
+└── primary-900: #0D47A1    (Darkest)
 
-Semantic Colors (語意色彩)
-├── success:  #4CAF50       (成功/正常)
-├── warning:  #FF9800       (警告)
-├── error:    #F44336       (錯誤/危急)
-├── info:     #2196F3       (資訊)
+Semantic Colors
+├── success:  #4CAF50       (Success/Normal)
+├── warning:  #FF9800       (Warning)
+├── error:    #F44336       (Error/Critical)
+├── info:     #2196F3       (Information)
 
-Clinical Colors (臨床專用)
-├── critical: #D32F2F       (危急值)
-├── abnormal: #FF5722       (異常)
-├── normal:   #4CAF50       (正常)
-├── pending:  #9E9E9E       (待處理)
+Clinical Colors (Clinical Specific)
+├── critical: #D32F2F       (Critical Value)
+├── abnormal: #FF5722       (Abnormal)
+├── normal:   #4CAF50       (Normal)
+├── pending:  #9E9E9E       (Pending)
 
-Neutral Colors (中性色)
+Neutral Colors
 ├── gray-50:  #FAFAFA
 ├── gray-100: #F5F5F5
 ├── gray-200: #EEEEEE
@@ -84,19 +84,19 @@ Neutral Colors (中性色)
 └── gray-900: #212121
 ```
 
-### 字型系統 (Typography)
+### Font System (Typography)
 
-#### 建議字型
+#### Recommended Fonts
 
 ```
 iOS:      SF Pro Text / SF Pro Display
 Android:  Roboto
 Web:      Inter / Noto Sans TC
 
-中文備用:  Noto Sans TC / PingFang TC
+Chinese Backup:  Noto Sans TC / PingFang TC
 ```
 
-#### 字型級距
+#### Font Scale Levels
 
 ```
 Display Large:   57px / 64px line-height
@@ -120,13 +120,13 @@ Label Medium:    12px / 16px (Medium weight)
 Label Small:     11px / 16px (Medium weight)
 ```
 
-### 間距系統 (Spacing)
+### Spacing System (Spacing)
 
 ```
-4px  基礎單位 (xs)
+4px  foundation unit (xs)
 8px  (sm)
 12px
-16px (md) - 常用
+16px (md) - Commonly Used
 20px
 24px (lg)
 32px (xl)
@@ -135,38 +135,38 @@ Label Small:     11px / 16px (Medium weight)
 64px (3xl)
 ```
 
-### 圓角 (Border Radius)
+### Border Radius
 
 ```
 none:   0px
 sm:     4px
-md:     8px    (常用)
+md:     8px    (Commonly Used)
 lg:     12px
 xl:     16px
-full:   9999px (圓形)
+full:   9999px (round)
 ```
 
-## Figma 與需求追溯
+## Figma and Requirement Traceability
 
-### Frame 命名規範
+### Frame Naming Specification
 
-每個畫面 Frame 必須包含需求追溯資訊：
-
-```
-Frame 名稱: SCR-{編號} - {畫面名稱}
-描述 (Description) 包含:
-- 對應需求: SRS-XXX, SRS-YYY
-- 設計版本: v1.0
-- 最後更新: 2024-01-15
-- 設計師: @designer_name
-```
-
-### Component 命名規範
+Every Screen Frame must include Requirement Traceability information:
 
 ```
-{類別}/{名稱}/{狀態}
+Frame Name: SCR-{Number} - {Screen Name}
+Description (Description) Include:
+- Corresponding Requirement: SRS-XXX, SRS-YYY
+- Design Version: v1.0
+- Last Update: 2024-01-15
+- Designer: @designer_name
+```
 
-範例:
+### Component Naming Specification
+
+```
+{Category}/{Name}/{Status}
+
+Example:
 Button/Primary/Default
 Button/Primary/Pressed
 Button/Primary/Disabled
@@ -177,47 +177,47 @@ Card/Patient/Default
 Alert/Critical/Default
 ```
 
-### 設計註解 (Annotations)
+### Design Comments (Annotations)
 
-在 Figma 中為重要元素加入註解：
+Add comments to important elements in Figma:
 
 ```
-📌 需求關聯
-SRS-001: 此按鈕觸發登入驗證流程
+📌 Requirement Relationship
+SRS-001: This button triggers login validation flow
 
-⚠️ 臨床安全
-此警示必須在 200ms 內顯示
+⚠️ Clinical Safety
+This alert must be displayed within 200ms
 
-♿ 無障礙
-對比度符合 WCAG AA (4.5:1)
+♿ Accessibility
+Contrast ratio complies with WCAG AA (4.5:1)
 
-📐 規格
-- 寬度: 100% - 32px padding
-- 高度: 48px
-- 圓角: 8px
+📐 Specifications
+- Width: 100% - 32px padding
+- Height: 48px
+- Border radius: 8px
 ```
 
-## 資產匯出設定
+## Asset Export Settings
 
-### Icons 匯出
+### Icons Export
 
 ```
 Figma Export Settings:
 
-SVG (設計用/Web):
+SVG (Design Use/Web):
 - Format: SVG
-- 勾選 "Include 'id' attribute"
+- Check "Include 'id' attribute"
 
 Android Vector Drawable:
-- 使用 Figma 插件: "Android Resources Export"
-- 或匯出 SVG 後用 Android Studio 轉換
+- Use Figma plugin: "Android Resources Export"
+- Or export SVG then use Android Studio to convert
 
 iOS PDF/PNG:
-- Format: PDF (向量) 或 PNG @1x, @2x, @3x
-- iOS 建議使用 PDF 格式
+- Format: PDF (Vector) or PNG @1x, @2x, @3x
+- iOS recommended to use PDF format
 ```
 
-### App Icon 匯出
+### App Icon Export
 
 ```
 Android (mipmap):
@@ -233,89 +233,89 @@ iOS (AppIcon.appiconset):
 - iPhone Settings:     29pt @2x, @3x
 - iPhone Spotlight:    40pt @2x, @3x
 - iPhone App:          60pt @2x, @3x
-- App Store:           1024 × 1024 (無透明)
+- App Store:           1024 × 1024 (No transparency)
 ```
 
-### 圖片匯出
+### Image Export
 
 ```
 Android (drawable):
-- mdpi:    1x (基準)
+- mdpi:    1x (base resolution)
 - hdpi:    1.5x
 - xhdpi:   2x
 - xxhdpi:  3x
 - xxxhdpi: 4x
 
 iOS (xcassets):
-- @1x: 基準
-- @2x: 2倍
-- @3x: 3倍
+- @1x: base resolution
+- @2x: 2 times
+- @3x: 3 times
 ```
 
-## Figma 外掛推薦
+## Figma Plugin Recommendations
 
-### 資產匯出
-- **Android Resources Export** - 直接匯出 Android 格式
-- **iOS Export Settings** - 匯出 iOS xcassets
-- **SVGO Compressor** - SVG 優化
+### Asset Export
+- **Android Resources Export** - Directly export Android format
+- **iOS Export Settings** - Export iOS xcassets
+- **SVGO Compressor** - SVG Optimization
 
 ### Design Token
-- **Design Tokens** - 匯出 JSON 格式 Token
-- **Token Studio** - 管理設計 Token
+- **Design Tokens** - Export JSON format tokens
+- **Token Studio** - Manage design tokens
 
-### 協作與文件
-- **Figma to Markdown** - 匯出設計規格
-- **Autoflow** - 自動產生流程箭頭
-- **Contrast** - 檢查色彩對比度 (無障礙)
+### Collaboration and Documentation
+- **Figma to Markdown** - Export design specifications
+- **Autoflow** - Auto-generate flow arrows
+- **Contrast** - Check color contrast ratio (Accessibility)
 
-### 開發交接
-- **Figma to Code** - 產生程式碼
-- **Locofy** - 轉換為 React/Flutter 程式碼
+### Development Handoff
+- **Figma to Code** - Generate code
+- **Locofy** - Convert to React/Flutter code
 
-## 與開發團隊協作
+## Development Team Collaboration
 
-### Design Handoff 流程
+### Design Handoff Flow
 
 ```
-1. 設計完成
-   └── 設計師標記 "Ready for Dev"
+1. Design Complete
+   └── Designer marks "Ready for Dev"
 
-2. 設計審查
-   └── 確認需求追溯 (SRS-XXX)
-   └── 確認無障礙規範
-   └── 確認臨床安全規範
+2. Design Review
+   └── Confirm requirement traceability (SRS-XXX)
+   └── Confirm accessibility specifications
+   └── Confirm clinical safety specifications
 
-3. 資產匯出
-   └── 匯出 Design Tokens (colors.json, typography.json)
-   └── 匯出 Icons (SVG → Android/iOS)
-   └── 匯出 Images (各解析度)
+3. Asset Export
+   └── Export Design Tokens (colors.json, typography.json)
+   └── Export Icons (SVG → Android/iOS)
+   └── Export Images (each resolution)
 
-4. 開發對接
-   └── 更新 03-assets/ 目錄
-   └── 更新畫面與需求對應表
-   └── 在 RTM 更新追溯關係
+4. Development Handoff
+   └── Update 03-assets/ directory
+   └── Update screen and requirement mapping table
+   └── Update traceability relationships in RTM
 
-5. 實作驗證
-   └── 截圖比對 Figma 設計
-   └── 記錄差異與調整
+5. Implementation Validation
+   └── Screenshot comparison with Figma design
+   └── Record differences and adjust
 ```
 
-### Figma 連結管理
+### Figma Link Management
 
-在專案中維護 `figma-links.md`：
+Maintain `figma-links.md` in the project:
 
 ```markdown
-# Figma 專案連結
+# Figma Project Links
 
-## 主要檔案
-- Design System: [連結](https://figma.com/...)
-- App Screens: [連結](https://figma.com/...)
-- Prototype: [連結](https://figma.com/...)
+## Main Files
+- Design System: [Link](https://figma.com/...)
+- App Screens: [Link](https://figma.com/...)
+- Prototype: [Link](https://figma.com/...)
 
-## 模組連結
-| 模組 | Figma 頁面 | 狀態 |
+## Module Links
+| Module | Figma Page | Status |
 |------|-----------|------|
-| Authentication | [Auth](https://figma.com/...) | ✅ 完成 |
-| Dashboard | [Home](https://figma.com/...) | 🔄 進行中 |
-| Patient | [Patient](https://figma.com/...) | 📝 規劃中 |
+| Authentication | [Auth](https://figma.com/...) | ✅ Complete |
+| Dashboard | [Home](https://figma.com/...) | 🔄 In Progress |
+| Patient | [Patient](https://figma.com/...) | 📝 Planning |
 ```

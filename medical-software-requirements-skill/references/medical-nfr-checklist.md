@@ -1,294 +1,294 @@
-# 醫療軟體非功能需求檢核清單 (Medical NFR Checklist)
+# Medical Software Non-Functional Requirements Checklist (Medical NFR Checklist)
 
-本檢核清單符合 IEC 62304、IEC 82304-1 及相關醫療法規要求。
+This checklist aligns with IEC 62304, IEC 82304-1 and related medical regulatory requirements.
 
-## 目錄
-1. [效能需求](#1-效能需求)
-2. [安全性需求](#2-安全性需求)
-3. [可用性與可靠性](#3-可用性與可靠性)
-4. [互通性需求](#4-互通性需求)
-5. [隱私與資料保護](#5-隱私與資料保護)
-6. [網路安全需求](#6-網路安全需求)
-7. [可維護性需求](#7-可維護性需求)
-8. [法規遵循需求](#8-法規遵循需求)
+## Table of Contents
+1. [Performance Requirements](#1-performance-requirements)
+2. [Safety Requirements](#2-safety-requirements)
+3. [Usability and Reliability](#3-usability-and-reliability)
+4. [Interoperability Requirements](#4-interoperability-requirements)
+5. [Privacy and Data Protection](#5-privacy-and-data-protection)
+6. [Cybersecurity Requirements](#6-cybersecurity-requirements)
+7. [Maintainability Requirements](#7-maintainability-requirements)
+8. [Regulatory Compliance Requirements](#8-regulatory-compliance-requirements)
 
 ---
 
-## 1. 效能需求
+## 1. Performance Requirements
 
-### 1.1 回應時間
+### 1.1 Response Time
 
-| 場景 | 建議目標 | Class C 要求 |
+| Scenario | Recommended Target | Class C Requirements |
 |------|----------|--------------|
-| 一般操作回應 | < 2 秒 | < 1 秒 |
-| 警示顯示 | < 500ms | < 200ms |
-| 緊急資料存取 | < 1 秒 | < 500ms |
-| 報表產生 | < 30 秒 | 依需求 |
+| General Operation Response | < 2 seconds | < 1 second |
+| Alert Display | < 500ms | < 200ms |
+| Emergency Data Access | < 1 second | < 500ms |
+| Report Generation | < 30 seconds | Depends on requirements |
 
-**檢核項目：**
-- [ ] 定義各功能的回應時間目標
-- [ ] 定義警示/警報的延遲上限
-- [ ] 定義資料同步的即時性要求
-- [ ] 定義批次處理的時間視窗
+**Checklist Items:**
+- [ ] Define response time target for each function
+- [ ] Define delay limits for alerts/alarms
+- [ ] Define real-time requirements for data synchronization
+- [ ] Define time window for batch processing
 
-### 1.2 併發與容量
+### 1.2 Concurrency and Capacity
 
-**檢核項目：**
-- [ ] 同時在線使用者數量
-- [ ] 同時處理的醫療事件數
-- [ ] 病患資料儲存容量
-- [ ] 醫療影像儲存容量
-- [ ] 歷史資料保留年限
-
----
-
-## 2. 安全性需求
-
-### 2.1 臨床安全 (Patient Safety)
-
-**檢核項目：**
-- [ ] 病患身份確認機制 (至少二因子)
-- [ ] 藥品/劑量警示機制
-- [ ] 過敏警示機制
-- [ ] 危急值通報機制
-- [ ] 醫療決策支援系統的警示
-
-### 2.2 資料完整性
-
-**檢核項目：**
-- [ ] 醫療紀錄不可刪除 (只能註記作廢)
-- [ ] 修改紀錄保留完整稽核軌跡
-- [ ] 資料傳輸完整性檢查
-- [ ] 資料儲存完整性驗證
-- [ ] 數位簽章要求
-
-### 2.3 存取控制
-
-**檢核項目：**
-- [ ] 角色為基礎的存取控制 (RBAC)
-- [ ] 最小權限原則
-- [ ] 緊急存取 (Break-the-Glass) 機制
-- [ ] 病患資料存取範圍控制
-- [ ] 敏感資料額外保護
+**Checklist Items:**
+- [ ] Number of simultaneous online users
+- [ ] Number of medical events processed simultaneously
+- [ ] Patient data storage capacity
+- [ ] Medical image storage capacity
+- [ ] Historical data retention period
 
 ---
 
-## 3. 可用性與可靠性
+## 2. Safety Requirements
 
-### 3.1 系統可用性
+### 2.1 Clinical Safety (Patient Safety)
 
-| 等級 | 可用性目標 | 適用場景 |
+**Checklist Items:**
+- [ ] Patient identity confirmation mechanism (At least two-factor authentication)
+- [ ] Medication/dosage alert mechanism
+- [ ] Allergy alert mechanism
+- [ ] Critical value alert mechanism
+- [ ] Clinical decision support system alerts
+
+### 2.2 Data Integrity
+
+**Checklist Items:**
+- [ ] Medical records cannot be deleted (only marked as void)
+- [ ] Modification records retain complete audit trail
+- [ ] Data transmission integrity check
+- [ ] Data storage integrity validation
+- [ ] Digital signature requirements
+
+### 2.3 Access Control
+
+**Checklist Items:**
+- [ ] Role-based access control (RBAC)
+- [ ] Least privilege principle
+- [ ] Emergency access (Break-the-Glass) mechanism
+- [ ] Patient data access scope control
+- [ ] Sensitive data additional protection
+
+---
+
+## 3. Usability and Reliability
+
+### 3.1 System Availability
+
+| Level | Availability Target | Applicable Scenario |
 |------|-----------|----------|
-| 一般 | 99.5% | 行政管理系統 |
-| 高 | 99.9% | 一般臨床系統 |
-| 關鍵 | 99.99% | 急診/加護病房系統 |
+| General | 99.5% | Administrative management system |
+| High | 99.9% | General clinical system |
+| Critical | 99.99% | Emergency department/ICU system |
 
-**檢核項目：**
-- [ ] 定義系統可用性目標
-- [ ] 定義計畫性維護時段
-- [ ] 定義 RTO (Recovery Time Objective)
-- [ ] 定義 RPO (Recovery Point Objective)
+**Checklist Items:**
+- [ ] Define system availability target
+- [ ] Define planned maintenance window
+- [ ] Define RTO (Recovery Time Objective)
+- [ ] Define RPO (Recovery Point Objective)
 
-### 3.2 容錯能力
+### 3.2 Fault Tolerance
 
-**檢核項目：**
-- [ ] 網路中斷時的離線運作能力
-- [ ] 單點故障的處理機制
-- [ ] 自動故障轉移 (Failover)
-- [ ] 優雅降級 (Graceful Degradation)
-- [ ] 資料同步衝突處理
+**Checklist Items:**
+- [ ] Offline operation capability during network interruption
+- [ ] Single point of failure handling mechanism
+- [ ] Auto failover
+- [ ] Graceful degradation
+- [ ] Data synchronization conflict handling
 
-### 3.3 備份與復原
+### 3.3 Backup and Recovery
 
-**檢核項目：**
-- [ ] 備份頻率 (即時/每小時/每日)
-- [ ] 備份保留期限
-- [ ] 異地備援
-- [ ] 復原演練頻率
-- [ ] 災難復原計畫
+**Checklist Items:**
+- [ ] Backup frequency (real-time/hourly/daily)
+- [ ] Backup retention period
+- [ ] Off-site backup
+- [ ] Recovery drill frequency
+- [ ] Disaster recovery plan
 
 ---
 
-## 4. 互通性需求
+## 4. Interoperability Requirements
 
-### 4.1 醫療資料交換標準
+### 4.1 Medical Data Exchange Standards
 
-**檢核項目：**
-- [ ] HL7 FHIR 支援版本
-- [ ] HL7 v2.x 訊息支援
-- [ ] DICOM 支援 (醫療影像)
+**Checklist Items:**
+- [ ] HL7 FHIR supported version
+- [ ] HL7 v2.x message support
+- [ ] DICOM support (medical imaging)
 - [ ] CDA (Clinical Document Architecture)
-- [ ] IHE Profile 遵循
+- [ ] IHE Profile compliance
 
-### 4.2 整合介面
+### 4.2 Integration Interfaces
 
-**檢核項目：**
-- [ ] HIS (醫院資訊系統) 整合
-- [ ] LIS (檢驗資訊系統) 整合
-- [ ] RIS/PACS (影像系統) 整合
-- [ ] 醫療設備整合協定
-- [ ] 健保申報系統整合
+**Checklist Items:**
+- [ ] HIS (Hospital Information System) integration
+- [ ] LIS (Laboratory Information System) integration
+- [ ] RIS/PACS (Imaging System) integration
+- [ ] Medical device integration protocol
+- [ ] Health insurance claim system integration
 
-### 4.3 資料格式
+### 4.3 Data Format
 
-**檢核項目：**
-- [ ] 病歷資料格式
-- [ ] 檢驗報告格式
-- [ ] 處方資料格式
-- [ ] 匯出/匯入格式
-
----
-
-## 5. 隱私與資料保護
-
-### 5.1 個人資料保護
-
-**檢核項目：**
-- [ ] 個資蒐集同意機制
-- [ ] 個資使用目的限制
-- [ ] 個資保存期限
-- [ ] 個資刪除/匿名化機制
-- [ ] 跨境傳輸規範
-
-### 5.2 資料去識別化
-
-**檢核項目：**
-- [ ] 研究用資料去識別化
-- [ ] 統計報表去識別化
-- [ ] 測試環境資料遮罩
-- [ ] 螢幕顯示遮罩
-
-### 5.3 隱私權管理
-
-**檢核項目：**
-- [ ] 病患查閱自身資料權限
-- [ ] 病患資料可攜權
-- [ ] 同意書管理
-- [ ] 特殊隱私保護 (精神科、HIV 等)
+**Checklist Items:**
+- [ ] Medical record data format
+- [ ] Test report format
+- [ ] Prescription data format
+- [ ] Export/Import format
 
 ---
 
-## 6. 網路安全需求
+## 5. Privacy and Data Protection
 
-### 6.1 傳輸安全
+### 5.1 Personal Information Protection
 
-**檢核項目：**
-- [ ] TLS 1.2+ 加密傳輸
-- [ ] 憑證管理
-- [ ] API 安全 (OAuth 2.0/OIDC)
-- [ ] 內外網隔離
+**Checklist Items:**
+- [ ] Personal data collection consent mechanism
+- [ ] Personal data use purpose limitation
+- [ ] Personal data retention period
+- [ ] Personal data deletion/anonymization mechanism
+- [ ] Cross-border data transfer specifications
 
-### 6.2 端點安全
+### 5.2 Data De-identification
 
-**檢核項目：**
-- [ ] 應用程式白名單
-- [ ] 惡意程式防護
-- [ ] 裝置管理 (MDM)
-- [ ] USB/外接裝置控制
+**Checklist Items:**
+- [ ] Research use data de-identification
+- [ ] Statistical report de-identification
+- [ ] Test environment data masking
+- [ ] Screen display masking
 
-### 6.3 威脅偵測與回應
+### 5.3 Privacy Rights Management
 
-**檢核項目：**
-- [ ] 入侵偵測系統 (IDS)
-- [ ] 安全事件日誌
-- [ ] 異常行為偵測
-- [ ] 資安事件回應程序
-
-### 6.4 弱點管理
-
-**檢核項目：**
-- [ ] 定期弱點掃描
-- [ ] 滲透測試
-- [ ] 安全更新機制
-- [ ] 第三方元件管理
+**Checklist Items:**
+- [ ] Patient access to personal data rights
+- [ ] Patient data portability rights
+- [ ] Consent form management
+- [ ] Special privacy protection (psychiatry, HIV, etc.)
 
 ---
 
-## 7. 可維護性需求
+## 6. Cybersecurity Requirements
 
-### 7.1 軟體更新
+### 6.1 Transmission Security
 
-**檢核項目：**
-- [ ] 更新前相容性測試
-- [ ] 更新回滾機制
-- [ ] 更新期間服務可用性
-- [ ] 更新通知機制
-- [ ] 更新驗證程序
+**Checklist Items:**
+- [ ] TLS 1.2+ encrypted transmission
+- [ ] Certificate management
+- [ ] API security (OAuth 2.0/OIDC)
+- [ ] Internal/external network separation
 
-### 7.2 監控與維運
+### 6.2 Endpoint Security
 
-**檢核項目：**
-- [ ] 系統健康監控
-- [ ] 效能監控指標
-- [ ] 告警通知機制
-- [ ] 日誌集中管理
-- [ ] 問題排查工具
+**Checklist Items:**
+- [ ] Application code signing
+- [ ] Malware protection
+- [ ] Device management (MDM)
+- [ ] USB/external device control
 
-### 7.3 技術支援
+### 6.3 Threat Detection and Response
 
-**檢核項目：**
-- [ ] 支援服務等級 (SLA)
-- [ ] 問題回報管道
-- [ ] 知識庫/FAQ
-- [ ] 遠端支援能力
+**Checklist Items:**
+- [ ] Intrusion detection system (IDS)
+- [ ] Security event logs
+- [ ] Anomaly behavior detection
+- [ ] Security incident response procedure
+
+### 6.4 Vulnerability Management
+
+**Checklist Items:**
+- [ ] Regular vulnerability scanning
+- [ ] Penetration testing
+- [ ] Security update mechanism
+- [ ] Third-party component management
 
 ---
 
-## 8. 法規遵循需求
+## 7. Maintainability Requirements
 
-### 8.1 醫療器材法規
+### 7.1 Software Updates
 
-| 法規/標準 | 適用範圍 | 檢核項目 |
+**Checklist Items:**
+- [ ] Backward compatibility testing
+- [ ] Update rollback mechanism
+- [ ] Service availability during updates
+- [ ] Update notification mechanism
+- [ ] Update validation procedure
+
+### 7.2 Monitoring and Operations
+
+**Checklist Items:**
+- [ ] System health monitoring
+- [ ] Performance monitoring metrics
+- [ ] Alert notification mechanism
+- [ ] Log aggregation management
+- [ ] Problem troubleshooting tools
+
+### 7.3 Technical Support
+
+**Checklist Items:**
+- [ ] Support service level (SLA)
+- [ ] Problem reporting channel
+- [ ] Knowledge base/FAQ
+- [ ] Remote support capability
+
+---
+
+## 8. Regulatory Compliance Requirements
+
+### 8.1 Medical Device Regulations
+
+| Regulation/Standard | Applicable Scope | Checklist Items |
 |----------|---------|----------|
-| IEC 62304 | 醫療器材軟體生命週期 | 開發流程文件 |
-| IEC 82304-1 | 健康軟體產品安全 | 產品安全要求 |
-| ISO 14971 | 風險管理 | 風險分析文件 |
-| ISO 13485 | 品質管理系統 | QMS 要求 |
+| IEC 62304 | Medical device software lifecycle | Development process documentation |
+| IEC 82304-1 | Health software product safety | Product safety requirements |
+| ISO 14971 | Risk management | Risk analysis documentation |
+| ISO 13485 | Quality management system | QMS requirements |
 
-### 8.2 地區法規
+### 8.2 Regional Regulations
 
-**台灣：**
-- [ ] TFDA 醫療器材軟體分類
-- [ ] 個人資料保護法
-- [ ] 醫療法規相關要求
+**Taiwan:**
+- [ ] TFDA medical device software classification
+- [ ] Personal data protection act
+- [ ] Medical regulations related requirements
 
-**美國：**
+**United States:**
 - [ ] FDA 21 CFR Part 820
-- [ ] HIPAA 隱私與安全規則
-- [ ] FDA 網路安全指引
+- [ ] HIPAA privacy and security rules
+- [ ] FDA Cybersecurity guidance
 
-**歐盟：**
+**European Union:**
 - [ ] MDR (Medical Device Regulation)
-- [ ] GDPR 資料保護
-- [ ] CE 標章要求
+- [ ] GDPR data protection
+- [ ] CE marking requirements
 
-### 8.3 產業標準
+### 8.3 Industry Standards
 
-**檢核項目：**
-- [ ] HITRUST CSF (健康資訊信任)
+**Checklist Items:**
+- [ ] HITRUST CSF (Health Information Trust)
 - [ ] SOC 2 Type II
-- [ ] ISO 27001 資訊安全
-- [ ] ISO 27799 醫療資訊安全
+- [ ] ISO 27001 Information security
+- [ ] ISO 27799 Medical information security
 
 ---
 
-## 需求優先級評估
+## Requirement Priority Level Assessment
 
-| 優先級 | 定義 | 範例 |
+| Priority Level | Definition | Example |
 |--------|------|------|
-| P0 - 必要 | 影響病患安全或法規遵循 | 身份確認、資料加密 |
-| P1 - 重要 | 影響臨床流程效率 | 效能要求、可用性 |
-| P2 - 期望 | 提升使用者體驗 | UI 優化、額外報表 |
-| P3 - 可選 | Nice to have | 進階功能 |
+| P0 - Mandatory | Affects patient safety or regulatory compliance | Identity confirmation, data encryption |
+| P1 - Important | Affects clinical workflow efficiency | Performance requirements, availability |
+| P2 - Expected | Improves user experience | UI optimization, additional reports |
+| P3 - Optional | Nice to have | Advanced features |
 
 ---
 
-## 風險等級評估
+## Risk Level Assessment
 
-結合軟體安全分類與需求優先級：
+Combined software safety classification and requirement priority level:
 
-| 安全分類 | P0 需求 | P1 需求 | P2/P3 需求 |
+| Safety Classification | P0 Requirement | P1 Requirement | P2/P3 Requirement |
 |---------|--------|--------|-----------|
-| Class C | 必須 100% 滿足 | 必須滿足 | 建議滿足 |
-| Class B | 必須滿足 | 應該滿足 | 選擇性 |
-| Class A | 應該滿足 | 選擇性 | 選擇性 |
+| Class C | Must be 100% satisfied | Must be satisfied | Recommended to satisfy |
+| Class B | Must be satisfied | Should be satisfied | Optional |
+| Class A | Should be satisfied | Optional | Optional |

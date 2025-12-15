@@ -87,7 +87,7 @@ echo "3. Empty handlers..." && \
 (grep -rqn "(click)=\"\"" src/app/ && echo "❌ Empty handlers found" || echo "✅ No empty handlers") && \
 
 echo "4. Placeholder components..." && \
-(grep -rqn "PlaceholderComponent\|Coming Soon\|即將推出" src/app/ && echo "❌ Placeholders found" || echo "✅ No placeholders") && \
+(grep -rqn "PlaceholderComponent\|Coming Soon" src/app/ && echo "❌ Placeholders found" || echo "✅ No placeholders") && \
 
 echo "5. Hardcoded secrets..." && \
 (grep -rqn "api_key.*=.*'\|password.*=.*'\|secret.*=.*'" src/app/ && echo "❌ Hardcoded secrets found" || echo "✅ No hardcoded secrets") && \

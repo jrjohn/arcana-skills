@@ -93,10 +93,10 @@ class FeatureViewModel @Inject constructor(
             repository.getItems()
                 .onSuccess { items ->
                     _output.update { it.copy(items = items) }
-                    _effect.emit(Effect.ShowToast("更新成功"))
+                    _effect.emit(Effect.ShowToast("Update successful"))
                 }
                 .onFailure { error ->
-                    _effect.emit(Effect.ShowToast("更新失敗: ${error.message}"))
+                    _effect.emit(Effect.ShowToast("Update failed: ${error.message}"))
                 }
         }
     }

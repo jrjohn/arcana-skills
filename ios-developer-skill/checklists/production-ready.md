@@ -87,7 +87,7 @@ echo "3. Empty handlers..." && \
 (grep -rqn "action:\s*{\s*}" Sources/ && echo "❌ Empty handlers found" || echo "✅ No empty handlers") && \
 
 echo "4. Placeholder views..." && \
-(grep -rqn "PlaceholderView\|Coming Soon\|即將推出" Sources/ && echo "❌ Placeholders found" || echo "✅ No placeholders") && \
+(grep -rqn "PlaceholderView\|Coming Soon" Sources/ && echo "❌ Placeholders found" || echo "✅ No placeholders") && \
 
 echo "5. Hardcoded secrets..." && \
 (grep -rqn "api_key.*=.*\"\|password.*=.*\"\|secret.*=.*\"" Sources/ && echo "❌ Hardcoded secrets found" || echo "✅ No hardcoded secrets") && \

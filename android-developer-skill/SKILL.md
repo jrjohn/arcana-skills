@@ -73,23 +73,23 @@ Professional Android development skill based on [Arcana Android](https://github.
 
 ## 🚦 Rules Priority
 
-### 🔴 CRITICAL（必須遵守，違反會導致 Bug/Crash）
-- Zero-Null Policy - Repository stub 不返回 null/empty
-- Navigation Wiring - 所有 NavRoutes 必須有 composable
-- ID Consistency - 跨 Repository 的 ID 必須一致
-- Onboarding Flow - Register/Login 後必須檢查 Onboarding
+### 🔴 CRITICAL (Must follow, violations cause Bug/Crash)
+- Zero-Null Policy - Repository stubs must not return null/empty
+- Navigation Wiring - All NavRoutes must have composable destinations
+- ID Consistency - IDs must be consistent across Repositories
+- Onboarding Flow - Must check Onboarding status after Register/Login
 
-### 🟡 IMPORTANT（強烈建議，影響品質）
-- UI State Handling - Loading/Error/Empty 狀態
-- Mock Data Quality - 使用真實範圍的假資料
-- MVVM Input/Output - 遵循標準模式
-- Offline-First - 本地優先策略
+### 🟡 IMPORTANT (Strongly recommended, affects quality)
+- UI State Handling - Loading/Error/Empty states
+- Mock Data Quality - Use realistic mock data
+- MVVM Input/Output - Follow standard pattern
+- Offline-First - Local-first strategy
 
-### 🟢 RECOMMENDED（建議，提升體驗）
-- Animation Standards - 轉場動畫
-- Accessibility - 無障礙支援
-- Pull-to-Refresh - 列表下拉刷新
-- Skeleton Loading - 骨架屏載入
+### 🟢 RECOMMENDED (Suggested, improves UX)
+- Animation Standards - Transition animations
+- Accessibility - Accessibility support
+- Pull-to-Refresh - List pull-to-refresh
+- Skeleton Loading - Skeleton screen loading
 
 ---
 
@@ -130,7 +130,7 @@ sealed class AppError {
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │  Repository │ → │  ViewModel  │ → │  UiState    │ → │   Screen    │
-│  Result<T>  │    │  处理错误   │    │  .Error     │    │ ErrorUI     │
+│  Result<T>  │    │ Handle Err  │    │  .Error     │    │ ErrorUI     │
 └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
@@ -163,10 +163,10 @@ private fun handleResult(result: Result<Data>) {
         },
         onFailure = { error ->
             val message = when (error) {
-                is AppError.Network -> "網路連線失敗，請稍後再試"
-                is AppError.Auth.SessionExpired -> "登入已過期，請重新登入"
-                is AppError.NotFound -> "找不到資料"
-                else -> "發生未知錯誤"
+                is AppError.Network -> "Network connection failed, please try again later"
+                is AppError.Auth.SessionExpired -> "Session expired, please login again"
+                is AppError.NotFound -> "Data not found"
+                else -> "An unknown error occurred"
             }
             _output.update { it.copy(isLoading = false, error = message) }
 
@@ -208,7 +208,7 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
         Text(message, style = MaterialTheme.typography.bodyLarge)
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onRetry) {
-            Text("重試")
+            Text("Retry")
         }
     }
 }
@@ -224,7 +224,7 @@ class MainViewModel @Inject constructor() : ViewModel() {
         // Log to crash reporting
         Logger.e("Unhandled exception", throwable)
         // Show generic error
-        _globalError.value = "發生錯誤，請稍後再試"
+        _globalError.value = "An error occurred, please try again later"
     }
 
     fun launchSafely(block: suspend () -> Unit) {
@@ -827,7 +827,7 @@ if (error != null) {
 // ✅ REQUIRED: Content descriptions
 Icon(
     imageVector = Icons.Default.Star,
-    contentDescription = "評分 ${rating} 顆星"  // Not null!
+    contentDescription = "Rating: ${rating} stars"  // Not null!
 )
 
 // ✅ REQUIRED: Touch targets
@@ -858,10 +858,10 @@ when {
 fun EmptyState() {
     Column(horizontalAlignment = CenterHorizontally) {
         Image(emptyStateIllustration)
-        Text("尚無資料")
-        Text("開始使用後將會顯示在這裡")
+        Text("No data yet")
+        Text("Data will appear here after you start using the app")
         Button(onClick = onAction) {  // MUST have action
-            Text("開始使用")  // Or "新增", "探索", etc.
+            Text("Get Started")  // Or "Add", "Explore", etc.
         }
     }
 }
@@ -1910,11 +1910,11 @@ When Spec defines a screen type, these states are **universally required**:
 
 | Screen Type | Required States | Prediction Rule |
 |-------------|-----------------|-----------------|
-| **List Screen** | Loading, Empty, Error, Data, Pull-to-refresh | 列表必有空狀態 |
-| **Detail Screen** | Loading, Error, Data, Not Found | 詳情必有載入態 |
-| **Form Screen** | Input, Validation, Submitting, Success, Error | 表單必有驗證 |
-| **Dashboard** | Loading skeleton, Partial data, Full data | 儀表板必有骨架 |
-| **Settings** | Current values, Save confirmation | 設定必有確認 |
+| **List Screen** | Loading, Empty, Error, Data, Pull-to-refresh | Lists must have empty state |
+| **Detail Screen** | Loading, Error, Data, Not Found | Details must have loading state |
+| **Form Screen** | Input, Validation, Submitting, Success, Error | Forms must have validation |
+| **Dashboard** | Loading skeleton, Partial data, Full data | Dashboards must have skeleton |
+| **Settings** | Current values, Save confirmation | Settings must have confirmation |
 
 ```kotlin
 /**
@@ -1936,14 +1936,14 @@ When Spec defines a feature, predict **related flows**:
 
 | If Spec Has | Predict Also Needed | Reasoning |
 |-------------|---------------------|-----------|
-| Login | Register, Forgot Password | 登入必有註冊 |
-| Register | Onboarding, Email Verification | 註冊必有引導 |
-| List | Detail, Search, Filter | 列表必有詳情 |
-| Detail | Edit (if editable), Share, Delete | 詳情常有編輯 |
-| Create | Edit, Delete, Duplicate | 建立必有修改 |
-| Profile | Edit Profile, Logout | 個人必有登出 |
-| Notification List | Notification Detail, Mark Read | 通知必有已讀 |
-| Cart | Checkout, Remove Item | 購物車必有結帳 |
+| Login | Register, Forgot Password | Login requires register |
+| Register | Onboarding, Email Verification | Register requires onboarding |
+| List | Detail, Search, Filter | List requires detail |
+| Detail | Edit (if editable), Share, Delete | Detail often has edit |
+| Create | Edit, Delete, Duplicate | Create requires modify |
+| Profile | Edit Profile, Logout | Profile requires logout |
+| Notification List | Notification Detail, Mark Read | Notifications require read status |
+| Cart | Checkout, Remove Item | Cart requires checkout |
 
 ```bash
 # 🔮 Flow Completion Check
