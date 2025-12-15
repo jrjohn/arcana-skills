@@ -32,44 +32,56 @@ cd arcana-skills
 
 ### Windows
 
-#### Option 1: PowerShell One-Line Install (Recommended)
+#### Option 1: Command Prompt (cmd.exe) One-Line Install
+
+```cmd
+curl -fsSL https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.bat -o install.bat && install.bat
+```
+
+#### Option 2: PowerShell One-Line Install
+
+> **Note**: This command must be run in **PowerShell**, not in Command Prompt (cmd.exe).
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.ps1 | iex
 ```
 
-#### Option 2: Clone and Install
+#### Option 3: Clone and Install
 
+**PowerShell:**
 ```powershell
 git clone https://github.com/jrjohn/arcana-skills.git
 cd arcana-skills
 .\install.ps1
 ```
 
-#### Option 3: Batch File (Double-click)
-
-Download and double-click `install.bat`, or run from Command Prompt:
-
+**Command Prompt (cmd.exe):**
 ```cmd
 git clone https://github.com/jrjohn/arcana-skills.git
 cd arcana-skills
 install.bat
 ```
 
+#### Option 4: Batch File (Double-click)
+
+Download `install.bat` and double-click to run.
+
 #### Windows Installation Options
 
+**PowerShell:**
 ```powershell
-# Interactive installation (select skills to install)
-.\install.ps1
+.\install.ps1           # Interactive installation
+.\install.ps1 -All      # Install all skills
+.\install.ps1 -WSL      # Install to WSL2
+.\install.ps1 -WSL -All # Install all skills to WSL2
+```
 
-# Install all skills
-.\install.ps1 -All
-
-# Install to WSL2 (uses bash installer in WSL)
-.\install.ps1 -WSL
-
-# Install all skills to WSL2
-.\install.ps1 -WSL -All
+**Command Prompt (cmd.exe):**
+```cmd
+install.bat             # Interactive installation
+install.bat -All        # Install all skills
+install.bat -WSL        # Install to WSL2
+install.bat -WSL -All   # Install all skills to WSL2
 ```
 
 ### WSL2 (Windows Subsystem for Linux)
