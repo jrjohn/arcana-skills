@@ -186,10 +186,9 @@ arcana-skills/
 
 ## System Requirements
 
-- **macOS / Linux**: Bash, Git
-- **Windows**: PowerShell 5.1+ or PowerShell Core, Git
+- **macOS / Linux**: Bash, Git, curl
+- **Windows**: PowerShell 5.1+ or PowerShell Core, Git, curl (Windows 10+)
 - **Windows (WSL2)**: WSL2 with Ubuntu or other Linux distribution
-- Git
 - Claude Code CLI (`npm install -g @anthropic-ai/claude-code`)
 - Node.js 18+ (required for some skills)
 
@@ -219,10 +218,18 @@ git pull
 
 ### Windows
 
+**PowerShell:**
 ```powershell
 cd arcana-skills
 git pull
 .\install.ps1 -All
+```
+
+**Command Prompt (cmd.exe):**
+```cmd
+cd arcana-skills
+git pull
+install.bat -All
 ```
 
 ## License
