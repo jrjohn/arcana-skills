@@ -146,6 +146,65 @@ function Install-ViaWSL {
     }
 }
 
+# Install Node.js
+function Install-NodeJS {
+    Write-Info "Installing Node.js..."
+
+    # Check if winget is available
+    $wingetPath = Get-Command winget -ErrorAction SilentlyContinue
+    if ($wingetPath) {
+        Write-Info "Using winget to install Node.js..."
+        winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
+    }
+    # Check if choco is available
+    elseif (Get-Command choco -ErrorAction SilentlyContinue) {
+        Write-Info "Using Chocolatey to install Node.js..."
+        choco install nodejs-lts -y
+    }
+    else {
+        Write-Error "No package manager found (winget or choco)."
+        Write-Info "Please install Node.js manually from: https://nodejs.org/"
+        Write-Info "Or install winget: https://aka.ms/getwinget"
+        exit 1
+    }
+
+    # Refresh PATH
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+    # Verify installation
+    $nodePath = Get-Command node -ErrorAction SilentlyContinue
+    if ($nodePath) {
+        $nodeVersion = node --version
+        Write-Success "Node.js installed successfully: $nodeVersion"
+    }
+    else {
+        Write-Error "Node.js installation failed."
+        Write-Info "Please restart your terminal and try again."
+        exit 1
+    }
+}
+
+# Install Claude Code CLI
+function Install-ClaudeCLI {
+    Write-Info "Installing Claude Code CLI..."
+
+    npm install -g @anthropic-ai/claude-code
+
+    # Refresh PATH
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+    # Verify installation
+    $claudePath = Get-Command claude -ErrorAction SilentlyContinue
+    if ($claudePath) {
+        Write-Success "Claude Code CLI installed successfully"
+    }
+    else {
+        Write-Error "Claude Code CLI installation failed."
+        Write-Info "Try running as Administrator: npm install -g @anthropic-ai/claude-code"
+        exit 1
+    }
+}
+
 # Check prerequisites
 function Test-Prerequisites {
     Write-Info "Checking prerequisites..."
@@ -159,18 +218,34 @@ function Test-Prerequisites {
         exit 1
     }
 
-    # Check Node.js (optional but recommended)
+    # Check Node.js (required)
     $nodePath = Get-Command node -ErrorAction SilentlyContinue
     if (-not $nodePath) {
-        Write-Warn "Node.js is not installed. Some skills may require it."
-        Write-Info "Install from: https://nodejs.org/"
+        Write-Warn "Node.js is not installed."
+        $response = Read-Host "  Install Node.js automatically? (Y/n)"
+        if ($response -notmatch '^[Nn]') {
+            Install-NodeJS
+        }
+        else {
+            Write-Error "Node.js is required. Please install it manually."
+            Write-Info "Install from: https://nodejs.org/"
+            exit 1
+        }
     }
 
-    # Check Claude Code
+    # Check Claude Code (required)
     $claudePath = Get-Command claude -ErrorAction SilentlyContinue
     if (-not $claudePath) {
         Write-Warn "Claude Code CLI not found."
-        Write-Info "Install: npm install -g @anthropic-ai/claude-code"
+        $response = Read-Host "  Install Claude Code CLI automatically? (Y/n)"
+        if ($response -notmatch '^[Nn]') {
+            Install-ClaudeCLI
+        }
+        else {
+            Write-Error "Claude Code CLI is required. Please install it manually."
+            Write-Info "Install: npm install -g @anthropic-ai/claude-code"
+            exit 1
+        }
     }
 
     Write-Success "Prerequisites check passed"

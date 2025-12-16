@@ -68,6 +68,70 @@ error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Install Node.js
+install_nodejs() {
+    info "Installing Node.js..."
+    case "$(uname -s)" in
+        Darwin*)
+            if command -v brew &> /dev/null; then
+                info "Using Homebrew to install Node.js..."
+                brew install node
+            else
+                error "Homebrew not found. Please install Node.js manually."
+                info "Install Homebrew: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+                info "Or download Node.js from: https://nodejs.org/"
+                exit 1
+            fi
+            ;;
+        Linux*)
+            if command -v apt-get &> /dev/null; then
+                info "Using apt to install Node.js..."
+                curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+                sudo apt-get install -y nodejs
+            elif command -v yum &> /dev/null; then
+                info "Using yum to install Node.js..."
+                curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
+                sudo yum install -y nodejs
+            elif command -v pacman &> /dev/null; then
+                info "Using pacman to install Node.js..."
+                sudo pacman -S nodejs npm
+            else
+                error "Package manager not found. Please install Node.js manually."
+                info "Install from: https://nodejs.org/"
+                exit 1
+            fi
+            ;;
+        *)
+            error "Unsupported OS. Please install Node.js manually."
+            info "Install from: https://nodejs.org/"
+            exit 1
+            ;;
+    esac
+
+    # Verify installation
+    if command -v node &> /dev/null; then
+        success "Node.js installed successfully: $(node --version)"
+    else
+        error "Node.js installation failed."
+        exit 1
+    fi
+}
+
+# Install Claude Code CLI
+install_claude_cli() {
+    info "Installing Claude Code CLI..."
+    npm install -g @anthropic-ai/claude-code
+
+    # Verify installation
+    if command -v claude &> /dev/null; then
+        success "Claude Code CLI installed successfully"
+    else
+        error "Claude Code CLI installation failed."
+        info "Try running: sudo npm install -g @anthropic-ai/claude-code"
+        exit 1
+    fi
+}
+
 # Check prerequisites
 check_prerequisites() {
     info "Checking prerequisites..."
@@ -78,10 +142,47 @@ check_prerequisites() {
         exit 1
     fi
 
-    # Check if Claude Code is installed
+    # Check if rsync is installed (required for copying skills)
+    if ! command -v rsync &> /dev/null; then
+        error "rsync is not installed. Please install rsync first."
+        case "$(uname -s)" in
+            Linux*)
+                info "Install via: sudo apt install rsync (Debian/Ubuntu)"
+                info "         or: sudo yum install rsync (RHEL/CentOS)"
+                ;;
+            Darwin*)
+                info "Install via: brew install rsync"
+                ;;
+        esac
+        exit 1
+    fi
+
+    # Check if Node.js is installed (required)
+    if ! command -v node &> /dev/null; then
+        warn "Node.js is not installed."
+        read -p "  Install Node.js automatically? (Y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            install_nodejs
+        else
+            error "Node.js is required. Please install it manually."
+            info "Install from: https://nodejs.org/"
+            exit 1
+        fi
+    fi
+
+    # Check if Claude Code is installed (required)
     if ! command -v claude &> /dev/null; then
-        warn "Claude Code CLI not found. Please ensure it's installed."
-        warn "Install: npm install -g @anthropic-ai/claude-code"
+        warn "Claude Code CLI not found."
+        read -p "  Install Claude Code CLI automatically? (Y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            install_claude_cli
+        else
+            error "Claude Code CLI is required. Please install it manually."
+            info "Install: npm install -g @anthropic-ai/claude-code"
+            exit 1
+        fi
     fi
 
     success "Prerequisites check passed"
