@@ -210,6 +210,18 @@ Use ios-developer-skill to help me create a new iOS project
 
 ### macOS / Linux
 
+#### Option 1: One-Line Update (Recommended)
+
+If you used the one-line install method, simply run the same command again to update:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.sh | bash
+```
+
+#### Option 2: Update from Cloned Repository
+
+If you cloned the repository:
+
 ```bash
 cd arcana-skills
 git pull
@@ -217,6 +229,20 @@ git pull
 ```
 
 ### Windows
+
+#### Option 1: One-Line Update (Recommended)
+
+**Command Prompt (cmd.exe):**
+```cmd
+curl -fsSL https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.bat -o install.bat && install.bat
+```
+
+**PowerShell:**
+```powershell
+iwr -useb https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.ps1 | iex
+```
+
+#### Option 2: Update from Cloned Repository
 
 **PowerShell:**
 ```powershell
