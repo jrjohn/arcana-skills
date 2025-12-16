@@ -6,6 +6,114 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const crypto = require('crypto');
+const os = require('os');
+
+// ============================================
+// Cross-platform support
+// ============================================
+const IS_WINDOWS = os.platform() === 'win32';
+// Suppress stderr: Unix uses '2>/dev/null', Windows uses '2>NUL'
+const SUPPRESS_STDERR = IS_WINDOWS ? '2>NUL' : '2>/dev/null';
+// execSync options for cross-platform compatibility
+const EXEC_OPTIONS = { stdio: 'pipe', timeout: 60000, windowsHide: true };
+
+/**
+ * Normalize path for shell commands (convert backslashes to forward slashes)
+ * Windows shell commands work with forward slashes, and this avoids escape issues
+ */
+function shellPath(p) {
+  return p.replace(/\\/g, '/');
+}
+
+// ============================================
+// Dependency Check and Installation
+// ============================================
+
+/**
+ * Check if a command is available
+ */
+function isCommandAvailable(cmd) {
+  try {
+    const checkCmd = IS_WINDOWS ? `where ${cmd}` : `which ${cmd}`;
+    execSync(checkCmd, { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if npm package is installed globally
+ */
+function isNpmPackageInstalled(packageName) {
+  try {
+    const result = execSync(`npm list -g ${packageName} --depth=0`, { encoding: 'utf8', stdio: 'pipe' });
+    return result.includes(packageName);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check and install required dependencies
+ */
+function checkAndInstallDependencies() {
+  console.log('Checking dependencies...');
+  let allInstalled = true;
+
+  // Check docx npm module (local)
+  try {
+    require.resolve('docx');
+    console.log('  ✓ docx module');
+  } catch {
+    console.log('  ✗ docx module not found, installing...');
+    try {
+      execSync('npm install docx', { stdio: 'inherit' });
+      console.log('  ✓ docx module installed');
+    } catch (e) {
+      console.error('  ✗ Failed to install docx:', e.message);
+      allInstalled = false;
+    }
+  }
+
+  // Check mermaid-cli (mmdc)
+  if (isCommandAvailable('mmdc')) {
+    console.log('  ✓ mermaid-cli (mmdc)');
+  } else {
+    console.log('  ✗ mermaid-cli not found, installing globally...');
+    try {
+      execSync('npm install -g @mermaid-js/mermaid-cli', { stdio: 'inherit' });
+      console.log('  ✓ mermaid-cli installed');
+    } catch (e) {
+      console.error('  ✗ Failed to install mermaid-cli:', e.message);
+      allInstalled = false;
+    }
+  }
+
+  // Check mutool (mupdf)
+  if (isCommandAvailable('mutool')) {
+    console.log('  ✓ mutool (mupdf)');
+  } else {
+    console.log('  ⚠ mutool not found (optional, for better SVG quality)');
+    if (IS_WINDOWS) {
+      console.log('    To install: choco install mupdf');
+    } else {
+      console.log('    To install: brew install mupdf-tools');
+    }
+    // mutool is optional, don't fail
+  }
+
+  if (!allInstalled) {
+    console.error('\nSome required dependencies could not be installed.');
+    console.error('Please install them manually and try again.');
+    process.exit(1);
+  }
+
+  console.log('');
+}
+
+// Run dependency check on script load
+checkAndInstallDependencies();
 
 // ============================================
 // Font Settings - Chinese uses Microsoft JhengHei, English uses Arial
@@ -508,10 +616,7 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
   const pdfFile = path.join(tempDir, `mermaid-${hash}.pdf`);
   try {
     // Step 1: Generate PDF (Mermaid PDF output converts text to paths and applies style-specified colors)
-    execSync(`mmdc -i "${inputFile}" -o "${pdfFile}" -c "${configPath}" --pdfFit 2>/dev/null`, {
-      stdio: 'pipe',
-      timeout: 60000
-    });
+    execSync(`mmdc -i "${shellPath(inputFile)}" -o "${shellPath(pdfFile)}" -c "${shellPath(configPath)}" --pdfFit ${SUPPRESS_STDERR}`, EXEC_OPTIONS);
 
     if (fs.existsSync(pdfFile)) {
       // Step 2: Use mutool to convert PDF to SVG (text becomes paths for compatibility)
@@ -520,11 +625,10 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
       const mutoolOutputBase = path.join(tempDir, `svg-${hash}`);
       const mutoolSvgFile = `${mutoolOutputBase}1.svg`;  // mutool generates this filename
       try {
-        execSync(`which mutool`, { stdio: 'pipe' });
-        execSync(`mutool draw -F svg -o "${mutoolOutputBase}.svg" "${pdfFile}" 2>/dev/null`, {
-          stdio: 'pipe',
-          timeout: 60000
-        });
+        // Check if mutool is available (use 'where' on Windows, 'which' on Unix)
+        const whichCmd = IS_WINDOWS ? 'where mutool' : 'which mutool';
+        execSync(whichCmd, { stdio: 'pipe' });
+        execSync(`mutool draw -F svg -o "${shellPath(mutoolOutputBase)}.svg" "${shellPath(pdfFile)}" ${SUPPRESS_STDERR}`, EXEC_OPTIONS);
         // mutool output filename has page number, need to rename
         if (fs.existsSync(mutoolSvgFile)) {
           fs.renameSync(mutoolSvgFile, svgFile);
@@ -537,11 +641,8 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
       } catch (mutoolError) {
         // No mutool, fallback to direct SVG (text may not display)
         console.warn(`  Warning: mutool not installed, using direct SVG output (text may not display in Word)`);
-        console.warn(`    Install with: brew install mupdf-tools`);
-        execSync(`mmdc -i "${inputFile}" -o "${svgFile}" -c "${configPath}" -b white 2>/dev/null`, {
-          stdio: 'pipe',
-          timeout: 60000
-        });
+        console.warn(`    Install with: ${IS_WINDOWS ? 'choco install mupdf' : 'brew install mupdf-tools'}`);
+        execSync(`mmdc -i "${shellPath(inputFile)}" -o "${shellPath(svgFile)}" -c "${shellPath(configPath)}" -b white ${SUPPRESS_STDERR}`, EXEC_OPTIONS);
         if (fs.existsSync(svgFile)) {
           svgPath = svgFile;
         }
@@ -555,10 +656,7 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
     // PDF generation failed, fallback to direct SVG
     console.warn(`PDF render failed [${hash}]: ${error.message}`);
     try {
-      execSync(`mmdc -i "${inputFile}" -o "${svgFile}" -c "${configPath}" -b white 2>/dev/null`, {
-        stdio: 'pipe',
-        timeout: 60000
-      });
+      execSync(`mmdc -i "${shellPath(inputFile)}" -o "${shellPath(svgFile)}" -c "${shellPath(configPath)}" -b white ${SUPPRESS_STDERR}`, EXEC_OPTIONS);
       if (fs.existsSync(svgFile)) {
         svgPath = svgFile;
       }
@@ -569,7 +667,7 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
 
   // 2. Render PNG (as fallback for older Word versions)
   try {
-    execSync(`mmdc -i "${inputFile}" -o "${pngFile}" -c "${configPath}" -b white -w ${renderWidth} -s 2`, {
+    execSync(`mmdc -i "${shellPath(inputFile)}" -o "${shellPath(pngFile)}" -c "${shellPath(configPath)}" -b white -w ${renderWidth} -s 2`, {
       stdio: 'pipe',
       timeout: 60000
     });
@@ -1253,7 +1351,7 @@ function shouldBreakBeforeHeading(lines, currentIndex) {
 function parseMarkdown(content, outputDir = '.') {
   const lines = content.split('\n');
   const elements = [];
-  let inCode Block = false;
+  let inCodeBlock = false;
   let codeBlockContent = [];
   let codeBlockLang = '';
   let inTable = false;
@@ -1266,7 +1364,7 @@ function parseMarkdown(content, outputDir = '.') {
 
     // Process code blocks
     if (line.startsWith('```')) {
-      if (inCode Block) {
+      if (inCodeBlock) {
         // End code block
         if (codeBlockLang === 'mermaid') {
           // Mermaid diagram - render to SVG + PNG (SVG primary)
@@ -1281,25 +1379,25 @@ function parseMarkdown(content, outputDir = '.') {
           } else {
             // Render completely failed, fallback to code block
             console.warn('Mermaid render failed, displaying as code block');
-            elements.push(...createCode Block(mermaidCode));
+            elements.push(...createCodeBlock(mermaidCode));
           }
         } else {
           // Regular code block (pass language param for syntax highlighting)
-          elements.push(...createCode Block(codeBlockContent.join('\n'), codeBlockLang));
+          elements.push(...createCodeBlock(codeBlockContent.join('\n'), codeBlockLang));
         }
         codeBlockContent = [];
         codeBlockLang = '';
-        inCode Block = false;
+        inCodeBlock = false;
       } else {
         // Start code block, extract language
         codeBlockLang = line.substring(3).trim().toLowerCase();
-        inCode Block = true;
+        inCodeBlock = true;
       }
       i++;
       continue;
     }
 
-    if (inCode Block) {
+    if (inCodeBlock) {
       codeBlockContent.push(line);
       i++;
       continue;
@@ -1686,7 +1784,7 @@ function tokenizeLine(line, lang, fontSize) {
  * - Line numbers + zebra stripe background (alternating row colors)
  * - Syntax highlighting (based on VSCode Light+ colors)
  */
-function createCode Block(content, lang = '') {
+function createCodeBlock(content, lang = '') {
   const CODE_FONT_SIZE = 20;  // 10pt - code font size
   const LINE_NUMBER_SIZE = 18;  // 9pt - line number font size
   const CODE_LINE_HEIGHT = 280;  // Fixed line height 14pt
