@@ -21,6 +21,742 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
 - **Default Dimensions:** iPhone 14 Pro (390 x 844 pt) / Android Medium (360 x 800 dp)
 - **Default Format:** HTML + Tailwind CSS (browser-previewable)
 
+### 🚀 Auto HTML UI Flow Generation Rule (自動 HTML UI Flow 產出規則)
+
+**CRITICAL:** 當需求涉及以下任一項目時，**必須自動產出 HTML UI Flow**：
+
+| 觸發條件 | 說明 | 自動產出 |
+|----------|------|----------|
+| UI Flow | 使用者要求設計 UI Flow、User Flow、App Flow | ✅ 必須產出 |
+| Screen / 畫面 | 使用者要求設計 Screen、畫面、頁面 | ✅ 必須產出 |
+| Wireframe | 使用者要求 Wireframe、線框圖 | ✅ 必須產出 |
+| Prototype | 使用者要求 Prototype、原型 | ✅ 必須產出 |
+| 畫面流程 | 使用者描述畫面之間的流程關係 | ✅ 必須產出 |
+
+#### 自動產出內容
+當觸發上述條件時，**無需詢問使用者**，直接產出：
+1. **HTML 互動原型** - 每個畫面一個 HTML 檔案
+2. **index.html 導覽頁** - 所有畫面的導覽目錄
+3. **ui-flow-diagram.html** - 互動式畫面流程圖 (可縮放、拖曳)
+4. **完整導航連結** - 所有按鈕與連結皆可點擊導航
+
+#### 範例觸發語句
+```
+✅ "請幫我設計登入的 UI Flow" → 自動產出 HTML UI Flow
+✅ "我需要一個購物車畫面" → 自動產出 HTML Screen + Flow
+✅ "設計 Onboarding 流程" → 自動產出 HTML UI Flow
+✅ "規劃 App 的主要頁面" → 自動產出 HTML Screens + Flow
+✅ "畫出使用者從登入到結帳的流程" → 自動產出 HTML UI Flow
+```
+
+---
+
+## 📦 Official UI Flow Template (標準 Template 規範)
+
+> ### ⚠️ 強制規則：所有 UI Flow / Screen 產出必須遵循此 Template
+>
+> 本 Template 為通用企業級 UI/UX 產出標準，
+> 確保所有產出具備一致性、可追溯性與專業品質。
+
+### Template 目錄結構
+
+```
+📁 generated-ui/
+├── 📄 README.md                    # 專案說明文件
+├── 📄 index.html                   # 畫面總覽導覽頁 (必要)
+├── 📄 device-preview.html          # 裝置模擬器預覽頁
+├── 📁 docs/
+│   ├── ui-flow-diagram.html        # 互動式流程圖 (必要，可縮放拖曳)
+│   └── APP-FLOW-DIAGRAMS.md        # Mermaid 格式流程圖
+├── 📁 shared/                      # 共用資源
+│   ├── {project}-theme.css         # Design System CSS (必要)
+│   ├── notify-parent.js            # iframe 父層通知腳本
+│   └── navigation.js               # 導航邏輯
+├── 📁 screenshots/                 # 畫面截圖 (供 SDD 嵌入)
+│   ├── auth/                       # SCR-AUTH-*.png
+│   ├── dash/                       # SCR-DASH-*.png
+│   └── [modules]/                  # 各模組截圖
+├── 📁 assets/                      # 設計資源
+│   ├── backgrounds/                # 背景圖片
+│   ├── icons/                      # 圖標
+│   └── illustrations/              # 插圖素材
+├── 📁 platform-assets/             # 平台資產
+│   ├── ios/                        # iOS Assets.xcassets
+│   ├── android/                    # Android drawable/mipmap
+│   └── design-tokens.json          # Design Tokens
+├── 📁 auth/                        # 認證模組畫面
+│   ├── SCR-AUTH-001-login.html
+│   ├── SCR-AUTH-002-register.html
+│   └── ...
+├── 📁 onboard/                     # 引導模組畫面
+├── 📁 dash/                        # Dashboard 模組
+├── 📁 [custom-modules]/            # 專案自定義模組
+├── 📁 setting/                     # 設定模組
+└── 📁 scripts/                     # 輔助腳本
+    └── capture-screenshots.sh      # 截圖腳本
+```
+
+### index.html Template (畫面總覽導覽頁)
+
+```html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{ProjectName} UI/UX - 畫面總覽</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="shared/{project}-theme.css">
+  <style>
+    .module-card { transition: all 0.3s ease; }
+    .module-card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
+    .screen-link { transition: all 0.2s ease; }
+    .screen-link:hover { background-color: #EBF5FF; transform: translateX(4px); }
+    .status-done { background-color: #4CAF50; }
+    .status-pending { background-color: #FFC107; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen">
+  <!-- Header -->
+  <header class="bg-white/90 backdrop-blur-lg shadow-sm sticky top-0 z-50 border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-6 py-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <!-- App Icon (SVG placeholder) -->
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-gray-800">{ProjectName} UI/UX</h1>
+            <p class="text-sm text-gray-500">互動式原型畫面總覽</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <a href="device-preview.html" class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full font-medium hover:shadow-lg transition-all">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="5" y="2" width="14" height="20" rx="3" stroke-width="2"/>
+            </svg>
+            裝置預覽
+          </a>
+          <div class="text-right">
+            <p class="text-sm text-gray-500">UI/UX 覆蓋率</p>
+            <p class="text-xl font-bold text-green-600">{coverage}%</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    <!-- UI Flow Diagram Embed -->
+    <div class="mb-10 bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-100">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-gray-800">📱 UI Flow Diagram ({totalScreens} 畫面)</h2>
+        <a href="docs/ui-flow-diagram.html" target="_blank" class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors">開新視窗</a>
+      </div>
+      <iframe src="docs/ui-flow-diagram.html" class="w-full border-0 rounded-xl border border-gray-200" style="height: 600px;"></iframe>
+    </div>
+
+    <!-- Module Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <!-- Template: Repeat for each module -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
+        <div class="bg-gradient-to-r from-{module-color}-500 to-{module-color}-600 px-6 py-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <!-- Module Icon SVG -->
+            </div>
+            <div>
+              <h2 class="text-xl font-bold text-white">{MODULE} {ModuleName}</h2>
+              <p class="text-white/80 text-sm">{count}/{total} 畫面 | {percentage}%</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
+          <!-- Screen links -->
+          <a href="device-preview.html?screen={module}/SCR-{MODULE}-001-{name}.html" class="screen-link flex items-center gap-3 p-3 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="flex-1 text-gray-700">SCR-{MODULE}-001 {ScreenName}</span>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coverage Summary -->
+    <div class="mt-12 bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg border border-gray-100">
+      <h2 class="text-2xl font-bold text-gray-800 mb-6">畫面覆蓋率統計</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <!-- Per module stats card -->
+        <div class="text-center p-4 bg-{module-color}-50 rounded-xl">
+          <p class="text-3xl font-bold text-{module-color}-600">{count}</p>
+          <p class="text-sm text-gray-500">{MODULE}</p>
+          <p class="text-xs text-green-600">{percentage}%</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="bg-white/60 backdrop-blur-sm mt-12 py-6 border-t border-gray-200">
+    <div class="max-w-7xl mx-auto px-6 text-center text-gray-500 text-sm">
+      <p>{ProjectName} UI/UX Design System v1.0</p>
+      <p>Based on SRS-{ProjectName}-1.0 | Generated: {date}</p>
+    </div>
+  </footer>
+</body>
+</html>
+```
+
+### Screen HTML Template (畫面 HTML)
+
+```html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{ProjectName} - {ScreenTitle}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/{project}-theme.css">
+  <style>
+    .glass-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100">
+  <!-- Screen Container (iPad Landscape: 1194x834 / iPhone: 393x852) -->
+  <div class="w-full max-w-[1194px] min-h-[834px] mx-auto relative overflow-hidden">
+
+    <!-- Header / Navigation Bar -->
+    <header class="flex items-center justify-between p-4 bg-white/90 backdrop-blur-lg border-b border-gray-200">
+      <button onclick="history.back()" class="p-2 rounded-full hover:bg-gray-100 transition-colors">
+        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <h1 class="text-lg font-bold text-gray-800">{ScreenTitle}</h1>
+      <div class="w-10"></div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="p-6">
+      <!-- Screen Content Here -->
+    </main>
+
+    <!-- Bottom Navigation (if applicable) -->
+    <nav class="fixed bottom-0 left-0 right-0 h-20 bg-white/95 backdrop-blur-lg shadow-lg border-t border-gray-200 flex justify-around items-center">
+      <a href="../dash/SCR-DASH-001-home.html" class="flex flex-col items-center gap-1 text-gray-500 hover:text-indigo-600 transition-colors">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+        <span class="text-xs">首頁</span>
+      </a>
+      <!-- More nav items -->
+    </nav>
+  </div>
+
+  <!-- iframe Parent Notification (for device-preview.html sync) -->
+  <script src="../shared/notify-parent.js"></script>
+</body>
+</html>
+```
+
+### Design System CSS Template ({project}-theme.css)
+
+```css
+/**
+ * {ProjectName} Design System
+ * Version: 1.0
+ * Style: Modern Minimal / Professional
+ */
+
+:root {
+  /* Primary Colors - Indigo/Purple Theme */
+  --color-primary: #6366F1;
+  --color-primary-dark: #4F46E5;
+  --color-primary-light: #818CF8;
+  --color-secondary: #10B981;
+  --color-accent: #8B5CF6;
+
+  /* Background Colors - Subtle Gradient */
+  --color-bg-primary: #F8FAFC;
+  --color-bg-secondary: #EEF2FF;
+  --color-bg-gradient: linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%);
+
+  /* Surface Colors */
+  --color-surface-white: #FFFFFF;
+  --color-surface-glass: rgba(255, 255, 255, 0.85);
+  --color-surface-card: rgba(255, 255, 255, 0.95);
+  --color-surface-muted: #F1F5F9;
+
+  /* Text Colors */
+  --color-text-primary: #1E293B;
+  --color-text-secondary: #64748B;
+  --color-text-muted: #94A3B8;
+  --color-text-on-primary: #FFFFFF;
+
+  /* Semantic Colors */
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-info: #3B82F6;
+
+  /* Spacing Scale */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  /* Typography */
+  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Roboto', sans-serif;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 30px;
+
+  /* Animation */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+}
+
+/* Base Styles */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  background: var(--color-bg-gradient);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Glass Card Effect */
+.glass-card {
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+/* Modern Button Styles */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-xl);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  min-height: 48px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: var(--color-text-on-primary);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+}
+
+.btn-secondary {
+  background: var(--color-surface-white);
+  color: var(--color-primary);
+  border: 2px solid var(--color-primary);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--color-surface-muted);
+}
+
+/* Input Styles */
+.input-field {
+  width: 100%;
+  padding: var(--spacing-md);
+  font-size: var(--font-size-md);
+  border: 2px solid #E2E8F0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-white);
+  transition: all var(--transition-fast);
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Card Styles */
+.card {
+  background: var(--color-surface-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-lg);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  transition: all var(--transition-normal);
+}
+
+/* Bottom Navigation */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(12px);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: var(--font-size-xs);
+  padding: var(--spacing-sm);
+  transition: color var(--transition-fast);
+}
+
+.nav-item.active,
+.nav-item:hover {
+  color: var(--color-primary);
+}
+
+/* Utility Classes */
+.text-gradient {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-fadeIn { animation: fadeIn 0.5s ease forwards; }
+.animate-pulse { animation: pulse 2s ease-in-out infinite; }
+```
+
+### ui-flow-diagram.html Template (互動式流程圖)
+
+```html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{ProjectName} - Screen Flow Diagram</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: linear-gradient(135deg, #F1F5F9 0%, #E2E8F0 100%); margin: 0; padding: 0; overflow: auto; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    .flow-container { min-width: 4000px; min-height: 3000px; position: relative; padding: 60px; }
+
+    .screen-card {
+      position: absolute;
+      width: 200px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .screen-card:hover { transform: scale(1.08); z-index: 100; }
+    .screen-card:hover .device-frame { box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
+
+    .device-frame {
+      width: 200px; height: 140px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+    .device-frame img { width: 100%; height: 100%; object-fit: cover; }
+
+    .screen-id {
+      position: absolute;
+      top: 8px; left: 8px;
+      padding: 2px 8px;
+      background: var(--module-color, #6366F1);
+      color: white;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      z-index: 10;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    .screen-label {
+      margin-top: 10px;
+      text-align: center;
+      font-size: 12px;
+      color: #475569;
+      font-weight: 500;
+    }
+
+    /* Connection Lines */
+    .connection-svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+
+    /* Legend */
+    .legend {
+      position: fixed; top: 24px; right: 24px;
+      background: white; padding: 24px; border-radius: 20px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      z-index: 1000;
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+    .legend h3 { font-size: 14px; font-weight: 700; margin-bottom: 16px; color: #1E293B; }
+    .legend-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; color: #64748B; }
+    .legend-color { width: 18px; height: 18px; border-radius: 6px; }
+
+    /* Zoom Controls */
+    .zoom-controls {
+      position: fixed; bottom: 24px; right: 24px;
+      display: flex; gap: 8px; z-index: 1000;
+    }
+    .zoom-btn {
+      width: 48px; height: 48px;
+      background: white; border: none; border-radius: 14px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      cursor: pointer; font-size: 20px; color: #475569;
+      transition: all 0.2s;
+    }
+    .zoom-btn:hover { background: #F1F5F9; transform: scale(1.05); }
+  </style>
+</head>
+<body>
+  <!-- Legend -->
+  <div class="legend">
+    <h3>模組顏色</h3>
+    <div class="space-y-2">
+      <div class="legend-item"><div class="legend-color" style="background:#6366F1"></div><span>AUTH</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:#8B5CF6"></div><span>ONBOARD</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:#F59E0B"></div><span>DASH</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:#10B981"></div><span>FEATURE</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:#EC4899"></div><span>PROFILE</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:#64748B"></div><span>SETTING</span></div>
+    </div>
+    <div class="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400">
+      總計: {totalScreens} 畫面
+    </div>
+  </div>
+
+  <!-- Flow Container -->
+  <div class="flow-container" id="flowContainer">
+    <!-- Connection Lines SVG -->
+    <svg class="connection-svg">
+      <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#94A3B8"/>
+        </marker>
+      </defs>
+      <!-- Connection lines here -->
+    </svg>
+
+    <!-- Screen Cards (positioned absolutely) -->
+    <a href="../auth/SCR-AUTH-001-login.html" class="screen-card" style="left: 100px; top: 200px; --module-color: #6366F1;">
+      <div class="device-frame">
+        <img src="../screenshots/auth/SCR-AUTH-001-login.png" alt="Login">
+        <div class="screen-id">AUTH-001</div>
+      </div>
+      <div class="screen-label">登入頁</div>
+    </a>
+    <!-- More screen cards... -->
+  </div>
+
+  <!-- Zoom Controls -->
+  <div class="zoom-controls">
+    <button class="zoom-btn" onclick="zoomIn()">+</button>
+    <button class="zoom-btn" onclick="zoomOut()">−</button>
+    <button class="zoom-btn" onclick="resetZoom()">↺</button>
+  </div>
+
+  <script>
+    let scale = 1;
+    const container = document.getElementById('flowContainer');
+
+    function zoomIn() { scale = Math.min(scale * 1.2, 3); applyZoom(); }
+    function zoomOut() { scale = Math.max(scale / 1.2, 0.3); applyZoom(); }
+    function resetZoom() { scale = 1; applyZoom(); }
+    function applyZoom() {
+      container.style.transform = `scale(${scale})`;
+      container.style.transformOrigin = '0 0';
+    }
+
+    // Drag to pan
+    let isDragging = false, startX, startY, scrollL, scrollT;
+    document.body.onmousedown = e => { isDragging = true; startX = e.pageX; startY = e.pageY; scrollL = window.scrollX; scrollT = window.scrollY; };
+    document.body.onmouseup = () => isDragging = false;
+    document.body.onmouseleave = () => isDragging = false;
+    document.body.onmousemove = e => {
+      if (!isDragging) return;
+      e.preventDefault();
+      window.scrollTo(scrollL - (e.pageX - startX), scrollT - (e.pageY - startY));
+    };
+  </script>
+</body>
+</html>
+```
+
+### README.md Template
+
+```markdown
+# {ProjectName} Generated UI Assets
+
+**Version:** 1.0
+**Date:** {date}
+**Format:** HTML + Tailwind CSS
+**Based on:** SRS-{ProjectName}-1.0, SDD-{ProjectName}-1.0
+
+---
+
+## Quick Start
+
+1. 開啟 `index.html` 查看畫面總覽
+2. 使用 `device-preview.html` 模擬裝置預覽 (iPad/iPhone)
+3. 開啟 `docs/ui-flow-diagram.html` 查看互動式流程圖
+
+---
+
+## Directory Structure
+
+```
+generated-ui/
+├── README.md
+├── index.html
+├── device-preview.html
+├── docs/
+│   └── ui-flow-diagram.html
+├── shared/
+│   └── {project}-theme.css
+├── screenshots/
+├── assets/
+├── platform-assets/
+└── {modules}/
+```
+
+---
+
+## Design System
+
+### Color Palette
+| Token | Hex | Usage |
+|-------|-----|-------|
+| Primary | `#6366F1` | 主要按鈕、連結、強調 |
+| Secondary | `#10B981` | 成功狀態、正向回饋 |
+| Accent | `#8B5CF6` | 點綴、次要強調 |
+
+### Typography
+- **iOS:** SF Pro Display / SF Pro Text
+- **Android:** Roboto / Inter
+- **Web:** Inter / System UI
+
+### Spacing
+- xs: 4px | sm: 8px | md: 16px | lg: 24px | xl: 32px | 2xl: 48px
+
+---
+
+## Screen Coverage
+
+| 模組 | 已生成 | 總需求 | 覆蓋率 |
+|------|--------|--------|--------|
+| AUTH | {n} | {total} | {%}% |
+| ONBOARD | {n} | {total} | {%}% |
+| DASH | {n} | {total} | {%}% |
+| ... | | | |
+| **總計** | **{n}** | **{total}** | **{%}%** |
+
+---
+
+## Usage Notes
+
+1. **預覽方式:** 直接用瀏覽器開啟 HTML 檔案
+2. **互動導航:** 所有按鈕皆已實作 onclick 導航
+3. **響應式:** 畫面支援 iPad / iPhone 雙尺寸
+4. **無依賴:** 僅需 Tailwind CDN，無其他依賴
+
+---
+
+*Generated by app-uiux-designer skill*
+```
+
+### Module Color Palette (模組色彩對照)
+
+| Module | Color Code | Tailwind Class | 用途 |
+|--------|------------|----------------|------|
+| AUTH | `#6366F1` | `from-indigo-500 to-indigo-600` | 認證模組 |
+| ONBOARD | `#8B5CF6` | `from-purple-500 to-purple-600` | 引導流程 |
+| DASH | `#F59E0B` | `from-amber-500 to-amber-600` | Dashboard |
+| FEATURE | `#10B981` | `from-emerald-500 to-emerald-600` | 核心功能 |
+| PROFILE | `#EC4899` | `from-pink-500 to-pink-600` | 個人資料 |
+| REPORT | `#3B82F6` | `from-blue-500 to-blue-600` | 報告分析 |
+| SETTING | `#64748B` | `from-slate-500 to-slate-600` | 設定選項 |
+| COMMERCE | `#EF4444` | `from-red-500 to-red-600` | 電商購物 |
+| SOCIAL | `#14B8A6` | `from-teal-500 to-teal-600` | 社群互動 |
+| MEDIA | `#F97316` | `from-orange-500 to-orange-600` | 媒體內容 |
+
+---
+
 ### UI Review Output Defaults
 When performing UI/UX Review, default outputs include:
 1. **Interactive HTML Prototype** - All screens as standalone HTML files
@@ -132,8 +868,8 @@ When UI is embedded in iframe (e.g., device-preview.html):
 
 **Step 5: Image Path Validation**
 Files in module folders (auth/, device/, dash/, etc.) referencing assets:
-- ✅ Correct: `src="../assets/napi/cheers.png"` (one level up)
-- ❌ Wrong: `src="../../assets/napi/cheers.png"` (two levels up - incorrect path)
+- ✅ Correct: `src="../assets/icons/app-logo.png"` (one level up)
+- ❌ Wrong: `src="../../assets/icons/app-logo.png"` (two levels up - incorrect path)
 
 ```bash
 # Check for incorrect image paths
@@ -488,8 +1224,8 @@ generated-ui/ 完成後
 │   │   ├── AppIcon.appiconset/     # 18 個 PNG + Contents.json
 │   │   ├── Colors/                 # 色彩資產 (含 Dark Mode)
 │   │   └── *.imageset/             # 圖片資產
-│   ├── SomniLandColors.swift       # SwiftUI Color Extension
-│   └── SomniLandIcons.swift        # SF Symbols + Icons
+│   ├── {ProjectName}Colors.swift   # SwiftUI Color Extension
+│   └── {ProjectName}Icons.swift    # SF Symbols + Icons
 └── 📁 android/
     ├── drawable/                   # Vector Drawable (XML)
     ├── mipmap-ldpi ~ xxxhdpi/      # App Icons (PNG)
@@ -499,7 +1235,7 @@ generated-ui/ 完成後
     │   ├── colors.xml
     │   ├── dimens.xml
     │   └── themes.xml
-    └── SomniLandTheme.kt           # Jetpack Compose Theme
+    └── {ProjectName}Theme.kt       # Jetpack Compose Theme
 ```
 
 #### iOS App Icon 尺寸
