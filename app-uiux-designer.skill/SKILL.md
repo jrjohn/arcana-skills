@@ -202,6 +202,7 @@ Identify and extract Icons, illustrations, UI components from images, generate p
 - Copy directly to project, ready to use
 - Figma Asset Library creation
 - React/iOS/Android Icon Component generation
+- **Auto App Icon Generation:** Use `scripts/generate-app-icons.sh` to batch generate all icon sizes
 
 ### 6. Platform Design Guidelines
 - **iOS**: Human Interface Guidelines (HIG), see [references/ios-guidelines.md](references/ios-guidelines.md)
@@ -442,6 +443,95 @@ Suggested requirements to add to SRS:
 - [ ] Regenerate SRS.docx and SDD.docx
 - [ ] Verify RTM 100% traceability
 ```
+
+### 20. Auto Platform Asset Generation 📱🤖
+當完成 UI 生成後，自動產生 iOS 和 Android 平台所需的所有資產。
+
+#### 自動觸發條件
+當使用者要求「產生平台資產」或「generate platform assets」時，自動執行以下流程：
+
+#### 自動產生流程
+```
+generated-ui/ 完成後
+     ↓
+1. 掃描 shared/theme.css 提取 Design Tokens
+2. 掃描 assets/ 識別現有素材
+3. 產生 App Icon (從 SVG 或 PNG 來源)
+4. 產生 iOS Assets.xcassets 結構
+5. 產生 Android drawable/mipmap 結構
+6. 輸出 Design Tokens (JSON/Swift/Kotlin)
+7. 產生 README 說明文件
+```
+
+#### App Icon 自動產生腳本
+```bash
+# 位置: scripts/generate-app-icons.sh
+
+# 使用方式
+./generate-app-icons.sh [source_image] [output_dir]
+
+# 範例
+./generate-app-icons.sh app-icon.svg ./platform-assets
+./generate-app-icons.sh app-icon-1024.png
+```
+
+#### 產生的資產結構
+```
+📁 platform-assets/
+├── 📄 README.md                    # 整合說明
+├── 📄 design-tokens.json           # Design Tokens
+├── 📁 app-icon/
+│   ├── app-icon-source.svg         # 來源 SVG
+│   └── app-icon-1024.png           # 來源 PNG
+├── 📁 ios/
+│   ├── Assets.xcassets/
+│   │   ├── AppIcon.appiconset/     # 18 個 PNG + Contents.json
+│   │   ├── Colors/                 # 色彩資產 (含 Dark Mode)
+│   │   └── *.imageset/             # 圖片資產
+│   ├── SomniLandColors.swift       # SwiftUI Color Extension
+│   └── SomniLandIcons.swift        # SF Symbols + Icons
+└── 📁 android/
+    ├── drawable/                   # Vector Drawable (XML)
+    ├── mipmap-ldpi ~ xxxhdpi/      # App Icons (PNG)
+    ├── mipmap-anydpi-v26/          # Adaptive Icon (XML)
+    ├── playstore/                  # Play Store (512x512)
+    ├── values/
+    │   ├── colors.xml
+    │   ├── dimens.xml
+    │   └── themes.xml
+    └── SomniLandTheme.kt           # Jetpack Compose Theme
+```
+
+#### iOS App Icon 尺寸
+| 檔案名稱 | 尺寸 | 用途 |
+|----------|------|------|
+| Icon-20@2x.png | 40x40 | iPhone Notification |
+| Icon-20@3x.png | 60x60 | iPhone Notification |
+| Icon-29@2x.png | 58x58 | Settings |
+| Icon-29@3x.png | 87x87 | Settings |
+| Icon-40@2x.png | 80x80 | Spotlight |
+| Icon-40@3x.png | 120x120 | Spotlight |
+| Icon-60@2x.png | 120x120 | iPhone App |
+| Icon-60@3x.png | 180x180 | iPhone App |
+| Icon-76.png | 76x76 | iPad App |
+| Icon-76@2x.png | 152x152 | iPad App |
+| Icon-83.5@2x.png | 167x167 | iPad Pro |
+| Icon-1024.png | 1024x1024 | App Store |
+
+#### Android Mipmap 尺寸
+| 資料夾 | 尺寸 | DPI |
+|--------|------|-----|
+| mipmap-ldpi | 36x36 | 120 |
+| mipmap-mdpi | 48x48 | 160 |
+| mipmap-hdpi | 72x72 | 240 |
+| mipmap-xhdpi | 96x96 | 320 |
+| mipmap-xxhdpi | 144x144 | 480 |
+| mipmap-xxxhdpi | 192x192 | 640 |
+| playstore | 512x512 | - |
+
+#### 需求工具
+- **macOS:** `sips` (內建)
+- **SVG 轉換:** `rsvg-convert` (brew install librsvg) 或 `ImageMagick`
 
 ---
 
