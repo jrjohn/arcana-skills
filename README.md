@@ -113,6 +113,12 @@ If you prefer using WSL2, you can either:
 | `springboot-developer-skill` | Spring Boot development guide (Dual-protocol, OSGi Plugin System) |
 | `windows-developer-skill` | Windows desktop development guide (WinUI 3, CRDT-based offline sync) |
 
+### Design Skills
+
+| Skill | Description |
+|-------|-------------|
+| `app-uiux-designer.skill` | Enterprise-grade UI/UX design expert (SRS/SDD → Batch UI Generation, Visual Style Extraction, Motion Design, Dark Mode, i18n Localization, Design Review) |
+
 ### Domain-Specific Skills
 
 | Skill | Description |
@@ -181,7 +187,8 @@ arcana-skills/
 ├── python-developer-skill/
 ├── springboot-developer-skill/
 ├── windows-developer-skill/
-└── medical-software-requirements-skill/
+├── medical-software-requirements-skill/
+└── app-uiux-designer.skill/
 ```
 
 ## System Requirements
@@ -207,6 +214,8 @@ Use ios-developer-skill to help me create a new iOS project
 ```
 
 ## Update Skills
+
+> **Note:** The installer automatically removes old skill versions before reinstalling, ensuring a clean update.
 
 ### macOS / Linux
 

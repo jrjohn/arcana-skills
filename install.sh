@@ -37,6 +37,7 @@ SKILLS=(
     "springboot-developer-skill"
     "windows-developer-skill"
     "medical-software-requirements-skill"
+    "app-uiux-designer.skill"
 )
 
 # Print banner
@@ -223,15 +224,9 @@ install_skill() {
         return 0
     fi
 
-    # Check if skill already exists
+    # Auto-remove old skill if exists (for clean reinstall)
     if [ -d "$target_path" ]; then
-        warn "Skill already exists: $skill_name"
-        read -p "  Overwrite? (y/N) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            info "Skipping $skill_name"
-            return 0
-        fi
+        info "Removing old version: $skill_name"
         rm -rf "$target_path"
     fi
 

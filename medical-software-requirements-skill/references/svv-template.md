@@ -9,7 +9,7 @@ Prepared by {{author}}
 ## Table of Contents
 <!-- TOC -->
 * [1. Introduction](#1-introduction)
-* [2. Verification Activities Summary](#2-Verification-activities-summary)
+* [2. Verification Activities Summary](#2-verification-activities-summary)
 * [3. Validation Activities Summary](#3-validation-activities-summary)
 * [4. Traceability Analysis](#4-traceability-analysis)
 * [5. Anomaly Report](#5-anomaly-report)
@@ -29,391 +29,391 @@ Prepared by {{author}}
 
 ### 1.1 References
 
-| Document Number | Document Name | Version |
+| 文件編號 | 文件名稱 | 版本 |
 |---------|---------|------|
-| SRS-xxx | Software Requirements Specification | [Version] |
-| SDD-xxx | Software Design Specification | [Version] |
-| SWD-xxx | Software Detailed Design | [Version] |
-| STP-xxx | Software Test Plan | [Version] |
-| STC-xxx | Software Test Cases | [Version] |
+| SRS-xxx | 軟體需求規格書 | [版本] |
+| SDD-xxx | 軟體設計規格書 | [版本] |
+| SWD-xxx | 軟體詳細設計書 | [版本] |
+| STP-xxx | 軟體測試計畫 | [版本] |
+| STC-xxx | 軟體測試案例 | [版本] |
 
-### 1.3 Software Version Information
+### 1.3 軟體版本資訊
 
-| Items | Content |
+| 項目 | 內容 |
 |-----|------|
-| Software Name | [ProductName] |
-| Software Version | [X.X.X] |
-| Build Number | [Build Number] |
-| Build Date | [YYYY-MM-DD] |
-| Software Safety Classification | [Class A/B/C] |
+| 軟體名稱 | [產品名稱] |
+| 軟體版本 | [X.X.X] |
+| 組建編號 | [Build Number] |
+| 組建日期 | [YYYY-MM-DD] |
+| 軟體安全分類 | [Class A/B/C] |
 
 ---
 
-## 2. Verification Activity Summary
+## 2. 驗證活動摘要
 
-### 2.1 Verification Activity Overview
+### 2.1 驗證活動總覽
 
-| ID | Verification Activity | Corresponding Standard Clause | Execution Status | Results |
+| ID | 驗證活動 | 對應標準條款 | 執行狀態 | 結果 |
 |----|---------|-------------|---------|------|
-| SVV-001 | Requirements Review | IEC 62304 §5.2 | Complete | Passed |
-| SVV-002 | Design Review | IEC 62304 §5.3, §5.4 | Complete | Passed |
-| SVV-003 | Code Review | IEC 62304 §5.5 | Complete | Passed |
-| SVV-004 | UnitTest | IEC 62304 §5.5.5 | Complete | Passed |
-| SVV-005 | Integration Test | IEC 62304 §5.6 | Complete | Passed |
-| SVV-006 | System Test | IEC 62304 §5.7 | Complete | Passed |
+| SVV-001 | 需求審查 | IEC 62304 §5.2 | 完成 | 通過 |
+| SVV-002 | 設計審查 | IEC 62304 §5.3, §5.4 | 完成 | 通過 |
+| SVV-003 | 程式碼審查 | IEC 62304 §5.5 | 完成 | 通過 |
+| SVV-004 | 單元測試 | IEC 62304 §5.5.5 | 完成 | 通過 |
+| SVV-005 | 整合測試 | IEC 62304 §5.6 | 完成 | 通過 |
+| SVV-006 | 系統測試 | IEC 62304 §5.7 | 完成 | 通過 |
 
-### 2.2 Verification Activity Detailed Description
+### 2.2 驗證活動詳細說明
 
 ---
 
-#### SVV-001 Requirements Review
+#### SVV-001 需求審查
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SVV-001 |
-| **Activity Name** | Requirements Review |
-| **Corresponding Standard** | IEC 62304 §5.2 |
-| **Corresponding Document** | SRS-xxx |
-| **Execution Date** | [YYYY-MM-DD] |
-| **Executor** | [Name] |
-| **Results** | [Passed/ConditionallyPassed/NotPassed] |
+| **活動名稱** | 需求審查 |
+| **對應標準** | IEC 62304 §5.2 |
+| **對應文件** | SRS-xxx |
+| **執行日期** | [YYYY-MM-DD] |
+| **執行者** | [姓名] |
+| **結果** | [通過/有條件通過/不通過] |
 
-**Review Items**：
-| Items | Review Content | Results | Notes |
+**審查項目**：
+| 項目 | 審查內容 | 結果 | 備註 |
 |-----|---------|------|------|
-| Completeness | Requirements completely cover all functions | [Pass/Fail] | |
-| Correctness | Requirement descriptions are correct and error-free | [Pass/Fail] | |
-| Consistency | Requirements are consistent with no contradictions | [Pass/Fail] | |
-| Traceability | Requirements can be traced to source | [Pass/Fail] | |
-| Verifiability | Requirements can be verified | [Pass/Fail] | |
-| Risk Management | Safety-related requirements are identified | [Pass/Fail] | |
+| 完整性 | 需求是否完整涵蓋所有功能 | [Pass/Fail] | |
+| 正確性 | 需求描述是否正確無誤 | [Pass/Fail] | |
+| 一致性 | 需求間是否一致無矛盾 | [Pass/Fail] | |
+| 可追溯性 | 需求是否可追溯至來源 | [Pass/Fail] | |
+| 可驗證性 | 需求是否可被驗證 | [Pass/Fail] | |
+| 風險管理 | 是否識別安全相關需求 | [Pass/Fail] | |
 
-**Review Findings**：
-| Finding ID | Description | Severity Level | Processing Status |
+**審查發現**：
+| 發現 ID | 描述 | 嚴重程度 | 處理狀態 |
 |--------|------|---------|---------|
-| [ID] | [Description] | [High/Medium/Low] | [Open/Resolved] |
+| [ID] | [描述] | [高/中/低] | [開啟/已解決] |
 
 ---
 
-#### SVV-002 Design Review
+#### SVV-002 設計審查
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SVV-002 |
-| **Activity Name** | Design Review |
-| **Corresponding Standard** | IEC 62304 §5.3, §5.4 |
-| **Corresponding Document** | SDD-xxx, SWD-xxx |
-| **Execution Date** | [YYYY-MM-DD] |
-| **Executor** | [Name] |
-| **Results** | [Passed/ConditionallyPassed/NotPassed] |
+| **活動名稱** | 設計審查 |
+| **對應標準** | IEC 62304 §5.3, §5.4 |
+| **對應文件** | SDD-xxx, SWD-xxx |
+| **執行日期** | [YYYY-MM-DD] |
+| **執行者** | [姓名] |
+| **結果** | [通過/有條件通過/不通過] |
 
-**Review Items**：
-| Items | Review Content | Results | Notes |
+**審查項目**：
+| 項目 | 審查內容 | 結果 | 備註 |
 |-----|---------|------|------|
-| Architecture Rationality | Architecture design is rational | [Pass/Fail] | |
-| Module Decomposition | Module decomposition is appropriate | [Pass/Fail] | |
-| Interface Definition | Interface definition is clear | [Pass/Fail] | |
-| Requirement Traceability | Design traces to requirement | [Pass/Fail] | |
-| Safety Design | Safety risks considered | [Pass/Fail] | |
+| 架構合理性 | 架構設計是否合理 | [Pass/Fail] | |
+| 模組分解 | 模組分解是否適當 | [Pass/Fail] | |
+| 介面定義 | 介面定義是否清晰 | [Pass/Fail] | |
+| 需求追溯 | 設計是否追溯至需求 | [Pass/Fail] | |
+| 安全設計 | 是否考慮安全風險 | [Pass/Fail] | |
 
 ---
 
-#### SVV-003 Code Review
+#### SVV-003 程式碼審查
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SVV-003 |
-| **Activity Name** | Code Review |
-| **Corresponding Standard** | IEC 62304 §5.5 |
-| **Corresponding Document** | SWD-xxx |
-| **Execution Date** | [YYYY-MM-DD] |
-| **Executor** | [Name] |
-| **Results** | [Passed/ConditionallyPassed/NotPassed] |
+| **活動名稱** | 程式碼審查 |
+| **對應標準** | IEC 62304 §5.5 |
+| **對應文件** | SWD-xxx |
+| **執行日期** | [YYYY-MM-DD] |
+| **執行者** | [姓名] |
+| **結果** | [通過/有條件通過/不通過] |
 
-**Review Items**：
-| Items | Review Content | Results | Notes |
+**審查項目**：
+| 項目 | 審查內容 | 結果 | 備註 |
 |-----|---------|------|------|
-| Coding Standards | Aligned with coding standards | [Pass/Fail] | |
-| Logic Correctness | Implementation logic is correct | [Pass/Fail] | |
-| Error Handling | Error handling is complete | [Pass/Fail] | |
-| Resource Management | Resources correctly released | [Pass/Fail] | |
-| Security | Security vulnerabilities exist | [Pass/Fail] | |
+| 編碼標準 | 是否符合編碼標準 | [Pass/Fail] | |
+| 邏輯正確 | 程式邏輯是否正確 | [Pass/Fail] | |
+| 錯誤處理 | 錯誤處理是否完整 | [Pass/Fail] | |
+| 資源管理 | 資源是否正確釋放 | [Pass/Fail] | |
+| 安全性 | 是否存在安全漏洞 | [Pass/Fail] | |
 
 ---
 
-#### SVV-004 UnitTest
+#### SVV-004 單元測試
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SVV-004 |
-| **Activity Name** | UnitTest |
-| **Corresponding Standard** | IEC 62304 §5.5.5 |
-| **Corresponding Document** | STC-xxx |
-| **Execution Date** | [YYYY-MM-DD] |
-| **Executor** | [Name] |
-| **Results** | [Passed/ConditionallyPassed/NotPassed] |
+| **活動名稱** | 單元測試 |
+| **對應標準** | IEC 62304 §5.5.5 |
+| **對應文件** | STC-xxx |
+| **執行日期** | [YYYY-MM-DD] |
+| **執行者** | [姓名] |
+| **結果** | [通過/有條件通過/不通過] |
 
-**Test Statistics**：
-| Metric | Value | Requirements | Status |
+**測試統計**：
+| 指標 | 數值 | 要求 | 狀態 |
 |-----|------|------|------|
-| Total Test Cases | [Quantity] | - | - |
-| Passed Count | [Quantity] | - | - |
-| Failed Count | [Quantity] | 0 | [Pass/Fail] |
-| Pass Rate | [%] | 100% | [Pass/Fail] |
-| Statement Coverage | [%] | ≥ [Requirements]% | [Pass/Fail] |
-| Branch Coverage | [%] | ≥ [Requirements]% | [Pass/Fail] |
+| 總測試案例數 | [數量] | - | - |
+| 通過數 | [數量] | - | - |
+| 失敗數 | [數量] | 0 | [Pass/Fail] |
+| 通過率 | [%] | 100% | [Pass/Fail] |
+| 語句覆蓋率 | [%] | ≥ [要求]% | [Pass/Fail] |
+| 分支覆蓋率 | [%] | ≥ [要求]% | [Pass/Fail] |
 
 ---
 
-#### SVV-005 Integration Test
+#### SVV-005 整合測試
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SVV-005 |
-| **Activity Name** | Integration Test |
-| **Corresponding Standard** | IEC 62304 §5.6 |
-| **Corresponding Document** | STC-xxx |
-| **Execution Date** | [YYYY-MM-DD] |
-| **Executor** | [Name] |
-| **Results** | [Passed/ConditionallyPassed/NotPassed] |
+| **活動名稱** | 整合測試 |
+| **對應標準** | IEC 62304 §5.6 |
+| **對應文件** | STC-xxx |
+| **執行日期** | [YYYY-MM-DD] |
+| **執行者** | [姓名] |
+| **結果** | [通過/有條件通過/不通過] |
 
-**Test Statistics**：
-| Metric | Value | Requirements | Status |
+**測試統計**：
+| 指標 | 數值 | 要求 | 狀態 |
 |-----|------|------|------|
-| Total Test Cases | [Quantity] | - | - |
-| Passed Count | [Quantity] | - | - |
-| Failed Count | [Quantity] | 0 | [Pass/Fail] |
-| Pass Rate | [%] | 100% | [Pass/Fail] |
+| 總測試案例數 | [數量] | - | - |
+| 通過數 | [數量] | - | - |
+| 失敗數 | [數量] | 0 | [Pass/Fail] |
+| 通過率 | [%] | 100% | [Pass/Fail] |
 
 ---
 
-#### SVV-006 System Test
+#### SVV-006 系統測試
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SVV-006 |
-| **Activity Name** | System Test |
-| **Corresponding Standard** | IEC 62304 §5.7 |
-| **Corresponding Document** | STC-xxx |
-| **Execution Date** | [YYYY-MM-DD] |
-| **Executor** | [Name] |
-| **Results** | [Passed/ConditionallyPassed/NotPassed] |
+| **活動名稱** | 系統測試 |
+| **對應標準** | IEC 62304 §5.7 |
+| **對應文件** | STC-xxx |
+| **執行日期** | [YYYY-MM-DD] |
+| **執行者** | [姓名] |
+| **結果** | [通過/有條件通過/不通過] |
 
-**Test Statistics**：
-| Metric | Value | Requirements | Status |
+**測試統計**：
+| 指標 | 數值 | 要求 | 狀態 |
 |-----|------|------|------|
-| Total Test Cases | [Quantity] | - | - |
-| Passed Count | [Quantity] | - | - |
-| Failed Count | [Quantity] | 0 | [Pass/Fail] |
-| Pass Rate | [%] | 100% | [Pass/Fail] |
-| Requirement Coverage | [%] | 100% | [Pass/Fail] |
+| 總測試案例數 | [數量] | - | - |
+| 通過數 | [數量] | - | - |
+| 失敗數 | [數量] | 0 | [Pass/Fail] |
+| 通過率 | [%] | 100% | [Pass/Fail] |
+| 需求覆蓋率 | [%] | 100% | [Pass/Fail] |
 
 ---
 
-## 3. Validation Activity Summary
+## 3. 確認活動摘要
 
-### 3.1 Validation Activity Overview
+### 3.1 確認活動總覽
 
-| ID | Validation Activity | Corresponding Standard Clause | Execution Status | Results |
+| ID | 確認活動 | 對應標準條款 | 執行狀態 | 結果 |
 |----|---------|-------------|---------|------|
-| SVV-VAL-001 | User Acceptance Test | IEC 62304 §5.8 | Complete | Passed |
-| SVV-VAL-002 | Intended Use Environment Test | IEC 62304 §5.8 | Complete | Passed |
-| SVV-VAL-003 | Risk Mitigation Validation | IEC 62304 §7.3 | Complete | Passed |
+| SVV-VAL-001 | 使用者驗收測試 | IEC 62304 §5.8 | 完成 | 通過 |
+| SVV-VAL-002 | 預期使用環境測試 | IEC 62304 §5.8 | 完成 | 通過 |
+| SVV-VAL-003 | 風險緩解驗證 | IEC 62304 §7.3 | 完成 | 通過 |
 
-### 3.2 Validation Activity Detailed Description
+### 3.2 確認活動詳細說明
 
 ---
 
-#### SVV-VAL-001 User Acceptance Test
+#### SVV-VAL-001 使用者驗收測試
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SVV-VAL-001 |
-| **Activity Name** | User Acceptance Test |
-| **Execution Date** | [YYYY-MM-DD] |
-| **Executor** | [Name] |
-| **Participating User** | [Name/Role] |
-| **Results** | [Passed/ConditionallyPassed/NotPassed] |
+| **活動名稱** | 使用者驗收測試 |
+| **執行日期** | [YYYY-MM-DD] |
+| **執行者** | [姓名] |
+| **參與使用者** | [姓名/角色] |
+| **結果** | [通過/有條件通過/不通過] |
 
-**Acceptance Items**：
-| Items | Description | Results | User Feedback |
+**驗收項目**：
+| 項目 | 說明 | 結果 | 使用者回饋 |
 |-----|------|------|-----------|
-| [Items1] | [Description] | [Pass/Fail] | [Feedback] |
-| [Items2] | [Description] | [Pass/Fail] | [Feedback] |
+| [項目1] | [說明] | [Pass/Fail] | [回饋] |
+| [項目2] | [說明] | [Pass/Fail] | [回饋] |
 
 ---
 
-#### SVV-VAL-002 Intended Use Environment Test
+#### SVV-VAL-002 預期使用環境測試
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SVV-VAL-002 |
-| **Activity Name** | Intended Use Environment Test |
-| **Execution Date** | [YYYY-MM-DD] |
-| **Executor** | [Name] |
-| **Test Environment** | [Environment Description] |
-| **Results** | [Passed/ConditionallyPassed/NotPassed] |
+| **活動名稱** | 預期使用環境測試 |
+| **執行日期** | [YYYY-MM-DD] |
+| **執行者** | [姓名] |
+| **測試環境** | [環境說明] |
+| **結果** | [通過/有條件通過/不通過] |
 
-**Environment Test Items**：
-| Items | Description | Results | Notes |
+**環境測試項目**：
+| 項目 | 說明 | 結果 | 備註 |
 |-----|------|------|------|
-| Hardware Compatibility | [Description] | [Pass/Fail] | |
-| Software Compatibility | [Description] | [Pass/Fail] | |
-| Network Environment | [Description] | [Pass/Fail] | |
+| 硬體相容性 | [說明] | [Pass/Fail] | |
+| 軟體相容性 | [說明] | [Pass/Fail] | |
+| 網路環境 | [說明] | [Pass/Fail] | |
 
 ---
 
-#### SVV-VAL-003 Risk Mitigation Validation
+#### SVV-VAL-003 風險緩解驗證
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SVV-VAL-003 |
-| **Activity Name** | Risk Mitigation Validation |
-| **Execution Date** | [YYYY-MM-DD] |
-| **Executor** | [Name] |
-| **Results** | [Passed/ConditionallyPassed/NotPassed] |
+| **活動名稱** | 風險緩解驗證 |
+| **執行日期** | [YYYY-MM-DD] |
+| **執行者** | [姓名] |
+| **結果** | [通過/有條件通過/不通過] |
 
-**Risk Mitigation Validation**：
-| Risk ID | Risk Description | Mitigation measure | Verification Method | Results |
+**風險緩解驗證**：
+| 風險 ID | 風險描述 | 緩解措施 | 驗證方法 | 結果 |
 |--------|---------|---------|---------|------|
-| [RISK-001] | [Description] | [measure] | [Method] | [Pass/Fail] |
-| [RISK-002] | [Description] | [measure] | [Method] | [Pass/Fail] |
+| [RISK-001] | [描述] | [措施] | [方法] | [Pass/Fail] |
+| [RISK-002] | [描述] | [措施] | [方法] | [Pass/Fail] |
 
 ---
 
-## 4. Traceability Analysis
+## 4. 追溯性分析
 
-### 4.1 Requirement Traceability Matrix Summary
+### 4.1 需求追溯矩陣摘要
 
-| Traceability Type | Total Count | Already Traced | Coverage |
+| 追溯類型 | 總數 | 已追溯 | 覆蓋率 |
 |---------|------|--------|--------|
-| Requirement → Design | [Quantity] | [Quantity] | [%] |
-| Design → Implementation | [Quantity] | [Quantity] | [%] |
-| Requirement → Test | [Quantity] | [Quantity] | [%] |
-| Test → Validate | [Quantity] | [Quantity] | [%] |
+| 需求 → 設計 | [數量] | [數量] | [%] |
+| 設計 → 程式 | [數量] | [數量] | [%] |
+| 需求 → 測試 | [數量] | [數量] | [%] |
+| 測試 → 驗證 | [數量] | [數量] | [%] |
 
-### 4.2 Complete Traceability Chain
+### 4.2 完整追溯鏈
 
-| Requirement ID | Design ID | Implementation ID | Test ID | Validate ID | Status |
+| 需求 ID | 設計 ID | 程式 ID | 測試 ID | 驗證 ID | 狀態 |
 |--------|--------|--------|--------|--------|------|
-| SRS-001 | SDD-001 | SWD-001 | STC-001 | SVV-006 | Complete |
-| SRS-002 | SDD-002 | SWD-002 | STC-003 | SVV-006 | Complete |
-| SRS-003 | SDD-003 | SWD-003 | STC-005 | SVV-006 | Complete |
+| SRS-001 | SDD-001 | SWD-001 | STC-001 | SVV-006 | 完整 |
+| SRS-002 | SDD-002 | SWD-002 | STC-003 | SVV-006 | 完整 |
+| SRS-003 | SDD-003 | SWD-003 | STC-005 | SVV-006 | 完整 |
 
-### 4.3 Traceability Gap Analysis
+### 4.3 追溯性缺口分析
 
-| Gap Type | Items ID | Description | Processing Status |
+| 缺口類型 | 項目 ID | 說明 | 處理狀態 |
 |---------|--------|------|---------|
-| [Type] | [ID] | [Description] | [Resolved/In Progress] |
+| [類型] | [ID] | [說明] | [已解決/待處理] |
 
 ---
 
-## 5. Anomaly Report
+## 5. 異常報告
 
-### 5.1 Anomaly Summary
+### 5.1 異常摘要
 
-| Severity Level | Discovery Count | Resolved | Unresolved |
+| 嚴重程度 | 發現數 | 已解決 | 未解決 |
 |---------|--------|--------|--------|
-| Critical | [Quantity] | [Quantity] | [Quantity] |
-| High | [Quantity] | [Quantity] | [Quantity] |
-| Medium | [Quantity] | [Quantity] | [Quantity] |
-| Low | [Quantity] | [Quantity] | [Quantity] |
-| **Total Count** | [Quantity] | [Quantity] | [Quantity] |
+| Critical | [數量] | [數量] | [數量] |
+| High | [數量] | [數量] | [數量] |
+| Medium | [數量] | [數量] | [數量] |
+| Low | [數量] | [數量] | [數量] |
+| **總計** | [數量] | [數量] | [數量] |
 
-### 5.2 Anomaly Details Record
+### 5.2 異常詳細記錄
 
-| Anomaly ID | Description | Severity Level | Discovery Phase | Status | Solution |
+| 異常 ID | 描述 | 嚴重程度 | 發現階段 | 狀態 | 解決方案 |
 |--------|------|---------|---------|------|---------|
-| BUG-001 | [Description] | [Level] | SVV-004 | Resolved | [Approach] |
-| BUG-002 | [Description] | [Level] | SVV-006 | Resolved | [Approach] |
+| BUG-001 | [描述] | [等級] | SVV-004 | 已解決 | [方案] |
+| BUG-002 | [描述] | [等級] | SVV-006 | 已解決 | [方案] |
 
-### 5.3 Unresolved Anomaly Risk Assessment
+### 5.3 未解決異常風險評估
 
-| Anomaly ID | Description | Risk Assessment | Mitigation Measure | Acceptance Rationale |
+| 異常 ID | 描述 | 風險評估 | 緩解措施 | 接受理由 |
 |--------|------|---------|---------|---------|
-| [ID] | [Description] | [Risk Level] | [Measure] | [Rationale] |
+| [ID] | [描述] | [風險等級] | [措施] | [理由] |
 
 ---
 
-## 6. Conclusions and Recommendations
+## 6. 結論與建議
 
-### 6.1 Verification Conclusion
+### 6.1 驗證結論
 
-| Items | Conclusion |
+| 項目 | 結論 |
 |-----|------|
-| Requirement Compliance | [Aligned/Partially Aligned/Not Aligned] |
-| Design Conformance | [Aligned/Partially Aligned/Not Aligned] |
-| Implementation Conformance | [Aligned/Partially Aligned/Not Aligned] |
-| Test Completeness | [Complete/Partially Complete/Not Complete] |
-| Traceability Completeness | [Complete/Partially Complete/Not Complete] |
+| 需求符合性 | [符合/部分符合/不符合] |
+| 設計符合性 | [符合/部分符合/不符合] |
+| 實作符合性 | [符合/部分符合/不符合] |
+| 測試完整性 | [完整/部分完整/不完整] |
+| 追溯性完整性 | [完整/部分完整/不完整] |
 
-### 6.2 Validation Conclusion
+### 6.2 確認結論
 
-| Items | Conclusion |
+| 項目 | 結論 |
 |-----|------|
-| User Acceptance | [Accepted/Conditionally Accepted/Not Accepted] |
-| Environment Compatibility | [Compatible/Partially Compatible/Not Compatible] |
-| Risk Control Effectiveness | [Effective/Partially Effective/Ineffective] |
+| 使用者接受度 | [接受/有條件接受/不接受] |
+| 環境相容性 | [相容/部分相容/不相容] |
+| 風險控制有效性 | [有效/部分有效/無效] |
 
-### 6.3 Overall Conclusion
+### 6.3 整體結論
 
-**Software Verification & Validation Conclusion**: [Passed/Conditionally Passed/Not Passed]
+**軟體驗證與確認結論**：[通過/有條件通過/不通過]
 
-**Conclusion Description**:
-[Detailed description of overall V&V conclusion basis]
+**結論說明**：
+[詳細說明整體 V&V 結論的依據]
 
-### 6.4 Recommendations
+### 6.4 建議事項
 
-| Recommendation ID | Recommendation Content | Priority Level | Responsible Person |
+| 建議 ID | 建議內容 | 優先級 | 負責人 |
 |--------|---------|--------|--------|
-| REC-001 | [Recommendation Content] | [High/Medium/Low] | [Name] |
-| REC-002 | [Recommendation Content] | [High/Medium/Low] | [Name] |
+| REC-001 | [建議內容] | [高/中/低] | [姓名] |
+| REC-002 | [建議內容] | [高/中/低] | [姓名] |
 
-### 6.5 Release Recommendation
+### 6.5 發布建議
 
-| Items | Recommend |
+| 項目 | 建議 |
 |-----|------|
-| Recommend Release | [Yes/No/Conditionally] |
-| Release Conditions | [Condition Description，If applicable] |
-| Limitations | [Limitation Description，If applicable] |
+| 是否建議發布 | [是/否/有條件] |
+| 發布條件 | [條件說明，若適用] |
+| 限制事項 | [限制說明，若適用] |
 
 ---
 
-## 7. Appendix
+## 7. 附錄
 
-### 7.1 Test Environment Detailed Configuration
+### 7.1 測試環境詳細配置
 
-| Items | Specification |
+| 項目 | 規格 |
 |-----|------|
-| [Hardware/Software] | [SpecificationDescription] |
+| [硬體/軟體] | [規格說明] |
 
-### 7.2 Test Tool Validation Record
+### 7.2 測試工具驗證記錄
 
-| Tool Name | Version | Validation Date | Validation Results |
+| 工具名稱 | 版本 | 驗證日期 | 驗證結果 |
 |---------|------|---------|---------|
-| [Tool] | [Version] | [Date] | [Pass/Fail] |
+| [工具] | [版本] | [日期] | [Pass/Fail] |
 
-### 7.3 Technical Terms Definition
+### 7.3 術語定義
 
-| Technical Term | Definition |
+| 術語 | 定義 |
 |-----|------|
-| Verification | Confirm software aligns with specification requirements |
-| Validation | Confirm software aligns with user requirements |
+| 驗證 (Verification) | 確認軟體符合規格要求 |
+| 確認 (Validation) | 確認軟體符合使用者需求 |
 
-### 7.4 Abbreviations
+### 7.4 縮寫
 
-| Abbreviations | Full Name |
+| 縮寫 | 全稱 |
 |-----|------|
 | SVV | Software Verification & Validation |
 | V&V | Verification and Validation |
 
 ---
 
-## Approval
+## 簽核
 
-| Role | Name | Signature | Date |
+| 角色 | 姓名 | 簽名 | 日期 |
 |-----|------|------|------|
-| Author | | | |
-| Reviewer | | | |
-| Quality Supervisor | | | |
-| Approver | | | |
+| 作者 | | | |
+| 審核者 | | | |
+| 品保主管 | | | |
+| 核准者 | | | |

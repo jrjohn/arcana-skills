@@ -6,119 +6,11 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const crypto = require('crypto');
-const os = require('os');
-
-// ============================================
-// Cross-platform support
-// ============================================
-const IS_WINDOWS = os.platform() === 'win32';
-// Suppress stderr: Unix uses '2>/dev/null', Windows uses '2>NUL'
-const SUPPRESS_STDERR = IS_WINDOWS ? '2>NUL' : '2>/dev/null';
-// execSync options for cross-platform compatibility
-const EXEC_OPTIONS = { stdio: 'pipe', timeout: 60000, windowsHide: true };
-
-/**
- * Normalize path for shell commands (convert backslashes to forward slashes)
- * Windows shell commands work with forward slashes, and this avoids escape issues
- */
-function shellPath(p) {
-  return p.replace(/\\/g, '/');
-}
-
-// ============================================
-// Dependency Check and Installation
-// ============================================
-
-/**
- * Check if a command is available
- */
-function isCommandAvailable(cmd) {
-  try {
-    const checkCmd = IS_WINDOWS ? `where ${cmd}` : `which ${cmd}`;
-    execSync(checkCmd, { stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Check if npm package is installed globally
- */
-function isNpmPackageInstalled(packageName) {
-  try {
-    const result = execSync(`npm list -g ${packageName} --depth=0`, { encoding: 'utf8', stdio: 'pipe' });
-    return result.includes(packageName);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Check and install required dependencies
- */
-function checkAndInstallDependencies() {
-  console.log('Checking dependencies...');
-  let allInstalled = true;
-
-  // Check docx npm module (local)
-  try {
-    require.resolve('docx');
-    console.log('  ✓ docx module');
-  } catch {
-    console.log('  ✗ docx module not found, installing...');
-    try {
-      execSync('npm install docx', { stdio: 'inherit' });
-      console.log('  ✓ docx module installed');
-    } catch (e) {
-      console.error('  ✗ Failed to install docx:', e.message);
-      allInstalled = false;
-    }
-  }
-
-  // Check mermaid-cli (mmdc)
-  if (isCommandAvailable('mmdc')) {
-    console.log('  ✓ mermaid-cli (mmdc)');
-  } else {
-    console.log('  ✗ mermaid-cli not found, installing globally...');
-    try {
-      execSync('npm install -g @mermaid-js/mermaid-cli', { stdio: 'inherit' });
-      console.log('  ✓ mermaid-cli installed');
-    } catch (e) {
-      console.error('  ✗ Failed to install mermaid-cli:', e.message);
-      allInstalled = false;
-    }
-  }
-
-  // Check mutool (mupdf)
-  if (isCommandAvailable('mutool')) {
-    console.log('  ✓ mutool (mupdf)');
-  } else {
-    console.log('  ⚠ mutool not found (optional, for better SVG quality)');
-    if (IS_WINDOWS) {
-      console.log('    To install: choco install mupdf');
-    } else {
-      console.log('    To install: brew install mupdf-tools');
-    }
-    // mutool is optional, don't fail
-  }
-
-  if (!allInstalled) {
-    console.error('\nSome required dependencies could not be installed.');
-    console.error('Please install them manually and try again.');
-    process.exit(1);
-  }
-
-  console.log('');
-}
-
-// Run dependency check on script load
-checkAndInstallDependencies();
 
 // ============================================
 // Font Settings - Chinese uses Microsoft JhengHei, English uses Arial
 // ============================================
-const FONT_CN = 'Microsoft JhengHei';  // Chinese font (Traditional/Simplified Chinese)
+const FONT_CN = '微軟正黑體';  // Chinese font (Traditional/Simplified Chinese)
 const FONT_EN = 'Arial';       // English font
 const FONT_CODE = 'Consolas';  // Code font (monospace, better readability)
 
@@ -138,9 +30,9 @@ const FONT_SIZE = {
 };
 
 /**
- * Check if text Include Chinese characters
+ * Check if text contains Chinese characters
  */
-function IncludeChinese(text) {
+function containsChinese(text) {
   return /[\u4e00-\u9fff]/.test(text);
 }
 
@@ -548,7 +440,7 @@ function postProcessMutoolSvg(svgContent) {
     const textX = e;
     const textY = f;
 
-    // Check if this is a background rectangle (large white box) - scale > 0.1 and Include M0 0H pattern
+    // Check if this is a background rectangle (large white box) - scale > 0.1 and contains M0 0H pattern
     if (Math.abs(a) > 0.1 && attrs.includes('d="M0 0H')) {
       return fullMatch; // Keep background rectangle as white
     }
@@ -616,7 +508,10 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
   const pdfFile = path.join(tempDir, `mermaid-${hash}.pdf`);
   try {
     // Step 1: Generate PDF (Mermaid PDF output converts text to paths and applies style-specified colors)
-    execSync(`mmdc -i "${shellPath(inputFile)}" -o "${shellPath(pdfFile)}" -c "${shellPath(configPath)}" --pdfFit ${SUPPRESS_STDERR}`, EXEC_OPTIONS);
+    execSync(`mmdc -i "${inputFile}" -o "${pdfFile}" -c "${configPath}" --pdfFit 2>/dev/null`, {
+      stdio: 'pipe',
+      timeout: 60000
+    });
 
     if (fs.existsSync(pdfFile)) {
       // Step 2: Use mutool to convert PDF to SVG (text becomes paths for compatibility)
@@ -625,10 +520,11 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
       const mutoolOutputBase = path.join(tempDir, `svg-${hash}`);
       const mutoolSvgFile = `${mutoolOutputBase}1.svg`;  // mutool generates this filename
       try {
-        // Check if mutool is available (use 'where' on Windows, 'which' on Unix)
-        const whichCmd = IS_WINDOWS ? 'where mutool' : 'which mutool';
-        execSync(whichCmd, { stdio: 'pipe' });
-        execSync(`mutool draw -F svg -o "${shellPath(mutoolOutputBase)}.svg" "${shellPath(pdfFile)}" ${SUPPRESS_STDERR}`, EXEC_OPTIONS);
+        execSync(`which mutool`, { stdio: 'pipe' });
+        execSync(`mutool draw -F svg -o "${mutoolOutputBase}.svg" "${pdfFile}" 2>/dev/null`, {
+          stdio: 'pipe',
+          timeout: 60000
+        });
         // mutool output filename has page number, need to rename
         if (fs.existsSync(mutoolSvgFile)) {
           fs.renameSync(mutoolSvgFile, svgFile);
@@ -641,8 +537,11 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
       } catch (mutoolError) {
         // No mutool, fallback to direct SVG (text may not display)
         console.warn(`  Warning: mutool not installed, using direct SVG output (text may not display in Word)`);
-        console.warn(`    Install with: ${IS_WINDOWS ? 'choco install mupdf' : 'brew install mupdf-tools'}`);
-        execSync(`mmdc -i "${shellPath(inputFile)}" -o "${shellPath(svgFile)}" -c "${shellPath(configPath)}" -b white ${SUPPRESS_STDERR}`, EXEC_OPTIONS);
+        console.warn(`    Install with: brew install mupdf-tools`);
+        execSync(`mmdc -i "${inputFile}" -o "${svgFile}" -c "${configPath}" -b white 2>/dev/null`, {
+          stdio: 'pipe',
+          timeout: 60000
+        });
         if (fs.existsSync(svgFile)) {
           svgPath = svgFile;
         }
@@ -656,7 +555,10 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
     // PDF generation failed, fallback to direct SVG
     console.warn(`PDF render failed [${hash}]: ${error.message}`);
     try {
-      execSync(`mmdc -i "${shellPath(inputFile)}" -o "${shellPath(svgFile)}" -c "${shellPath(configPath)}" -b white ${SUPPRESS_STDERR}`, EXEC_OPTIONS);
+      execSync(`mmdc -i "${inputFile}" -o "${svgFile}" -c "${configPath}" -b white 2>/dev/null`, {
+        stdio: 'pipe',
+        timeout: 60000
+      });
       if (fs.existsSync(svgFile)) {
         svgPath = svgFile;
       }
@@ -667,7 +569,7 @@ function renderMermaidToSvgAndPng(mermaidCode, outputDir) {
 
   // 2. Render PNG (as fallback for older Word versions)
   try {
-    execSync(`mmdc -i "${shellPath(inputFile)}" -o "${shellPath(pngFile)}" -c "${shellPath(configPath)}" -b white -w ${renderWidth} -s 2`, {
+    execSync(`mmdc -i "${inputFile}" -o "${pngFile}" -c "${configPath}" -b white -w ${renderWidth} -s 2`, {
       stdio: 'pipe',
       timeout: 60000
     });
@@ -692,7 +594,7 @@ function renderMermaidToPng(mermaidCode, outputDir) {
 
 /**
  * Read PNG image dimensions
- * PNG file format: first 8 bytes are signature, IHDR chunk Include width/height info
+ * PNG file format: first 8 bytes are signature, IHDR chunk contains width/height info
  */
 function getPngDimensions(buffer) {
   // PNG signature: 89 50 4E 47 0D 0A 1A 0A
@@ -1035,7 +937,7 @@ function cleanupMermaidTemp(outputDir) {
  *   - #### REQ-FUNC-001: User Login (new format, colon separated)
  */
 function isRequirementHeading(line) {
-  // Support SRS/SWD/SDD/STC/REQ Prefix, 3-5 # symbols
+  // Support SRS/SWD/SDD/STC/REQ prefix, 3-5 # symbols
   return line.match(/^#{3,5}\s+(SRS|SWD|SDD|STC|REQ)-[A-Z]+-\d+/);
 }
 
@@ -1078,7 +980,7 @@ function parseRequirementBlock(lines, startIndex) {
     rationale: '',        // Rationale (new format)
     priority: '',
     safetyClass: '',
-    VerificationMethod: '',
+    verificationMethod: '',
     acceptanceCriteria: [],
     otherFields: {}
   };
@@ -1103,19 +1005,19 @@ function parseRequirementBlock(lines, startIndex) {
       const fieldValue = fieldMatch[2].trim();
 
       // Chinese fields
-      if (fieldName === 'Description') {
+      if (fieldName === '描述') {
         requirement.description = fieldValue;
         currentField = 'description';
         inAcceptanceCriteria = false;
-      } else if (fieldName === 'Prioritylevel') {
+      } else if (fieldName === '優先級') {
         requirement.priority = fieldValue;
         currentField = 'priority';
         inAcceptanceCriteria = false;
-      } else if (fieldName === 'Safety Classification') {
+      } else if (fieldName === '安全分類') {
         requirement.safetyClass = fieldValue;
         currentField = 'safetyClass';
         inAcceptanceCriteria = false;
-      } else if (fieldName === 'Validation Standard') {
+      } else if (fieldName === '驗收標準') {
         inAcceptanceCriteria = true;
         currentField = 'acceptanceCriteria';
       }
@@ -1132,8 +1034,8 @@ function parseRequirementBlock(lines, startIndex) {
         inAcceptanceCriteria = true;
         currentField = 'acceptanceCriteria';
       } else if (fieldName === 'Verification Method') {
-        requirement.VerificationMethod = fieldValue;
-        currentField = 'VerificationMethod';
+        requirement.verificationMethod = fieldValue;
+        currentField = 'verificationMethod';
         inAcceptanceCriteria = false;
       } else {
         requirement.otherFields[fieldName] = fieldValue;
@@ -1208,17 +1110,17 @@ function createRequirementTable(req) {
 
   // Old format field (Description)
   if (req.description) {
-    rows.push(createFieldRow('Description', req.description, labelWidth, valueWidth, cellBorders));
+    rows.push(createFieldRow('描述', req.description, labelWidth, valueWidth, cellBorders));
   }
 
   // Priority
   if (req.priority) {
-    rows.push(createFieldRow('Prioritylevel', req.priority, labelWidth, valueWidth, cellBorders));
+    rows.push(createFieldRow('優先級', req.priority, labelWidth, valueWidth, cellBorders));
   }
 
   // Safety Class
   if (req.safetyClass) {
-    rows.push(createFieldRow('Safety Classification', req.safetyClass, labelWidth, valueWidth, cellBorders));
+    rows.push(createFieldRow('安全分類', req.safetyClass, labelWidth, valueWidth, cellBorders));
   }
 
   // Other fields
@@ -1229,7 +1131,7 @@ function createRequirementTable(req) {
   // Acceptance Criteria
   if (req.acceptanceCriteria.length > 0) {
     // Determine Chinese or English label
-    const acLabel = req.statement ? 'Acceptance Criteria' : 'Validation Standard';
+    const acLabel = req.statement ? 'Acceptance Criteria' : '驗收標準';
     const acParagraphs = req.acceptanceCriteria.map(ac =>
       new Paragraph({
         spacing: { after: 80 },
@@ -1260,8 +1162,8 @@ function createRequirementTable(req) {
   }
 
   // Verification Method (new format)
-  if (req.VerificationMethod) {
-    rows.push(createFieldRow('Verification', req.VerificationMethod, labelWidth, valueWidth, cellBorders));
+  if (req.verificationMethod) {
+    rows.push(createFieldRow('Verification', req.verificationMethod, labelWidth, valueWidth, cellBorders));
   }
 
   return new Table({
@@ -1451,7 +1353,7 @@ function parseMarkdown(content, outputDir = '.') {
       const headingText = line.substring(3);
       // Check if it's a main section (e.g., "Introduction", "Product Overview", manual numbering removed)
       // Special titles (Table of Contents, Revision History, etc.) don't use auto numbering
-      const isSpecialSection = headingText.match(/^(Table of Contents|Revision History|Directory|For\s)/i);
+      const isSpecialSection = headingText.match(/^(Table of Contents|Revision History|目錄|修訂歷史|For\s)/i);
       const isMainSection = !isSpecialSection; // Non-special sections get page break before
       elements.push(createHeading(headingText, HeadingLevel.HEADING_2, isMainSection, !isSpecialSection));
       i++;
@@ -1986,7 +1888,7 @@ function getTextDisplayLength(text) {
 function isIdColumn(headerText, cellText) {
   // Check if header is ID-related (case-insensitive, ignore spaces)
   const headerNormalized = headerText.toLowerCase().replace(/\s+/g, '');
-  const idHeaders = ['id', 'Designid', 'Requirementid', 'Numbering', 'identifier', 'designid', 'requirementid'];
+  const idHeaders = ['id', '設計id', '需求id', '編號', 'identifier', 'designid', 'requirementid'];
   if (idHeaders.some(h => headerNormalized.includes(h))) {
     return true;
   }
@@ -2024,7 +1926,7 @@ function createTable(headers, rows) {
         margins: { top: 40, bottom: 40, left: 80, right: 80 },
         children: [new Paragraph({
           alignment: AlignmentType.CENTER,
-          keepLines: noWrapColumns[i],  // ID FieldsNotLine break
+          keepLines: noWrapColumns[i],  // ID 欄位不換行
           children: [new TextRun({ text: header, bold: true, size: FONT_SIZE.TABLE_HEADER, font: getFont(header) })]
         })]
       }))
@@ -2036,7 +1938,7 @@ function createTable(headers, rows) {
         margins: { top: 40, bottom: 40, left: 80, right: 80 },
         children: [new Paragraph({
           spacing: { after: 0 },
-          keepLines: noWrapColumns[i],  // ID FieldsNotLine break
+          keepLines: noWrapColumns[i],  // ID 欄位不換行
           children: parseInlineFormatting(cell, FONT_SIZE.TABLE)
         })]
       }))
@@ -2052,7 +1954,7 @@ function createTable(headers, rows) {
 function parseDocumentStructure(content, outputDir) {
   const lines = content.split('\n');
   const structure = {
-    coverInformation: { title: '', subtitle: '', version: '', author: '', organization: '', date: '' },
+    coverInfo: { title: '', subtitle: '', version: '', author: '', organization: '', date: '' },
     tocLines: [],
     revisionHistory: [],
     mainContent: []
@@ -2068,18 +1970,18 @@ function parseDocumentStructure(content, outputDir) {
     // Detect cover info (from document start to before Table of Contents)
     if (section === 'cover') {
       if (trimmed.startsWith('# ')) {
-        structure.coverInformation.title = trimmed.substring(2).trim();
+        structure.coverInfo.title = trimmed.substring(2).trim();
       } else if (trimmed.startsWith('## For ') || trimmed.startsWith('**For ')) {
-        structure.coverInformation.subtitle = trimmed.replace(/^##\s*For\s*|^\*\*For\s*|\*\*$/g, '').trim();
-      } else if (trimmed.toLowerCase().includes('version') || trimmed.includes('Version')) {
-        structure.coverInformation.version = trimmed.replace(/^Version\s*/i, '').replace(/Version\s*/, '').trim();
-      } else if (trimmed.toLowerCase().includes('prepared by') || trimmed.includes('Author')) {
-        structure.coverInformation.author = trimmed.replace(/^Prepared by\s*/i, '').replace(/Author\s*/, '').trim();
+        structure.coverInfo.subtitle = trimmed.replace(/^##\s*For\s*|^\*\*For\s*|\*\*$/g, '').trim();
+      } else if (trimmed.toLowerCase().includes('version') || trimmed.includes('版本')) {
+        structure.coverInfo.version = trimmed.replace(/^Version\s*/i, '').replace(/版本\s*/, '').trim();
+      } else if (trimmed.toLowerCase().includes('prepared by') || trimmed.includes('作者')) {
+        structure.coverInfo.author = trimmed.replace(/^Prepared by\s*/i, '').replace(/作者\s*/, '').trim();
       } else if (trimmed.match(/^[A-Z].*\s+(Inc\.|Corp\.|Ltd\.|Co\.)$/i) || trimmed.match(/^SOMNICS/i)) {
-        structure.coverInformation.organization = trimmed;
+        structure.coverInfo.organization = trimmed;
       } else if (trimmed.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        structure.coverInformation.date = trimmed;
-      } else if (trimmed.toLowerCase().includes('table of contents') || trimmed.startsWith('## Table of Contents') || trimmed === '## Directory') {
+        structure.coverInfo.date = trimmed;
+      } else if (trimmed.toLowerCase().includes('table of contents') || trimmed.startsWith('## Table of Contents') || trimmed === '## 目錄') {
         section = 'toc';
       }
       i++;
@@ -2088,7 +1990,7 @@ function parseDocumentStructure(content, outputDir) {
 
     // Detect TOC section
     if (section === 'toc') {
-      if (trimmed.startsWith('## Revision History') || trimmed.toLowerCase().includes('revision history')) {
+      if (trimmed.startsWith('## Revision History') || trimmed.toLowerCase().includes('revision history') || trimmed === '## 修訂歷史') {
         section = 'revision';
         i++;
         continue;
@@ -2108,7 +2010,7 @@ function parseDocumentStructure(content, outputDir) {
 
     // Detect revision history
     if (section === 'revision') {
-      if (trimmed.startsWith('## 1') || trimmed === '---' || (trimmed.startsWith('## ') && !trimmed.toLowerCase().includes('revision') && !trimmed.includes('repairset'))) {
+      if (trimmed.startsWith('## 1') || trimmed === '---' || (trimmed.startsWith('## ') && !trimmed.toLowerCase().includes('revision') && !trimmed.includes('修訂'))) {
         if (trimmed === '---') {
           i++;
           continue;
@@ -2136,7 +2038,7 @@ function parseDocumentStructure(content, outputDir) {
 /**
  * Create cover page elements
  */
-function createCoverPage(coverInformation) {
+function createCoverPage(coverInfo) {
   const elements = [];
 
   // Blank spacing
@@ -2149,22 +2051,22 @@ function createCoverPage(coverInformation) {
     alignment: AlignmentType.CENTER,
     spacing: { after: 400 },
     children: [new TextRun({
-      text: coverInformation.title || 'Document Title',
+      text: coverInfo.title || 'Document Title',
       bold: true,
       size: 56,
-      font: getFont(coverInformation.title)
+      font: getFont(coverInfo.title)
     })]
   }));
 
   // Subtitle
-  if (coverInformation.subtitle) {
+  if (coverInfo.subtitle) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 600 },
       children: [new TextRun({
-        text: `For ${coverInformation.subtitle}`,
+        text: `For ${coverInfo.subtitle}`,
         size: 36,
-        font: getFont(coverInformation.subtitle)
+        font: getFont(coverInfo.subtitle)
       })]
     }));
   }
@@ -2175,38 +2077,38 @@ function createCoverPage(coverInformation) {
   }
 
   // Version
-  if (coverInformation.version) {
+  if (coverInfo.version) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
-      children: [new TextRun({ text: `Version ${coverInformation.version}`, size: 28, font: FONT_EN })]
+      children: [new TextRun({ text: `Version ${coverInfo.version}`, size: 28, font: FONT_EN })]
     }));
   }
 
   // Author
-  if (coverInformation.author) {
+  if (coverInfo.author) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
-      children: [new TextRun({ text: `Prepared by ${coverInformation.author}`, size: 28, font: FONT_EN })]
+      children: [new TextRun({ text: `Prepared by ${coverInfo.author}`, size: 28, font: FONT_EN })]
     }));
   }
 
   // Organization
-  if (coverInformation.organization) {
+  if (coverInfo.organization) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
-      children: [new TextRun({ text: coverInformation.organization, size: 28, font: FONT_EN })]
+      children: [new TextRun({ text: coverInfo.organization, size: 28, font: FONT_EN })]
     }));
   }
 
   // Date
-  if (coverInformation.date) {
+  if (coverInfo.date) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
-      children: [new TextRun({ text: coverInformation.date, size: 28, font: FONT_EN })]
+      children: [new TextRun({ text: coverInfo.date, size: 28, font: FONT_EN })]
     }));
   }
 
@@ -2267,7 +2169,7 @@ function createRevisionHistoryPage(revisionLines) {
   }));
 
   if (revisionLines.length > 0) {
-    // Parse Revision History table
+    // 解析修訂歷史表格
     const headers = [];
     const rows = [];
     let isHeader = true;
@@ -2435,7 +2337,7 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
       // Section 1: Cover page (no header/footer)
       {
         properties: { page: { margin: pageMargins } },
-        children: createCoverPage(structure.coverInformation)
+        children: createCoverPage(structure.coverInfo)
       },
       // Section 2: TOC page
       {

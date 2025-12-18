@@ -47,6 +47,7 @@ $Skills = @(
     "springboot-developer-skill"
     "windows-developer-skill"
     "medical-software-requirements-skill"
+    "app-uiux-designer.skill"
 )
 
 # Colors
@@ -310,14 +311,9 @@ function Install-Skill {
         return
     }
 
-    # Check if skill already exists
+    # Auto-remove old skill if exists (for clean reinstall)
     if (Test-Path $targetFull) {
-        Write-Warn "Skill already exists: $SkillName"
-        $response = Read-Host "  Overwrite? (y/N)"
-        if ($response -notmatch '^[Yy]') {
-            Write-Info "Skipping $SkillName"
-            return
-        }
+        Write-Info "Removing old version: $SkillName"
         Remove-Item -Path $targetFull -Recurse -Force
     }
 

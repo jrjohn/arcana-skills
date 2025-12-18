@@ -1,46 +1,46 @@
 ---
 name: medical-software-requirements-skill
 description: |
-  Medical device software IEC 62304 development documentation tool. This Skill should be automatically activated when users mention any of the following keywords:
+  醫療器材軟體 IEC 62304 開發文件工具。當用戶提到以下任一關鍵字時，應主動啟用此 Skill：
 
-  [Auto-Trigger Keywords]SRS、SDD、SWD、STP、STC、SVV、RTM、Software Requirements、Software Design、Requirements Specification、Design Specification、
-  Test Plan、Test Cases、Traceability Matrix、IEC 62304、Medical software、DOCX Output、DocumentOutput、check compliance、
-  compliance check、Requirements Gathering、Requirements Analysis、Architecture Design、Detailed Design、UI/UX Design、SCR Screen、
-  Design Psychology、Design Psychology、Cognitive Load、Cognitive Load、Progressive Disclosure、Progressive Disclosure、
-  Spatial Orientation、Fitts' Law、Hick's Law、Prerequisites、Dashboard、User Flow、UX Flow、
-  Cognitive Psychology、Cognitive Psychology、Mental Model、Mental Model、Attention、Attention、Memory、Memory、
-  Working Memory、Working Memory、Long-term Memory、Long-term Memory、Perception、Perception、Gestalt、Gestalt、
-  Affordance、Affordance、Signifier、Signifier、Feedback、Feedback、Mapping、Mapping、Consistency、Consistency、
-  Error Prevention、Error Prevention、Learnability、Learnability、Reading Psychology、Reading Psychology、
-  Document Layout、Document Layout、Document Readability、Document Readability、Technical Document Design、Technical Document Design。
+  【自動觸發關鍵字】SRS、SDD、SWD、STP、STC、SVV、RTM、軟體需求、軟體設計、需求規格、設計規格、
+  測試計畫、測試案例、追溯矩陣、IEC 62304、醫療軟體、DOCX 產出、文件產出、check compliance、
+  compliance check、需求收集、需求分析、架構設計、詳細設計、UI/UX 設計、SCR 畫面、
+  設計心理學、Design Psychology、認知負荷、Cognitive Load、漸進式揭露、Progressive Disclosure、
+  空間定向、Fitts' Law、Hick's Law、前置條件、Dashboard、使用者流程、UX Flow、
+  認知心理學、Cognitive Psychology、心智模型、Mental Model、注意力、Attention、記憶、Memory、
+  工作記憶、Working Memory、長期記憶、Long-term Memory、感知、Perception、格式塔、Gestalt、
+  可供性、Affordance、訊號、Signifier、回饋、Feedback、映射、Mapping、一致性、Consistency、
+  錯誤預防、Error Prevention、可學習性、Learnability、閱讀心理學、Reading Psychology、
+  文件編排、Document Layout、文件可讀性、Document Readability、技術文件設計、Technical Document Design。
 
-  [Features]
-  Phase 1 - Requirements Gathering: Project vision interviews, stakeholder analysis, functional/non-functional requirements collection, acceptance criteria definition.
-  Phase 2 - Document Generation: SRS/SDD/SWD/STP/STC/SVV/RTM documents, SDD phase integrates UI/UX design and AI asset generation.
-  Phase 3 - Asset Export: UI/UX design tool collaboration, AI image generation, App Icon/Icons/Images multi-resolution export.
-  Phase 4 - Psychology Analysis: Design Psychology + Cognitive Psychology, including cognitive load, mental models, attention, memory,
-            perception principles, affordance design, error prevention, learnability analysis, reading psychology optimization.
-  Phase 5 - Document Layout Psychology: Technical document (SRS/SDD/SWD) layout follows reading psychology, optimized for different roles
-            (SA/SD/PG/QA) document structure, ensuring readability and development efficiency.
+  【功能說明】
+  第一階段 - 需求收集：專案願景訪談、利害關係人分析、功能/非功能需求收集、驗收標準定義。
+  第二階段 - 文件產出：SRS/SDD/SWD/STP/STC/SVV/RTM 文件，SDD 階段整合 UI/UX 設計與 AI 資產產生。
+  第三階段 - 資產匯出：UI/UX 設計工具協作、AI 圖像產生、App Icon/Icons/Images 多尺寸匯出。
+  第四階段 - 心理學分析：設計心理學 + 認知心理學，包含認知負荷、心智模型、注意力、記憶、
+            感知原則、可供性設計、錯誤預防、可學習性分析、閱讀心理學優化。
+  第五階段 - 文件編排心理學：技術文件 (SRS/SDD/SWD) 編排遵循閱讀心理學，針對不同角色
+            (SA/SD/PG/QA) 優化文件結構，確保易讀性與開發效率。
 
-  [Mandatory Rules]
-  ⚠️ Traceability Requirements: All traceability directions must achieve 100% coverage.
-  ⚠️ Document Synchronization: .md and .docx must be synchronized, regenerate DOCX when updating MD.
-  ⚠️ UI Images: SDD must embed UI design images, not just reference external links.
-  ⚠️ Diagram Format: All diagrams must use Mermaid syntax, ASCII art diagrams are prohibited.
-  ⚠️ Heading Numbering (Important!):
-     - MD files "must not" contain manual numbering (e.g., ## 1. Introduction)
-     - Correct format: ## Introduction (no numbering)
-     - Incorrect format: ## 1. Introduction (has numbering, will cause duplicate numbering in DOCX)
-     - DOCX conversion automatically generates hierarchical numbering (1., 1.1, 1.1.1, etc.)
-     - Remove existing numbering:bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh <file.md>
-  ⚠️ Design Psychology: UI/UX flow must follow design psychology principles, Dashboard cannot be skipped, device pairing must occur before training.
-  ⚠️ Document Layout Psychology: All technical documents must follow reading psychology principles, optimized structure and layout for different reader roles.
-  ⚠️ Psychology Auto-Application: Automatically read and apply three psychology principles when performing any document operation (see below).
-  ⚠️ Technology Stack Reference (Important!):
-     - When writing SDD Technology Stack, must prioritize reference to corresponding platform developer Skill
-     - Reading order: First read corresponding Skill architecture definition, then write SDD technology selection section
-     - Reference sources:
+  【強制規則】
+  ⚠️ 追溯要求：所有追溯方向必須達到 100% 覆蓋率。
+  ⚠️ 文件同步：.md 與 .docx 必須同步，更新 MD 時必須重新產生 DOCX。
+  ⚠️ UI 圖片：SDD 必須嵌入 UI 設計圖片，不可僅參考外部連結。
+  ⚠️ 圖表格式：所有圖表必須使用 Mermaid 語法，禁止使用 ASCII 文字製圖。
+  ⚠️ 標題編號 (重要！)：
+     - MD 檔案「禁止」包含手動編號 (如 ## 1. Introduction)
+     - 正確格式：## Introduction (無編號)
+     - 錯誤格式：## 1. Introduction (有編號，會導致 DOCX 重複編號)
+     - DOCX 轉換時自動產生階層式編號 (1., 1.1, 1.1.1 等)
+     - 移除既有編號：bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh <file.md>
+  ⚠️ 設計心理學：UI/UX 流程必須遵循設計心理學原則，Dashboard 不可跳過，設備配對必須在訓練前。
+  ⚠️ 文件編排心理學：所有技術文件必須遵循閱讀心理學原則，針對不同讀者角色優化結構與排版。
+  ⚠️ 心理學自動套用：執行任何文件操作時，自動讀取並套用三種心理學原則 (見下方)。
+  ⚠️ 技術堆疊參考 (重要！)：
+     - SDD 撰寫技術選型 (Technology Stack) 時，必須優先參考對應平台的開發者 Skill
+     - 讀取順序：先讀取對應 Skill 的架構定義，再撰寫 SDD 技術選型章節
+     - 參考來源：
        • Android App → android-developer-skill (Jetpack Compose, Hilt, Room, Kotlin Coroutines)
        • iOS App → ios-developer-skill (SwiftUI, SwiftData, Combine, Swift Concurrency)
        • Backend (Python) → python-developer-skill (Flask, gRPC, SQLAlchemy, Clean Architecture)
@@ -50,130 +50,130 @@ description: |
        • Windows Desktop → windows-developer-skill (WinUI 3, MVVM, .NET)
        • Spring Boot → springboot-developer-skill (Spring Boot 3, gRPC, OSGi)
 
-  [🧠 Psychology Auto-Application Rules]
-  When this Skill is executed, must automatically read and apply the following three psychology guides:
+  【🧠 心理學自動套用規則】
+  本 Skill 執行時，必須自動讀取並套用以下三份心理學指南：
 
-  1️⃣ Design Psychology
-     📄 File:references/design-psychology.md
-     🎯 Applies to:SRS requirements definition, SDD UI/UX design, user flow
-     ✅ Auto-check:
-        - Cognitive Load - Is information overload avoided?
-        - Progressive Disclosure - Is there step-by-step guidance?
-        - Prerequisites - Is the flow sequence reasonable?
-        - Dashboard Orientation - Is there a central navigation page?
-        - Fitts' Law - Are button size and position reasonable?
-        - Hick's Law - Are options simplified (≤7)?
+  1️⃣ 設計心理學 (Design Psychology)
+     📄 檔案：references/design-psychology.md
+     🎯 適用：SRS 需求定義、SDD UI/UX 設計、使用者流程
+     ✅ 自動檢查：
+        - 認知負荷 (Cognitive Load) - 資訊是否過載？
+        - 漸進式揭露 (Progressive Disclosure) - 是否逐步引導？
+        - 前置條件 (Prerequisite) - 流程順序是否合理？
+        - Dashboard 定向 - 是否有中心導航頁？
+        - Fitts' Law - 按鈕大小與位置是否合理？
+        - Hick's Law - 選項數量是否精簡 (≤7)？
 
-  2️⃣ Cognitive Psychology
-     📄 File:references/cognitive-psychology.md
-     🎯 Applies to:SRS Rationale, SDD design decisions, UI interaction design
-     ✅ Auto-check:
-        - Mental Model - Does it meet user expectations?
-        - Working Memory - Are steps ≤7?
-        - Gestalt Principles - Is visual grouping clear?
-        - Affordance - Are interactive elements intuitive?
-        - Error Prevention - Are fool-proof mechanisms in place?
-        - Feedback - Is there clear feedback after operations?
+  2️⃣ 認知心理學 (Cognitive Psychology)
+     📄 檔案：references/cognitive-psychology.md
+     🎯 適用：SRS Rationale、SDD 設計決策、UI 互動設計
+     ✅ 自動檢查：
+        - 心智模型 (Mental Model) - 符合使用者預期？
+        - 工作記憶 (Working Memory) - 步驟數 ≤7？
+        - 格式塔原則 (Gestalt) - 視覺分組是否清晰？
+        - 可供性 (Affordance) - 操作元件是否直覺？
+        - 錯誤預防 (Error Prevention) - 有防呆機制？
+        - 回饋 (Feedback) - 操作後有明確回饋？
 
-  3️⃣ Document Layout Psychology
-     📄 File:references/document-layout-psychology.md
-     🎯 Applies to:All IEC 62304 documents (SRS/SDD/SWD/STP/STC/SVV/RTM)
-     ✅ Auto-check:
-        - Reader Role Analysis - Is it optimized for SA/SD/PG/QA/RA?
-        - F-pattern Reading Mode - Is important information in the top-left?
-        - Visual Hierarchy - Are heading levels correct?
-        - Progressive Disclosure - Are overview tables present? Overview first, details later?
-        - ID Encoding Consistency - Are REQ/SDD/SWD/STC ID formats unified?
-        - Trace Fields - Does each requirement have traceability fields?
-        - Table Readability - Column count ≤7? ID in first column?
+  3️⃣ 文件編排心理學 (Document Layout Psychology)
+     📄 檔案：references/document-layout-psychology.md
+     🎯 適用：所有 IEC 62304 文件 (SRS/SDD/SWD/STP/STC/SVV/RTM)
+     ✅ 自動檢查：
+        - 讀者角色分析 - 是否針對 SA/SD/PG/QA/RA 優化？
+        - F 型閱讀模式 - 重要資訊是否在左上方？
+        - 視覺層級 (Visual Hierarchy) - 標題層級是否正確？
+        - 漸進式揭露 - 是否有總覽表？先總覽後詳細？
+        - ID 編碼一致性 - REQ/SDD/SWD/STC ID 格式統一？
+        - Trace 欄位 - 每個需求是否有追溯欄位？
+        - 表格可讀性 - 欄數 ≤7？ID 在首欄？
 
-  [Execution Timing]
-  📌 Generate/Modify SRS: Auto-apply Design Psychology + Cognitive Psychology + Document Layout Psychology
-  📌 Generate/Modify SDD: Auto-apply Design Psychology + Cognitive Psychology + Document Layout Psychology
-  📌 Generate/Modify SWD: Auto-apply Cognitive Psychology + Document Layout Psychology
-  📌 Generate/Modify STP/STC: Auto-apply Document Layout Psychology
-  📌 Review/Audit Documents: Auto-execute three psychology checklists
-  📌 Generate DOCX: Ensure layout complies with Document Layout Psychology
+  【執行時機】
+  📌 產出/修改 SRS 時：自動套用 設計心理學 + 認知心理學 + 文件編排心理學
+  📌 產出/修改 SDD 時：自動套用 設計心理學 + 認知心理學 + 文件編排心理學
+  📌 產出/修改 SWD 時：自動套用 認知心理學 + 文件編排心理學
+  📌 產出/修改 STP/STC 時：自動套用 文件編排心理學
+  📌 檢視/審查文件時：自動執行三種心理學檢查清單
+  📌 產生 DOCX 時：確保排版符合文件編排心理學
 ---
 
-# Medical Device Software Requirements Gathering and Documentation Skill
+# 醫療器材軟體需求收集與文件產出 Skill
 
-This Skill provides comprehensive medical software development support: from requirements gathering, IEC 62304 document generation, to design asset management.
+本 Skill 提供完整的醫療軟體開發支援：從需求收集、IEC 62304 文件產出、到設計資產管理。
 
 ---
 
-## 🧠 Psychology Auto-Application Workflow (Must Read Before Execution)
+## 🧠 心理學自動套用流程 (執行時必讀)
 
-**When this Skill is triggered, the following steps must be automatically executed:**
+**當此 Skill 被觸發時，必須自動執行以下步驟：**
 
-### Step 1: Read Psychology Guides
+### Step 1: 讀取心理學指南
 
 ```
-Before any document operation, automatically read the following files:
+在進行任何文件操作前，自動讀取以下檔案：
 
-📖 Design Psychology：
+📖 設計心理學：
    cat ~/.claude/skills/medical-software-requirements-skill/references/design-psychology.md
 
-📖 Cognitive Psychology：
+📖 認知心理學：
    cat ~/.claude/skills/medical-software-requirements-skill/references/cognitive-psychology.md
 
-📖 Document Layout Psychology：
+📖 文件編排心理學：
    cat ~/.claude/skills/medical-software-requirements-skill/references/document-layout-psychology.md
 ```
 
-### Step 2: Apply Psychology Based on Task Type
+### Step 2: 根據任務類型套用心理學
 
-| Task Type | Design Psychology | Cognitive Psychology | Document Layout Psychology |
+| 任務類型 | 設計心理學 | 認知心理學 | 文件編排心理學 |
 |---------|:----------:|:----------:|:--------------:|
-| Generate/Modify SRS | ✅ | ✅ | ✅ |
-| Generate/Modify SDD | ✅ | ✅ | ✅ |
-| Generate/Modify SWD | - | ✅ | ✅ |
-| Generate/Modify STP/STC | - | - | ✅ |
-| Review/Audit Documents | ✅ | ✅ | ✅ |
-| Generate DOCX | - | - | ✅ |
+| 產出/修改 SRS | ✅ | ✅ | ✅ |
+| 產出/修改 SDD | ✅ | ✅ | ✅ |
+| 產出/修改 SWD | - | ✅ | ✅ |
+| 產出/修改 STP/STC | - | - | ✅ |
+| 檢視/審查文件 | ✅ | ✅ | ✅ |
+| 產生 DOCX | - | - | ✅ |
 
-### Step 3: Output Psychology Compliance Report
+### Step 3: 輸出心理學檢視報告
 
-After document operation is complete, output a brief psychology compliance review:
+在文件操作完成後，輸出簡要的心理學符合度檢視：
 
 ```markdown
-## Psychology Compliance Review
+## 心理學符合度檢視
 
-### Design Psychology ✅/⚠️/❌
-- [ ] Cognitive Load:...
-- [ ] Progressive Disclosure:...
-- [ ] Prerequisites:...
+### 設計心理學 ✅/⚠️/❌
+- [ ] 認知負荷：...
+- [ ] 漸進式揭露：...
+- [ ] 前置條件：...
 
-### Cognitive Psychology ✅/⚠️/❌
-- [ ] Mental Model:...
-- [ ] Working Memory Limit:...
-- [ ] Error Prevention:...
+### 認知心理學 ✅/⚠️/❌
+- [ ] 心智模型：...
+- [ ] 工作記憶限制：...
+- [ ] 錯誤預防：...
 
-### Document Layout Psychology ✅/⚠️/❌
-- [ ] Reader Role Optimization:...
-- [ ] ID Coding Consistency:...
-- [ ] Trace Field Completeness:...
+### 文件編排心理學 ✅/⚠️/❌
+- [ ] 讀者角色優化：...
+- [ ] ID 編碼一致性：...
+- [ ] Trace 欄位完整性：...
 ```
 
 ---
 
-## Complete Workflow
+## 完整工作流程
 
 ```
-[Phase 1: Requirements]    [Phase 2: Documents]    [Phase 3: Assets]    [Phase 4: UI/UX Psychology]   [Phase 5：Document Layout Psychology]
-1. Project Vision ──┐  ┌→ SRS Requirements ──┐  ┌→ UI/UX Design Tools   ┌→ Cognitive Load Analysis      ┌→ Reader Role Analysis (SA/SD/PG/QA)
-2. Stakeholder Analysis ┼→ ┼→ SDD Design Spec ──┼→ ┼→ UI/UX Screenshots → ┼→ Progressive Flow    ├→ F-pattern Layout
-3. Functional Reqs ──┤  ├→ SWD Detailed Design ────┤  ├→ Icons/Images     ├→ Prerequisite Design      ├→ Visual Hierarchy
-4. Non-Functional Reqs ┤  ├→ STP/STC Testing ────┤  ├→ App Icons        ├→ Dashboard Orientation    ├→ Cognitive Load Optimization
-5. Safety Class Eval ──┘  ├→ SVV Verification ────┤  └→ Android/iOS     └→ User Flow Optimization    ├→ Section Structure Optimization
-                     └→ RTM Traceability ────┘                                         └→ Table/Diagram Readability
+[第一階段：需求收集]    [第二階段：文件產出]    [第三階段：設計資產]    [第四階段：UI/UX心理學]   [第五階段：文件編排心理學]
+1. 專案願景訪談 ──┐  ┌→ SRS 需求規格書 ──┐  ┌→ UI/UX 設計工具   ┌→ 認知負荷分析      ┌→ 讀者角色分析 (SA/SD/PG/QA)
+2. 利害關係人分析 ┼→ ┼→ SDD 設計規格書 ──┼→ ┼→ UI/UX 畫面圖片 → ┼→ 流程漸進式揭露    ├→ F型閱讀模式排版
+3. 功能需求收集 ──┤  ├→ SWD 詳細設計 ────┤  ├→ Icons/Images     ├→ 前置條件設計      ├→ 視覺層級設計
+4. 非功能需求分析 ┤  ├→ STP/STC 測試 ────┤  ├→ App Icons        ├→ Dashboard 定向    ├→ 認知負荷優化
+5. 安全分類評估 ──┘  ├→ SVV 驗證報告 ────┤  └→ Android/iOS     └→ 使用者流程優化    ├→ 章節結構優化
+                     └→ RTM 追溯矩陣 ────┘                                         └→ 表格/圖表可讀性
 ```
 
-> ### ⚠️ 100% Traceability Completeness Requirement
+> ### ⚠️ 100% 追溯完整度要求
 >
-> **This Skill requires all document traceability must achieve 100%:**
+> **本 Skill 要求所有文件追溯必須達到 100%：**
 >
-> | Traceability Direction | Requirement |
+> | 追溯方向 | 要求 |
 > |---------|------|
 > | SRS → SDD | 100% |
 > | SRS → SWD | 100% |
@@ -182,117 +182,117 @@ After document operation is complete, output a brief psychology compliance revie
 > | SDD → SWD | 100% |
 > | SWD → STC | 100% |
 >
-> **RTM must show all traceability directions have reached 100%, otherwise the document is considered incomplete.**
+> **RTM 必須顯示所有追溯方向均達 100%，否則視為文件不完整。**
 
-> ### ⚠️ MD/DOCX Document Synchronization Requirement
+> ### ⚠️ MD/DOCX 文件同步要求
 >
-> **All IEC 62304 documents must maintain both Markdown (.md) and Word (.docx) formats:**
+> **所有 IEC 62304 文件必須同時維護 Markdown (.md) 與 Word (.docx) 兩種格式：**
 >
-> | Document | .md | .docx | Sync Rule |
+> | 文件 | .md | .docx | 同步規則 |
 > |------|-----|-------|---------|
-> | SRS | ✓ | ✓ | When updating MD, must regenerate DOCX |
-> | SDD | ✓ | ✓ | When updating MD, must regenerate DOCX |
-> | SWD | ✓ | ✓ | When updating MD, must regenerate DOCX |
-> | STP | ✓ | ✓ | When updating MD, must regenerate DOCX |
-> | STC | ✓ | ✓ | When updating MD, must regenerate DOCX |
-> | SVV | ✓ | ✓ | When updating MD, must regenerate DOCX |
-> | RTM | ✓ | ✓ | When updating MD, must regenerate DOCX |
+> | SRS | ✓ | ✓ | 更新 MD 時必須重新產生 DOCX |
+> | SDD | ✓ | ✓ | 更新 MD 時必須重新產生 DOCX |
+> | SWD | ✓ | ✓ | 更新 MD 時必須重新產生 DOCX |
+> | STP | ✓ | ✓ | 更新 MD 時必須重新產生 DOCX |
+> | STC | ✓ | ✓ | 更新 MD 時必須重新產生 DOCX |
+> | SVV | ✓ | ✓ | 更新 MD 時必須重新產生 DOCX |
+> | RTM | ✓ | ✓ | 更新 MD 時必須重新產生 DOCX |
 >
-> **When checking document completeness, must simultaneously validate MD and DOCX existence and sync status.**
+> **檢查文件完整性時，必須同時驗證 MD 與 DOCX 的存在與同步狀態。**
 >
-> **Sync check method:** Compare modification times of .md and .docx, regenerate .docx if .md is newer.
+> **同步檢查方式：** 比較 .md 與 .docx 的修改時間，若 .md 較新則需重新產生 .docx。
 
-> ### ⚠️ UI Image Embedding SDD Requirement
+> ### ⚠️ UI 圖片嵌入 SDD 要求
 >
-> **SDD Document's UI/UX design section must directly embed UI design images, not just reference external links:**
+> **SDD 文件的 UI/UX 設計章節必須直接嵌入 UI 設計圖片，而非僅參考外部連結：**
 >
-> | Content Type | Requirement | Format |
+> | 內容類型 | 要求 | 格式 |
 > |---------|------|------|
-> | UI Screen Design | Must embed image | **SVG** (Mandatory) or PNG |
-> | Screen Flow Diagram | Must embed image | **SVG** (Mandatory) |
-> | Interaction Description | Can include image annotations | **SVG** + Text Description |
-> | State Transitions | Recommend embedding state diagrams | **SVG** (Mandatory) or PNG |
-> | Mermaid Diagrams | Auto-render | **SVG** (Default) |
+> | UI 畫面設計 | 必須嵌入圖片 | **SVG** (強制) 或 PNG |
+> | 畫面流程圖 | 必須嵌入圖片 | **SVG** (強制) |
+> | 互動說明 | 可包含圖片標註 | **SVG** + 文字說明 |
+> | 狀態切換 | 建議嵌入各狀態圖 | **SVG** (強制) 或 PNG |
+> | Mermaid 圖表 | 自動渲染 | **SVG** (預設) |
 >
-> **⚠️ Mandatory Specification: DOCX Image Format Must Prioritize SVG**
+> **⚠️ 強制規範：DOCX 圖片格式必須優先使用 SVG**
 >
-> **Image Specifications:**
-> - **Format: SVG (Mandatory Priority)**, vector format ensures lossless scaling
-> - Resolution: SVG is vector format, automatically adapts to any resolution
-> - Fallback: Use PNG @2x/@3x only when SVG unavailable
-> - Naming:`SCR-{Module}-{Number}-{Description}.svg` (Example: `SCR-AUTH-001-login.svg`)
-> - Storage location:`02-design/SDD/images/` or `03-assets/ui-screens/`
+> **圖片規範：**
+> - **格式：SVG (強制優先)**，向量格式確保任意縮放不失真
+> - 解析度：SVG 為向量格式，自動適應任何解析度
+> - Fallback：僅當 SVG 不可用時，使用 PNG @2x/@3x
+> - 命名：`SCR-{模組}-{序號}-{描述}.svg` (例: `SCR-AUTH-001-login.svg`)
+> - 存放位置：`02-design/SDD/images/` 或 `03-assets/ui-screens/`
 >
-> **SVG Advantages:**
-> - ✅ Vector format, lossless scaling
-> - ✅ Smaller file size, reduces DOCX file size
-> - ✅ Can be edited later (draw.io/Inkscape/Figma)
-> - ✅ Best print quality, suitable for IEC 62304 review documents
+> **SVG 優勢：**
+> - ✅ 向量格式，無限縮放不失真
+> - ✅ 檔案較小，DOCX 檔案體積更小
+> - ✅ 可後續編輯 (draw.io/Inkscape/Figma)
+> - ✅ 列印品質最佳，適合 IEC 62304 審查文件
 >
-> **Markdown Embedding Syntax:**
+> **Markdown 嵌入語法：**
 > ```markdown
-> ![SCR-AUTH-001 Login Screen](./images/SCR-AUTH-001-login.svg)
+> ![SCR-AUTH-001 登入畫面](./images/SCR-AUTH-001-login.svg)
 > ```
 >
-> **During DOCX conversion, SVG images will be auto-embedded to ensure document independence and vector quality.**
+> **DOCX 轉換時會自動嵌入 SVG 圖片，確保文件獨立完整性與向量品質。**
 
-> ### ⚠️ Mermaid Diagrams Adaptive Specification (Applies to all Diagrams)
+> ### ⚠️ Mermaid 圖表自適應規範 (適用所有圖表)
 >
-> **All Mermaid diagrams must follow the "Adaptive Line-Breaking" principle to avoid excessive horizontal width causing small fonts or diagram compression.**
+> **所有 Mermaid 圖表必須遵循「自適應分行」原則，避免水平過寬導致字體過小或圖表被壓縮。**
 >
-> #### Basic Rule: ASCII Art Diagrams Prohibited
+> #### 基本規則：禁止 ASCII 製圖
 >
-> | Diagram Type | Correct Format | Prohibited Format |
+> | 圖表類型 | 正確格式 | 禁止格式 |
 > |---------|---------|---------|
-> | Flowchart | Mermaid `flowchart` | ASCII Arrows `-->`, `├──`, `└──` |
-> | Sequence Diagram | Mermaid `sequenceDiagram` | ASCII Timeline |
-> | State Diagram | Mermaid `stateDiagram-v2` | ASCII State Boxes |
-> | Class Diagram | Mermaid `classDiagram` | ASCII Class Boxes |
-> | ER Diagram | Mermaid `erDiagram` | ASCII Relationship Lines |
-> | Architecture Diagram | Mermaid `flowchart` / `C4Context` | ASCII Block Diagrams |
+> | 流程圖 | Mermaid `flowchart` | ASCII 箭頭 `-->`, `├──`, `└──` |
+> | 序列圖 | Mermaid `sequenceDiagram` | ASCII 時序線 |
+> | 狀態圖 | Mermaid `stateDiagram-v2` | ASCII 狀態框 |
+> | 類別圖 | Mermaid `classDiagram` | ASCII 類別框 |
+> | ER 圖 | Mermaid `erDiagram` | ASCII 關聯線 |
+> | 架構圖 | Mermaid `flowchart` / `C4Context` | ASCII 方塊圖 |
 >
-> #### Adaptive Line-Breaking Principles (Core Rules)
+> #### 自適應分行原則 (核心規則)
 >
-> | Principle | Description |
+> | 原則 | 說明 |
 > |------|------|
-> | **Node Quantity Limit** | Max 3-4 nodes per line, must break if exceeded |
-> | **Vertical Priority** | Prioritize `flowchart TB` (Top-Bottom), avoid `LR` (Left-Right) |
-> | **Layered subgraph** | Group related nodes with subgraph, each group on separate layer |
-> | **Concise Text** | Node text should be brief (< 15 characters), detailed descriptions in tables |
-> | **Block Connections** | Use `-->` to connect subgraphs instead of internal elements |
-> | **Avoid Nesting** | Don't put all elements in single subgraph |
+> | **節點數量限制** | 單行最多 3-4 個節點，超過必須換行 |
+> | **垂直優先** | 優先使用 `flowchart TB` (Top-Bottom)，避免 `LR` (Left-Right) |
+> | **分層 subgraph** | 相關節點用 subgraph 分組，每組獨立一層 |
+> | **精簡文字** | 節點文字簡短 (< 15 字)，詳細說明放表格 |
+> | **區塊連結** | 使用 `-->` 連結 subgraph 而非內部元素 |
+> | **避免嵌套** | 不要將所有元素放在單一 subgraph 內 |
 >
-> #### Adaptive Guidelines by Diagram Type
+> #### 各圖表類型自適應指引
 >
-> **1. Flowchart (flowchart) - ComponentStructure Diagram、Architecture Diagram**
+> **1. 流程圖 (flowchart) - 元件結構圖、架構圖**
 >
 > ~~~markdown
-> ❌ Wrong: Excessive horizontal width (LR + multiple nodes)
+> ❌ 錯誤：水平過寬 (LR + 多節點)
 > ```mermaid
 > flowchart LR
 >     A[AppBar] --> B[Counter] --> C[Animation] --> D[Progress] --> E[Segment] --> F[Hint] --> G[Character]
 > ```
 >
-> ✅ Correct: Vertical layering + subgraph
+> ✅ 正確：垂直分層 + subgraph
 > ```mermaid
 > flowchart TB
->     subgraph Header["Header Section"]
->         A[AppBar<br/>Back+Title]
+>     subgraph Header["Header 區"]
+>         A[AppBar<br/>返回+標題]
 >     end
 >
->     subgraph Content["Content Section"]
->         B[Counter<br/>Counter]
->         C[Animation<br/>Animation Component]
+>     subgraph Content["內容區"]
+>         B[Counter<br/>計數器]
+>         C[Animation<br/>動畫元件]
 >     end
 >
->     subgraph Progress["Progress Section"]
->         D[ProgressBar<br/>Overall Progress]
->         E[SegmentView<br/>Segment Progress]
+>     subgraph Progress["進度區"]
+>         D[ProgressBar<br/>整體進度]
+>         E[SegmentView<br/>分段進度]
 >     end
 >
->     subgraph Footer["Footer Section"]
->         F[HintText<br/>Hint Text]
->         G[Character<br/>Character Bubble]
+>     subgraph Footer["Footer 區"]
+>         F[HintText<br/>提示文字]
+>         G[Character<br/>角色泡泡]
 >     end
 >
 >     Header --> Content
@@ -301,10 +301,10 @@ After document operation is complete, output a brief psychology compliance revie
 > ```
 > ~~~
 >
-> **2. Sequence Diagram (sequenceDiagram) - Interaction Flow**
+> **2. 序列圖 (sequenceDiagram) - 互動流程**
 >
 > ~~~markdown
-> ❌ Wrong: Too many participants spread horizontally
+> ❌ 錯誤：參與者過多橫向展開
 > ```mermaid
 > sequenceDiagram
 >     participant U as User
@@ -313,71 +313,71 @@ After document operation is complete, output a brief psychology compliance revie
 >     participant D as Device
 >     participant S as Server
 >     participant DB as Database
->     U->>A: Operation
->     A->>B: Connection
->     B->>D: Send
->     D->>S: Upload
->     S->>DB: Save
+>     U->>A: 操作
+>     A->>B: 連線
+>     B->>D: 傳送
+>     D->>S: 上傳
+>     S->>DB: 儲存
 > ```
 >
-> ✅ Correct: Grouped box + simplified participants
+> ✅ 正確：分組 box + 精簡參與者
 > ```mermaid
 > sequenceDiagram
->     box User Side
+>     box 使用者端
 >         participant U as User
 >         participant A as App
 >     end
->     box Device Layer
+>     box 設備層
 >         participant D as Device
 >     end
->     box Server Side
+>     box 伺服器端
 >         participant S as Server
 >     end
 >
->     U->>A: Operation
->     A->>D: BLE Connection
->     D->>S: Upload Data
->     S-->>A: Confirm
+>     U->>A: 操作
+>     A->>D: BLE 連線
+>     D->>S: 上傳資料
+>     S-->>A: 確認
 > ```
 > ~~~
 >
-> **3. State Diagram (stateDiagram-v2) - Screen States**
+> **3. 狀態圖 (stateDiagram-v2) - 畫面狀態**
 >
 > ~~~markdown
-> ❌ Wrong: States arranged horizontally
+> ❌ 錯誤：狀態橫向排列
 > ```mermaid
 > stateDiagram-v2
 >     direction LR
 >     [*] --> Idle --> Loading --> Playing --> Paused --> Completed --> [*]
 > ```
 >
-> ✅ Correct: Vertical arrangement + grouping
+> ✅ 正確：垂直排列 + 分組
 > ```mermaid
 > stateDiagram-v2
 >     direction TB
 >     [*] --> Idle
 >
->     state "Initial Phase" as Init {
->         Idle --> Loading: Start
+>     state "初始階段" as Init {
+>         Idle --> Loading: 開始
 >     }
 >
->     state "Execution Phase" as Running {
->         Loading --> Playing: Loading Complete
->         Playing --> Paused: Paused
->         Paused --> Playing: Resume
+>     state "執行階段" as Running {
+>         Loading --> Playing: 載入完成
+>         Playing --> Paused: 暫停
+>         Paused --> Playing: 繼續
 >     }
 >
->     state "End Phase" as End {
->         Playing --> Completed: Complete
+>     state "結束階段" as End {
+>         Playing --> Completed: 完成
 >         Completed --> [*]
 >     }
 > ```
 > ~~~
 >
-> **4. Class Diagram (classDiagram) - Data Model**
+> **4. 類別圖 (classDiagram) - 資料模型**
 >
 > ~~~markdown
-> ❌ Wrong: Classes arranged horizontally
+> ❌ 錯誤：類別橫向排列
 > ```mermaid
 > classDiagram
 >     direction LR
@@ -387,11 +387,11 @@ After document operation is complete, output a brief psychology compliance revie
 >     Preferences --> Theme
 > ```
 >
-> ✅ Correct: Vertical arrangement + namespace grouping
+> ✅ 正確：垂直排列 + namespace 分組
 > ```mermaid
 > classDiagram
 >     direction TB
->     namespace User Module {
+>     namespace 使用者模組 {
 >         class User {
 >             +id: String
 >             +name: String
@@ -400,7 +400,7 @@ After document operation is complete, output a brief psychology compliance revie
 >             +avatar: URL
 >         }
 >     }
->     namespace Settings Module {
+>     namespace 設定模組 {
 >         class Settings {
 >             +theme: Theme
 >         }
@@ -414,15 +414,15 @@ After document operation is complete, output a brief psychology compliance revie
 > ```
 > ~~~
 >
-> **5. ER Diagram (erDiagram) - Database Relationships**
+> **5. ER 圖 (erDiagram) - 資料庫關聯**
 >
 > ~~~markdown
-> ✅ ER diagrams auto-adjust but need simplified fields
+> ✅ ER 圖本身會自動調整，但需精簡欄位
 > ```mermaid
 > erDiagram
 >     USER ||--o{ SESSION : has
 >     USER ||--o{ TRAINING : performs
->     SESSION ||--|{ TRAINING_DATA : Include
+>     SESSION ||--|{ TRAINING_DATA : contains
 >
 >     USER {
 >         string id PK
@@ -435,168 +435,168 @@ After document operation is complete, output a brief psychology compliance revie
 > ```
 > ~~~
 >
-> #### Node Text Specifications
+> #### 節點文字規範
 >
-> | Situation | Recommendation |
+> | 情況 | 建議 |
 > |------|------|
-> | Node Label | Maximum 15 Chinese characters or 30 English characters |
-> | Need line break | Use `<br/>` line break (Example: `A[Title<br/>Subtitle]`) |
-> | Detailed Description | Node only shows ID, detailed descriptions use tables as supplement |
+> | 節點標籤 | 最多 15 個中文字或 30 個英文字 |
+> | 需要換行 | 使用 `<br/>` 換行 (例: `A[標題<br/>副標題]`) |
+> | 詳細說明 | 節點只放 ID，詳細說明用表格補充 |
 >
 > ~~~markdown
-> ✅ Recommended: Concise nodes + table supplement
+> ✅ 推薦：節點精簡 + 表格補充
 > ```mermaid
 > flowchart TB
 >     A[SCR-TRAIN-001] --> B[SCR-TRAIN-002]
 > ```
 >
-> | Screen ID | Screen Name | Description |
+> | 畫面 ID | 畫面名稱 | 說明 |
 > |---------|---------|------|
-> | SCR-TRAIN-001 | Training Home | Display training list and progress |
-> | SCR-TRAIN-002 | Training In Progress | Real-time training screen |
+> | SCR-TRAIN-001 | 訓練首頁 | 顯示訓練列表與進度 |
+> | SCR-TRAIN-002 | 訓練進行 | 即時訓練畫面 |
 > ~~~
 >
-> #### Exceptions
+> #### 例外情況
 >
-> - Simple bullet lists (`-`, `*`, `1.`）Can use
-> - Tables use Markdown TablesSyntax（`| col |`）
-> - Code BlockinOutputExamplesCan contain ASCII
+> - 簡單的項目符號列表（`-`, `*`, `1.`）可使用
+> - 表格使用 Markdown 表格語法（`| col |`）
+> - 程式碼區塊內的輸出範例可包含 ASCII
 >
-> #### Reason
+> #### 理由
 >
-> - Vertical layering keeps diagrams narrow, fonts clear and readable in DOCX
-> - **Mermaid Diagrams auto-render as SVG Embed DOCX** (Vector quality)
-> - ASCII art diagrams cause alignment issues in DOCX due to font problems
-> - **SVG Vector Format ensures lossless scaling，Appropriateclose IEC 62304 Review Document**
+> - 垂直分層讓圖表維持窄寬度，在 DOCX 中字體清晰可讀
+> - **Mermaid 圖表自動渲染為 SVG 嵌入 DOCX** (向量品質)
+> - ASCII 製圖在 DOCX 中會因字型問題導致對齊錯亂
+> - **SVG 向量格式確保任意縮放不失真，適合 IEC 62304 審查文件**
 
 ---
 
-# Phase 1: Requirements Gathering
+# 第一階段：需求收集
 
-## Phase 1.1: Project Vision Interview
+## 階段 1.1：專案願景訪談
 
-Collect core information for medical software project:
+收集醫療軟體專案的核心資訊：
 
-**Required Questions:**
-1. What clinical problem does this medical software solve?
-2. Who are the expected users? (Medical staff/Patients/Managers)
-3. What medical setting will the software be used in? (Hospital/Clinic/Home)
-4. What regulatory requirements exist? (TFDA/FDA/CE)
-5. What harm could software failure cause? (For safety classification)
-6. What are the expected benefits and success metrics?
+**必問問題清單：**
+1. 這個醫療軟體要解決什麼臨床問題？
+2. 預期使用者是誰？(醫護人員/病患/管理者)
+3. 軟體將用於哪種醫療場域？(醫院/診所/居家)
+4. 有哪些法規要求？(TFDA/FDA/CE)
+5. 軟體失效可能造成什麼危害？(用於安全分類)
+6. 專案的預期效益與成功指標是什麼？
 
-**Output:** Project vision statement + Initial safety classification assessment
+**輸出：** 專案願景陳述 + 初步安全分類評估
 
-## Phase 1.2: Stakeholder Analysis
+## 階段 1.2：利害關係人分析
 
-Medical software-specific stakeholders:
+醫療軟體特定的利害關係人：
 
-| Category | Role Examples | Focus Areas |
+| 類別 | 角色範例 | 關注重點 |
 |------|----------|----------|
-| Clinical Users | Physicians, Nurses, Technicians | Clinical workflow, Usability |
-| Patients | End Users | Privacy, Safety, Accessibility |
-| Managers | Hospital IT, Supervisors | Integration, Reports, Cost |
-| Regulatory | QA、RA | IEC 62304 Compliance, Traceability |
-| Technical Team | Development, Operations | Maintainability, Security |
+| 臨床使用者 | 醫師、護理師、技術員 | 臨床工作流程、易用性 |
+| 病患 | 終端使用者 | 隱私、安全、無障礙 |
+| 管理者 | 醫院資訊室、主管 | 整合性、報表、成本 |
+| 法規單位 | QA、RA | IEC 62304 合規、追溯性 |
+| 技術團隊 | 開發、維運 | 可維護性、安全性 |
 
-## Phase 1.3: Functional Requirements Collection
+## 階段 1.3：功能需求收集
 
-Use FURPS+ Model，with medical-specific considerations：
+使用 FURPS+ 模型，加入醫療特定考量：
 
-**F - Functionality**
-- Clinical functions: Diagnosis, Monitoring, Treatment support
-- Data management: Medical records, Test Results, Orders
-- Safety functions: Alerts, Interlocks, Dosage checks
+**F - Functionality (功能性)**
+- 臨床功能：診斷、監測、治療支援
+- 資料管理：病歷、檢驗結果、醫令
+- 安全功能：警示、互鎖、劑量檢查
 
-**U - Usability**
-- Clinical EnvironmentSuitability (Glove Operation、Emergency Situation)
-- Accessibility requirements (Visual impairment, Hearing impairment)
-- Multi-language support
+**U - Usability (易用性)**
+- 臨床環境適用性 (手套操作、緊急情況)
+- 無障礙需求 (視障、聽障)
+- 多語系支援
 
-**R - Reliability**
-- Critical function availability targets
-- Data integrity
-- Error handling and recovery
+**R - Reliability (可靠性)**
+- 關鍵功能可用性目標
+- 資料完整性
+- 錯誤處理與復原
 
-**P - Performance**
-- response time in clinical scenariosRequirement
-- Large data processing capability
+**P - Performance (效能)**
+- 臨床情境的回應時間要求
+- 大量資料處理能力
 
-**S - Supportability**
-- Maintainability and update mechanisms
-- Audit Log Requirements
+**S - Supportability (可支援性)**
+- 可維護性與更新機制
+- 稽核日誌要求
 
-**+ Medical-Specific Considerations**
-- Interoperability (HL7 FHIR, DICOM)
-- Privacy protection (Personal Data Protection Law, HIPAA)
-- Cybersecurity (Medical Device Cybersecurity)
+**+ 醫療特定考量**
+- 互通性 (HL7 FHIR、DICOM)
+- 隱私保護 (個資法、HIPAA)
+- 網路安全 (醫療設備網安)
 
-## Phase 1.4: Non-Functional Requirements Analysis
+## 階段 1.4：非功能需求分析
 
-Detailed medical NFR checklist see [references/medical-nfr-checklist.md](references/medical-nfr-checklist.md)
+詳細醫療 NFR 檢核清單見 [references/medical-nfr-checklist.md](references/medical-nfr-checklist.md)
 
-## Phase 1.5: Software Safety Classification Assessment
+## 階段 1.5：軟體安全分類評估
 
-According to IEC 62304, assess potential harm from software failure:
+根據 IEC 62304，評估軟體失效可能造成的危害：
 
-| Classification | Harm Level | Examples | DocumentRequirement |
+| 分類 | 危害程度 | 範例 | 文件要求 |
 |-----|---------|------|---------|
-| Class A | No harm | Administrative software | Basic |
-| Class B | Possible non-serious injury | General monitoring software | Complete |
-| Class C | MayCausedeathor serious injury | Diagnostic/Therapeutic software | Most Stringent |
+| Class A | 不會造成傷害 | 行政管理軟體 | 基本 |
+| Class B | 可能造成非嚴重傷害 | 一般監測軟體 | 完整 |
+| Class C | 可能造成死亡或嚴重傷害 | 診斷/治療軟體 | 最嚴格 |
 
-**Safety Classification Decision Tree：**
+**安全分類決策樹：**
 ```
-Could software failure directlyor indirectly cause harm？
-├── No → Class A
-└── Yes → Could the injury be serious?
-         ├── No → Class B
-         └── Is → Class C
+軟體失效是否可能直接或間接造成傷害？
+├── 否 → Class A
+└── 是 → 傷害是否可能嚴重？
+         ├── 否 → Class B
+         └── 是 → Class C
 ```
 
 ---
 
-# Phase 2：DocumentOutput
+# 第二階段：文件產出
 
-## ID Numbering System
+## ID 編號系統
 
-AllHaveDocument ItemsUseUnified's ID NumberingFormat，ensure **100% Traceability**：
+所有文件項目使用統一的 ID 編號格式，確保 **100% 可追溯性**：
 
-| Document Type | ID Prefix | Format Examples | Traceability Requirement |
+| 文件類型 | ID 前綴 | 格式範例 | 追溯要求 |
 |---------|--------|---------|---------|
-| Software RequirementsSpecification | SRS | SRS-{MODULE}-001 | Source：UserRequirement |
-| Software DesignSpecification | SDD | SDD-{MODULE}-001 | **Must correspond to SRS (100%)** |
-| softwareDetailed Design | SWD | SWD-{MODULE}-001 | **Must correspond to SDD (100%)** |
-| ScreenDesign | SCR | SCR-{MODULE}-001 | **Must correspond to SRS (100%)** |
-| softwareTest Plan | STP | STP-001 | Cover all requirements |
-| softwareTest Cases | STC | STC-{MODULE}-001 | **Must correspond to SRS (100%)** |
-| Verification & Validation | SVV | SVV-001 | Consolidate all Verification Results |
+| 軟體需求規格書 | SRS | SRS-{MODULE}-001 | 來源：使用者需求 |
+| 軟體設計規格書 | SDD | SDD-{MODULE}-001 | **必須對應 SRS (100%)** |
+| 軟體詳細設計書 | SWD | SWD-{MODULE}-001 | **必須對應 SDD (100%)** |
+| 畫面設計 | SCR | SCR-{MODULE}-001 | **必須對應 SRS (100%)** |
+| 軟體測試計畫 | STP | STP-001 | 涵蓋所有需求 |
+| 軟體測試案例 | STC | STC-{MODULE}-001 | **必須對應 SRS (100%)** |
+| 驗證與確認 | SVV | SVV-001 | 彙整所有驗證結果 |
 
-**ID Rules:**
-- Format: `[Prefix]-[Module]-[three-digit number]` (Example: `SRS-AUTH-001`, `SDD-TRAIN-002`)
-- Sub-items: `SRS-AUTH-001.1`, `SRS-AUTH-001.2`
-- Cross-Document Reference: Use Complete ID
-- **Each SRS item must have corresponding SDD, SWD, STC, SCR (UI) items**
+**ID 規則：**
+- 格式: `[前綴]-[模組]-[三位數字]` (例: `SRS-AUTH-001`, `SDD-TRAIN-002`)
+- 子項目: `SRS-AUTH-001.1`, `SRS-AUTH-001.2`
+- 跨文件參考: 使用完整 ID
+- **每個 SRS 項目必須有對應的 SDD、SWD、STC、SCR (UI) 項目**
 
-**Module Code Examples：**
-- AUTH: Authentication Module
-- ONBOARD: Onboarding flow
-- TRAIN: Training Function
-- REPORT: Report Function
-- DEVICE: DeviceConnection
-- REWARD: Reward System
-- SETTING: Settings Function
-- NFR: Non-Functional Requirements
+**模組代碼範例：**
+- AUTH: 認證模組
+- ONBOARD: 引導流程
+- TRAIN: 訓練功能
+- REPORT: 報告功能
+- DEVICE: 設備連線
+- REWARD: 獎勵系統
+- SETTING: 設定功能
+- NFR: 非功能需求
 
-## Unified Document Format Specification
+## 統一文件格式規範
 
-> ### ⚠️ AllHave IEC 62304 Documents must use unified format
+> ### ⚠️ 所有 IEC 62304 文件必須採用統一格式
 >
-> AllHaveDocument (SRS/SDD/SWD/STP/STC/SVV/RTM) MustUse same cover and Revision History Format，Ensure document consistency。
+> 所有文件 (SRS/SDD/SWD/STP/STC/SVV/RTM) 必須使用相同的封面與 Revision History 格式，確保文件一致性。
 
-### Standard Cover Format
+### 標準封面格式
 
-AllHaveDocument's Markdown cover must use the following format：
+所有文件的 Markdown 封面必須採用以下格式：
 
 ```markdown
 # {Document Title}
@@ -622,9 +622,9 @@ Prepared by {Author}
 ---
 ```
 
-**Standard Title for Each Document：**
+**各文件標準標題：**
 
-| Document | Title |
+| 文件 | 標題 |
 |------|------|
 | SRS | `# Software Requirements Specification` |
 | SDD | `# Software Design Description` |
@@ -634,109 +634,109 @@ Prepared by {Author}
 | SVV | `# Software Verification & Validation Report` |
 | RTM | `# Requirements Traceability Matrix` |
 
-### Revision History Format
+### Revision History 格式
 
-**Unified Field Order:**
+**統一欄位順序：**
 
 | Name | Date | Reason For Changes | Version |
 |------|------|--------------------|---------|
 
-**Prohibited Old Formats：**
-- ❌ `| Version | Date | Changes | Author |`
-- ❌ `| Version | Date | Author | Change Description |`
-- ❌ Table Format Cover（Document Informationrmation Tables）
-- ❌ `## Directory (Details)` or any duplicateDirectory Block
-- ❌ `## 1. Document Informationrmation` Table Format Document Informationrmation Block
+**禁止使用的舊格式：**
+- ❌ `| 版本 | 日期 | 修改內容 | 作者 |`
+- ❌ `| 版本 | 日期 | 作者 | 變更說明 |`
+- ❌ 表格式封面（文件資訊表格）
+- ❌ `## 目錄 (詳細)` 或任何重複的目錄區塊
+- ❌ `## 1. 文件資訊` 表格式文件資訊區塊
 
-### Mandatory Format Elements (Mandatory Format Elements)
+### 必要格式要素 (Mandatory Format Elements)
 
-> **Important：** AllHaveDocumentmust strictly follow the following format，Cannot omitorChange order：
+> **重要：** 所有文件必須嚴格遵守以下格式，不得省略或更改順序：
 
-1. **Standard Cover** - Must include：
-   - H1 Title (`# {Document Title}`)
-   - H2 project name (`## For {Project Name}`)
-   - Version information (Version X.X)
-   - Author (Prepared by)
-   - Organization name
-   - Date (YYYY-MM-DD)
+1. **標準封面** - 必須包含：
+   - H1 標題 (`# {Document Title}`)
+   - H2 專案名稱 (`## For {Project Name}`)
+   - 版本資訊 (Version X.X)
+   - 作者 (Prepared by)
+   - 組織名稱
+   - 日期 (YYYY-MM-DD)
 
-2. **Table of Contents** - Must:
-   - Use `## Table of Contents` Title
-   - Use `<!-- TOC -->` markers to surround
-   - List all main sections
+2. **Table of Contents** - 必須：
+   - 使用 `## Table of Contents` 標題
+   - 使用 `<!-- TOC -->` 標記包圍
+   - 列出所有主要章節
 
-3. **Revision History** - Must:
-   - Use `## Revision History` Title
-   - Field order:`Name | Date | Reason For Changes | Version`
-   - UseSeparator lines `---` End block
+3. **Revision History** - 必須：
+   - 使用 `## Revision History` 標題
+   - 欄位順序：`Name | Date | Reason For Changes | Version`
+   - 使用分隔線 `---` 結束區塊
 
-4. **Body Sections** - Start from `## 1. Introduction` or `## 1. Introduction` Start
+4. **正文章節** - 從 `## 1. 簡介` 或 `## 1. Introduction` 開始
 
-### Internal Font Settings
+### 中文字型設定
 
-DOCX output font settings:
+DOCX 輸出時，字型設定如下：
 
-| Character Type | Font |
+| 字元類型 | 字型 |
 |---------|------|
-| English/Half-width (ascii) | Arial |
-| Chinese/Full-width (eastAsia) | PingFang TC |
-| Title | Arial + PingFang TC (Mixed) |
-| Code | Consolas |
+| 英文/半形 (ascii) | Arial |
+| 中文/全形 (eastAsia) | 微軟正黑體 |
+| 標題 | Arial + 微軟正黑體 (混合) |
+| 程式碼 | Consolas |
 
-### Code BlockFormattransform
+### 程式碼區塊格式化
 
-DOCX output code blocks have the following features:
+DOCX 輸出的程式碼區塊具備以下特性：
 
-| Function | Description |
+| 功能 | 說明 |
 |------|------|
-| **Line Numbers** | Show line numbers on left for easy code location |
-| **Zebra Striped Background** | Odd rows white (FFFFFF)，Even rows light gray (F5F5F5) |
-| **Fixed Line Height** | 14pt Line height, ensure neat alignment |
-| **Syntax Highlighting** | Based on VSCode Light+ Color scheme |
-| **Fixed Table Layout** | Use `layout: fixed` Prevent column width readjustment |
-| **Explicit Column Width** | Line number column 720 DXA，Code column 8640 DXA |
-| **Text Direction Lock** | `textDirection: lrTb` Ensure horizontal text flow |
+| **行號顯示** | 左側顯示行號，方便定位程式碼位置 |
+| **斑馬紋背景** | 奇數行白色 (FFFFFF)，偶數行淺灰 (F5F5F5) |
+| **固定行高** | 14pt 行高，確保對齊整齊 |
+| **語法高亮** | 基於 VSCode Light+ 配色方案 |
+| **固定表格佈局** | 使用 `layout: fixed` 防止欄寬被重新調整 |
+| **明確欄寬設定** | 行號欄 720 DXA，程式碼欄 8640 DXA |
+| **文字方向鎖定** | `textDirection: lrTb` 確保水平文字流向 |
 
-> **⚠️ Google Drive Edit Compatibility Note**
+> **⚠️ Google Drive 編輯兼容性說明**
 >
-> When DOCX is edited directly in Google Drive, code blocks may display vertically.
-> This is due to Google Docs compatibility limitations with Word table formats.
+> 當 DOCX 在 Google Drive 直接編輯後，程式碼區塊可能會出現垂直直行顯示問題。
+> 這是因為 Google Docs 對 Word 表格格式的兼容性限制。
 >
-> **Solutions:**
-> 1. Use the latest `md-to-docx.js` to regenerate DOCX (fixed table layout added)
-> 2. Download DOCX and use Microsoft Word to edit, avoid using Google Docs
-> 3. If online collaboration is needed, edit MD files and reconvert
+> **解決方案：**
+> 1. 使用最新版 `md-to-docx.js` 重新產生 DOCX（已加入固定表格佈局）
+> 2. 或下載 DOCX 後用 Microsoft Word 編輯，避免使用 Google Docs
+> 3. 若需在線協作，建議編輯 MD 檔案後重新轉換
 
-#### SyntaxhighlightingcolorStandard (VSCode Light+ Theme)
+#### 語法高亮色彩標準 (VSCode Light+ Theme)
 
-| Token Type | Color | Examples |
+| Token 類型 | 顏色 | 範例 |
 |-----------|------|------|
-| Keywords | `#0000FF` Blue | `class`, `func`, `if`, `return` |
-| Strings | `#A31515` Dark red | `"Hello"`, `'text'` |
-| Comments | `#008000` Green | `// comment`, `/* block */` |
-| Numbers | `#098658` Dark cyan | `123`, `3.14` |
-| Types | `#267F99` Cyan blue | `String`, `Int`, `Bool` |
-| Decorators | `#AF00DB` Purple | `@State`, `@Published` |
-| Default (default) | `#000000` Black | Other identifiers |
+| 關鍵字 (keyword) | `#0000FF` 藍色 | `class`, `func`, `if`, `return` |
+| 字串 (string) | `#A31515` 深紅色 | `"Hello"`, `'text'` |
+| 註解 (comment) | `#008000` 綠色 | `// comment`, `/* block */` |
+| 數字 (number) | `#098658` 深青色 | `123`, `3.14` |
+| 型別 (type) | `#267F99` 青藍色 | `String`, `Int`, `Bool` |
+| 裝飾器 (decorator) | `#AF00DB` 紫色 | `@State`, `@Published` |
+| 預設 (default) | `#000000` 黑色 | 其他識別字 |
 
-#### Support'sProgramLanguage
+#### 支援的程式語言
 
-- Swift / Kotlin / Java (Mobile)
-- Python / JavaScript / TypeScript (Backend/Frontend)
+- Swift / Kotlin / Java (行動端)
+- Python / JavaScript / TypeScript (後端/前端)
 - HTML / CSS / SQL
 
-### Class Diagram ColorStandard (Peter Coad Color UML)
+### Class Diagram 顏色標準 (Peter Coad Color UML)
 
-Mermaid Class Diagram Use **Peter Coad four-colorarchetype** performvisualClassification：
+Mermaid Class Diagram 使用 **Peter Coad 四色原型** 進行視覺分類：
 
-| Archetype | Color | Purpose | Mermaid Style |
+| Archetype | 顏色 | 用途 | Mermaid Style |
 |-----------|------|------|---------------|
-| **MI (Moment-Interval)** | Pink `#FFCCCC` | Service, UseCase, Transaction | `style XXXService fill:#FFCCCC` |
-| **Role** | Yellow `#FFFFCC` | ViewModel, Presenter, Controller | `style XXXViewModel fill:#FFFFCC` |
-| **Thing (Party/Place/Thing)** | Green `#CCFFCC` | Entity、Model、Domain Object | `style XXXEntity fill:#CCFFCC` |
-| **Description** | Blue `#CCCCFF` | Repository、DTO、Configuration | `style XXXRepository fill:#CCCCFF` |
+| **MI (Moment-Interval)** | 粉紅色 `#FFCCCC` | Service、UseCase、Transaction | `style XXXService fill:#FFCCCC` |
+| **Role** | 黃色 `#FFFFCC` | ViewModel、Presenter、Controller | `style XXXViewModel fill:#FFFFCC` |
+| **Thing (Party/Place/Thing)** | 綠色 `#CCFFCC` | Entity、Model、Domain Object | `style XXXEntity fill:#CCFFCC` |
+| **Description** | 藍色 `#CCCCFF` | Repository、DTO、Configuration | `style XXXRepository fill:#CCCCFF` |
 
-#### Class Diagram coloringExamples
+#### Class Diagram 著色範例
 
 ```mermaid
 classDiagram
@@ -770,19 +770,19 @@ classDiagram
     style UserRepository fill:#CCCCFF
 ```
 
-### State Machine ColorStandard
+### State Machine 顏色標準
 
-Mermaid State Diagram uses the following color standards to classify State Types:
+Mermaid State Diagram 使用以下顏色標準區分狀態類型：
 
-| State Type | Color | Hex Code | Text Color | Purpose |
+| 狀態類型 | 顏色 | Hex Code | 文字色 | 用途 |
 |---------|------|----------|--------|------|
-| **Initial/Inactive** | Warm beige gray | `#E8E0D8` | `#5D4037` | Not yet started status (Idle, Disconnected) |
-| **Processing/In Progress** | Warm golden yellow | `#F4A940` | `#5D4037` | Currently in progress/transition status (Processing, Scanning) |
-| **Success/Complete** | Grass green | `#8BC34A` | `#fff` | SuccessComplete'sStatus (Authenticated, Connected) |
-| **Error/Failed** | Warm coral | `#E57373` | `#fff` | Error states (Failed, Error) |
-| **Warning/Locked** | Amber yellow | `#FFB74D` | `#5D4037` | Warning states requiring attention (Locked, Timeout) |
+| **初始/未啟用** | 暖米灰 | `#E8E0D8` | `#5D4037` | 尚未開始的狀態 (Idle, Disconnected) |
+| **處理中/進行中** | 暖金黃 | `#F4A940` | `#5D4037` | 正在執行的過渡狀態 (Processing, Scanning) |
+| **成功/完成** | 草綠 | `#8BC34A` | `#fff` | 成功完成的狀態 (Authenticated, Connected) |
+| **錯誤/失敗** | 暖珊瑚 | `#E57373` | `#fff` | 發生錯誤的狀態 (Failed, Error) |
+| **警告/鎖定** | 琥珀黃 | `#FFB74D` | `#5D4037` | 需要注意的警告狀態 (Locked, Timeout) |
 
-#### State Machine coloringExamples
+#### State Machine 著色範例
 
 ```mermaid
 stateDiagram-v2
@@ -807,414 +807,414 @@ stateDiagram-v2
     class Locked warning
 ```
 
-### C4 Model Architecture DiagramColorStandard
+### C4 Model 架構圖顏色標準
 
-Context View、Container View etcArchitecture DiagramUse **Warm color scheme** (Warm and friendly style)：
+Context View、Container View 等架構圖使用 **暖色系配色** (溫暖友善風格)：
 
-| Element Type | Color | Hex Code | Text Color | Purpose |
+| 元素類型 | 顏色 | Hex Code | 文字色 | 用途 |
 |---------|------|----------|--------|------|
-| **Person** | Deep brown orange | `#A1664A` | `#fff` | User、Role |
-| **Software System** | Orange | `#E67E22` | `#fff` | Main system (currently developing) |
-| **Container** | Warm golden yellow | `#F4A940` | `#5D4037` | App、Database、Server |
-| **Component** | Light apricot | `#FDEBD0` | `#5D4037` | Internal components |
-| **External System** | Warm gray brown | `#8D7B6B` | `#fff` | External systems, Third-party services |
+| **Person** | 深棕橘 | `#A1664A` | `#fff` | 使用者、角色 |
+| **Software System** | 橘色 | `#E67E22` | `#fff` | 主系統 (當前開發中) |
+| **Container** | 暖金黃 | `#F4A940` | `#5D4037` | App、Database、Server |
+| **Component** | 淺杏色 | `#FDEBD0` | `#5D4037` | 內部元件 |
+| **External System** | 暖灰棕 | `#8D7B6B` | `#fff` | 外部系統、第三方服務 |
 
 ---
 
-## SDD StandardScreenFlowSpecification
+## SDD 標準畫面流程規範
 
-> ### ⚠️ Important: SDD module design must follow standard screen flow
+> ### ⚠️ 重要：SDD 模組設計必須遵循標準畫面流程
 >
-> AllHave SDD Document'sModuledesign section must follow**industryStandard App NavigationFlow**Organization，
-> ensuring developers can read and implement in logical order.
+> 所有 SDD 文件的模組設計章節必須依照**業界標準 App 導航流程**組織，
+> 確保開發者能夠按照邏輯順序閱讀與實作。
 
-### Design PsychologyPrinciple (Design Psychology)
+### 設計心理學原則 (Design Psychology)
 
-> ### ⚠️ UI/UX DesignMustfollowDesign PsychologyPrinciple
+> ### ⚠️ UI/UX 設計必須遵循設計心理學原則
 >
-> AllHaveScreenFlow design must considerUserpsychologicalfactors，ensuregood'sUseexperience。
+> 所有畫面流程設計必須考量使用者心理因素，確保良好的使用體驗。
 
-#### coreDesign PsychologyPrinciple
+#### 核心設計心理學原則
 
-| Principle | Description | Application Scenario |
+| 原則 | 說明 | 應用場景 |
 |------|------|---------|
-| **Cognitive Load Theory** | Avoid presenting too much information at once, reduce user cognitive burden | Dashboard design, Function layering |
-| **Progressive Disclosure** | Gradually guide users deeper, not showing all functions at once | Login→Overview→Select Function→Operation |
-| **Spatial Orientation** | letUserknow「Where am I」、「CangoWhere」 | Navigation design, Dashboard mental map |
-| **Fitts' Law** | Larger and closer targets are easier to click | Button size, Touch area design |
-| **Hick's Law** | More options, longer decision time | OptionsClassification、reducedecisionfatigue |
-| **Achievement Psychology** | Progress visualization enhances motivation | Gamification, Progress bars, Badge system |
+| **認知負荷理論** (Cognitive Load Theory) | 避免一次呈現過多資訊，減輕使用者認知負擔 | Dashboard 設計、功能分層 |
+| **漸進式揭露** (Progressive Disclosure) | 逐步引導使用者深入，不一次展示所有功能 | 登入→總覽→選擇功能→操作 |
+| **空間定向** (Spatial Orientation) | 讓使用者知道「我在哪」、「能去哪」 | 導航設計、Dashboard 心理地圖 |
+| **Fitts' Law** | 目標越大越近，越容易點擊 | 按鈕尺寸、觸控區域設計 |
+| **Hick's Law** | 選項越多，決策時間越長 | 選項分類、減少決策疲勞 |
+| **成就感設計** (Achievement Psychology) | 進度可視化增強動機 | 遊戲化、進度條、徽章系統 |
 
-#### FlowDesign PsychologyCheckList
+#### 流程設計心理學檢查清單
 
-When designing App flow, must answer the following questions:
+在設計 App 流程時，必須回答以下問題：
 
-| Phase | Psychology Question | Design Response |
+| 階段 | 心理學問題 | 設計對應 |
 |------|-----------|---------|
-| After Login | UserNeed「bufferSection」CreatepsychologicalModel | Must have Dashboard, cannot jump directly to function modules |
-| Main Screen | Users want to know "where am I, what's completed, what's next" | Dashboard shows progress, status, next step guidance |
-| Function Entry | UserNeedknow「Prerequisites」IsNosatisfied | CheckdeviceConnection、Permissionstate before allowing entry |
-| Before Training | User may be frustrated due to device not connecting | Device pairing must be before training function |
-| CompleteAfter | Useneed positive feedback to reinforce behavior | Success animation, Rewards, Encouragement messages |
+| 登入後 | 使用者需要「緩衝區」建立心理模型 | 必須有 Dashboard，不可直接跳入功能模組 |
+| 主畫面 | 使用者想知道「我在哪、完成什麼、下一步」 | Dashboard 顯示進度、狀態、下一步引導 |
+| 功能入口 | 使用者需要知道「前置條件」是否滿足 | 檢查裝置連線、權限狀態後才允許進入 |
+| 訓練前 | 使用者可能因裝置未連線而挫折 | 裝置配對必須在訓練功能之前 |
+| 完成後 | 使用者需要正向回饋強化行為 | 成功動畫、獎勵、鼓勵訊息 |
 
-#### Prerequisite Designpattern
+#### 前置條件設計模式
 
-> **Important:** Functions with hardware dependencies must design prerequisite check mechanisms.
+> **重要：** 具有硬體依賴的功能，必須設計前置條件檢查機制。
 
 ```
-When entering function module:
-├── Check necessary prerequisites
-│   ├── Conditions met → Allow entry
-│   └── Conditions not met → Guide to settings page
-│       ├── Show friendly hint message
-│       ├── Provide "Go to Settings" button
-│       └── CompleteSettingsAfterAutoreturnreturn
+進入功能模組時：
+├── 檢查必要前置條件
+│   ├── 條件已滿足 → 允許進入
+│   └── 條件未滿足 → 引導至設定頁面
+│       ├── 顯示友善提示訊息
+│       ├── 提供「前往設定」按鈕
+│       └── 完成設定後自動返回
 ```
 
-**Examples：trainingModulePrerequisites**
+**範例：訓練模組前置條件**
 
-| Training Type | Prerequisites | Handle When Not Met |
+| 訓練類型 | 前置條件 | 未滿足時處理 |
 |---------|---------|-------------|
-| Airtight Training | iNAP DevicealreadyConnection | Hint「pleaseFirstconnect iNAP Device」→ GuideToDevicepairing |
-| DeviceInteractiontraining | Training device paired | Prompt "Please pair training device first" → Guide to device settings |
-| Tutorial Videos | No hardware required | Allow offline viewing |
-| Muscle Function Training | No hardware required | Allow some independent usage |
+| 氣密訓練 | iNAP 設備已連線 | 提示「請先連接 iNAP 設備」→ 引導至設備配對 |
+| 設備互動訓練 | 訓練裝置已配對 | 提示「請先配對訓練裝置」→ 引導至裝置設定 |
+| 教學影片 | 無硬體需求 | 允許離線觀看 |
+| 肌功能訓練 | 無硬體需求 | 允許離線使用 |
 
 ---
 
-### Cognitive PsychologyPrinciple (Cognitive Psychology)
+### 認知心理學原則 (Cognitive Psychology)
 
-> ### ⚠️ UI/UX DesignMustfollowCognitive PsychologyPrinciple
+> ### ⚠️ UI/UX 設計必須遵循認知心理學原則
 >
-> Cognitive PsychologyStudy how humans perceive、attention、Memory、thinkandlearning。
-> Good UI design must align with how human cognition works.
+> 認知心理學研究人類如何感知、注意、記憶、思考與學習。
+> 良好的 UI 設計必須符合人類認知運作方式。
 
-#### coreCognitive PsychologyPrinciple
+#### 核心認知心理學原則
 
-| Principle | Description | Application Scenario |
+| 原則 | 說明 | 應用場景 |
 |------|------|---------|
-| **Mental Model** (Mental Model) | User's mental expectation of system operation | Design aligned with user's expected interaction methods |
-| **Attention** (Attention) | User can process limited information at the same time | Highlight important information, reduce interference |
-| **Working Memory** (Working Memory) | Short-term memory capacity approximately 4±1 items | Steps not exceeding 4-5, reducing memory burden |
-| **Long-term Memory** (Long-term Memory) | Strengthen memory through repetition and association | ConsistencyDesign、Canidentify'sIcon |
-| **Perception** (Perception) | How humans interpret visual information | Gestalt Principle, visual hierarchy |
-| **Affordance** (Affordance) | Object suggests its usage method | Button looks like it can be clicked |
-| **Signifier** (Signifier) | Explicit instruction on how to operate | Icon, Label, Hint Text |
+| **心智模型** (Mental Model) | 使用者對系統運作的內心預期 | 設計符合使用者預期的互動方式 |
+| **注意力** (Attention) | 使用者能同時處理的資訊有限 | 突顯重要資訊、減少干擾 |
+| **工作記憶** (Working Memory) | 短期記憶容量約 4±1 項目 | 步驟不超過 4-5 步、減少記憶負擔 |
+| **長期記憶** (Long-term Memory) | 透過重複與關聯強化記憶 | 一致性設計、可辨識的圖示 |
+| **感知** (Perception) | 人如何解讀視覺資訊 | 格式塔原則、視覺層級 |
+| **可供性** (Affordance) | 物件暗示的使用方式 | 按鈕看起來可點擊 |
+| **訊號** (Signifier) | 明確指示如何操作 | 圖示、標籤、提示文字 |
 
-#### PerceptionandGestaltPrinciple (Gestalt Principles)
+#### 感知與格式塔原則 (Gestalt Principles)
 
-| Principle | Description | UI ShouldUse |
+| 原則 | 說明 | UI 應用 |
 |------|------|---------|
-| **Proximity** (Proximity) | Elements close together are viewed as a group | Related buttons placed together |
-| **Similarity** (Similarity) | Elements with similar appearance are viewed as a group | Same category functions use same style |
-| **continuity** (Continuity) | Eye movement follows lines or curves | Layout design guiding eye movement |
-| **closure** (Closure) | Brain automatically completes inComplete'sshape | simplifyIconDesign |
-| **Figure-Ground** (Figure-Ground) | Distinguish foreground and background | Dialog and mask layer |
-| **common fate** (Common Fate) | Elements moving in the same direction are viewed as a group | AnimationDesign |
+| **接近性** (Proximity) | 靠近的元素被視為一組 | 相關按鈕放在一起 |
+| **相似性** (Similarity) | 相似外觀的元素被視為一組 | 同類功能使用相同樣式 |
+| **連續性** (Continuity) | 視線會沿著線條或曲線移動 | 引導視線的佈局設計 |
+| **封閉性** (Closure) | 大腦會自動補齊不完整的形狀 | 簡化圖示設計 |
+| **圖地關係** (Figure-Ground) | 區分前景與背景 | 對話框與遮罩層 |
+| **共同命運** (Common Fate) | 同方向移動的元素被視為一組 | 動畫設計 |
 
-#### Memory and Learning Design
+#### 記憶與學習設計
 
-**Working Memory Limitation (Miller's Law: 7±2 → Current research: 4±1)**
+**工作記憶限制 (Miller's Law: 7±2 → 現代研究: 4±1)**
 
-| DesignItems | Recommendationquantity | Reason |
+| 設計項目 | 建議數量 | 原因 |
 |---------|---------|------|
-| Navigation Tab quantity | 4-5 piece | ExceedWilladdSelectdifficulty |
-| Form Fields Group | Every group 3-4 fields | Reduce cognitive load |
-| Steps Flow | Maximum 5 steps | Avoid forgetting progress |
-| DropdownOptions | 7 pieceWithinside | ExceedNeedClassificationorSearch |
+| 導航 Tab 數量 | 4-5 個 | 超過會增加選擇困難 |
+| 表單欄位分組 | 每組 3-4 欄 | 減少認知負荷 |
+| 步驟流程 | 最多 5 步 | 避免忘記進度 |
+| 下拉選單選項 | 7 個以內 | 超過需分類或搜尋 |
 
-**Long-term MemoryreinforceDesign**
+**長期記憶強化設計**
 
-| policySlightly | Description | Examples |
+| 策略 | 說明 | 範例 |
 |------|------|------|
-| **Consistency** | SameFunctionSameappearance | AllHave「Save」ButtonallIsBlue |
-| **metaphor** | Usefamiliar'sconceptual | trash canIconreplaceTableDelete |
-| **chunking** (Chunking) | Organize information into meaningful groups | Phone numbers displayed in segments |
-| **Repeated exposure** | Important functions appear multiple times | Frequently used functions placed at multiple entry points |
+| **一致性** | 相同功能相同外觀 | 所有「儲存」按鈕都是藍色 |
+| **隱喻** | 使用熟悉的概念 | 垃圾桶圖示代表刪除 |
+| **分塊** (Chunking) | 將資訊組織成有意義的群組 | 電話號碼分段顯示 |
+| **重複曝光** | 重要功能多次出現 | 常用功能放在多個入口 |
 
-#### Affordance and Signifier Design (Norman's Design Principles)
+#### 可供性與訊號設計 (Norman's Design Principles)
 
-| Principle | Description | good'sDesign | difference'sDesign |
+| 原則 | 說明 | 好的設計 | 差的設計 |
 |------|------|---------|---------|
-| **Affordance** | What the object suggests can be done | raised'sButtonsuggestCanpress | flatTextNonemethodidentifyIsNoCanA bit |
-| **Signifier** | Explicit instruction on how to operate | Button has icon + text | Only has mysterious icon |
-| **Mapping** | Correspondence between control and result | Swipe up to move content up | Counter-intuitive operation |
-| **Feedback** | Immediate feedback after operation | Has animation/sound after click | Click has no feedback |
-| **conceptualModel** | Systemoperation'sexplain | Progress BarShowetcstayin | NoneStatusinstruction |
-| **Constraint** | Prevent error operation | Disabled invalid options | Allow invalid operation then show error |
+| **可供性** | 物件暗示可做什麼 | 凸起的按鈕暗示可按 | 平面文字無法辨識是否可點 |
+| **訊號** | 明確指示如何操作 | 按鈕有圖示+文字 | 只有神秘圖示 |
+| **映射** | 控制與結果的對應關係 | 向上滑動內容向上移 | 違反直覺的操作 |
+| **回饋** | 操作後的即時反應 | 點擊後有動畫/聲音 | 點擊無反應 |
+| **概念模型** | 系統運作的解釋 | 進度條顯示等待中 | 無狀態指示 |
+| **限制** | 防止錯誤操作 | 禁用無效選項 | 允許無效操作後報錯 |
 
-#### Error PreventionandProcess
+#### 錯誤預防與處理
 
-| Principle | Description | Implementationway |
+| 原則 | 說明 | 實作方式 |
 |------|------|---------|
-| **preventionwinIntreatment** | Design to prevent errors from occurring | Disable invalid buttons, limit input format |
-| **Confirm Important Operation** | Confirm before irreversible operations | Show confirm dialog before delete |
-| **Allow Undo** | Provide undo function | Undoable delete (soft delete) |
-| **Friendly Error Message** | Describe problem and solution method | "Password needs to include numbers and characters" rather than "Format Error" |
-| **i.e.TimeValidate** | inputTimei.e.TimeCheck | input Email Timei.e.TimeValidateFormat |
+| **預防勝於治療** | 設計上避免錯誤發生 | 禁用無效按鈕、限制輸入格式 |
+| **確認重要操作** | 不可逆操作前確認 | 刪除前顯示確認對話框 |
+| **允許復原** | 提供 Undo 功能 | 可復原的刪除（軟刪除） |
+| **友善錯誤訊息** | 說明問題與解決方法 | 「密碼需包含數字」而非「格式錯誤」 |
+| **即時驗證** | 輸入時即時檢查 | 輸入 Email 時即時驗證格式 |
 
-#### Reading Psychology (Reading Psychology)
+#### 閱讀心理學 (Reading Psychology)
 
-> **Medical software particularly important：** Critical information must be easy to read, avoid misreading causing medical errors。
+> **醫療軟體特別重要：** 關鍵資訊必須易於閱讀，避免誤讀導致醫療錯誤。
 
-| Principle | Description | Implementationway |
+| 原則 | 說明 | 實作方式 |
 |------|------|---------|
-| **F typeReading Mode** | Users tend to start from upper left, scanning in F-pattern | Place important information in upper left |
-| **Visual Hierarchy** | Create hierarchy through size, color, spacing | Title large, content medium, description small |
-| **Line Length Limit** | 45-75 characters per line most readable | Limit text block width |
-| **Line Height** | Line height approximately 1.4-1.6 times font size | Avoid lines too close together |
-| **Contrast Ratio** | Text and background contrast ratio at least 4.5:1 | WCAG AA Standard |
-| **Font Selection** | Sans-serif fonts are easier to read on screen | iOS: SF Pro, Android: Roboto |
+| **F 型閱讀模式** | 使用者傾向從左上角開始，呈 F 型掃描 | 重要資訊放左上角 |
+| **視覺層級** | 透過大小、顏色、粗細建立層級 | 標題大、內文中、說明小 |
+| **行長限制** | 每行 45-75 字元最易閱讀 | 限制文字區塊寬度 |
+| **行高** | 行高約 1.4-1.6 倍字體大小 | 避免行距過窄 |
+| **對比度** | 文字與背景對比度至少 4.5:1 | WCAG AA 標準 |
+| **字體選擇** | 無襯線字體較易螢幕閱讀 | iOS: SF Pro, Android: Roboto |
 
-**countCharactersandunitShow**
+**數字與單位顯示**
 
-| Scenario | RecommendationFormat | Reason |
+| 情境 | 建議格式 | 原因 |
 |------|---------|------|
-| Large Numbers | 1,234,567 | Thousands separator for readability |
-| Time | 7h 32m | Clear units |
-| Percentage | 85% | Clear symbol |
-| Medical Values | 98.6°F / 37°C | MustShowunit |
+| 大數字 | 1,234,567 | 千分位分隔易讀 |
+| 時間 | 7h 32m | 明確單位 |
+| 百分比 | 85% | 符號明確 |
+| 醫療數值 | 98.6°F / 37°C | 必須顯示單位 |
 
-#### Cognitive PsychologyCheckList
+#### 認知心理學檢查清單
 
-existreview UI DesignTime，MustConfirm：
+在審查 UI 設計時，必須確認：
 
-| CheckCategory | CheckItems | Pass Criteria |
+| 檢查類別 | 檢查項目 | 通過標準 |
 |---------|---------|---------|
-| **Mental Model** | OperationwayalignUserexpected？ | NoneNeedDescriptioni.e.CanUnderstand |
-| **Attention** | Is important information highlighted enough? | Can find critical information within 3 seconds |
-| **Memory Load** | Is the number of steps reasonable? | Single flow no more than 5 steps |
-| **Perception** | Are visual groups clear? | Related elements clearly grouped |
-| **Affordance** | Are interactive elements obvious? | Button looks like it can be clicked |
-| **Feedback** | Do all operations have feedback? | Click has visual/tactile feedback |
-| **Error Prevention** | Has error-proof design? | Invalid operations are disabled |
-| **Readability** | Is text easy to read? | Contrast ratio ≥ 4.5:1 |
+| **心智模型** | 操作方式符合使用者預期？ | 無需說明即可理解 |
+| **注意力** | 重要資訊夠突顯？ | 3 秒內能找到關鍵資訊 |
+| **記憶負荷** | 步驟數量合理？ | 單一流程不超過 5 步 |
+| **感知** | 視覺分組清楚？ | 相關元素明顯成組 |
+| **可供性** | 可互動元素明顯？ | 按鈕看起來可點擊 |
+| **回饋** | 所有操作有回饋？ | 點擊有視覺/觸覺反應 |
+| **錯誤預防** | 有防呆設計？ | 無效操作被禁用 |
+| **閱讀性** | 文字易讀？ | 對比度 ≥ 4.5:1 |
 
 ---
 
-### techniqueDocument Layout Psychology (Document Layout Psychology)
+### 技術文件編排心理學 (Document Layout Psychology)
 
-> ### ⚠️ AllHavetechniqueDocumentMustfollowDocument Layout PsychologyPrinciple
+> ### ⚠️ 所有技術文件必須遵循文件編排心理學原則
 >
-> IEC 62304 Document (SRS/SDD/SWD/STP/STC/SVV/RTM) 's writing and layout must consider different readersRole'sreadingRequirement，
-> Ensure documents are easy to read, understand and use, improving development efficiency。
+> IEC 62304 文件 (SRS/SDD/SWD/STP/STC/SVV/RTM) 的撰寫與編排必須考量不同讀者角色的閱讀需求，
+> 確保文件易於閱讀、理解與使用，提升開發效率。
 
-#### Reader Role Analysis (Reader Role Analysis)
+#### 讀者角色分析 (Reader Role Analysis)
 
-NotsameRolereadingtechniqueDocument have different needs and focus points：
+不同角色閱讀技術文件時有不同的需求與關注點：
 
-| Role | Abbreviation | Reading Purpose | Main Focus Sections | Reading Mode |
+| 角色 | 縮寫 | 閱讀目的 | 主要關注章節 | 閱讀模式 |
 |------|------|---------|-------------|---------|
-| **System Analyst** | SA | Understand requirement sources, acceptance criteria | SRS full text、RTM | Comprehensive reading |
-| **SystemDesigner** | SD | UnderstandArchitecture、Design Patterns | SRS Requirement、SDD Architecture | structuretransformreading |
-| **Programmer** | PG | Implementation details, API specifications | SDD Detailed Design、SWD | Jump-style reference |
-| **Quality Engineer** | QA | Test Cases, Validation Method | SRS AC, STC, SVV | Traceability-style reading |
-| **Regulatory Specialist** | RA | Traceability Completeness, compliance evidence | RTM, SVV | Audit-style check |
+| **系統分析師** | SA | 了解需求來源、驗收標準 | SRS 全文、RTM | 全面閱讀 |
+| **系統設計師** | SD | 理解架構、設計模式 | SRS 需求、SDD 架構 | 結構化閱讀 |
+| **程式設計師** | PG | 實作細節、API 規格 | SDD 詳細設計、SWD | 跳躍式查閱 |
+| **品質工程師** | QA | 測試案例、驗證方法 | SRS AC、STC、SVV | 追溯式閱讀 |
+| **法規專員** | RA | 追溯完整性、合規證據 | RTM、SVV | 稽核式檢查 |
 
-#### DocumentreadingFlowDesign (Document Reading Flow)
+#### 文件閱讀流程設計 (Document Reading Flow)
 
 ```
-Reader's mental model when reading technical documents:
+讀者閱讀技術文件時的心智模型：
 
-SRS Requirements                 SDD Design Spec                 SWD Detailed Design
+SRS 需求規格書                 SDD 設計規格書                 SWD 詳細設計
 ┌─────────────┐              ┌─────────────┐              ┌─────────────┐
-│ 1. OverviewSummary  │              │ 1. ArchitectureOverview  │              │ 1. ModuleOverview  │
+│ 1. 總覽摘要  │              │ 1. 架構總覽  │              │ 1. 模組總覽  │
 │    ↓        │              │    ↓        │              │    ↓        │
-│ 2. ModuleList  │  ───────→    │ 2. ModuleDesign  │  ───────→    │ 2. CategoryDesign  │
-│    ↓        │  (SD Need     │    ↓        │  (PG Need    │    ↓        │
-│ 3. Detailed Requirements  │   Architecture context) │ 3. Interface Design  │   Implementation details)  │ 3. Method details  │
+│ 2. 模組清單  │  ───────→    │ 2. 模組設計  │  ───────→    │ 2. 類別設計  │
+│    ↓        │  (SD 需要     │    ↓        │  (PG 需要    │    ↓        │
+│ 3. 詳細需求  │   架構上下文) │ 3. 介面設計  │   實作細節)  │ 3. 方法細節  │
 │    ↓        │              │    ↓        │              │    ↓        │
-│ 4. Traceability Info  │              │ 4. Data Design  │              │ 4. Algorithm method    │
+│ 4. 追溯資訊  │              │ 4. 資料設計  │              │ 4. 演算法    │
 └─────────────┘              └─────────────┘              └─────────────┘
       │                            │                            │
       └────────────────────────────┴────────────────────────────┘
                                    │
                                    ▼
-                            RTM Traceability
-                        (RA/QA AuditValidate)
+                            RTM 追溯矩陣
+                        (RA/QA 稽核驗證)
 ```
 
-#### Document LayoutcorePrinciple
+#### 文件編排核心原則
 
-| Principle | Description | Implementationway |
+| 原則 | 說明 | 實作方式 |
 |------|------|---------|
-| **F-Pattern Layout** | Place important information in upper left | Requirement ID, Module Name at beginning of line |
-| **Visual Hierarchy** | Title size distinguishes levels | H1 > H2 > H3 explicit hierarchy |
-| **Chunking Presentation** | Group related information | Tables, text blocks, separator lines |
-| **Progressive Disclosure** | Overview first, details later | Each chapter starts with summary table, then detailed sections |
-| **Consistency** | Unified format and terminology | ID encoding, field order consistent |
-| **Scannability** | Support quick search | Tables、List、Bold key characters |
+| **F 型排版** | 重要資訊置於左上角 | 需求 ID、模組名稱放在行首 |
+| **視覺層級** | 標題大小區分層級 | H1 > H2 > H3 明確層級 |
+| **分塊呈現** | 相關資訊群組化 | 表格、區塊引用、分隔線 |
+| **漸進式揭露** | 先總覽後詳細 | 每章先總表，再分節詳述 |
+| **一致性** | 統一格式與術語 | ID 編碼、欄位順序一致 |
+| **可掃描性** | 支援快速查找 | 表格、清單、粗體關鍵字 |
 
-#### SRS Document LayoutGuide
+#### SRS 文件編排指南
 
-**structureDesignPrinciple：**
+**結構設計原則：**
 
-| Section | Reader Focus | Arrangement Technique |
+| 章節 | 讀者關注 | 編排技巧 |
 |------|---------|---------|
-| **1. Introduction** | SA/SD/RA | 2-3 page overview, create overall mental model |
-| **2. Overall Description** | SA/SD | Context diagram, user role table |
-| **3. Functional Requirements** | SD/PG | Module → Requirement Items → AC, progressive reveal |
-| **4. Non-Functional Requirements** | SD/QA | Tables format, measurable metrics |
+| **1. 簡介** | SA/SD/RA | 2-3 段總覽，建立整體心智模型 |
+| **2. 總體描述** | SA/SD | 上下文圖、使用者角色表 |
+| **3. 功能需求** | SD/PG | 模組→需求項目→AC，遞進揭露 |
+| **4. 非功能需求** | SD/QA | 表格化，量化指標 |
 
-**RequirementItemsarrange：**
+**需求項目編排：**
 
 ```markdown
-##### REQ-XXX-001 RequirementName
+##### REQ-XXX-001 需求名稱
 
-**Statement:** [One sentence description, not exceeding 50 characters]
+**Statement:** [一句話描述，不超過 50 字]
 
 **Rationale:**
-- [psychology/techniqueReason 1]
-- [psychology/techniqueReason 2]
+- [心理學/技術原因 1]
+- [心理學/技術原因 2]
 
 **Acceptance Criteria:**
-- AC1: When [condition], [action], and [expected results] - [Design basis]
+- AC1: 當 [條件]，[動作]，並 [預期結果] - [設計依據]
 - AC2: ...
 
 **Verification Method:** Test | Inspection | Demonstration | Analysis
 ```
 
-**Rationale psychologyannotationFormat：**
+**Rationale 心理學標註格式：**
 
-Requirement's Rationale ShouldIncludepsychologyAccording to（IfAppropriateUse）：
+需求的 Rationale 應包含心理學依據（若適用）：
 
-| Rationale Type | Annotation Format | Examples |
+| Rationale 類型 | 標註格式 | 範例 |
 |---------------|---------|------|
-| Cognitive Load | **Cognitive Load Theory**: ... | Dashboard Chunking to reduce cognitive load |
-| Memory Limitation | **Working Memory Limitation**: ... | Steps not exceed 5 steps |
-| Visual Perception | **F-pattern Reading**: ... | Important information placed in upper left |
-| Usability | **Fitts' Law**: ... | Button size ≥44pt |
-| Decision Optimization | **Hick's Law**: ... | Options ≤5 items |
-| Error Prevention | **Error Prevention**: ... | Prerequisites Check |
+| 認知負荷 | **認知負荷理論**：... | Dashboard 分塊降低認知負擔 |
+| 記憶限制 | **工作記憶限制**：... | 步驟不超過 5 步 |
+| 視覺感知 | **F 型閱讀**：... | 重要資訊置於左上 |
+| 可用性 | **Fitts' Law**：... | 按鈕尺寸 ≥44pt |
+| 決策優化 | **Hick's Law**：... | 選項 ≤5 個 |
+| 錯誤預防 | **錯誤預防**：... | 前置條件檢查 |
 
-#### SDD Document Layout Guide
+#### SDD 文件編排指南
 
-**Structure Design Principles:**
+**結構設計原則：**
 
-| Section | Reader Focus | Arrangement Technique |
+| 章節 | 讀者關注 | 編排技巧 |
 |------|---------|---------|
-| **1. Introduction** | SD | Design Principles, Architecture Overview |
-| **2. System Architecture** | SD/PG | Layered Architecture Diagram, Technology Selection Table |
-| **3. Module Design** | PG | Each Module: Overview Table → Architecture → Screen |
-| **4. Data Design** | PG | ER Diagram, Entity definition |
-| **5. Interface Design** | PG | API specification、UI Screen |
+| **1. 簡介** | SD | 設計原則、架構概述 |
+| **2. 系統架構** | SD/PG | 分層架構圖、技術選型表 |
+| **3. 模組設計** | PG | 每模組：總覽表→架構→畫面 |
+| **4. 資料設計** | PG | ER 圖、Entity 定義 |
+| **5. 介面設計** | PG | API 規格、UI 畫面 |
 
-**Moduleinternalarrange：**
+**模組內部編排：**
 
 ```markdown
-### 3.X Module Name (MODULE_CODE)
+### 3.X 模組名稱 (MODULE_CODE)
 
-| Design ID | Name | CorrespondingRequirement | CorrespondingScreen | Description |
+| 設計 ID | 名稱 | 對應需求 | 對應畫面 | 說明 |
 |---------|------|---------|----------|------|
 | SDD-XXX-001 | ... | REQ-XXX-001 | SCR-XXX-001 | ... |
 
-← First present overview table, let reader create mental model
+← 先呈現總覽表，讓讀者建立心智模型
 
-#### 3.X.1 ModuleArchitecture Design
-← ThenExpandArchitecturedetails (SD/PG Need)
+#### 3.X.1 模組架構設計
+← 再展開架構細節 (SD/PG 需要)
 
-#### 3.X.2 ScreenDesign：SCR-XXX-001
-← MostAfterDetailsScreen (PG Need)
+#### 3.X.2 畫面設計：SCR-XXX-001
+← 最後詳細畫面 (PG 需要)
 ```
 
-#### SWD Document LayoutGuide
+#### SWD 文件編排指南
 
-**PG readingOptimization：**
+**PG 閱讀優化：**
 
-| Arrangement Technique | Description | Examples |
+| 編排技巧 | 說明 | 範例 |
 |---------|------|------|
-| **Category Overview Table** | Each module first lists all categories | Category name, responsibility, dependency |
-| **Method Signature Priority** | First present API, then describe logic | `func login() -> Result` |
-| **Code Block** | Key algorithms directly display | Pseudocode or actual code |
-| **Sequence Diagram** | Complex flow use diagram description | Mermaid sequence diagram |
+| **類別總覽表** | 每模組先列出所有類別 | 類別名、職責、依賴 |
+| **方法簽名優先** | 先呈現 API，再說明邏輯 | `func login() -> Result` |
+| **程式碼區塊** | 關鍵演算法直接展示 | Pseudocode 或實際程式碼 |
+| **序列圖** | 複雜流程用圖說明 | Mermaid sequenceDiagram |
 
-#### TablesDesignReadability
+#### 表格設計可讀性
 
-**TablesarrangePrinciple：**
+**表格編排原則：**
 
-| Principle | Description | Implementation |
+| 原則 | 說明 | 實作 |
 |------|------|------|
-| **Field Order** | ID → Name → Details → Traceability | Align reading habits |
-| **Column Width Ratio** | ID narrow, Description wide | Content decides column width |
-| **Table Header Bold** | Distinguish table header and content | Markdown `**Bold**` |
-| **Zebra Stripes** | Large tables alternate background color | DOCX Style Settings |
-| **Not exceed 7 fields** | Avoid horizontal scrolling | Split or simplify |
+| **欄位順序** | ID → 名稱 → 詳細 → 追溯 | 符合閱讀習慣 |
+| **欄寬比例** | ID 窄、說明寬 | 內容決定欄寬 |
+| **表頭加粗** | 區分表頭與內容 | Markdown `**粗體**` |
+| **斑馬條紋** | 大表格交替背景色 | DOCX 樣式設定 |
+| **不超過 7 欄** | 避免水平滾動 | 拆分或簡化 |
 
-**ID FieldsNotLine breakrules：**
+**ID 欄位不換行規則：**
 
 ```markdown
-<!-- correct：ID maintainsimplerows -->
-| SRS-AUTH-001 | UserLoginFunction，Support Email、Google、Apple Loginway |
+<!-- 正確：ID 保持單行 -->
+| SRS-AUTH-001 | 使用者登入功能，支援 Email、Google、Apple 登入方式 |
 
-<!-- Error: ID truncated -->
-| SRS-AUTH- | UserLoginFunction |
+<!-- 錯誤：ID 被截斷 -->
+| SRS-AUTH- | 使用者登入功能 |
 | 001       |               |
 ```
 
-#### DiagramsReadability
+#### 圖表可讀性
 
-**Mermaid Diagramsarrange：**
+**Mermaid 圖表編排：**
 
-| Diagram Type | DirectionRecommendation | Reason |
+| 圖表類型 | 方向建議 | 原因 |
 |---------|---------|------|
-| Flowchart | TB (upTolower) | alignreadingDirection |
-| Sequence Diagram | Group box | Reduce participant quantity |
-| State Diagram | TB + Group | Avoid horizontal direction too wide |
-| Class Diagram | TB + namespace | logicalGroup |
+| 流程圖 | TB (上到下) | 符合閱讀方向 |
+| 序列圖 | 分組 box | 減少參與者數量 |
+| 狀態圖 | TB + 分組 | 避免橫向過寬 |
+| 類別圖 | TB + namespace | 邏輯分組 |
 
-**Diagramssizecontrol：**
+**圖表尺寸控制：**
 
 ```markdown
-<!-- UI Wireframe (block-beta)：narrowWidth -->
-Maximum width: 500px (Appropriate for mobile screen)
+<!-- UI Wireframe (block-beta)：窄寬度 -->
+最大寬度: 500px (適合手機畫面)
 
-<!-- otherDiagrams：StandardWidth -->
-MostlargeWidth: 1200px (Appropriateclose A4 print)
+<!-- 其他圖表：標準寬度 -->
+最大寬度: 1200px (適合 A4 列印)
 ```
 
-#### Document LayoutCheckList
+#### 文件編排檢查清單
 
-| CheckCategory | CheckItems | Pass Criteria |
+| 檢查類別 | 檢查項目 | 通過標準 |
 |---------|---------|---------|
-| **structure** | each chapterHaveOverviewTable？ | Overview first, details later |
-| **Level** | TitleLevelcorrect？ | H1→H2→H3 deliveradvance |
-| **ID** | ID NotLine break？ | simplerowsShow |
-| **Tables** | Is field order reasonable? | ID in first column |
-| **Diagrams** | DiagramsDirectioncorrect？ | TB Priority |
-| **Traceability** | Traceability ID CanClick？ | SupportsuperLink |
-| **Terminology** | Terminology consistent? | Unified vocabulary |
-| **Format** | MD/DOCX Synchronized? | Timestamp check |
+| **結構** | 每章有總覽表？ | 先總覽後詳細 |
+| **層級** | 標題層級正確？ | H1→H2→H3 遞進 |
+| **ID** | ID 不換行？ | 單行顯示 |
+| **表格** | 欄位順序合理？ | ID 在首欄 |
+| **圖表** | 圖表方向正確？ | TB 優先 |
+| **追溯** | 追溯 ID 可點擊？ | 支援超連結 |
+| **術語** | 術語一致？ | 統一用詞 |
+| **格式** | MD/DOCX 同步？ | 時間戳記檢查 |
 
 ---
 
-### Standard App NavigationFlowArchitecture
+### 標準 App 導航流程架構
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Standard App NavigationFlow                              │
+│                    標準 App 導航流程                              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  1. Splash Screen (StartScreen)                                     │
+│  1. Splash Screen (啟動畫面)                                     │
 │         │                                                       │
 │         ▼                                                       │
-│  2. AuthenticateCheck ─────┬─── alreadyLogin ──────► directlyenter Dashboard          │
+│  2. 認證檢查 ─────┬─── 已登入 ──────► 直接進入 Dashboard          │
 │         │        │                                              │
-│         │        └─── notLogin ──────► Login Screen                    │
-│         │                            ├─ Register                    │
-│         │                            ├─ Forgot password                │
-│         │                            └─ Social login(Google/Apple)  │
+│         │        └─── 未登入 ──────► 登入畫面                    │
+│         │                            ├─ 註冊                    │
+│         │                            ├─ 忘記密碼                │
+│         │                            └─ 社群登入(Google/Apple)  │
 │         │                                                       │
 │         ▼                                                       │
-│  3. First timeUseCheck ───┬─── First time ──────► Onboarding flow            │
-│         │          │                 (3-6 pieceGuideScreen)            │
+│  3. 首次使用檢查 ───┬─── 首次 ──────► Onboarding Flow            │
+│         │          │                 (3-6 個引導畫面)            │
 │         │          │                                            │
-│         │          └─── NotFirst time ────► Dashboard (mainpage)            │
+│         │          └─── 非首次 ────► Dashboard (主頁)            │
 │         │                                                       │
 │         ▼                                                       │
-│  4. Dashboard (main page/home page)                                        │
+│  4. Dashboard (主頁/首頁)                                        │
 │         │                                                       │
 │         ▼                                                       │
-│  5. Tab Navigation (bottomNavigation)                                    │
+│  5. Tab Navigation (底部導航)                                    │
 │     ┌──────┬──────┬──────┬──────┬──────┐                        │
 │     │ Home │ Tab2 │ Tab3 │ Tab4 │Setting│                       │
 │     └──────┴──────┴──────┴──────┴──────┘                        │
@@ -1222,80 +1222,80 @@ MostlargeWidth: 1200px (Appropriateclose A4 print)
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### SDD Moduledesign section order specification
+### SDD 模組設計章節順序規範
 
-Module design section must follow the following order organization, aligned with App actual navigation flow and **Design Psychology Principle**:
+模組設計章節必須按照以下順序組織，符合 App 實際導航流程與**設計心理學原則**：
 
-| Order | Module | MandatoryScreen | Description | psychologyAccording to |
+| 順序 | 模組 | 必要畫面 | 說明 | 心理學依據 |
 |------|------|---------|------|-----------|
-| 1 | **AUTH (Authenticate)** | Login → Register → Forgot Password → Social Login → Profile Selection | First step of app entry | Create sense of security |
-| 2 | **ONBOARD (Guide)** | Welcome → Feature Introduction → Settings Guide → Complete | First-time user onboarding flow | Progressive Disclosure |
-| 3 | **DASHBOARD (Main Screen)** | Status Overview → Progress → Today's Tasks → Navigation Entry | **Psychological buffer section, creates orientation** | Cognitive Load、Spatial Orientation |
-| 4 | **DEVICE (Device)** | Device List→Connection→Pairing→Status | **Must be completed before training** | Prerequisite Design |
-| 5 | **Core Function Module** (such as TRAIN) | Prerequisites Check→Function Flow | Main business function | Hardware dependency design |
-| 6 | **REPORT (Report)** | Data Overview → Detailed Reports → Export | Data presentation | Achievement psychology design |
-| 7 | **REWARD (Reward)** | Achievements → Badges → Collection | Gamification elements (when appropriate) | Achievement psychology design |
-| 8 | **SETTING (Settings)** | Profile→Notification→Language→Logout | Always placed at the end | Hick's Law |
-| 9 | **PLATFORM (Cloud Platform)** | Backend Service Design | Not App UI, place last | - |
+| 1 | **AUTH (認證)** | 登入→註冊→忘記密碼→社群登入→Profile選擇 | 進入 App 的第一關 | 安全感建立 |
+| 2 | **ONBOARD (引導)** | 歡迎頁→功能介紹→設定引導→完成 | 首次使用者引導流程 | 漸進式揭露 |
+| 3 | **DASHBOARD (主畫面)** | 狀態總覽→進度→今日任務→導航入口 | **心理緩衝區，建立定向感** | 認知負荷、空間定向 |
+| 4 | **DEVICE (設備)** | 設備列表→連線→配對→狀態 | **必須在訓練前完成** | 前置條件設計 |
+| 5 | **核心功能模組** (如 TRAIN) | 前置條件檢查→功能流程 | 主要業務功能 | 依硬體依賴設計 |
+| 6 | **REPORT (報告)** | 數據總覽→詳細報告→匯出 | 數據呈現 | 成就感設計 |
+| 7 | **REWARD (獎勵)** | 成就→徽章→收集 | 遊戲化元素 (如適用) | 成就感設計 |
+| 8 | **SETTING (設定)** | 個人資料→通知→語言→登出 | 永遠放在最後 | Hick's Law |
+| 9 | **PLATFORM (雲平台)** | 後端服務設計 | 非 App UI，放最後 | - |
 
-> **⚠️ ImportantOrderPrinciple：**
-> 1. **Dashboard must appear immediately after authentication** - Acts as psychological buffer section, cannot skip
-> 2. **Device module must exist before training module** - Hardware dependency function's prerequisites
-> 3. **Settings module always placed at the end** - Align with user psychological expectation
+> **⚠️ 重要順序原則：**
+> 1. **Dashboard 必須在認證後立即出現** - 作為心理緩衝區，不可跳過
+> 2. **設備模組必須在訓練模組之前** - 硬體依賴功能的前置條件
+> 3. **設定模組永遠放在最後** - 符合使用者心理預期
 
-### ModuleinternalstructureSpecification
+### 模組內部結構規範
 
-Each module must follow the following order to organize subsections:
+每個模組必須按照以下順序組織子章節：
 
 ```markdown
-### 3.X Module Name (MODULE_CODE)
+### 3.X 模組名稱 (MODULE_CODE)
 
-| Design ID | Name | CorrespondingRequirement | CorrespondingScreen | Description |
+| 設計 ID | 名稱 | 對應需求 | 對應畫面 | 說明 |
 |---------|------|---------|----------|------|
 | SDD-XXX-001 | ... | SRS-XXX-001 | SCR-XXX-001 | ... |
 
-#### 3.X.1 Module Architecture Design
-- State Machine (State Machine)
-- Service Interface (Service Interface)
-- Data Flow (Data Flow)
+#### 3.X.1 模組架構設計
+- 狀態機 (State Machine)
+- 服務介面 (Service Interface)
+- 資料流 (Data Flow)
 
-#### 3.X.2 Screen Design: SCR-XXX-001 First Screen
-- Screen Property Table
+#### 3.X.2 畫面設計：SCR-XXX-001 第一個畫面
+- 畫面屬性表
 - Wireframe (Mermaid block-beta)
-- Interaction Behavior Table
+- 互動行為表
 
-#### 3.X.3 Screen Design: SCR-XXX-002 Second Screen
+#### 3.X.3 畫面設計：SCR-XXX-002 第二個畫面
 ...
 ```
 
-### AUTH ModuleStandardstructure (Examples)
+### AUTH 模組標準結構 (範例)
 
 ```markdown
-### 3.1 Authentication Module (AUTH)
+### 3.1 認證模組 (AUTH)
 
-#### 3.1.1 Authentication Service Architecture Design
-- Authentication Flow State Machine
-- Authentication Service Interface (AuthService)
+#### 3.1.1 認證服務架構設計
+- 認證流程狀態機
+- 認證服務介面 (AuthService)
 
-#### 3.1.2 Screen Design: SCR-AUTH-001 Login Screen
-#### 3.1.3 Screen Design: SCR-AUTH-002 Register Screen
-#### 3.1.4 Screen Design: SCR-AUTH-003 Forgot Password
-#### 3.1.5 Social Login Integration Design
-#### 3.1.6 Child Profile Management Design (if appropriate)
-#### 3.1.7 Screen Design: SCR-AUTH-004 Profile Select
-#### 3.1.8 Screen Design: SCR-AUTH-005 Profile Edit
+#### 3.1.2 畫面設計：SCR-AUTH-001 登入畫面
+#### 3.1.3 畫面設計：SCR-AUTH-002 註冊畫面
+#### 3.1.4 畫面設計：SCR-AUTH-003 忘記密碼
+#### 3.1.5 社群登入整合設計
+#### 3.1.6 兒童 Profile 管理設計 (如適用)
+#### 3.1.7 畫面設計：SCR-AUTH-004 Profile 選擇
+#### 3.1.8 畫面設計：SCR-AUTH-005 Profile 編輯
 ```
 
-### ScreenDesignsectionsStandardFormat
+### 畫面設計章節標準格式
 
 ```markdown
-#### 3.X.N ScreenDesign：SCR-XXX-NNN Screen Name
+#### 3.X.N 畫面設計：SCR-XXX-NNN 畫面名稱
 
-| Items | Content |
+| 項目 | 內容 |
 |------|------|
-| Screen ID | SCR-XXX-NNN |
-| CorrespondingDesign | SDD-XXX-NNN |
-| CorrespondingRequirement | SRS-XXX-NNN |
+| 畫面 ID | SCR-XXX-NNN |
+| 對應設計 | SDD-XXX-NNN |
+| 對應需求 | SRS-XXX-NNN |
 
 **Wireframe**
 
@@ -1305,77 +1305,77 @@ block-beta
 
     block:header:1
         columns 1
-        title["ScreenTitle"]
+        title["畫面標題"]
     end
 
     block:content:1
         columns 1
-        element["mainContent"]
+        element["主要內容"]
     end
 
     block:actions:1
         columns 1
-        button["[ mainButton ]"]
+        button["[ 主要按鈕 ]"]
     end
 \`\`\`
 
-**Interaction Behavior**
+**互動行為**
 
-| Element | Behavior | Result |
+| 元素 | 行為 | 結果 |
 |------|------|------|
-| Button | Click | Navigate to next screen |
+| 按鈕 | 點擊 | 導向下一個畫面 |
 ```
 
-### prohibited'sModulestructure
+### 禁止的模組結構
 
-- ❌ Authentication ModuledirectlyFrom Profile Start，SkipTooLogin/Register
-- ❌ Screendesign scattered across different sections
-- ❌ ModuleinsideonlyHaveArchitecture DesignNoScreenDesign
-- ❌ ScreenOrder does not match actual navigation flow
-- ❌ Repeated'ssectionsNumbering (such astwopiece 3.3.1)
+- ❌ 認證模組直接從 Profile 開始，跳過登入/註冊
+- ❌ 畫面設計散落在不同章節
+- ❌ 模組內只有架構設計沒有畫面設計
+- ❌ 畫面順序與實際導航流程不符
+- ❌ 重複的章節編號 (如兩個 3.3.1)
 
 ---
 
-## Documenttemplate
+## 文件範本
 
-### SRS Software RequirementsSpecification
+### SRS 軟體需求規格書
 
-**Complete template (contains writing guide):**
-- [srs-template/srs-template.md](srs-template/srs-template.md) - SRS Complete template, includes 💬 Description, ➥ Guide, 💡 Hint
-- [srs-template/req-template.md](srs-template/req-template.md) - Single requirement item template, includes writing guide
+**完整模板 (含撰寫指引)：**
+- [srs-template/srs-template.md](srs-template/srs-template.md) - SRS 完整範本，包含 💬 說明、➥ 指引、💡 提示
+- [srs-template/req-template.md](srs-template/req-template.md) - 單一需求項目範本，包含撰寫指引
 
-**Simplified template (structure only):**
-- [srs-template/srs-template-bare.md](srs-template/srs-template-bare.md) - SRS simplified version, only retains section structure
-- [srs-template/req-template-bare.md](srs-template/req-template-bare.md) - Requirement items simplified version
+**精簡模板 (僅結構)：**
+- [srs-template/srs-template-bare.md](srs-template/srs-template-bare.md) - SRS 精簡版，僅保留章節結構
+- [srs-template/req-template-bare.md](srs-template/req-template-bare.md) - 需求項目精簡版
 
-**Traditional template (compatible with old version):**
-- [references/srs-template.md](references/srs-template.md) - Old version SRS template
+**傳統模板 (相容舊版)：**
+- [references/srs-template.md](references/srs-template.md) - 舊版 SRS 範本
 
-### SDD Software DesignSpecification
+### SDD 軟體設計規格書
 
-**Complete template (contains writing guide):**
-- [sdd-template/sdd-template.md](sdd-template/sdd-template.md) - SDD Complete template, includes 15 design viewpoints (Context, Composition, Logical, Physical, Structure, Dependency, Information, Interface, Interaction, Algorithm, State Dynamics, Concurrency, Patterns, Deployment, Resources)
-- [sdd-template/view-template.md](sdd-template/view-template.md) - Single design view template, includes writing guide
+**完整模板 (含撰寫指引)：**
+- [sdd-template/sdd-template.md](sdd-template/sdd-template.md) - SDD 完整範本，包含 15 種設計觀點 (Context, Composition, Logical, Physical, Structure, Dependency, Information, Interface, Interaction, Algorithm, State Dynamics, Concurrency, Patterns, Deployment, Resources)
+- [sdd-template/view-template.md](sdd-template/view-template.md) - 單一設計視圖範本，包含撰寫指引
 
-**Simplified template (structure only):**
-- [sdd-template/sdd-template-bare.md](sdd-template/sdd-template-bare.md) - SDD simplified version, only retains section structure
-- [sdd-template/view-template-bare.md](sdd-template/view-template-bare.md) - Design view simplified version
+**精簡模板 (僅結構)：**
+- [sdd-template/sdd-template-bare.md](sdd-template/sdd-template-bare.md) - SDD 精簡版，僅保留章節結構
+- [sdd-template/view-template-bare.md](sdd-template/view-template-bare.md) - 設計視圖精簡版
 
-**Traditional template (compatible with old version):**
-- [references/sdd-template.md](references/sdd-template.md) - Old version SDD template
+**傳統模板 (相容舊版)：**
+- [references/sdd-template.md](references/sdd-template.md) - 舊版 SDD 範本
 
-**SDD must include sections:**
-1. System Architecture Design - Layered Architecture, technology selection
-2. Module Design - Class Diagram, Sequence Diagram, State Machine
-3. Data Design - Database Schema, Entity definition
-4. Interface Design - **internalInterface (API)** and **externalInterface (BLE/hardware)**
+**SDD 必須包含的章節：**
+1. 系統架構設計 - 分層架構、技術選型
+2. 模組設計 - 類別圖、序列圖、狀態機
+3. 資料設計 - 資料庫 Schema、Entity 定義
+4. 介面設計 - **內部介面 (API)** 與 **外部介面 (BLE/硬體)**
 
-> **⚠️ technology selection (Technology Stack) writeFlow：**
+> **⚠️ 技術選型 (Technology Stack) 撰寫流程：**
 >
-> write SDD's technology selection section must first read the corresponding platform's developer Skill, ensuring technology stack aligns with Arcana Architecture：
+> 撰寫 SDD 的技術選型章節時，必須先讀取對應平台的開發者 Skill，確保技術堆疊與 Arcana 架構一致：
 >
 > ```bash
-> # Before writing, first read corresponding Skill
+> # 撰寫前先讀取對應 Skill
 > cat ~/.claude/skills/android-developer-skill/SKILL.md   # Android App
 > cat ~/.claude/skills/ios-developer-skill/SKILL.md       # iOS App
 > cat ~/.claude/skills/python-developer-skill/SKILL.md    # Python Backend
@@ -1384,9 +1384,9 @@ block-beta
 > cat ~/.claude/skills/react-developer-skill/SKILL.md     # React Web
 > ```
 >
-> **technology selectionTablesExamples (reference Skill Afterwrite)：**
+> **技術選型表格範例 (參考 Skill 後撰寫)：**
 >
-> | Platform | reference Skill | coretechnique |
+> | 平台 | 參考 Skill | 核心技術 |
 > |------|-----------|---------|
 > | Android App | android-developer-skill | Kotlin, Jetpack Compose, Hilt, Room, Coroutines |
 > | iOS App | ios-developer-skill | Swift, SwiftUI, SwiftData, Combine, async/await |
@@ -1394,152 +1394,152 @@ block-beta
 > | Node.js Backend | nodejs-developer-skill | Node.js 20+, Express, Prisma, InversifyJS, gRPC |
 > | Angular Web | angular-developer-skill | Angular 17+, Signals, NgRx, Angular Material |
 > | React Web | react-developer-skill | React 19, Zustand, TanStack Query, Tailwind CSS |
-5. **Screen Design (UI/UX)** - ⭐ **Mandatory section, cannot be omitted**
-   - ScreenFlow (Navigation Flow)
-   - Screen StatesDesign (Screen States)
-   - ScreenDetailsspecification (Layout, Component, Interaction)
-   - Design System (color、Font、togetherUseComponent)
-   - AnimationandturnfieldDesign
-   - Accessibility Design
-6. safetyDesignconsider
+5. **畫面設計 (UI/UX)** - ⭐ **必要章節，不可遺漏**
+   - 畫面流程 (Navigation Flow)
+   - 畫面狀態設計 (Screen States)
+   - 畫面詳細規格 (Layout, 元件, 互動)
+   - Design System (色彩、字型、共用元件)
+   - 動畫與轉場設計
+   - 無障礙設計
+6. 安全設計考量
 
-> **Importantreminder：** SDD 's「Interface Design」sectionsShould include both backend API Design and frontend UI/UX Design, both are essential。
+> **重要提醒：** SDD 的「介面設計」章節應同時包含後端 API 設計與前端 UI/UX 設計，兩者缺一不可。
 
-### SWD softwareDetailed Design
-template: [references/swd-template.md](references/swd-template.md)
+### SWD 軟體詳細設計書
+範本: [references/swd-template.md](references/swd-template.md)
 
-### STP softwareTest Plan
-template: [references/stp-template.md](references/stp-template.md)
+### STP 軟體測試計畫
+範本: [references/stp-template.md](references/stp-template.md)
 
-### STC softwareTest Cases
-template: [references/stc-template.md](references/stc-template.md)
+### STC 軟體測試案例
+範本: [references/stc-template.md](references/stc-template.md)
 
-### SVV softwareVerification & ValidationReport
-template: [references/svv-template.md](references/svv-template.md)
+### SVV 軟體驗證與確認報告
+範本: [references/svv-template.md](references/svv-template.md)
 
-### RTM RequirementTraceability Matrix
-template: [references/rtm-template.md](references/rtm-template.md)
+### RTM 需求追溯矩陣
+範本: [references/rtm-template.md](references/rtm-template.md)
 
 ---
 
-## MD turn DOCX SynchronizationGenerate
+## MD 轉 DOCX 同步產生
 
-**everytimeUpdate Markdown DocumentTime，MustSynchronizationGenerateCorresponding's DOCX Document。**
+**每次更新 Markdown 文件時，必須同步產生對應的 DOCX 文件。**
 
-### SynchronizationCheckFlow
+### 同步檢查流程
 
 ```
-1. Check .md and .docx ModifyTime
+1. 檢查 .md 與 .docx 修改時間
    │
-   ├── .docx NotExistence → MustGenerate
+   ├── .docx 不存在 → 必須產生
    │
-   └── .docx Existence → compareMoreTime戳record
+   └── .docx 存在 → 比較時間戳記
            │
-           ├── .md Morenew → Mustre-Generate .docx
+           ├── .md 較新 → 必須重新產生 .docx
            │
-           └── .docx Newer or same → Already synchronized, no action needed
+           └── .docx 較新或相同 → 已同步，無需動作
 ```
 
-### DOCX Generateway
+### DOCX 產生方式
 
-This skill provides unified MD to DOCX converter, supporting all document types (SRS/SDD/SWD etc).
+本 Skill 提供統一的 MD 轉 DOCX 轉換器，支援所有文件類型（SRS/SDD/SWD 等）。
 
-#### Converter (md-to-docx.js) ⭐
+#### 轉換器 (md-to-docx.js) ⭐
 
-**Converter Location:** `~/.claude/skills/medical-software-requirements-skill/md-to-docx.js`
+**轉換器位置：** `~/.claude/skills/medical-software-requirements-skill/md-to-docx.js`
 
 ```bash
-# Install dependencies (first time use)
+# 安裝依賴 (首次使用)
 cd ~/.claude/skills/medical-software-requirements-skill
 npm install docx
-npm install -g @mermaid-js/mermaid-cli  # If need to render Mermaid diagrams
+npm install -g @mermaid-js/mermaid-cli  # 若需渲染 Mermaid 圖表
 
-# Convert document
+# 轉換文件
 node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js <input.md> [output.docx]
 
-# Usage examples
+# 使用範例
 node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SRS-SomniLand-1.0.md
 node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SDD-Project-1.0.md
 ```
 
-**Converter Functions:**
-- ✅ Auto-parse Markdown document structure (supports Chinese/English titles)
-- ✅ **Auto-render Mermaid diagrams as SVG** (Vector format, default) ⭐
-- ✅ **SVG images auto-embed in DOCX** document and **center display**
-- ✅ Support tables, code blocks, title hierarchy
-- ✅ Auto-generate cover, table of contents, header/footer
-- ✅ **Smart table column width**: Auto-adjust according to column count and content
-- ✅ **Chinese character optimization**: Chinese characters occupy 2 units for column width calculation
-- ✅ **ID fields no line break**: Auto-detect ID fields (SRS-XXX-NNN, SDD-XXX-NNN etc) and prevent line breaks
-- ✅ **Smart diagram sizing**: block-beta (UI wireframe) uses narrow width (500px), other diagrams use standard width (1200px)
-- ✅ **Requirement items table format**: Auto-convert requirement blocks to structured tables
-- ✅ **Title auto-numbering** ⭐: DOCX auto-generates hierarchical numbering (1., 1.1, 1.1.1, 1.1.1.1, 1.1.1.1.1)
-- ✅ **Code block formatting** ⭐: Line numbers, zebra stripe background, fixed 12pt line height
-- ✅ **Syntax Highlighting** ⭐: Based on VSCode Light+ color palette, supports many languages (Swift/Kotlin/Python/JS/TS)
-- ✅ **Title not separated (keepNext)**: Bold sub-titles auto-bind with following content, avoid orphan titles
-- ✅ **Peter Coad four-color archetype**: Class diagrams colored by MI/Role/Thing/Description classification
-- ✅ **State machine color standard**: State machines colored by state type (Initial/Processing/Success/Failed/Warning)
-- ✅ **C4 Model architecture diagram color**: Context/Container view uses C4 official colors (Person/System/Container)
-- ✅ **Local image embed** ⭐: Support `![alt](./images/xxx.png)` syntax, auto-embed PNG/JPEG images
-- ✅ **Image size auto-adjustment**: Read actual image size, proportionally scale to maximum width 500px
-- ✅ **Screen design auto-pagination** ⭐: Titles containing `Screen Design:` or `SCR-` auto-start from new page
+**轉換器功能：**
+- ✅ 自動解析 Markdown 文件結構（支援中英文標題）
+- ✅ **自動渲染 Mermaid 圖表為 SVG** (向量格式，預設) ⭐
+- ✅ **SVG 圖片自動嵌入 DOCX** 文件並**置中顯示**
+- ✅ 支援表格、程式碼區塊、標題階層
+- ✅ 自動產生封面、目錄、頁首頁尾
+- ✅ **智慧表格欄寬**：根據欄數與內容自動調整
+- ✅ **中文字元優化**：中文字佔用 2 個單位計算欄寬
+- ✅ **ID 欄位不換行**：自動偵測 ID 欄位 (SRS-XXX-NNN, SDD-XXX-NNN 等) 並防止換行
+- ✅ **智慧圖表尺寸**：block-beta (UI wireframe) 使用窄寬度 (500px)，其他圖表使用標準寬度 (1200px)
+- ✅ **需求項目表格化**：自動將需求區塊轉為結構化表格
+- ✅ **標題自動編號** ⭐：DOCX 自動產生階層式編號 (1., 1.1, 1.1.1, 1.1.1.1, 1.1.1.1.1)
+- ✅ **程式碼區塊格式化** ⭐：行號、斑馬紋背景、固定 12pt 行高
+- ✅ **語法高亮** ⭐：基於 VSCode Light+ 配色，支援多語言 (Swift/Kotlin/Python/JS/TS)
+- ✅ **標題不分離 (keepNext)**：粗體子標題自動與後續內容綁定，避免孤立標題
+- ✅ **Peter Coad 四色原型**：Class Diagram 依 MI/Role/Thing/Description 分類著色
+- ✅ **狀態機顏色標準**：State Machine 依狀態類型著色 (初始/處理中/成功/失敗/警告)
+- ✅ **C4 Model 架構圖顏色**：Context/Container View 依 C4 官方色彩 (Person/System/Container)
+- ✅ **本地圖片嵌入** ⭐：支援 `![alt](./images/xxx.png)` 語法，自動嵌入 PNG/JPEG 圖片
+- ✅ **圖片尺寸自動調整**：讀取實際圖片尺寸，按比例縮放至最大寬度 500px
+- ✅ **Screen Design 自動分頁** ⭐：含 `Screen Design:` 或 `SCR-` 的標題自動從新頁開始
 
-**⚠️ Image Format Mandatory Specification:**
-| Image Type | Format | Description |
+**⚠️ 圖片格式強制規範：**
+| 圖片類型 | 格式 | 說明 |
 |---------|------|------|
-| Mermaid Diagrams | **SVG** (Mandatory) | Vector format, lossless scaling |
-| UI Screen Design | **PNG/JPEG** | Use `![alt](./images/xxx.png)` syntax to embed |
-| Local Image | **PNG/JPEG** | Auto-read size, proportionally scale, center display |
-| External Import Image | **SVG** (Priority) | Or high-resolution PNG |
+| Mermaid 圖表 | **SVG** (強制) | 向量格式，無限縮放不失真 |
+| UI 畫面設計 | **PNG/JPEG** | 使用 `![alt](./images/xxx.png)` 語法嵌入 |
+| 本地圖片 | **PNG/JPEG** | 自動讀取尺寸、按比例縮放、置中顯示 |
+| 外部匯入圖片 | **SVG** (優先) | 或高解析度 PNG |
 
-**Font Settings (IEC 62304 Readability Optimization):**
-| Element | Size | Description |
+**字型設定 (IEC 62304 可讀性優化)：**
+| 元素 | 大小 | 說明 |
 |------|------|------|
-| H1 | 18pt | Main title |
-| H2 | 16pt | Large sections |
-| H3 | 14pt | Small sections |
-| H4 | 13pt | Sub-sections |
-| H5 | 12pt | Details |
-| Body Text | 11pt | Default text |
-| Tables | 11pt | Table content and title |
-| Footer | 9pt | Page number |
+| H1 | 18pt | 主標題 |
+| H2 | 16pt | 大章節 |
+| H3 | 14pt | 小節 |
+| H4 | 13pt | 子節 |
+| H5 | 12pt | 細節 |
+| 內文 | 11pt | 段落文字 |
+| 表格 | 11pt | 表格內容與標題 |
+| 頁尾 | 9pt | 頁碼 |
 
-**Title Auto-Numbering Settings:** ⭐
+**標題自動編號設定：** ⭐
 
-When DOCX document is output, titles will auto-generate hierarchical numbering, no need for manual numbering in Markdown.
+DOCX 文件輸出時，標題會自動產生階層式編號，無需在 Markdown 中手動編號。
 
-**IEC 62304 DocumentTitleLevelCorresponding：**
+**IEC 62304 文件標題層級對應：**
 
-| MD Syntax | Purpose | DOCX Numbering | Examples |
+| MD 語法 | 用途 | DOCX 編號 | 範例 |
 |---------|------|----------|------|
-| `#` | CoverTitle | (NotNumbering) | Software Requirements Specification |
-| `##` | mainsections | 1., 2., 3. | 1. Introduction |
-| `###` | subsections | 1.1, 1.2 | 1.1 Document Purpose |
-| `####` | subsubsections | 1.1.1 | 1.1.1 User Interfaces |
-| `#####` | detailssections | 1.1.1.1 | 1.1.1.1 REQ-INT-001 |
+| `#` | 封面標題 | (不編號) | Software Requirements Specification |
+| `##` | 主章節 | 1., 2., 3. | 1. Introduction |
+| `###` | 子章節 | 1.1, 1.2 | 1.1 Document Purpose |
+| `####` | 子子章節 | 1.1.1 | 1.1.1 User Interfaces |
+| `#####` | 細節章節 | 1.1.1.1 | 1.1.1.1 REQ-INT-001 |
 
-> **⚠️ MD Title Format Specification (Important! Avoid Numbering Duplication):**
+> **⚠️ MD 標題格式規範 (重要！避免編號重複)：**
 >
-> **Problem Description:** If MD file already has manual numbering (such as `## 1. Introduction`), converting to DOCX will generate duplicated numbering (such as `1.1 1. Introduction`).
+> **問題描述：** 若 MD 檔案中已有手動編號（如 `## 1. Introduction`），轉換為 DOCX 時會產生重複編號（如 `1.1 1. Introduction`）。
 >
-> **Solutions:**
-> - **MD file must not include manual numbering**
-> - Converter will auto-generate correct hierarchical numbering in DOCX
-> - Use `remove-heading-numbers.sh` script to remove existing manual numbering in MD file
+> **解決方案：**
+> - **MD 檔案中禁止包含手動編號**
+> - 轉換器會自動在 DOCX 中產生正確的階層編號
+> - 使用 `remove-heading-numbers.sh` 腳本移除既有 MD 檔案中的手動編號
 >
-> **correct vs ErrorFormat Examples：**
+> **正確 vs 錯誤格式範例：**
 >
-> | Format | MD Titlewritemethod | DOCX Output |
+> | 格式 | MD 標題寫法 | DOCX 輸出 |
 > |------|------------|----------|
-> | ✅ correct | `## Introduction` | 1. Introduction |
-> | ✅ correct | `### Document Purpose` | 1.1 Document Purpose |
-> | ❌ Error | `## 1. Introduction` | 1.1 1. Introduction (Repeated!) |
-> | ❌ Error | `### 1.1 Document Purpose` | 1.1.1 1.1 Document Purpose (Repeated!) |
+> | ✅ 正確 | `## Introduction` | 1. Introduction |
+> | ✅ 正確 | `### Document Purpose` | 1.1 Document Purpose |
+> | ❌ 錯誤 | `## 1. Introduction` | 1.1 1. Introduction (重複!) |
+> | ❌ 錯誤 | `### 1.1 Document Purpose` | 1.1.1 1.1 Document Purpose (重複!) |
 >
-> **Remove existing manual numbering:**
+> **移除既有手動編號：**
 >
 > ```bash
-> # Method 1: Use sed command (recommended)
+> # 方法 1: 使用 sed 命令 (推薦)
 > sed -E -i.bak '
 >   s/^(#{1,6}) ([0-9]+\.) /\1 /
 >   s/^(#{1,6}) ([0-9]+\.[0-9]+) /\1 /
@@ -1547,196 +1547,196 @@ When DOCX document is output, titles will auto-generate hierarchical numbering, 
 >   s/^(#{1,6}) ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) /\1 /
 > ' your-document.md
 >
-> # Method 2: Use utility script
+> # 方法 2: 使用工具腳本
 > bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh <input.md>
 > ```
 >
-> **Rules when generating MD:** When writing or generating MD document, titles should not include any manual numbering prefix.
+> **產生 MD 時的規則：** 撰寫或產生 MD 文件時，標題不應包含任何手動編號前綴。
 
-**NotAutoNumbering'sTitleType：**
-| TitleType | Description |
+**不自動編號的標題類型：**
+| 標題類型 | 說明 |
 |---------|------|
-| Table of Contents | DirectoryTitle |
-| Revision History | revisionhistoryTitle |
-| CoverTitle | Software Requirements Specification etc |
-| Requirement ID Title | REQ-FUNC-001、SRS-AUTH-001 etc |
+| Table of Contents | 目錄標題 |
+| Revision History | 修訂歷史標題 |
+| 封面標題 | Software Requirements Specification 等 |
+| 需求 ID 標題 | REQ-FUNC-001、SRS-AUTH-001 等 |
 
-**SVG Image Settings (A4 Optimization):**
-- **Format: SVG (Vector, mandatory default)** - Ensure lossless scaling
-- **PDF→SVG workflow** - First generate PDF, then use mutool to convert to SVG (text converted to vector paths)
-- DOCX display: Maximum width 550px (~6 inches, appropriate for A4)
-- Height limitation: Maximum 600px (prevent overflow from page)
-- Minimum size: 200px (avoid too small images)
-- All images auto-centered
+**SVG 圖片設定 (A4 優化)：**
+- **格式：SVG (向量，強制預設)** - 確保任意縮放不失真
+- **PDF→SVG 工作流程** - 先產生 PDF，再用 mutool 轉換為 SVG (文字轉為向量路徑)
+- DOCX 顯示：最大寬度 550px (~6 吋，適合 A4)
+- 高度限制：最大 600px (防止溢出頁面)
+- 最小尺寸：200px (避免過小圖片)
+- 所有圖片自動置中
 
-> **⚠️ SVG Text Rendering Description:**
+> **⚠️ SVG 文字渲染說明：**
 >
-> Mermaid defaults to using `foreignObject` to embed HTML text, which Word/Inkscape cannot render correctly.
-> Converter uses **PDF→SVG workflow**:
-> 1. Use `mmdc` to generate Mermaid as PDF (text already embedded)
-> 2. Use `mutool draw -F svg` to convert PDF to SVG (text converted to vector paths)
+> Mermaid 預設使用 `foreignObject` 內嵌 HTML 文字，Word/Inkscape 無法正確渲染。
+> 轉換器採用 **PDF→SVG 工作流程**：
+> 1. 使用 `mmdc` 將 Mermaid 產生為 PDF (文字已嵌入)
+> 2. 使用 `mutool draw -F svg` 將 PDF 轉換為 SVG (文字轉為向量路徑)
 >
-> This solution ensures all text displays correctly in Word, regardless of original Mermaid diagram label format.
+> 此方案確保所有文字在 Word 中正確顯示，無論原始 Mermaid 圖表使用何種標籤格式。
 >
-> **Dependencies：** `brew install mupdf-tools` (provide mutool command)
+> **相依性：** `brew install mupdf-tools` (提供 mutool 指令)
 >
-> reference：[mermaid-js/mermaid#2688](https://github.com/mermaid-js/mermaid/issues/2688)
+> 參考：[mermaid-js/mermaid#2688](https://github.com/mermaid-js/mermaid/issues/2688)
 
-**Table Column Width Smart Allocation:**
-| Column Count | Minimum Column Width | Maximum Column Width | Description |
+**表格欄寬智慧分配：**
+| 欄數 | 最小欄寬 | 最大欄寬 | 說明 |
 |------|---------|---------|------|
-| 2 fields | 2000 | 7000 | Wider fields |
-| 3-4 fields | 1500 | 5000 | Medium width |
-| 5+ fields | 1000 | 3500 | Narrower fields |
+| 2 欄 | 2000 | 7000 | 較寬的欄位 |
+| 3-4 欄 | 1500 | 5000 | 適中 |
+| 5+ 欄 | 1000 | 3500 | 較窄的欄位 |
 
-**OutputExamples：**
+**輸出範例：**
 ```
 Converting SDD-SomniLand-1.0.md...
 Created SDD-SomniLand-1.0.docx (6541 KB)
 ```
 
-**Notes:**
-- Mermaid diagrams with syntax errors will fallback to code block display
-- Supports Chinese section titles (such as `## Directory`, `## Revision History`)
-- Cover information supports Chinese/English fields
+**注意事項：**
+- Mermaid 圖表語法錯誤時會 fallback 為程式碼區塊顯示
+- 支援中文章節標題（如 `## 目錄`、`## 修訂歷史`）
+- 封面資訊支援中英文欄位
 
-**Detailed Descriptionsee：** [references/md-to-docx-converter.md](references/md-to-docx-converter.md)
+**詳細說明見：** [references/md-to-docx-converter.md](references/md-to-docx-converter.md)
 
-### Document Completeness CheckList
+### 文件完整性檢查清單
 
-When performing document completeness check, must confirm:
+執行文件完整性檢查時，必須確認：
 
-| Check Item | Validation Method |
+| 檢查項目 | 驗證方式 |
 |---------|---------|
-| MD Document Existence | Check `{DOC}-{PROJECT}-{VER}.md` file |
-| DOCX Document Existence | Check `{DOC}-{PROJECT}-{VER}.docx` file |
-| Timestamp Synchronization | `.docx` modification time >= `.md` modification time |
-| Content Synchronization | DOCX content reflects latest MD version |
+| MD 文件存在 | 檢查 `{DOC}-{PROJECT}-{VER}.md` 檔案 |
+| DOCX 文件存在 | 檢查 `{DOC}-{PROJECT}-{VER}.docx` 檔案 |
+| 時間戳記同步 | `.docx` 修改時間 >= `.md` 修改時間 |
+| 內容同步 | DOCX 內容反映最新 MD 版本 |
 
-**If MD is newer but DOCX is not updated, must immediately regenerate DOCX.**
+**若發現 MD 較新但 DOCX 未更新，必須立即重新產生 DOCX。**
 
 ---
 
-**RTM 100% Traceability Validation List:**
+**RTM 100% 追溯驗證清單：**
 
-After completing all documents, RTM must show the following coverage:
+在完成所有文件後，RTM 必須顯示以下覆蓋率：
 
-| Traceability Direction | Must Reach | Validation Method |
+| 追溯方向 | 必須達成 | 驗證方式 |
 |---------|---------|---------|
-| SRS → SDD | 100% | Each SRS has corresponding SDD ID |
-| SRS → SWD | 100% | Each SRS has corresponding SWD ID |
-| SRS → STC | 100% | Each SRS has corresponding STC ID |
-| SRS → UI (SCR) | 100% | Each functional SRS has corresponding SCR ID |
-| SDD → SWD | 100% | Every SDD item has detailed design |
-| SWD → STC | 100% | Every SWD item has test coverage |
+| SRS → SDD | 100% | 每條 SRS 都有對應 SDD ID |
+| SRS → SWD | 100% | 每條 SRS 都有對應 SWD ID |
+| SRS → STC | 100% | 每條 SRS 都有對應 STC ID |
+| SRS → UI (SCR) | 100% | 每條功能性 SRS 都有對應 SCR ID |
+| SDD → SWD | 100% | 每項 SDD 都有詳細設計 |
+| SWD → STC | 100% | 每項 SWD 都有測試覆蓋 |
 
-**If any traceability direction is lower than 100%, must supplement missing items until complete traceability is achieved.**
+**若任一追溯方向低於 100%，必須補充缺少的項目直到達成完整追溯。**
 
-## Document Requirements by Classification
+## 各分類文件要求
 
-| Activity | Class A | Class B | Class C | Traceability Requirement |
+| 活動 | Class A | Class B | Class C | 追溯要求 |
 |-----|---------|---------|---------|---------|
-| Software Requirements Analysis (SRS) | ✓ | ✓ | ✓ | Source traceability |
-| Software Architecture Design (SDD) | ✓ | ✓ | ✓ | **100% Corresponding SRS** |
-| Software Detailed Design (SWD) | ✓ | ✓ | ✓ | **100% Corresponding SDD** |
-| Screen Design (UI/SCR) | ✓ | ✓ | ✓ | **100% Corresponding SRS** |
-| Software Unit Testing | ✓ | ✓ | ✓ | Corresponding SWD |
-| Software Integration Test | ✓ | ✓ | ✓ | Corresponding SDD |
-| Software System Test (STC) | ✓ | ✓ | ✓ | **100% Corresponding SRS** |
-| Requirement Traceability Matrix (RTM) | ✓ | ✓ | ✓ | **All directions 100%** |
+| 軟體需求分析 (SRS) | ✓ | ✓ | ✓ | 來源追溯 |
+| 軟體架構設計 (SDD) | ✓ | ✓ | ✓ | **100% 對應 SRS** |
+| 軟體詳細設計 (SWD) | ✓ | ✓ | ✓ | **100% 對應 SDD** |
+| 畫面設計 (UI/SCR) | ✓ | ✓ | ✓ | **100% 對應 SRS** |
+| 軟體單元驗證 | ✓ | ✓ | ✓ | 對應 SWD |
+| 軟體整合測試 | ✓ | ✓ | ✓ | 對應 SDD |
+| 軟體系統測試 (STC) | ✓ | ✓ | ✓ | **100% 對應 SRS** |
+| 需求追溯矩陣 (RTM) | ✓ | ✓ | ✓ | **所有方向 100%** |
 
-> **Note:**
-> - All documents and test activities are listed as required outputs, exceeding IEC 62304 minimum requirements
-> - **All traceability directions must reach 100% coverage**
-> - RTM is the final validation document, must prove complete traceability chain
-
----
-
-## Requirement Writing Specification
-
-Each requirement must comply with SMART Principle:
-
-- **S**pecific (Specific): Explicit description, no vague terms
-- **M**easurable (Measurable): Has clear acceptance criteria
-- **A**chievable (Achievable): Technically feasible
-- **R**elevant (Relevant): Related to project goals
-- **T**raceable (Traceable): Has unique numbering, can be tracked
-
-**Requirement Statement Template:**
-```
-[SRS-XXX] [Requirement Name]
-Description: System should/must [action] [object] [condition/limitation]
-Priority: Mandatory/Important/Optional
-Safety Classification: Class A/B/C
-Source: [stakeholders]
-Acceptance criteria：
-  - AC1: Given [Prerequisites], When [action], Then [expectedResults]
-```
-
-## Acceptance Criteria Writing
-
-Use Given-When-Then Format:
-
-```
-Given [Prerequisites/Scenario]
-When [Trigger action]
-Then [Expected results]
-```
-
-**Medical Software Example:**
-```
-SRS-001 Patient Identity Confirmation
-Description: System must confirm patient identity before performing any medical operation
-Priority: Mandatory
-Safety Classification: Class B
-
-Acceptance Criteria:
-AC1: Given nurse selects medication administration operation
-     When system prompts to scan patient wristband barcode
-     Then system displays patient name, medical record number for confirmation
-
-AC2: Given scanned barcode and medical order patient do not match
-     When system verifies identity
-     Then system shows warning and blocks operation from continuing
-```
+> **注意：**
+> - 所有文件與測試活動已列為必要產出，超越 IEC 62304 最低要求
+> - **所有追溯方向必須達到 100% 覆蓋率**
+> - RTM 是最終驗證文件，必須證明完整追溯鏈
 
 ---
 
-## SDD Design Phase: UI/UX Design and AI Assets Generation
+## 需求撰寫規範
 
-In SDD (Software Design Specification) phase, simultaneously perform UI/UX design and visual assets generation.
+每條需求必須符合 SMART 原則：
 
-### Supported UI/UX Design Tools
+- **S**pecific (具體)：明確描述，無模糊詞彙
+- **M**easurable (可衡量)：有明確的驗收標準
+- **A**chievable (可達成)：技術上可行
+- **R**elevant (相關)：與專案目標相關
+- **T**raceable (可追溯)：有唯一編號，可追蹤
 
-This skill supports various UI/UX design tools, not limited to specific platforms:
+**需求陳述模板：**
+```
+[SRS-XXX] [需求名稱]
+描述：系統應該/必須 [動作] [對象] [條件/限制]
+優先級：必要/重要/期望
+安全分類：Class A/B/C
+來源：[利害關係人]
+驗收標準：
+  - AC1: Given [前置條件], When [動作], Then [預期結果]
+```
 
-| Design Tool | Export Format | Appropriate Use Scenario |
+## 驗收標準撰寫
+
+使用 Given-When-Then 格式：
+
+```
+Given [前置條件/情境]
+When [觸發動作]
+Then [預期結果]
+```
+
+**醫療軟體範例：**
+```
+SRS-001 病患身份確認
+描述：系統必須在執行任何醫療處置前確認病患身份
+優先級：必要
+安全分類：Class B
+
+驗收標準：
+AC1: Given 護理師選擇執行給藥作業
+     When 系統提示掃描病患手環條碼
+     Then 系統顯示病患姓名、病歷號供確認
+
+AC2: Given 掃描的條碼與醫令病患不符
+     When 系統比對身份
+     Then 系統顯示警告並阻止作業繼續
+```
+
+---
+
+## SDD 設計階段：UI/UX 設計與 AI 資產產生
+
+在 SDD (軟體設計規格書) 階段，同步進行 UI/UX 設計與視覺資產產生。
+
+### 支援的 UI/UX 設計工具
+
+本 Skill 支援各種 UI/UX 設計工具，不限於特定平台：
+
+| 設計工具 | 匯出格式 | 適用情境 |
 |---------|---------|---------|
-| **Figma** | PNG, SVG, PDF | Team collaboration, prototype design |
-| **Sketch** | PNG, SVG, PDF | macOS design team |
-| **Adobe XD** | PNG, SVG, PDF | Adobe ecosystem integration |
-| **Penpot** | PNG, SVG | Open source alternative |
-| **Axure RP** | PNG, HTML | High-fidelity prototype |
-| **InVision** | PNG | Prototype presentation |
-| **Zeplin** | PNG, SVG | Design handoff |
-| **Hand-drawn/Mockup** | PNG, JPG | Quick prototype |
+| **Figma** | PNG, SVG, PDF | 團隊協作、原型設計 |
+| **Sketch** | PNG, SVG, PDF | macOS 設計團隊 |
+| **Adobe XD** | PNG, SVG, PDF | Adobe 生態系整合 |
+| **Penpot** | PNG, SVG | 開源替代方案 |
+| **Axure RP** | PNG, HTML | 高保真原型 |
+| **InVision** | PNG | 原型展示 |
+| **Zeplin** | PNG, SVG | 設計交付 |
+| **手繪/Mockup** | PNG, JPG | 快速原型 |
 
-**Key Requirement:** Regardless of which design tool is used, must export UI screens as image files (PNG/JPG) and embed in SDD document.
+**關鍵要求：** 不論使用何種設計工具，最終必須將 UI 畫面匯出為圖片檔 (PNG/JPG)，嵌入 SDD 文件中。
 
-### DesignworkFlow
+### 設計工作流程
 
 ```
-SRS Requirement ──→ SDD Design Specification
+SRS 需求 ──→ SDD 設計規格
                  │
-                 ├──→ Screenplan (SCR-*)
+                 ├──→ 畫面規劃 (SCR-*)
                  │       │
-                 │       ├──→ UI/UX Design Tools (Figma/Sketch/XD/other)
+                 │       ├──→ UI/UX 設計工具 (Figma/Sketch/XD/其他)
                  │       │       │
-                 │       │       └──→ Export PNG/JPG Image
+                 │       │       └──→ 匯出 PNG/JPG 圖片
                  │       │               │
-                 │       │               └──→ Embed SDD Document
+                 │       │               └──→ 嵌入 SDD 文件
                  │       │
-                 │       └──→ AI Image Generation (Optional)
+                 │       └──→ AI 圖像產生 (可選)
                  │
                  └──→ Design System
                          │
@@ -1745,36 +1745,36 @@ SRS Requirement ──→ SDD Design Specification
                          └──→ UI Components
 ```
 
-### UI Image Embed in SDD Flow
+### UI 圖片嵌入 SDD 流程
 
 ```
-1. Use UI/UX design tools to create screen design
+1. 使用 UI/UX 設計工具建立畫面設計
               │
               ▼
-2. Export screen as PNG/JPG image
-   - Resolution: @2x or @3x (Recommend @2x)
-   - Format: PNG (recommended) or JPG
-   - Naming: SCR-{Module}-{Number}-{Description}.png
+2. 匯出畫面為 PNG/JPG 圖片
+   - 解析度：@2x 或 @3x (建議 @2x)
+   - 格式：PNG (推薦) 或 JPG
+   - 命名：SCR-{模組}-{序號}-{描述}.png
               │
               ▼
-3. Place image in project directory
-   - Location: 02-design/SDD/images/
-   - Or: 03-assets/ui-screens/
+3. 將圖片放入專案目錄
+   - 位置：02-design/SDD/images/
+   - 或：03-assets/ui-screens/
               │
               ▼
-4. Embed image in SDD Markdown
-   - Syntax: ![Description](./images/filename.png)
+4. 在 SDD Markdown 中嵌入圖片
+   - 語法：![描述](./images/檔名.png)
               │
               ▼
-5. Auto-embed image when generating DOCX
-   - md-to-docx converter supports image embedding
+5. 產生 DOCX 時自動嵌入圖片
+   - md-to-docx 轉換器支援圖片嵌入
 ```
 
-### Design System Creation
+### Design System 建立
 
-**Design Tokens (Design variables)**
+**Design Tokens (設計變數)**
 
-Use JSON format definition, ensure cross-platform consistency:
+使用 JSON 格式定義，確保跨平台一致性：
 
 ```json
 {
@@ -1790,15 +1790,15 @@ Use JSON format definition, ensure cross-platform consistency:
 }
 ```
 
-Detailed token templates see:
-- [assets/colors.json](assets/colors.json) - Color system
-- [assets/typography.json](assets/typography.json) - Font and spacing
+詳細 Token 範本見:
+- [assets/colors.json](assets/colors.json) - 色彩系統
+- [assets/typography.json](assets/typography.json) - 字型與間距
 
-### AI Image Generation
+### AI 圖像產生
 
-Use AI tools (Midjourney, DALL-E, Stable Diffusion) to generate design assets.
+使用 AI 工具 (Midjourney, DALL-E, Stable Diffusion) 產生設計資產。
 
-**App Icon Prompt Examples (medical category):**
+**App Icon Prompt 範例 (醫療類):**
 
 ```
 Professional medical healthcare app icon,
@@ -1813,7 +1813,7 @@ centered composition,
 suitable for iOS and Android app stores
 ```
 
-**UI Screen Prompt Example:**
+**UI 畫面 Prompt 範例:**
 
 ```
 Mobile app login screen UI/UX design,
@@ -1829,7 +1829,7 @@ iPhone 14 Pro frame,
 high fidelity mockup
 ```
 
-**Medical-Specific Icon Prompt:**
+**醫療專用圖標 Prompt:**
 
 ```
 Medical vital signs icon set,
@@ -1841,163 +1841,163 @@ medical dashboard icons,
 transparent background
 ```
 
-Detailed prompt templates see [references/ai-prompt-templates.md](references/ai-prompt-templates.md)
+詳細 Prompt 範本庫見 [references/ai-prompt-templates.md](references/ai-prompt-templates.md)
 
-### Assets Export Scripts
+### 資產匯出腳本
 
-Provides Python scripts to auto-export multi-size assets:
+提供 Python 腳本自動化匯出多尺寸資產：
 
-| Script | Purpose |
+| 腳本 | 用途 |
 |------|------|
 | `app_icon_export.py` | 1024x1024 → Android mipmap + iOS AppIcon |
-| `image_export.py` | @3x Image → Android drawable-* + iOS @1x/@2x/@3x |
-| `svg_to_png.py` | SVG → Multiple size PNG |
-| `batch_export.py` | Batch process entire folder |
+| `image_export.py` | @3x 圖片 → Android drawable-* + iOS @1x/@2x/@3x |
+| `svg_to_png.py` | SVG → 多尺寸 PNG |
+| `batch_export.py` | 批次處理整個資料夾 |
 
-Detailed scripts see [references/asset-scripts.md](references/asset-scripts.md)
+詳細腳本見 [references/asset-scripts.md](references/asset-scripts.md)
 
-**Quick Usage:**
+**快速使用:**
 
 ```bash
-# Install dependencies
+# 安裝依賴
 pip install Pillow cairosvg
 
-# App Icon Export
+# App Icon 匯出
 python app_icon_export.py ./app-icon-1024.png ./03-assets/app-icons/
 
-# Image multi-size export
+# 圖片多尺寸匯出
 python image_export.py ./bg_login@3x.png ./03-assets/images/ 360 640
 ```
 
 ---
 
-# Phase 3: Design Assetsmanagement
+# 第三階段：設計資產管理
 
-## projectDirectorystructure
+## 專案目錄結構
 
-When creating new project, use standardized directory structure to ensure requirements, design, and assets have complete traceability:
+建立新專案時，使用標準化目錄結構確保需求、設計、資產可完整追溯：
 
-DetailsDirectorystructuresee [assets/project-template/PROJECT_STRUCTURE.md](assets/project-template/PROJECT_STRUCTURE.md)
+詳細目錄結構見 [assets/project-template/PROJECT_STRUCTURE.md](assets/project-template/PROJECT_STRUCTURE.md)
 
 ```
 {project-name}/
-├── 01-requirements/        # RequirementDocument
-│   ├── SRS/               # Software RequirementsSpecification
-│   ├── interviews/        # Interview records
-│   └── analysis/          # Analysis documents (risk, safety classification)
+├── 01-requirements/        # 需求文件
+│   ├── SRS/               # 軟體需求規格書
+│   ├── interviews/        # 訪談紀錄
+│   └── analysis/          # 分析文件 (風險、安全分類)
 │
-├── 02-design/             # DesignDocument
-│   ├── SDD/               # Software DesignSpecification
-│   ├── SWD/               # Detailed Design
-│   ├── architecture/      # Architecture Design
-│   └── ui-ux/             # UI/UX DesignDescription
+├── 02-design/             # 設計文件
+│   ├── SDD/               # 軟體設計規格書
+│   ├── SWD/               # 詳細設計書
+│   ├── architecture/      # 架構設計
+│   └── ui-ux/             # UI/UX 設計說明
 │
-├── 03-assets/             # Designassets ⭐
-│   ├── design-tokens/     # Design Token (colors, typography)
-│   ├── icons/             # Icons (SVG → Android/iOS)
-│   ├── app-icons/         # App Icons (each size)
-│   ├── images/            # Image resources
-│   ├── splash/            # Splash screen
-│   └── screenshots/       # Screenshots
+├── 03-assets/             # 設計資產 ⭐
+│   ├── design-tokens/     # 設計 Token (colors, typography)
+│   ├── icons/             # 圖標 (SVG → Android/iOS)
+│   ├── app-icons/         # App 圖標 (各尺寸)
+│   ├── images/            # 圖片資源
+│   ├── splash/            # 啟動畫面
+│   └── screenshots/       # 螢幕截圖
 │
-├── 04-testing/            # TestDocument (STP, STC)
-├── 05-validation/         # ValidateDocument (SVV, RTM)
-└── 06-regulatory/         # RegulatoryDocument
+├── 04-testing/            # 測試文件 (STP, STC)
+├── 05-validation/         # 驗證文件 (SVV, RTM)
+└── 06-regulatory/         # 法規文件
 ```
 
-## design assets and requirements traceability
+## 設計資產與需求追溯
 
-### Traceability Completeness Requirement (100%)
+### 追溯完整度要求 (100%)
 
-> **⚠️ Important: All traceability must achieve 100% completeness**
+> **⚠️ 重要：所有追溯必須達到 100% 完整度**
 >
-> According to IEC 62304 requirements, the following traceability directions all need to reach **100% coverage**:
+> 根據 IEC 62304 要求，以下追溯方向均需達到 **100% 覆蓋**：
 
-| Traceability Direction | Required Coverage | Description |
+| 追溯方向 | 要求覆蓋率 | 說明 |
 |---------|-----------|------|
-| SRS → SDD | **100%** | Each requirement must have corresponding architecture design |
-| SRS → SWD | **100%** | Each requirement must have corresponding detailed design |
-| SRS → STC | **100%** | Each requirement must have corresponding test cases |
-| SRS → UI (SCR) | **100%** | Each functional requirement must have corresponding screen design |
-| SDD → SWD | **100%** | Every architecture design must have detailed design implementation |
-| SWD → STC | **100%** | Every detailed design must have test validation |
+| SRS → SDD | **100%** | 每條需求必須有對應架構設計 |
+| SRS → SWD | **100%** | 每條需求必須有對應詳細設計 |
+| SRS → STC | **100%** | 每條需求必須有對應測試案例 |
+| SRS → UI (SCR) | **100%** | 每條功能需求必須有對應畫面設計 |
+| SDD → SWD | **100%** | 每項架構設計必須有詳細設計實作 |
+| SWD → STC | **100%** | 每項詳細設計必須有測試驗證 |
 
-**RTM (Requirement Traceability Matrix) must show all traceability directions are 100%, otherwise the document is considered incomplete.**
+**RTM (需求追溯矩陣) 必須顯示所有追溯方向均為 100%，否則視為文件不完整。**
 
-### Traceability Chain
+### 追溯鏈
 
 ```
-SRS-001 (Requirement) ─────────────────────────────────────────┐
+SRS-001 (需求) ─────────────────────────────────────────┐
     │                                                    │
-    ├── SDD-001 (Architecture Design) ← Must 100% Corresponding              │
+    ├── SDD-001 (架構設計) ← 必須 100% 對應              │
     │       │                                            │
-    │       └── SWD-001 (Detailed Design) ← Must 100% Corresponding      │
+    │       └── SWD-001 (詳細設計) ← 必須 100% 對應      │
     │               │                                    │
-    │               └── SCR-AUTH-001 (Screen) ← Must 100%  │
+    │               └── SCR-AUTH-001 (畫面) ← 必須 100%  │
     │                       ├── Figma Frame              │
     │                       └── Assets: icons/, images/  │
     │                                                    │
-    └── STC-001 (Test Cases) ← Must 100% Corresponding ─────────────┘
+    └── STC-001 (測試案例) ← 必須 100% 對應 ─────────────┘
 ```
 
-### ScreenNumberingrules
+### 畫面編號規則
 
 ```
-SCR-{Module}-{Number}
+SCR-{模組}-{序號}
 
-Module Code:
-- AUTH: Authentication Module
-- HOME: Home page
-- PAT:  Patient
-- CLN:  Clinical
-- SET:  Settings
+模組代碼:
+- AUTH: 認證模組
+- HOME: 首頁
+- PAT:  病患
+- CLN:  臨床
+- SET:  設定
 ```
 
-DetailsCorrespondingTablesee [references/screen-requirement-mapping.md](references/screen-requirement-mapping.md)
+詳細對應表見 [references/screen-requirement-mapping.md](references/screen-requirement-mapping.md)
 
-## UI/UX Design Toolsintegrate
+## UI/UX 設計工具整合
 
-### Design Project Structure (Applicable to all design tools)
+### 設計專案結構 (適用於各種設計工具)
 
-Regardless of using Figma, Sketch, Adobe XD or other tools, recommend using the following structure:
-
-```
-{project} - Medical App
-├── Design System          # Colors, fonts, shared components
-├── App Icons             # App icon design
-├── Authentication        # SCR-AUTH-* Screen
-├── Home & Dashboard      # SCR-HOME-* Screen
-├── Patient Management    # SCR-PAT-* Screen
-└── Clinical Features     # SCR-CLN-* Screen
-```
-
-### Naming Specification
+不論使用 Figma、Sketch、Adobe XD 或其他工具，建議採用以下結構：
 
 ```
-Screen/Frame:  SCR-{Module}-{Number} - {Screen Name}
-Component:     {Category}/{Name}/{Status}
-Export File:   SCR-{Module}-{Number}-{Description}.png
-
-Example:
-Screen:        SCR-AUTH-001 - Login Screen
-Component:     Button/Primary/Default
-Export File:   SCR-AUTH-001-login.png
+{專案} - Medical App
+├── Design System          # 色彩、字型、共用元件
+├── App Icons             # App 圖標設計
+├── Authentication        # SCR-AUTH-* 畫面
+├── Home & Dashboard      # SCR-HOME-* 畫面
+├── Patient Management    # SCR-PAT-* 畫面
+└── Clinical Features     # SCR-CLN-* 畫面
 ```
 
-### Design Tool Export Guide
+### 命名規範
 
-| Design Tool | Export Method | Recommended Settings |
+```
+畫面/Frame:  SCR-{模組}-{序號} - {畫面名稱}
+元件:        {類別}/{名稱}/{狀態}
+匯出檔案:    SCR-{模組}-{序號}-{描述}.png
+
+範例:
+畫面:        SCR-AUTH-001 - Login Screen
+元件:        Button/Primary/Default
+匯出檔案:    SCR-AUTH-001-login.png
+```
+
+### 各設計工具匯出指南
+
+| 設計工具 | 匯出方式 | 建議設定 |
 |---------|---------|---------|
-| **Figma** | Export → PNG @2x | Include background, compression quality 100% |
-| **Sketch** | Export → PNG @2x | Include background color |
+| **Figma** | Export → PNG @2x | Include background, 壓縮品質 100% |
+| **Sketch** | Export → PNG @2x | Background color 包含 |
 | **Adobe XD** | Export Selected → PNG | Scale 2x |
-| **Penpot** | Export → PNG | Resolution 2x |
+| **Penpot** | Export → PNG | 解析度 2x |
 
-Detailed design tool integration guide see [references/figma-integration.md](references/figma-integration.md) (applicable to all tools)
+詳細設計工具整合指南見 [references/figma-integration.md](references/figma-integration.md) (適用於各種工具)
 
-## Assets Export Specification
+## 資產匯出規格
 
-### App Icon size
+### App Icon 尺寸
 
 **Android (mipmap):**
 - mdpi: 48×48, hdpi: 72×72, xhdpi: 96×96
@@ -2009,112 +2009,112 @@ Detailed design tool integration guide see [references/figma-integration.md](ref
 - @3x: 60, 87, 120, 180px
 - App Store: 1024×1024
 
-### Icons Export
+### Icons 匯出
 
 ```
 icons/
-├── svg/                   # Original SVG
+├── svg/                   # 原始 SVG
 ├── android/drawable/      # Vector Drawable (.xml)
 └── ios/Icons.xcassets/    # iOS Asset Catalog
 ```
 
-### Images Export
+### Images 匯出
 
 ```
 images/
-├── source/                # Original files
+├── source/                # 原始檔
 ├── android/drawable-*/    # mdpi ~ xxxhdpi
 └── ios/Images.xcassets/   # @1x, @2x, @3x
 ```
 
 ---
 
-## Resources
+## 資源
 
-### srs-template/ (SRS Template Directory)
+### srs-template/ (SRS 模板目錄)
 
-| File | Description |
+| 檔案 | 說明 |
 |------|------|
-| `srs-template.md` | SRS complete template (contains 💬 Description, ➥ Guide, 💡 Hint) |
-| `srs-template-bare.md` | SRS simplified template (structure only) |
-| `req-template.md` | Single requirement item template (contains writing guide) |
-| `req-template-bare.md` | Requirement items simplified template |
+| `srs-template.md` | SRS 完整範本 (含 💬 說明、➥ 指引、💡 提示) |
+| `srs-template-bare.md` | SRS 精簡範本 (僅結構) |
+| `req-template.md` | 單一需求項目範本 (含撰寫指引) |
+| `req-template-bare.md` | 需求項目精簡範本 |
 
-### sdd-template/ (SDD Template Directory)
+### sdd-template/ (SDD 模板目錄)
 
-| File | Description |
+| 檔案 | 說明 |
 |------|------|
-| `sdd-template.md` | SDD complete template (contains 15 design viewpoints, writing guide) |
-| `sdd-template-bare.md` | SDD simplified template (structure only) |
-| `view-template.md` | Single design view template (contains writing guide) |
-| `view-template-bare.md` | Design view simplified template |
+| `sdd-template.md` | SDD 完整範本 (含 15 種設計觀點、撰寫指引) |
+| `sdd-template-bare.md` | SDD 精簡範本 (僅結構) |
+| `view-template.md` | 單一設計視圖範本 (含撰寫指引) |
+| `view-template-bare.md` | 設計視圖精簡範本 |
 
 ### references/
 
-**Requirements Gathering:**
-- `medical-nfr-checklist.md` - Medical software non-functional requirements checklist
-- `interview-questions.md` - Medical software requirements interview question bank
+**需求收集:**
+- `medical-nfr-checklist.md` - 醫療軟體非功能需求檢核清單
+- `interview-questions.md` - 醫療軟體需求訪談問題庫
 
-**IEC 62304 Document Templates (Traditional Version):**
-- `srs-template.md` - SRS Software Requirements Specification template (old version, recommend using srs-template/ directory)
-- `sdd-template.md` - SDD Software Design Specification template (old version, recommend using sdd-template/ directory)
-- `swd-template.md` - SWD Software Detailed Design template
-- `stp-template.md` - STP Software Test Plan template
-- `stc-template.md` - STC Software Test Cases template
-- `svv-template.md` - SVV Software Verification & Validation Report template
-- `rtm-template.md` - RTM Requirement Traceability Matrix template
+**IEC 62304 文件範本 (傳統版本):**
+- `srs-template.md` - SRS 軟體需求規格書範本 (舊版，建議使用 srs-template/ 目錄)
+- `sdd-template.md` - SDD 軟體設計規格書範本 (舊版，建議使用 sdd-template/ 目錄)
+- `swd-template.md` - SWD 軟體詳細設計書範本
+- `stp-template.md` - STP 軟體測試計畫範本
+- `stc-template.md` - STC 軟體測試案例範本
+- `svv-template.md` - SVV 軟體驗證與確認報告範本
+- `rtm-template.md` - RTM 需求追溯矩陣範本
 
-**Document Synchronization Tool:**
-- `md-to-docx.js` - **Unified MD to DOCX converter** ⭐ (supports all document types, auto-render Mermaid as **SVG**, title auto-numbering)
-- `remove-heading-numbers.js` - **MD title numbering removal tool** ⭐ (remove manual numbering, works with DOCX auto-numbering)
-- `md-to-docx-with-mermaid.js` - (already integrated into md-to-docx.js, retained for backward compatibility)
-- `md-to-docx-converter.md` - MD to DOCX converter detailed description and implementation reference
+**文件同步工具:**
+- `md-to-docx.js` - **統一 MD 轉 DOCX 轉換器** ⭐ (支援所有文件類型，自動渲染 Mermaid 為 **SVG**，標題自動編號)
+- `remove-heading-numbers.js` - **MD 標題編號移除工具** ⭐ (移除手動編號，配合 DOCX 自動編號使用)
+- `md-to-docx-with-mermaid.js` - (已整合至 md-to-docx.js，保留供向下相容)
+- `md-to-docx-converter.md` - MD 轉 DOCX 轉換器詳細說明與實作參考
 
-> **⚠️ Important:** All IEC 62304 documents use unified `md-to-docx.js` for conversion, image format must be SVG, title auto-numbering.
+> **⚠️ 重要：** 所有 IEC 62304 文件轉換統一使用 `md-to-docx.js`，圖片格式強制為 SVG，標題自動編號。
 
-**UI/UX Design and Assets:**
-- `figma-integration.md` - UI/UX design tools integration and design asset management guide (applicable to Figma/Sketch/XD etc)
-- `screen-requirement-mapping.md` - Screen and requirement mapping table
-- `asset-specifications.md` - Android/iOS assets size specification
-- `ai-prompt-templates.md` - AI image generation prompt template library
-- `ui-components-prompts.md` - UI component prompt templates
-- `design-tokens-template.md` - Design token JSON template
-- `app-icon-export.md` - App icon export guide
-- `asset-scripts.md` - Assets processing Python scripts
-- `ui-image-embedding.md` - UI image embedding in SDD specification
+**UI/UX 設計與資產:**
+- `figma-integration.md` - UI/UX 設計工具整合與設計資產管理指南 (適用 Figma/Sketch/XD 等)
+- `screen-requirement-mapping.md` - 畫面與需求對應表
+- `asset-specifications.md` - Android/iOS 資產尺寸規格
+- `ai-prompt-templates.md` - AI 圖像產生 Prompt 範本庫
+- `ui-components-prompts.md` - UI 元件 Prompt 範本
+- `design-tokens-template.md` - Design Token JSON 範本
+- `app-icon-export.md` - App Icon 匯出指南
+- `asset-scripts.md` - 資產處理 Python 腳本
+- `ui-image-embedding.md` - UI 圖片嵌入 SDD 規範
 
-**Design Psychology:**
-- `design-psychology.md` - **Design Psychology Principle Guide** ⭐
-  - Cognitive Load Theory (Cognitive Load Theory)
-  - Progressive Disclosure (Progressive Disclosure)
-  - Spatial Orientation (Spatial Orientation)
+**設計心理學:**
+- `design-psychology.md` - **設計心理學原則指南** ⭐
+  - 認知負荷理論 (Cognitive Load Theory)
+  - 漸進式揭露 (Progressive Disclosure)
+  - 空間定向 (Spatial Orientation)
   - Fitts' Law & Hick's Law
-  - Prerequisite Designpattern
-  - Dashboard DesignSpecification
+  - 前置條件設計模式
+  - Dashboard 設計規範
 
-**Cognitive Psychology:**
-- `cognitive-psychology.md` - **Cognitive PsychologyPrincipleGuide** ⭐
-  - Mental Model (Mental Model)
-  - Attention (Attention) - Select性、分散、continueattention
-  - Memory (Memory) - Working Memory、Long-term Memory、Miller's Law
-  - Perception (Perception) - GestaltPrinciple (Gestalt Principles)
-  - AffordanceandSignifier (Affordance & Signifier) - Norman's Principles
-  - Error PreventionandProcess (Error Prevention)
-  - Reading Psychology (Reading Psychology) - F -pattern scan、Readability
-  - Learnability (Learnability)
-  - Cognitive PsychologyreviewList
+**認知心理學:**
+- `cognitive-psychology.md` - **認知心理學原則指南** ⭐
+  - 心智模型 (Mental Model)
+  - 注意力 (Attention) - 選擇性、分散、持續注意
+  - 記憶 (Memory) - 工作記憶、長期記憶、Miller's Law
+  - 感知 (Perception) - 格式塔原則 (Gestalt Principles)
+  - 可供性與訊號 (Affordance & Signifier) - Norman's Principles
+  - 錯誤預防與處理 (Error Prevention)
+  - 閱讀心理學 (Reading Psychology) - F 型掃描、可讀性
+  - 可學習性 (Learnability)
+  - 認知心理學審查清單
 
-**Document Layout Psychology:**
-- `document-layout-psychology.md` - **techniqueDocument Layout PsychologyGuide** ⭐ (NEW)
-  - Reader Role Analysis (SA/SD/PG/QA/RA)
-  - DocumentreadingFlowDesign
-  - F -pattern layout and visual hierarchy
-  - SRS/SDD/SWD arrangeGuide
-  - Rationale psychologyannotationFormat
-  - TablesandDiagramsReadability
-  - Document LayoutCheckList
+**文件編排心理學:**
+- `document-layout-psychology.md` - **技術文件編排心理學指南** ⭐ (NEW)
+  - 讀者角色分析 (SA/SD/PG/QA/RA)
+  - 文件閱讀流程設計
+  - F 型排版與視覺層級
+  - SRS/SDD/SWD 編排指南
+  - Rationale 心理學標註格式
+  - 表格與圖表可讀性
+  - 文件編排檢查清單
 
 ### assets/
-- `project-template/PROJECT_STRUCTURE.md` - projectDirectorystructuretemplate (contain Android/iOS Directory)
-- `colors.json` - medical App color Token
-- `typography.json` - FontandSpacing Token
+- `project-template/PROJECT_STRUCTURE.md` - 專案目錄結構範本 (含 Android/iOS 目錄)
+- `colors.json` - 醫療 App 色彩 Token
+- `typography.json` - 字型與間距 Token

@@ -1,8 +1,8 @@
-# Design Tokens template
+# Design Tokens 範本
 
-Design Tokens IsDesignSystem'sfoundationchangecount，CanExportsupplydevelopUse。
+Design Tokens 是設計系統的基礎變數，可匯出供開發使用。
 
-## Complete Design Tokens structure
+## 完整 Design Tokens 結構
 
 ```json
 {
@@ -95,7 +95,7 @@ Design Tokens IsDesignSystem'sfoundationchangecount，CanExportsupplydevelopUse�
 
 ---
 
-## Font (Typography)
+## 字型 (Typography)
 
 ### typography.json
 
@@ -146,7 +146,7 @@ Design Tokens IsDesignSystem'sfoundationchangecount，CanExportsupplydevelopUse�
 
 ---
 
-## Spacing (Spacing)
+## 間距 (Spacing)
 
 ### spacing.json
 
@@ -191,7 +191,7 @@ Design Tokens IsDesignSystem'sfoundationchangecount，CanExportsupplydevelopUse�
 
 ---
 
-## roundcorner (Border Radius)
+## 圓角 (Border Radius)
 
 ### borderRadius.json
 
@@ -279,7 +279,7 @@ Design Tokens IsDesignSystem'sfoundationchangecount，CanExportsupplydevelopUse�
 
 ---
 
-## PlatformConvert
+## 平台轉換
 
 ### Android (XML)
 
@@ -349,16 +349,16 @@ enum BorderRadius {
 
 ---
 
-## Figma Token Studio Export
+## Figma Token Studio 匯出
 
-Use Figma Token Studio outsidehangCanstraightreceiveExportupper述Format：
+使用 Figma Token Studio 外掛可直接匯出上述格式：
 
-1. exist Figma middle安裝 Token Studio
-2. determine義placeHave Tokens
-3. ExportIs JSON
-4. Use Style Dictionary ConvertIseachPlatformFormat
+1. 在 Figma 中安裝 Token Studio
+2. 定義所有 Tokens
+3. 匯出為 JSON
+4. 使用 Style Dictionary 轉換為各平台格式
 
-### Style Dictionary Configuration
+### Style Dictionary 配置
 
 ```json
 {

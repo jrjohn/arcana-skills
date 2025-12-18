@@ -1,18 +1,18 @@
-# Android / iOS Asset size specifications
+# Android / iOS 資產尺寸規格
 
-This document defines Android and iOS standard資產Sizeand directory structure。
+本文件定義 Android 與 iOS 的標準資產尺寸與目錄結構。
 
-## Directory structure overview
+## 目錄結構總覽
 
 ```
 03-assets/
-├── design-tokens/              # Design Token
+├── design-tokens/              # 設計 Token
 │   ├── colors.json
 │   ├── typography.json
 │   └── spacing.json
 │
-├── icons/                      # Icon resources
-│   ├── svg/                    # Original SVG (Design source)
+├── icons/                      # 圖標資源
+│   ├── svg/                    # 原始 SVG (設計來源)
 │   │   ├── ic_home.svg
 │   │   └── ic_patient.svg
 │   │
@@ -25,14 +25,14 @@ This document defines Android and iOS standard資產Sizeand directory structure�
 │       └── Icons.xcassets/
 │           ├── ic_home.imageset/
 │           │   ├── Contents.json
-│           │   ├── ic_home.pdf      # or @1x, @2x, @3x PNG
+│           │   ├── ic_home.pdf      # 或 @1x, @2x, @3x PNG
 │           │   ├── ic_home@2x.png
 │           │   └── ic_home@3x.png
 │           └── ic_patient.imageset/
 │
-├── app-icons/                  # App icons
+├── app-icons/                  # App 圖標
 │   ├── source/
-│   │   └── app-icon-1024.png   # Original 1024x1024
+│   │   └── app-icon-1024.png   # 原始 1024x1024
 │   │
 │   ├── android/
 │   │   ├── mipmap-mdpi/        # 48x48
@@ -61,8 +61,8 @@ This document defines Android and iOS standard資產Sizeand directory structure�
 │           ├── Icon-60@3x.png      # 180x180
 │           └── Icon-1024.png       # 1024x1024 (App Store)
 │
-├── images/                     # Image resources
-│   ├── source/                 # Original design files
+├── images/                     # 圖片資源
+│   ├── source/                 # 原始設計檔
 │   │   ├── bg_login.png
 │   │   └── img_onboarding_1.png
 │   │
@@ -81,7 +81,7 @@ This document defines Android and iOS standard資產Sizeand directory structure�
 │               ├── bg_login@2x.png     # @2x
 │               └── bg_login@3x.png     # @3x
 │
-└── splash/                     # Launch screen
+└── splash/                     # 啟動畫面
     ├── source/
     ├── android/
     └── ios/
@@ -89,31 +89,31 @@ This document defines Android and iOS standard資產Sizeand directory structure�
 
 ---
 
-## App Icon Complete size specifications
+## App Icon 完整尺寸規格
 
 ### Android App Icon
 
-| Density | Directory | Size | Description |
+| 密度 | 目錄 | 尺寸 | 說明 |
 |------|------|------|------|
-| mdpi | `mipmap-mdpi/` | 48 × 48 | baseaccurateDensity (1x) |
+| mdpi | `mipmap-mdpi/` | 48 × 48 | 基準密度 (1x) |
 | hdpi | `mipmap-hdpi/` | 72 × 72 | 1.5x |
 | xhdpi | `mipmap-xhdpi/` | 96 × 96 | 2x |
 | xxhdpi | `mipmap-xxhdpi/` | 144 × 144 | 3x |
 | xxxhdpi | `mipmap-xxxhdpi/` | 192 × 192 | 4x |
-| Play Store | `playstore/` | 512 × 512 | Google Play store |
+| Play Store | `playstore/` | 512 × 512 | Google Play 商店 |
 
 **Adaptive Icon (Android 8.0+)：**
 ```
 mipmap-xxxhdpi/
-├── ic_launcher.png              # Traditional icon (192x192)
-├── ic_launcher_foreground.png   # Foreground layer (432x432，including safe area)
-├── ic_launcher_background.png   # Background layer (432x432)
-└── ic_launcher.xml              # Adaptive Icon definition
+├── ic_launcher.png              # 傳統圖標 (192x192)
+├── ic_launcher_foreground.png   # 前景層 (432x432，含安全區)
+├── ic_launcher_background.png   # 背景層 (432x432)
+└── ic_launcher.xml              # Adaptive Icon 定義
 ```
 
 ### iOS App Icon
 
-| Purpose | Size pt | @2x | @3x | Filename |
+| 用途 | 尺寸 pt | @2x | @3x | 檔名 |
 |------|---------|-----|-----|------|
 | iPhone Notification | 20pt | 40×40 | 60×60 | Icon-20@2x/3x.png |
 | iPhone Settings | 29pt | 58×58 | 87×87 | Icon-29@2x/3x.png |
@@ -126,7 +126,7 @@ mipmap-xxxhdpi/
 | iPad App | 76pt | 76×76 | 152×152 | Icon-76.png, Icon-76@2x.png |
 | App Store | 1024pt | - | - | Icon-1024.png |
 
-**iOS Contents.json Example：**
+**iOS Contents.json 範例：**
 ```json
 {
   "images": [
@@ -146,13 +146,13 @@ mipmap-xxxhdpi/
 
 ---
 
-## Icons (圖標) Size規格
+## Icons (圖標) 尺寸規格
 
 ### Android Icons
 
-**Recommendeded：Use vector drawable (XML)**
+**推薦：使用 Vector Drawable (XML)**
 
-Convert from SVG to vector drawable，No need for multiple resolutions：
+從 SVG 轉換為 Vector Drawable，不需要多解析度：
 ```
 icons/android/drawable/
 ├── ic_home.xml
@@ -160,9 +160,9 @@ icons/android/drawable/
 └── ic_alert.xml
 ```
 
-**If using PNG：**
+**若使用 PNG：**
 
-| Density | Directory | System icon | Toolbar 圖標 |
+| 密度 | 目錄 | 系統圖標 | Toolbar 圖標 |
 |------|------|----------|--------------|
 | mdpi | `drawable-mdpi/` | 24 × 24 | 24 × 24 |
 | hdpi | `drawable-hdpi/` | 36 × 36 | 36 × 36 |
@@ -172,9 +172,9 @@ icons/android/drawable/
 
 ### iOS Icons
 
-**Recommendeded：Use PDF or SVG (iOS 13+)**
+**推薦：使用 PDF 或 SVG (iOS 13+)**
 
-Single PDF file，System auto-scales：
+單一 PDF 檔案，系統自動縮放：
 ```
 Icons.xcassets/
 └── ic_home.imageset/
@@ -182,15 +182,15 @@ Icons.xcassets/
     └── ic_home.pdf
 ```
 
-**If using PNG：**
+**若使用 PNG：**
 
-| Scale | System icon | Tab Bar | Toolbar |
+| Scale | 系統圖標 | Tab Bar | Toolbar |
 |-------|----------|---------|---------|
 | @1x | 22 × 22 | 25 × 25 | 22 × 22 |
 | @2x | 44 × 44 | 50 × 50 | 44 × 44 |
 | @3x | 66 × 66 | 75 × 75 | 66 × 66 |
 
-**iOS Icon Contents.json Example (PNG)：**
+**iOS Icon Contents.json 範例 (PNG)：**
 ```json
 {
   "images": [
@@ -202,7 +202,7 @@ Icons.xcassets/
 }
 ```
 
-**iOS Icon Contents.json Example (PDF)：**
+**iOS Icon Contents.json 範例 (PDF)：**
 ```json
 {
   "images": [
@@ -215,11 +215,11 @@ Icons.xcassets/
 
 ---
 
-## Images (Image) Size規格
+## Images (圖片) 尺寸規格
 
 ### Android Images
 
-| Density | Directory | Ratio | DPI |
+| 密度 | 目錄 | 比例 | DPI |
 |------|------|------|-----|
 | mdpi | `drawable-mdpi/` | 1x | 160 dpi |
 | hdpi | `drawable-hdpi/` | 1.5x | 240 dpi |
@@ -227,9 +227,9 @@ Icons.xcassets/
 | xxhdpi | `drawable-xxhdpi/` | 3x | 480 dpi |
 | xxxhdpi | `drawable-xxxhdpi/` | 4x | 640 dpi |
 
-**Calculation example：**
+**計算範例：**
 ```
-Baseline image (mdpi): 100 × 100 px
+基準圖片 (mdpi): 100 × 100 px
 
 hdpi:    100 × 1.5 = 150 × 150 px
 xhdpi:   100 × 2   = 200 × 200 px
@@ -239,17 +239,17 @@ xxxhdpi: 100 × 4   = 400 × 400 px
 
 ### iOS Images
 
-| Scale | Purpose | Calculate |
+| Scale | 用途 | 計算 |
 |-------|------|------|
-| @1x | Not Retina (已淘汰) | baseaccurateSize |
-| @2x | Retina Standard | baseaccurate × 2 |
-| @3x | Retina HD (Plus/Max) | baseaccurate × 3 |
+| @1x | 非 Retina (已淘汰) | 基準尺寸 |
+| @2x | Retina 標準 | 基準 × 2 |
+| @3x | Retina HD (Plus/Max) | 基準 × 3 |
 
-**Calculation example：**
+**計算範例：**
 ```
-DesignSize (pt): 100 × 100 pt
+設計尺寸 (pt): 100 × 100 pt
 
-@1x:  100 × 100 px (Can omit)
+@1x:  100 × 100 px (可省略)
 @2x:  200 × 200 px
 @3x:  300 × 300 px
 ```
@@ -260,21 +260,21 @@ DesignSize (pt): 100 × 100 pt
 
 ### Android Splash
 
-**Recommendeded：Use Android 12+ splash screen API**
+**推薦：使用 Android 12+ Splash Screen API**
 
 ```
 res/
 ├── values/
-│   └── splash.xml              # Splash Settings
+│   └── splash.xml              # Splash 設定
 ├── drawable/
-│   └── splash_background.xml   # Background
+│   └── splash_background.xml   # 背景
 └── mipmap-*/
-    └── splash_icon.png         # Center icon (288dp Visible area)
+    └── splash_icon.png         # 中央圖標 (288dp 可見區域)
 ```
 
-**Traditional method (drawable)：**
+**傳統方式 (drawable)：**
 
-| Density | SizeRecommended |
+| 密度 | 尺寸建議 |
 |------|----------|
 | mdpi | 320 × 480 |
 | hdpi | 480 × 800 |
@@ -284,13 +284,13 @@ res/
 
 ### iOS Launch Screen
 
-**Recommendeded：Use LaunchScreen.storyboard**
+**推薦：使用 LaunchScreen.storyboard**
 
-No need to provide static image，Through Storyboard Auto-adapts。
+不需要提供靜態圖片，透過 Storyboard 自動適配。
 
-**If using static image：**
+**若使用靜態圖片：**
 
-| Device | Size |
+| 裝置 | 尺寸 |
 |------|------|
 | iPhone SE | 640 × 1136 |
 | iPhone 8 | 750 × 1334 |
@@ -305,79 +305,79 @@ No need to provide static image，Through Storyboard Auto-adapts。
 
 ---
 
-## Naming convention
+## 命名規範
 
-### Naming rules
+### 通用規則
 
 ```
-{Type}_{Name}_{Status}.{Format}
+{類型}_{名稱}_{狀態}.{格式}
 
-Type prefix:
-- ic_     : icon
-- img_    : image
-- bg_     : background
-- btn_    : button
-- logo_   : logo
+類型前綴:
+- ic_     : icon (圖標)
+- img_    : image (圖片)
+- bg_     : background (背景)
+- btn_    : button (按鈕)
+- logo_   : logo (標誌)
 - splash_ : splash screen
 
-Status suffix (Optional):
+狀態後綴 (可選):
 - _normal, _pressed, _disabled, _selected, _focused
 
-Example:
+範例:
 - ic_home_normal.svg
 - ic_home_selected.svg
 - bg_login.png
 - btn_submit_pressed.png
 ```
 
-### Android Special rules
+### Android 特定
 
-- All lowercase，Separated by underscores
-- Cannot start with numbers
-- Cannot use uppercase, hyphens, or spaces
+- 全小寫，底線分隔
+- 不可使用數字開頭
+- 不可使用大寫、連字號、空格
 
 ```
-Correct: ic_home.xml, bg_login_screen.png
-Error: IC_Home.xml, bg-login.png, 1_icon.png
+正確: ic_home.xml, bg_login_screen.png
+錯誤: IC_Home.xml, bg-login.png, 1_icon.png
 ```
 
-### iOS Special rules
+### iOS 特定
 
-- Can use any naming (Inside asset catalog)
-- Recommendedand Android maintain consistencyfor easier management
+- 可使用任何命名 (Asset Catalog 內部)
+- 建議與 Android 保持一致以便管理
 
 ---
 
-## Figma Export settings
+## Figma 匯出設定
 
-### Export App Icon
+### 匯出 App Icon
 
-1. Select 1024×1024 original design
-2. UseExportpluginor手moveOutputeachSize
+1. 選擇 1024×1024 原始設計
+2. 使用匯出外掛或手動產出各尺寸
 
-**Recommendededplugin：**
-- **App Icon Generator** - 一鍵OutputplaceHaveSize
-- **Icon Organizer** - Manage icons
+**推薦外掛：**
+- **App Icon Generator** - 一鍵產出所有尺寸
+- **Icon Organizer** - 管理圖標
 
-### Export Icons
+### 匯出 Icons
 
-**SVG (Design source)：**
+**SVG (設計來源)：**
 - Export → SVG
-- Check "Include id attribute"
+- 勾選 "Include id attribute"
 
 **Android Vector Drawable：**
-- Use **Android Resources Export** plugin
-- or export SVG then convert using Android Studio
+- 使用 **Android Resources Export** 外掛
+- 或匯出 SVG 後用 Android Studio 轉換
 
 **iOS PDF：**
 - Export → PDF
 
-### Export Images
+### 匯出 Images
 
-**Multi-resolution export：**
-1. Select image layer
-2. Right panel export
-3. AddmanypieceExport settings：
+**多解析度匯出：**
+1. 選擇圖層
+2. 右側 Export 面板
+3. 新增多個匯出設定：
    - 1x (Android mdpi / iOS @1x)
    - 2x (Android xhdpi / iOS @2x)
    - 3x (Android xxhdpi / iOS @3x)
@@ -385,27 +385,27 @@ Error: IC_Home.xml, bg-login.png, 1_icon.png
 
 ---
 
-## Quick checklist
+## 快速檢核表
 
-### App Icon Checklist
+### App Icon 檢核
 
-- [ ] 1024×1024 Original image prepared
-- [ ] Android eachDensity (mdpi ~ xxxhdpi) Exported
-- [ ] Android Play Store 512×512 Exported
-- [ ] iOS eachSize (@2x, @3x) Exported
-- [ ] iOS App Store 1024×1024 Exported (No transparency、No rounded corners)
-- [ ] Contents.json Created
+- [ ] 1024×1024 原始圖準備完成
+- [ ] Android 各密度 (mdpi ~ xxxhdpi) 已匯出
+- [ ] Android Play Store 512×512 已匯出
+- [ ] iOS 各尺寸 (@2x, @3x) 已匯出
+- [ ] iOS App Store 1024×1024 已匯出 (無透明、無圓角)
+- [ ] Contents.json 已建立
 
-### Icons Checklist
+### Icons 檢核
 
-- [ ] SVG Original file saved
-- [ ] Android Vector Drawable Converted
-- [ ] iOS PDF or @2x/@3x PNG Exported
-- [ ] Naming follows specification (ic_ prefix)
+- [ ] SVG 原始檔已儲存
+- [ ] Android Vector Drawable 已轉換
+- [ ] iOS PDF 或 @2x/@3x PNG 已匯出
+- [ ] 命名符合規範 (ic_ 前綴)
 
-### Images Checklist
+### Images 檢核
 
-- [ ] Original design files已Save
-- [ ] Android eachDensityExported
-- [ ] iOS @2x, @3x Exported
-- [ ] Naming follows specification
+- [ ] 原始設計檔已儲存
+- [ ] Android 各密度已匯出
+- [ ] iOS @2x, @3x 已匯出
+- [ ] 命名符合規範

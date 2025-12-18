@@ -1,279 +1,279 @@
-# SRS Software Requirements Specification Template
+# SRS 軟體需求規格書範本
 ## Software Requirements Specification Template
 
-Aligned with IEC 62304 Standard
+符合 IEC 62304 標準
 
 ---
 
-## Directory
+## 目錄
 
-1. [Document Information](#1-document-Information)
-2. [Product Overview](#2-product-overview)
-3. [Functional Requirements](#3-functional-Requirements)
-4. [Non-Functional Requirements](#4-non-functional-Requirements)
-5. [Interface Requirements](#5-Interface-Requirements)
-6. [Software Safety Classification](#6-software-safety-classification)
-7. [Appendix](#7-appendix)
+1. [文件資訊](#1-文件資訊)
+2. [產品概述](#2-產品概述)
+3. [功能需求](#3-功能需求)
+4. [非功能需求](#4-非功能需求)
+5. [介面需求](#5-介面需求)
+6. [軟體安全分類](#6-軟體安全分類)
+7. [附錄](#7-附錄)
 
 ---
 
-## 1. Document Information
+## 1. 文件資訊
 
-| Items | Content |
+| 項目 | 內容 |
 |-----|------|
-| Document Number | SRS-[projectCode]-[Version] |
-| Document Name | [Product Name] Software Requirements Specification |
-| Version | [X.X] |
-| Creation Date | [YYYY-MM-DD] |
-| Last Modified Date | [YYYY-MM-DD] |
-| Author | [Name] |
-| Reviewer | [Name] |
-| Approver | [Name] |
+| 文件編號 | SRS-[專案代碼]-[版本號] |
+| 文件名稱 | [產品名稱] 軟體需求規格書 |
+| 版本 | [X.X] |
+| 建立日期 | [YYYY-MM-DD] |
+| 最後修改日期 | [YYYY-MM-DD] |
+| 作者 | [姓名] |
+| 審核者 | [姓名] |
+| 核准者 | [姓名] |
 
-### 1.1 Version History
+### 1.1 版本歷史
 
-| Version | Date | Changes | Author |
+| 版本 | 日期 | 修改內容 | 作者 |
 |-----|------|---------|------|
-| 1.0 | [YYYY-MM-DD] | Initial Version Created | [Name] |
+| 1.0 | [YYYY-MM-DD] | 初版建立 | [姓名] |
 
-### 1.2 Reference Documents
+### 1.2 參考文件
 
-| Document Number | Document Name | Version |
+| 文件編號 | 文件名稱 | 版本 |
 |---------|---------|------|
-| [Number] | [Name] | [Version] |
+| [編號] | [名稱] | [版本] |
 
 ---
 
-## 2. Product Overview
+## 2. 產品概述
 
-### 2.1 Product Purpose
+### 2.1 產品目的
 
-[Describe the product's main purpose and intended use]
+[描述產品的主要目的和預期用途]
 
-### 2.2 Product Scope
+### 2.2 產品範圍
 
-[Describe the product's functional scope and boundaries]
+[描述產品的功能範圍和邊界]
 
-### 2.3 User Characteristics
+### 2.3 使用者特性
 
-| User Type | Description | Technical Skill Level |
+| 使用者類型 | 說明 | 技術程度 |
 |-----------|------|---------|
-| [Type1] | [Description] | [High/Medium/Low] |
+| [類型1] | [說明] | [高/中/低] |
 
-### 2.4 Intended Use Environment
+### 2.4 預期使用環境
 
-[Describe the software's intended operating environment]
+[描述軟體預期的運行環境]
 
-### 2.5 Assumptions and Limitations
+### 2.5 假設與限制
 
-**Assumptions**:
-- [Assumption 1]
+**假設**：
+- [假設1]
 
-**Limitations**:
-- [Limitation 1]
+**限制**：
+- [限制1]
 
 ---
 
-## 3. Functional Requirements
+## 3. 功能需求
 
-### 3.1 Requirements Overview
+### 3.1 需求總覽
 
-| ID | Requirement Name | Priority Level | Safety Classification |
+| ID | 需求名稱 | 優先級 | 安全分類 |
 |----|---------|--------|---------|
-| SRS-001 | [Requirement Name] | [High/Medium/Low] | [A/B/C] |
-| SRS-002 | [Requirement Name] | [High/Medium/Low] | [A/B/C] |
+| SRS-001 | [需求名稱] | [高/中/低] | [A/B/C] |
+| SRS-002 | [需求名稱] | [高/中/低] | [A/B/C] |
 
-### 3.2 Requirement Detailed Description
+### 3.2 需求詳細說明
 
 ---
 
-#### SRS-001 [Requirement Name]
+#### SRS-001 [需求名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SRS-001 |
-| **Name** | [Requirement Name] |
-| **Description** | [The system shall...] |
-| **Source** | [Source document or stakeholder] |
-| **Priority Level** | [High/Medium/Low] |
-| **Safety Classification** | [Class A/B/C] |
-| **Verification Method** | [Test/Analysis/Inspection/Demonstration] |
-| **Preconditions** | [Preconditions] |
-| **Postconditions** | [Postconditions] |
-| **Related Requirements** | [Related SRS-xxx ID] |
+| **名稱** | [需求名稱] |
+| **描述** | [系統應...] |
+| **來源** | [來源文件或利害關係人] |
+| **優先級** | [高/中/低] |
+| **安全分類** | [Class A/B/C] |
+| **驗證方法** | [測試/分析/檢查/展示] |
+| **前置條件** | [前置條件] |
+| **後置條件** | [後置條件] |
+| **相關需求** | [相關 SRS-xxx ID] |
 
-**Acceptance Criteria**:
-1. [Criterion 1]
-2. [Criterion 2]
+**接受標準**：
+1. [標準1]
+2. [標準2]
 
-**Notess**:
-[Additional supplementary description]
+**備註**：
+[其他補充說明]
 
 ---
 
-#### SRS-002 [Requirement Name]
+#### SRS-002 [需求名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SRS-002 |
-| **Name** | [Requirement Name] |
-| **Description** | [The system shall...] |
-| **Source** | [Source document or stakeholder] |
-| **Priority Level** | [High/Medium/Low] |
-| **Safety Classification** | [Class A/B/C] |
-| **Verification Method** | [Test/Analysis/Inspection/Demonstration] |
-| **Preconditions** | [Preconditions] |
-| **Postconditions** | [Postconditions] |
-| **Related Requirements** | [Related SRS-xxx ID] |
+| **名稱** | [需求名稱] |
+| **描述** | [系統應...] |
+| **來源** | [來源文件或利害關係人] |
+| **優先級** | [高/中/低] |
+| **安全分類** | [Class A/B/C] |
+| **驗證方法** | [測試/分析/檢查/展示] |
+| **前置條件** | [前置條件] |
+| **後置條件** | [後置條件] |
+| **相關需求** | [相關 SRS-xxx ID] |
 
-**Acceptance Criteria**:
-1. [Criterion 1]
+**接受標準**：
+1. [標準1]
 
 ---
 
-## 4. Non-Functional Requirements
+## 4. 非功能需求
 
-### 4.1 Performance Requirements
+### 4.1 效能需求
 
-#### SRS-NFR-001 [Performance Requirement Name]
+#### SRS-NFR-001 [效能需求名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SRS-NFR-001 |
-| **Type** | Performance |
-| **Description** | [The system shall complete... within X seconds] |
-| **Measurement Criteria** | [Measurable performance criteria] |
-| **Verification Method** | [Test/Analysis] |
+| **類型** | 效能 |
+| **描述** | [系統應在 X 秒內完成...] |
+| **度量標準** | [可量化的標準] |
+| **驗證方法** | [測試/分析] |
 
-### 4.2 Security Requirements
+### 4.2 安全性需求
 
-#### SRS-NFR-002 [Security Requirement Name]
+#### SRS-NFR-002 [安全性需求名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SRS-NFR-002 |
-| **Type** | Security |
-| **Description** | [Describe Security requirement] |
-| **Verification Method** | [Test/Analysis/Inspection] |
+| **類型** | 安全性 |
+| **描述** | [描述安全性需求] |
+| **驗證方法** | [測試/分析/檢查] |
 
-### 4.3 Reliability Requirements
+### 4.3 可靠性需求
 
-#### SRS-NFR-003 [Reliability Requirement Name]
+#### SRS-NFR-003 [可靠性需求名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SRS-NFR-003 |
-| **Type** | Reliability |
-| **Description** | [Describe reliability requirement] |
-| **MTBF** | [Mean time between failures] |
-| **Verification Method** | [Test/Analysis] |
+| **類型** | 可靠性 |
+| **描述** | [描述可靠性需求] |
+| **MTBF** | [平均無故障時間] |
+| **驗證方法** | [測試/分析] |
 
-### 4.4 Maintainability Requirements
+### 4.4 可維護性需求
 
-#### SRS-NFR-004 [Maintainability Requirement Name]
+#### SRS-NFR-004 [可維護性需求名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SRS-NFR-004 |
-| **Type** | Maintainability |
-| **Description** | [Describe maintainability requirement] |
-| **Verification Method** | [Inspection/Analysis] |
+| **類型** | 可維護性 |
+| **描述** | [描述可維護性需求] |
+| **驗證方法** | [檢查/分析] |
 
 ---
 
-## 5. Interface Requirements
+## 5. 介面需求
 
-### 5.1 User Interface Requirements
+### 5.1 使用者介面需求
 
-#### SRS-UI-001 [UI Requirement Name]
+#### SRS-UI-001 [UI需求名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SRS-UI-001 |
-| **Description** | [Describe UI requirement] |
-| **Related Screen** | [Screen Name/Number] |
+| **描述** | [描述 UI 需求] |
+| **相關畫面** | [畫面名稱/編號] |
 
-### 5.2 Hardware Interface Requirements
+### 5.2 硬體介面需求
 
-#### SRS-HW-001 [Hardware Interface Requirement Name]
+#### SRS-HW-001 [硬體介面需求名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SRS-HW-001 |
-| **Description** | [Describe hardware Interface requirement] |
-| **Communication Protocol** | [Protocol name] |
+| **描述** | [描述硬體介面需求] |
+| **通訊協定** | [協定名稱] |
 
-### 5.3 Software Interface Requirements
+### 5.3 軟體介面需求
 
-#### SRS-SW-001 [Software Interface Requirement Name]
+#### SRS-SW-001 [軟體介面需求名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SRS-SW-001 |
-| **Description** | [Describe software Interface requirement] |
-| **API Specification** | [API description] |
+| **描述** | [描述軟體介面需求] |
+| **API 規格** | [API 說明] |
 
-### 5.4 Communication Interface Requirements
+### 5.4 通訊介面需求
 
-#### SRS-COM-001 [Communication Interface Requirement Name]
+#### SRS-COM-001 [通訊介面需求名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | SRS-COM-001 |
-| **Description** | [Describe communication Interface requirement] |
-| **Protocol** | [Protocol name] |
-| **Bandwidth Requirements** | [Requirement description] |
+| **描述** | [描述通訊介面需求] |
+| **協定** | [協定名稱] |
+| **頻寬需求** | [需求說明] |
 
 ---
 
-## 6. Software Safety Classification
+## 6. 軟體安全分類
 
-### 6.1 Classification Basis
+### 6.1 分類依據
 
-According to IEC 62304 Standard, software safety classification is based on the potential harm level caused by software failure:
+根據 IEC 62304 標準，軟體安全分類基於軟體失效可能造成的危害程度：
 
-| Classification | Definition | Applicable to This System |
+| 分類 | 定義 | 本系統適用 |
 |-----|------|-----------|
-| Class A | No injury or damage to health possible | [Yes/No] |
-| Class B | Non-serious injury possible | [Yes/No] |
-| Class C | Death or serious injury possible | [Yes/No] |
+| Class A | 不會造成傷害或對健康的危害 | [是/否] |
+| Class B | 可能造成非嚴重傷害 | [是/否] |
+| Class C | 可能造成死亡或嚴重傷害 | [是/否] |
 
-### 6.2 This System Classification
+### 6.2 本系統分類
 
-**Overall Software Safety Classification**: [Class A/B/C]
+**整體軟體安全分類**: [Class A/B/C]
 
-**Classification Rationale**:
-[Describe why this classification was selected]
+**分類理由**：
+[說明為何採用此分類]
 
-### 6.3 Function-Specific Safety Classification
+### 6.3 各功能安全分類
 
-| Function ID | Function Name | Safety Classification | Classification Rationale |
+| 功能 ID | 功能名稱 | 安全分類 | 分類理由 |
 |--------|---------|---------|---------|
-| SRS-001 | [Name] | [A/B/C] | [Rationale] |
+| SRS-001 | [名稱] | [A/B/C] | [理由] |
 
 ---
 
-## 7. Appendix
+## 7. 附錄
 
-### 7.1 Technical Terms Definition
+### 7.1 術語定義
 
-| Technical Term | Definition |
+| 術語 | 定義 |
 |-----|------|
-| [Term 1] | [Definition] |
+| [術語1] | [定義] |
 
-### 7.2 Abbreviations
+### 7.2 縮寫
 
-| Abbreviation | Full Name |
+| 縮寫 | 全稱 |
 |-----|------|
 | SRS | Software Requirements Specification |
 | IEC | International Electrotechnical Commission |
 
 ---
 
-## Approval
+## 簽核
 
-| Role | Name | Signature | Date |
+| 角色 | 姓名 | 簽名 | 日期 |
 |-----|------|------|------|
-| Author | | | |
-| Reviewer | | | |
-| Approver | | | |
+| 作者 | | | |
+| 審核者 | | | |
+| 核准者 | | | |

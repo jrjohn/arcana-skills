@@ -27,337 +27,337 @@ Prepared by {{author}}
 
 ### 1.1 References
 
-| Document Number | Document Name | Version |
+| 文件編號 | 文件名稱 | 版本 |
 |---------|---------|------|
-| SRS-xxx | Software Requirements Specification | [Version] |
-| SDD-xxx | Software Design Specification | [Version] |
-| STP-xxx | Software Test Plan | [Version] |
+| SRS-xxx | 軟體需求規格書 | [版本] |
+| SDD-xxx | 軟體設計規格書 | [版本] |
+| STP-xxx | 軟體測試計畫 | [版本] |
 
-### 1.3 Test Coverage Traceability
+### 1.3 測試覆蓋追溯
 
-| Requirement ID | Test Case ID | Coverage Status |
+| 需求 ID | 測試案例 ID | 覆蓋狀態 |
 |--------|------------|---------|
-| SRS-001 | STC-001, STC-002 | Complete Coverage |
-| SRS-002 | STC-003 | Complete Coverage |
-| SRS-003 | STC-004, STC-005 | Complete Coverage |
+| SRS-001 | STC-001, STC-002 | 完整覆蓋 |
+| SRS-002 | STC-003 | 完整覆蓋 |
+| SRS-003 | STC-004, STC-005 | 完整覆蓋 |
 
 ---
 
-## 2. Test Cases List
+## 2. 測試案例清單
 
-### 2.1 Test Cases Overview
+### 2.1 測試案例總覽
 
-| ID | Name | Corresponding Requirement | Corresponding Design | Test Type | Priority Level | Status |
+| ID | 名稱 | 對應需求 | 對應設計 | 測試類型 | 優先級 | 狀態 |
 |----|------|---------|---------|---------|--------|------|
-| STC-001 | [Test Case Name] | SRS-001 | SDD-001 | Functional Test | High | [Not Executed/Passed/Failed] |
-| STC-002 | [Test Case Name] | SRS-001 | SDD-001 | Boundary Test | High | [Not Executed/Passed/Failed] |
-| STC-003 | [Test Case Name] | SRS-002 | SDD-002 | Functional Test | Medium | [Not Executed/Passed/Failed] |
-| STC-004 | [Test Case Name] | SRS-NFR-001 | - | Performance Test | High | [Not Executed/Passed/Failed] |
-| STC-005 | [Test Case Name] | SRS-003 | SDD-003 | Exception Test | Medium | [Not Executed/Passed/Failed] |
+| STC-001 | [測試案例名稱] | SRS-001 | SDD-001 | 功能測試 | 高 | [未執行/通過/失敗] |
+| STC-002 | [測試案例名稱] | SRS-001 | SDD-001 | 邊界測試 | 高 | [未執行/通過/失敗] |
+| STC-003 | [測試案例名稱] | SRS-002 | SDD-002 | 功能測試 | 中 | [未執行/通過/失敗] |
+| STC-004 | [測試案例名稱] | SRS-NFR-001 | - | 效能測試 | 高 | [未執行/通過/失敗] |
+| STC-005 | [測試案例名稱] | SRS-003 | SDD-003 | 異常測試 | 中 | [未執行/通過/失敗] |
 
-### 2.2 Test Case Classification Statistics
+### 2.2 測試案例分類統計
 
-| Test Type | Quantity | Passed | Failed | Not Executed |
+| 測試類型 | 數量 | 通過 | 失敗 | 未執行 |
 |---------|------|------|------|--------|
-| Functional Test | [Quantity] | [Quantity] | [Quantity] | [Quantity] |
-| Boundary Test | [Quantity] | [Quantity] | [Quantity] | [Quantity] |
-| Exception Test | [Quantity] | [Quantity] | [Quantity] | [Quantity] |
-| Performance Test | [Quantity] | [Quantity] | [Quantity] | [Quantity] |
-| **Total Count** | [Quantity] | [Quantity] | [Quantity] | [Quantity] |
+| 功能測試 | [數量] | [數量] | [數量] | [數量] |
+| 邊界測試 | [數量] | [數量] | [數量] | [數量] |
+| 異常測試 | [數量] | [數量] | [數量] | [數量] |
+| 效能測試 | [數量] | [數量] | [數量] | [數量] |
+| **總計** | [數量] | [數量] | [數量] | [數量] |
 
 ---
 
-## 3. Test Case Detailed Description
+## 3. 測試案例詳細說明
 
 ---
 
-### STC-001 [Test Case Name]
+### STC-001 [測試案例名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | STC-001 |
-| **Name** | [Test Case Name] |
-| **Corresponding Requirement** | SRS-001 |
-| **Corresponding Design** | SDD-001 |
-| **Corresponding Test Strategy** | STP-003 |
-| **Test Type** | Functional Test |
-| **Priority Level** | high |
-| **Automated** | [Yes/No] |
+| **名稱** | [測試案例名稱] |
+| **對應需求** | SRS-001 |
+| **對應設計** | SDD-001 |
+| **對應測試策略** | STP-003 |
+| **測試類型** | 功能測試 |
+| **優先級** | 高 |
+| **自動化** | [是/否] |
 
-**TestObjective**：
-[DescriptionthisTest CasestoValidate'starget]
+**測試目的**：
+[描述此測試案例要驗證的目標]
 
-**Preconditions**:
-1. [Condition 1: E.g., system already started]
-2. [Condition 2: E.g., user already logged in]
-3. [Condition 3: E.g., test data already prepared]
+**前置條件**：
+1. [條件1：例如系統已啟動]
+2. [條件2：例如使用者已登入]
+3. [條件3：例如測試資料已準備]
 
-**Test Data**:
-| DataItems | Value | Description |
+**測試資料**：
+| 資料項目 | 值 | 說明 |
 |---------|-----|------|
-| [Data1] | [Value] | [Description] |
-| [Data2] | [Value] | [Description] |
+| [資料1] | [值] | [說明] |
+| [資料2] | [值] | [說明] |
 
-**Test Steps**:
+**測試步驟**：
 
-| Step | Operation | Input Data | Expected Results |
+| 步驟 | 操作 | 輸入資料 | 預期結果 |
 |-----|------|---------|---------|
-| 1 | [Operation description] | [Input value] | [Expected output/status] |
-| 2 | [Operation description] | [Input value] | [Expected output/status] |
-| 3 | [Operation description] | [Input value] | [Expected output/status] |
-| 4 | [Operation description] | - | [Expected output/status] |
+| 1 | [操作說明] | [輸入值] | [預期輸出/狀態] |
+| 2 | [操作說明] | [輸入值] | [預期輸出/狀態] |
+| 3 | [操作說明] | [輸入值] | [預期輸出/狀態] |
+| 4 | [操作說明] | - | [預期輸出/狀態] |
 
-**Postconditions**:
-1. [Cleanup action 1]
-2. [Cleanup action 2]
+**後置條件**：
+1. [清理動作1]
+2. [清理動作2]
 
-**Acceptance Criteria**:
-- [ ] All steps' actual results align with expected results
-- [ ] No unexpected error messages
-- [ ] System state is correct
+**接受標準**：
+- [ ] 所有步驟的實際結果符合預期結果
+- [ ] 無未預期的錯誤訊息
+- [ ] 系統狀態正確
 
 ---
 
-### STC-002 [Test CasesName - Boundary Test]
+### STC-002 [測試案例名稱 - 邊界測試]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | STC-002 |
-| **Name** | [Test Case Name] |
-| **Corresponding Requirement** | SRS-001 |
-| **Corresponding Design** | SDD-001 |
-| **Corresponding Test Strategy** | STP-003 |
-| **Test Type** | Boundary Test |
-| **Priority Level** | high |
-| **Automated** | [Yes/No] |
+| **名稱** | [測試案例名稱] |
+| **對應需求** | SRS-001 |
+| **對應設計** | SDD-001 |
+| **對應測試策略** | STP-003 |
+| **測試類型** | 邊界測試 |
+| **優先級** | 高 |
+| **自動化** | [是/否] |
 
-**TestObjective**：
-Validate [Function Name] existsideboundaryValueitempiecelower'scorrectBehavior
+**測試目的**：
+驗證 [功能名稱] 在邊界值條件下的正確行為
 
-**Preconditions**：
-1. [Condition Description]
+**前置條件**：
+1. [條件說明]
 
-**sideboundaryValueTestData**：
-| Test Scenario | inputValue | Expected Results | Description |
+**邊界值測試資料**：
+| 測試場景 | 輸入值 | 預期結果 | 說明 |
 |---------|--------|---------|------|
-| MinimumValue | [min] | [Expected] | Lower boundary test |
-| MinimumValue-1 | [min-1] | [Error] | Below lower boundary |
-| MostlargeValue | [max] | [Expected] | Upper boundary test |
-| MostlargeValue+1 | [max+1] | [Error] | Above upper boundary |
-| 典typeValue | [typical] | [Expected] | Normal range |
+| 最小值 | [min] | [預期] | 下界測試 |
+| 最小值-1 | [min-1] | [錯誤] | 低於下界 |
+| 最大值 | [max] | [預期] | 上界測試 |
+| 最大值+1 | [max+1] | [錯誤] | 超過上界 |
+| 典型值 | [typical] | [預期] | 正常範圍 |
 
-**Test Steps**：
+**測試步驟**：
 
-| steps | Operation | inputData | Expected Results |
+| 步驟 | 操作 | 輸入資料 | 預期結果 |
 |-----|------|---------|---------|
-| 1 | inputMinimumValue | [min] | SystemAccepted，Processing correct |
-| 2 | inputlowInMinimumValue | [min-1] | ShowError Message |
-| 3 | inputMostlargeValue | [max] | SystemAccepted，Processing correct |
-| 4 | inputsuperTooMostlargeValue | [max+1] | ShowError Message |
+| 1 | 輸入最小值 | [min] | 系統接受，處理正確 |
+| 2 | 輸入低於最小值 | [min-1] | 顯示錯誤訊息 |
+| 3 | 輸入最大值 | [max] | 系統接受，處理正確 |
+| 4 | 輸入超過最大值 | [max+1] | 顯示錯誤訊息 |
 
 ---
 
-### STC-003 [Test Case Name]
+### STC-003 [測試案例名稱]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | STC-003 |
-| **Name** | [Test Case Name] |
-| **pairShouldRequirement** | SRS-002 |
-| **Corresponding Design** | SDD-002 |
-| **pairShouldTest Strategy** | STP-003 |
-| **Test Type** | Functional Test |
-| **Priority Level** | Medium |
-| **Automated** | [Yes/No] |
+| **名稱** | [測試案例名稱] |
+| **對應需求** | SRS-002 |
+| **對應設計** | SDD-002 |
+| **對應測試策略** | STP-003 |
+| **測試類型** | 功能測試 |
+| **優先級** | 中 |
+| **自動化** | [是/否] |
 
-**TestObjective**：
-[DescriptionthisTest CasestoValidate'starget]
+**測試目的**：
+[描述此測試案例要驗證的目標]
 
-**Preconditions**：
-1. [Condition Description]
+**前置條件**：
+1. [條件說明]
 
-**Test Steps**：
+**測試步驟**：
 
-| steps | Operation | inputData | Expected Results |
+| 步驟 | 操作 | 輸入資料 | 預期結果 |
 |-----|------|---------|---------|
-| 1 | [Operation description] | [inputValue] | [Expected output/status] |
-| 2 | [Operation description] | [inputValue] | [Expected output/status] |
+| 1 | [操作說明] | [輸入值] | [預期輸出/狀態] |
+| 2 | [操作說明] | [輸入值] | [預期輸出/狀態] |
 
 ---
 
-### STC-004 [Performance Test Case]
+### STC-004 [效能測試案例]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | STC-004 |
-| **Name** | [Performance Test Case Name] |
-| **Corresponding Requirement** | SRS-NFR-001 |
-| **Corresponding Design** | - |
-| **Corresponding Test Strategy** | STP-003 |
-| **Test Type** | Performance Test |
-| **Priority Level** | High |
-| **Automated** | Yes |
+| **名稱** | [效能測試案例名稱] |
+| **對應需求** | SRS-NFR-001 |
+| **對應設計** | - |
+| **對應測試策略** | STP-003 |
+| **測試類型** | 效能測試 |
+| **優先級** | 高 |
+| **自動化** | 是 |
 
-**Test Objective**:
-Validate system performance aligns with requirements specification
+**測試目的**：
+驗證系統效能符合需求規格
 
-**Performance Metrics**:
-| Metric | Requirement Value | Measurement Method |
+**效能指標**：
+| 指標 | 需求值 | 測量方式 |
 |-----|--------|---------|
-| Response time | < [X] ms | Average value |
-| Throughput | > [Y] TPS | Transactions per second |
-| Resource Usage | < [Z]% CPU | Peak value |
+| 回應時間 | < [X] ms | 平均值 |
+| 吞吐量 | > [Y] TPS | 每秒交易數 |
+| 資源使用 | < [Z]% CPU | 峰值 |
 
-**Test Conditions**:
-| Items | Settings |
+**測試條件**：
+| 項目 | 設定 |
 |-----|------|
-| Concurrent users | [Quantity] |
-| Test duration | [Duration] |
-| Data volume | [Data item count] |
+| 並發使用者數 | [數量] |
+| 測試持續時間 | [時間] |
+| 資料量 | [資料筆數] |
 
-**Test Steps**:
+**測試步驟**：
 
-| Step | Operation | Expected Results |
+| 步驟 | 操作 | 預期結果 |
 |-----|------|---------|
-| 1 | Setup test environment and tools | Environment ready |
-| 2 | Execute load test | Record performance data |
-| 3 | Collect performance metrics | Output performance report |
-| 4 | Compare against requirement values | All metrics align with requirements |
+| 1 | 設定測試環境與工具 | 環境就緒 |
+| 2 | 執行負載測試 | 記錄效能數據 |
+| 3 | 收集效能指標 | 產出效能報告 |
+| 4 | 比對需求值 | 所有指標符合需求 |
 
 ---
 
-### STC-005 [Exception Test Case]
+### STC-005 [異常測試案例]
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
 | **ID** | STC-005 |
-| **Name** | [Exception Test Case Name] |
-| **Corresponding Requirement** | SRS-003 |
-| **Corresponding Design** | SDD-003 |
-| **Corresponding Test Strategy** | STP-003 |
-| **Test Type** | Exception Test |
-| **Priority Level** | Medium |
-| **Automated** | [Yes/No] |
+| **名稱** | [異常測試案例名稱] |
+| **對應需求** | SRS-003 |
+| **對應設計** | SDD-003 |
+| **對應測試策略** | STP-003 |
+| **測試類型** | 異常測試 |
+| **優先級** | 中 |
+| **自動化** | [是/否] |
 
-**Test Objective**:
-Validate system processing capability in exceptional situations
+**測試目的**：
+驗證系統在異常情況下的處理能力
 
-**Exception Scenarios**:
-| Scenario ID | Exception Description | Trigger Method | Expected Behavior |
+**異常場景**：
+| 場景 ID | 異常描述 | 觸發方式 | 預期行為 |
 |--------|---------|---------|---------|
-| EXC-01 | Invalid input | Input special characters | Show error message |
-| EXC-02 | Network disconnected | Disconnect network | Show connection error |
-| EXC-03 | Database no response | Stop database | Start backup mechanism |
+| EXC-01 | 無效輸入 | 輸入特殊字元 | 顯示錯誤訊息 |
+| EXC-02 | 網路中斷 | 斷開網路 | 顯示連線錯誤 |
+| EXC-03 | 資料庫無回應 | 停止資料庫 | 啟動備援機制 |
 
-**Test Steps**:
+**測試步驟**：
 
-| Step | Operation | Input Data | Expected Results |
+| 步驟 | 操作 | 輸入資料 | 預期結果 |
 |-----|------|---------|---------|
-| 1 | Trigger exception scenario | [Exception input] | System detects exception |
-| 2 | Observe system response | - | Show appropriate error message |
-| 3 | Confirm system stability | - | System does not crash |
-| 4 | Restore normal state | - | System restores normal operation |
+| 1 | 觸發異常場景 | [異常輸入] | 系統偵測到異常 |
+| 2 | 觀察系統反應 | - | 顯示適當錯誤訊息 |
+| 3 | 確認系統穩定 | - | 系統未崩潰 |
+| 4 | 恢復正常狀態 | - | 系統恢復正常運作 |
 
 ---
 
-## 4. Test Executionrecord
+## 4. 測試執行記錄
 
-### 4.1 Execution Summary
+### 4.1 執行摘要
 
-| Test Cycle | Execution Date | Executor | Passed | Failed | Blocked | Total Count |
+| 測試回合 | 執行日期 | 執行者 | 通過 | 失敗 | 阻塞 | 總計 |
 |---------|---------|--------|------|------|------|------|
-| Round 1 | [Date] | [Name] | [Count] | [Count] | [Count] | [Count] |
-| Round 2 | [Date] | [Name] | [Count] | [Count] | [Count] | [Count] |
+| Round 1 | [日期] | [姓名] | [數] | [數] | [數] | [數] |
+| Round 2 | [日期] | [姓名] | [數] | [數] | [數] | [數] |
 
-### 4.2 Test Execution Details Record
+### 4.2 測試執行詳細記錄
 
 ---
 
-#### STC-001 Execution Record
+#### STC-001 執行記錄
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
-| **Test Case ID** | STC-001 |
-| **Execution Date** | [YYYY-MM-DD] |
-| **Executor** | [Name] |
-| **Test Environment** | [Environment Name] |
-| **Execution Results** | [Passed/Failed/Blockeded] |
+| **測試案例 ID** | STC-001 |
+| **執行日期** | [YYYY-MM-DD] |
+| **執行者** | [姓名] |
+| **測試環境** | [環境名稱] |
+| **執行結果** | [通過/失敗/阻塞] |
 
-**stepsExecution Results**：
+**步驟執行結果**：
 
-| steps | Expected Results | Actual Results | Status |
+| 步驟 | 預期結果 | 實際結果 | 狀態 |
 |-----|---------|---------|------|
-| 1 | [Expected] | [Actual] | [Pass/Fail] |
-| 2 | [Expected] | [Actual] | [Pass/Fail] |
-| 3 | [Expected] | [Actual] | [Pass/Fail] |
-| 4 | [Expected] | [Actual] | [Pass/Fail] |
+| 1 | [預期] | [實際] | [Pass/Fail] |
+| 2 | [預期] | [實際] | [Pass/Fail] |
+| 3 | [預期] | [實際] | [Pass/Fail] |
+| 4 | [預期] | [實際] | [Pass/Fail] |
 
-**Test Evidence**:
-- Screenshot: [FilePath/Link]
-- Log: [FilePath/Link]
+**測試證據**：
+- 截圖: [檔案路徑/連結]
+- 日誌: [檔案路徑/連結]
 
-**Notes**:
-[Other description]
+**備註**：
+[其他說明]
 
-**Related Defects**：
-| Defect ID | Description | Status |
+**相關缺陷**：
+| 缺陷 ID | 說明 | 狀態 |
 |--------|------|------|
-| [BUG-xxx] | [Description] | [Open/Fixed/Closed] |
+| [BUG-xxx] | [說明] | [開啟/修復/關閉] |
 
 ---
 
-#### STC-002 Execution Record
+#### STC-002 執行記錄
 
-| Property | Content |
+| 屬性 | 內容 |
 |-----|------|
-| **Test Case ID** | STC-002 |
-| **Execution Date** | [YYYY-MM-DD] |
-| **Executor** | [Name] |
-| **Test Environment** | [Environment Name] |
-| **Execution Results** | [Passed/Failed/Blockeded] |
+| **測試案例 ID** | STC-002 |
+| **執行日期** | [YYYY-MM-DD] |
+| **執行者** | [姓名] |
+| **測試環境** | [環境名稱] |
+| **執行結果** | [通過/失敗/阻塞] |
 
-**stepsExecution Results**：
+**步驟執行結果**：
 
-| steps | Expected Results | Actual Results | Status |
+| 步驟 | 預期結果 | 實際結果 | 狀態 |
 |-----|---------|---------|------|
-| 1 | [Expected] | [Actual] | [Pass/Fail] |
-| 2 | [Expected] | [Actual] | [Pass/Fail] |
+| 1 | [預期] | [實際] | [Pass/Fail] |
+| 2 | [預期] | [實際] | [Pass/Fail] |
 
 ---
 
-## 5. Appendix
+## 5. 附錄
 
-### 5.1 Test Conclusion Summary
+### 5.1 測試結論摘要
 
-| Items | Results |
+| 項目 | 結果 |
 |-----|------|
-| Total Test Cases | [Quantity] |
-| Passed Count | [Quantity] |
-| Failed Count | [Quantity] |
-| Pass Rate | [Percentage]% |
-| Requirement Coverage | [Percentage]% |
+| 總測試案例數 | [數量] |
+| 通過數 | [數量] |
+| 失敗數 | [數量] |
+| 通過率 | [百分比]% |
+| 需求覆蓋率 | [百分比]% |
 
-### 5.2 Technical Terms Definition
+### 5.2 術語定義
 
-| Technical Term | Definition |
+| 術語 | 定義 |
 |-----|------|
-| Pass | Test case execution results align with expected |
-| Fail | Test case execution results do not align with expected |
-| Blocked | Due to external factors unable to execute tests |
+| Pass | 測試案例執行結果符合預期 |
+| Fail | 測試案例執行結果不符合預期 |
+| Block | 因外部因素無法執行測試 |
 
-### 5.3 Abbreviations
+### 5.3 縮寫
 
-| Abbreviations | Full Name |
+| 縮寫 | 全稱 |
 |-----|------|
 | STC | Software Test Case |
 | TPS | Transactions Per Second |
 
 ---
 
-## Approval
+## 簽核
 
-| Role | Name | Signature | Date |
+| 角色 | 姓名 | 簽名 | 日期 |
 |-----|------|------|------|
-| Author | | | |
-| Reviewer | | | |
-| Approver | | | |
+| 作者 | | | |
+| 審核者 | | | |
+| 核准者 | | | |

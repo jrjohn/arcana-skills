@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * SDD Heading Restoration Script
+ * SDD 標題修復腳本
  *
- * Restore incorrectly removed SDD headings, recover original section numbering format
- * Then use remove-heading-numbers.js to remove correctly
+ * 修復被錯誤移除編號的 SDD 標題，恢復原始章節編號格式
+ * 然後再使用 remove-heading-numbers.js 正確移除
  */
 
 const fs = require('fs');
 
-// SDD's original heading structure (according to IEC 62304 SDD template)
+// SDD 的原始標題結構（根據 IEC 62304 SDD 範本）
 const SDD_STRUCTURE = {
-  // Main headings (no numbering)
+  // 主標題 (不編號)
   'Software Design Description': { level: 1, number: null },
   'For SomniLand (iNAP Kids App)': { level: 2, number: null },
   'Table of Contents': { level: 2, number: null },
@@ -92,10 +92,10 @@ const SDD_STRUCTURE = {
   'Traceability Summary': { level: 3, number: '9.2' },
 };
 
-// Module subsection numbering mapping (subsections for each module)
-// Format: ModuleNumber.SubsectionNumber
+// 模組子標題編號對應 (每個模組的子標題)
+// 格式: 模組編號.子標題序號
 const MODULE_SUBSECTIONS = {
-  // Common subsections used by each module
+  // 每個模組通用的子標題
   'Design Overview': '.1',
   'Architecture Design': '.2',
   'Onboarding Flow': '.2',
@@ -109,19 +109,19 @@ const MODULE_SUBSECTIONS = {
   'Organization Hierarchy': '.3',
 };
 
-// Special heading patterns (do not modify)
+// 特殊標題模式 (不修改)
 const PRESERVE_PATTERNS = [
   /^Screen Design:/,
   /^SCR-/,
   /^(SRS|SDD|SWD|STC|REQ)-[A-Z]+-\d+/,
 ];
 
-// Track current module context
+// 當前模組上下文
 let currentModuleNumber = null;
 let currentModuleSubIndex = 0;
 
 function fixHeadingLine(line) {
-  // Match heading format
+  // 匹配標題格式
   const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
   if (!headingMatch) return line;
 
@@ -129,20 +129,20 @@ function fixHeadingLine(line) {
   const level = hashes.length;
   const trimmedContent = content.trim();
 
-  // Check if should preserve format
+  // 檢查是否為保留格式
   if (PRESERVE_PATTERNS.some(p => p.test(trimmedContent))) {
     return line;
   }
 
-  // Remove incorrect number prefix or existing numbering
-  // Examples: "1 Document Purpose" → "Document Purpose"
-  //          "2. Design Overview" → "Design Overview"
+  // 移除錯誤的數字前綴或原有編號
+  // 例如: "1 Document Purpose" → "Document Purpose"
+  // 例如: "2. Design Overview" → "Design Overview"
   const cleanContent = trimmedContent.replace(/^(\d+\.?\s+|\d+\.\d+\.?\s+|\d+\.\d+\.\d+\.?\s+)/, '');
 
-  // Find correct numbering
+  // 查找正確的編號
   const structure = SDD_STRUCTURE[cleanContent];
   if (structure && structure.number) {
-    // Update current module context
+    // 更新當前模組上下文
     if (cleanContent.includes('Module') && level === 3) {
       currentModuleNumber = structure.number.replace('.', '');
       currentModuleSubIndex = 0;
@@ -150,7 +150,7 @@ function fixHeadingLine(line) {
     return `${hashes} ${structure.number} ${cleanContent}`;
   }
 
-  // Check if is module subsection
+  // 檢查是否為模組子標題
   const subsection = MODULE_SUBSECTIONS[cleanContent];
   if (subsection && currentModuleNumber && level === 4) {
     currentModuleSubIndex++;
@@ -158,7 +158,7 @@ function fixHeadingLine(line) {
     return `${hashes} ${number} ${cleanContent}`;
   }
 
-  // If not found, return cleaned version (keep without numbering)
+  // 如果沒找到，返回清理後的版本 (保持無編號)
   return `${hashes} ${cleanContent}`;
 }
 
@@ -178,16 +178,16 @@ function processFile(inputPath, outputPath) {
 
   fs.writeFileSync(outputPath, processedLines.join('\n'), 'utf-8');
 
-  console.log(`\nRestoration complete!`);
-  console.log(`- Input: ${inputPath}`);
-  console.log(`- Output: ${outputPath}`);
-  console.log(`- Modified headings: ${changedCount}`);
+  console.log(`\n修復完成！`);
+  console.log(`- 輸入: ${inputPath}`);
+  console.log(`- 輸出: ${outputPath}`);
+  console.log(`- 修改標題數: ${changedCount}`);
 }
 
-// Execute
+// 執行
 const args = process.argv.slice(2);
 if (args.length === 0) {
-  console.log('Usage: node fix-sdd-headings.js <input.md> [output.md]');
+  console.log('使用方式: node fix-sdd-headings.js <input.md> [output.md]');
   process.exit(0);
 }
 
@@ -195,7 +195,7 @@ const inputPath = args[0];
 const outputPath = args[1] || inputPath;
 
 if (!fs.existsSync(inputPath)) {
-  console.error(`Error: Cannot find file "${inputPath}"`);
+  console.error(`錯誤: 找不到檔案 "${inputPath}"`);
   process.exit(1);
 }
 
