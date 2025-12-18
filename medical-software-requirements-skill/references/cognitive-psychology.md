@@ -1,484 +1,484 @@
-# Cognitive Psychology Principles
+# 認知心理學原則 (Cognitive Psychology)
 
-This document defines the cognitive psychology principles that UI/UX design must follow to ensure design aligns with human cognitive processes.
+本文件定義 UI/UX 設計必須遵循的認知心理學原則，確保設計符合人類認知運作方式。
 
-## Overview
+## 概述
 
-Cognitive psychology studies how humans:
-- **Perception** - Receive and interpret sensory information
-- **Attention** - Selectively process information
-- **Memory** - Store and retrieve information
-- **Thinking** - Problem-solving and decision-making
-- **Learning** - Acquire new knowledge and skills
+認知心理學研究人類如何：
+- **感知** (Perception) - 接收與解讀感官資訊
+- **注意** (Attention) - 選擇性處理資訊
+- **記憶** (Memory) - 儲存與提取資訊
+- **思考** (Thinking) - 問題解決與決策
+- **學習** (Learning) - 獲得新知識與技能
 
-Good UI design must align with these cognitive process principles.
+良好的 UI 設計必須符合這些認知運作原則。
 
 ---
 
-## 1. Mental Model
+## 1. 心智模型 (Mental Model)
 
-### Definition
-User's internal expectation and understanding of how the system operates.
+### 定義
+使用者對系統運作方式的內心預期與理解。
 
-### Importance
-- Users predict system behavior based on mental models
-- Design not aligned with mental model causes confusion and errors
-- Medical software errors can cause serious consequences
+### 重要性
+- 使用者會根據心智模型預測系統行為
+- 設計不符合心智模型會導致困惑與錯誤
+- 醫療軟體錯誤可能導致嚴重後果
 
-### Design Principles
+### 設計原則
 
-| Principle | Description | Example |
+| 原則 | 說明 | 範例 |
 |------|------|------|
-| **Align Expectations** | Design aligns with user's existing cognition | Trash can icon = Delete |
-| **Use Metaphors** | Use familiar entities to create boundary concepts | Folder, bookmarks, shopping cart |
-| **Consistency** | Same operation generates same result | Swipe always means navigation |
-| **Progressive Reveal** | Gradually create correct mental model | Newbie tutorial guide |
+| **符合預期** | 設計符合使用者既有認知 | 垃圾桶圖示 = 刪除 |
+| **利用隱喻** | 使用熟悉的實體世界概念 | 資料夾、書籤、購物車 |
+| **一致性** | 相同操作產生相同結果 | 滑動永遠是導航 |
+| **漸進揭露** | 逐步建立正確心智模型 | 新手教學引導 |
 
-### Common Mental Model Conflicts
+### 常見心智模型衝突
 
-| Situation | User Expectation | Wrong Design |
+| 情境 | 使用者預期 | 錯誤設計 |
 |------|-----------|---------|
-| Back Button | Return to previous page | Close entire app |
-| Downward Swipe | Content moves upward | Content moves downward |
-| Red Button | Danger/Stop operation | Confirm/Resume operation |
-| Checkmark Icon | Complete/Confirm | Select items |
+| 返回按鈕 | 回到上一頁 | 關閉整個 App |
+| 向下滑動 | 內容向上捲動 | 內容向下移動 |
+| 紅色按鈕 | 危險/停止操作 | 確認/繼續操作 |
+| 打勾圖示 | 完成/確認 | 選擇項目 |
 
 ---
 
-## 2. Attention
+## 2. 注意力 (Attention)
 
-### Definition
-Selective information processing cognitive ability. Attention is a limited resource.
+### 定義
+選擇性處理資訊的認知能力，注意力是有限資源。
 
-### Attention Types
+### 注意力類型
 
-| Type | Description | UI Application |
+| 類型 | 說明 | UI 應用 |
 |------|------|---------|
-| **Selective Attention** | Focus on specific stimuli | Dialog focuses on important message |
-| **Divided Attention** | Process multiple items simultaneously | Avoid requiring multitasking |
-| **Sustained Attention** | Maintain focus for extended period | Segmented tasks, rest hints |
-| **Attention Shift** | Transition between different focus points | Clear visual guidance |
+| **選擇性注意** | 專注於特定刺激 | 對話框聚焦重要訊息 |
+| **分散注意** | 同時處理多項資訊 | 避免要求多工 |
+| **持續注意** | 長時間維持專注 | 分段任務、休息提示 |
+| **注意力轉移** | 在不同焦點間切換 | 清楚的視覺引導 |
 
-### Methods to Attract Attention
+### 吸引注意力的方法
 
-| Method | Principle | UI Implementation |
+| 方法 | 原理 | UI 實作 |
 |------|------|---------|
-| **Contrast** | Differences attract attention | Important buttons use contrasting colors |
-| **Motion** | Movement attracts attention | Loading animation, hint flashing |
-| **Position** | Specific positions get priority attention | Important information placed in upper left |
-| **Size** | Larger elements more noticeable | Primary button larger than secondary button |
-| **Spacing** | Independent elements more prominent | Highlight critical content with whitespace |
+| **對比** | 差異吸引注意 | 重要按鈕使用對比色 |
+| **動態** | 動作吸引注意 | 載入動畫、提示閃爍 |
+| **位置** | 特定位置被優先注意 | 重要資訊放左上角 |
+| **大小** | 較大元素更引人注目 | 主按鈕比次要按鈕大 |
+| **隔離** | 獨立元素更突顯 | 留白突顯關鍵內容 |
 
-### Avoid Attention Interference
+### 避免注意力干擾
 
-| Interference Type | Problem | Solution |
+| 干擾類型 | 問題 | 解決方案 |
 |---------|------|---------|
-| Visual Noise | Too many elements competing for attention | Simplify interface, add whitespace |
-| Unexpected Animation | Distracts user focus | Animations have purpose and are controllable |
-| Pop-up Messages | Interrupt workflow | Non-urgent messages delay display |
-| Auto-play | Forces attention shift | User controls media playback |
+| 視覺噪音 | 太多元素競爭注意力 | 簡化介面、增加留白 |
+| 意外動畫 | 分散使用者專注 | 動畫有目的且可控 |
+| 彈出訊息 | 中斷工作流程 | 非緊急訊息延後顯示 |
+| 自動播放 | 強迫注意力轉移 | 使用者控制媒體播放 |
 
-### Change Blindness
+### 變化盲視 (Change Blindness)
 
-**Definition:** Users may miss changes on screen.
+**定義：** 使用者可能錯過畫面上的變化。
 
-**Medical Software Impact:** Status changes may be ignored, causing errors.
+**醫療軟體影響：** 狀態變化可能被忽略，導致錯誤。
 
-**Solutions:**
-- Important changes use animation transitions
-- Change position uses visual emphasis
-- Provide sound/vibration feedback
-- Explicit text description of change content
+**解決方案：**
+- 重要變化使用動畫過渡
+- 變化位置使用視覺強調
+- 提供聲音/震動回饋
+- 明確文字說明變化內容
 
 ---
 
-## 3. Memory
+## 3. 記憶 (Memory)
 
-### Memory Types
+### 記憶類型
 
 ```
-Sensory Memory (millisecond level)
+感覺記憶 (毫秒級)
     │
-    ▼ Attention Filter
-Working Memory (seconds~minutes, limited capacity)
+    ▼ 注意力篩選
+工作記憶 (秒~分鐘，容量有限)
     │
-    ▼ Encoding Process
-Long-term Memory (permanent, unlimited capacity)
+    ▼ 編碼過程
+長期記憶 (永久，容量無限)
     │
-    ├── Explicit Memory (conscious retrieval)
-    │   ├── Episodic Memory (event experience)
-    │   └── Semantic Memory (factual knowledge)
+    ├── 外顯記憶 (可意識提取)
+    │   ├── 情節記憶 (事件經驗)
+    │   └── 語意記憶 (事實知識)
     │
-    └── Implicit Memory (unconscious retrieval)
-        └── Procedural Memory (skills and habits)
+    └── 內隱記憶 (無意識提取)
+        └── 程序記憶 (技能習慣)
 ```
 
-### Working Memory
+### 工作記憶 (Working Memory)
 
-**Capacity Limitation:** 4±1 Items (modern research updates Miller's Law 7±2)
+**容量限制：** 4±1 項目（現代研究修正 Miller's Law 7±2）
 
-**Design Impact:**
+**設計影響：**
 
-| Design Item | Recommended Quantity | Reason |
+| 設計項目 | 建議數量 | 原因 |
 |---------|---------|------|
-| Navigation Items | 4-5 items | Exceeding makes it difficult to remember options |
-| Step Flow | ≤5 steps | Avoid forgetting progress |
-| Form Group | 3-4 fields/group | Reduce memory burden |
-| Verification Code | 4-6 digits | Short-term memory limitation |
-| Password Display | Provide show option | Forget content during input |
+| 導航項目 | 4-5 個 | 超過難以記住選項 |
+| 步驟流程 | ≤5 步 | 避免忘記進度 |
+| 表單分組 | 3-4 欄/組 | 減少記憶負擔 |
+| 驗證碼 | 4-6 位 | 短暫記憶限制 |
+| 密碼顯示 | 提供顯示選項 | 輸入時忘記內容 |
 
-**Strategies to Reduce Memory Burden:**
+**減少記憶負擔的策略：**
 
-| Strategy | Description | Example |
+| 策略 | 說明 | 範例 |
 |------|------|------|
-| **Recognition over Recall** | Provide options rather than require input | Dropdown instead of empty fields |
-| **Persistent Display** | Keep important information visible | Fixed status bar |
-| **Progress Indication** | Show current position | Step 2/5 |
-| **Auto-fill** | Reduce duplicate input | Remember previous input |
+| **辨識優於回憶** | 提供選項而非要求輸入 | 下拉選單而非空白欄位 |
+| **持久顯示** | 重要資訊保持可見 | 固定的狀態列 |
+| **進度指示** | 顯示目前位置 | 步驟 2/5 |
+| **自動填入** | 減少重複輸入 | 記住上次輸入 |
 
-### Long-term Memory
+### 長期記憶 (Long-term Memory)
 
-**Reinforce Long-term Memory Design:**
+**強化長期記憶的設計：**
 
-| Strategy | Cognitive Principle | UI Implementation |
+| 策略 | 認知原理 | UI 實作 |
 |------|---------|---------|
-| **Chunking** | Organize information into meaningful groups | Phone number segmented 0912-345-678 |
-| **Association** | Link new with old knowledge | Use familiar metaphor icons |
-| **Repetition** | Enhance memory trace | Frequently used function multiple entry points |
-| **Context** | Context-related memory more solid | Consistent operating environment |
-| **Emotion** | Emotion enhances memory | Positive feedback success animation |
+| **分塊** (Chunking) | 組織資訊成有意義群組 | 電話號碼分段 0912-345-678 |
+| **關聯** (Association) | 連結新舊知識 | 使用熟悉的隱喻圖示 |
+| **重複** (Repetition) | 增強記憶痕跡 | 常用功能多個入口 |
+| **情境** (Context) | 情境相關記憶更牢固 | 一致的操作環境 |
+| **情緒** (Emotion) | 情緒增強記憶 | 正向回饋的成功動畫 |
 
-### Memory-Related Design Principles
+### 記憶相關設計原則
 
-**Consistency Law**
+**一致性法則 (Consistency)**
 
-| Level | Description | Example |
+| 層級 | 說明 | 範例 |
 |------|------|------|
-| Internal Consistency | Same function same appearance within app | All save buttons are blue |
-| External Consistency | Align with platform conventions | iOS back button in upper left |
-| Sequential Consistency | Same operation order | Always select then confirm |
+| 內部一致 | App 內相同功能相同外觀 | 所有儲存按鈕都是藍色 |
+| 外部一致 | 符合平台慣例 | iOS 返回在左上角 |
+| 時序一致 | 相同操作順序 | 永遠先選擇再確認 |
 
 ---
 
-## 4. Perception
+## 4. 感知 (Perception)
 
-### Visual Perception Principles
+### 視覺感知原則
 
-#### Gestalt Principles
+#### 格式塔原則 (Gestalt Principles)
 
-| Principle | Description | UI Application | Example |
+| 原則 | 說明 | UI 應用 | 範例 |
 |------|------|---------|------|
-| **Proximity** | Close elements viewed as group | Related controls placed together | Form label next to input box |
-| **Similarity** | Similar appearance viewed as same category | Same category buttons same style | Primary buttons all blue |
-| **Continuity** | Eye movement follows lines | Guide reading order | Arrow indicates flow |
-| **Closure** | Brain completes incomplete shapes | Simplify icons | Missing circle still viewed as circle |
-| **Figure-Ground** | Distinguish foreground and background | Dialog design | Mask layer + floating card |
-| **Common Fate** | Same direction movement viewed as group | Animation design | Related elements move together |
+| **接近性** | 靠近的元素被視為一組 | 相關控制項放一起 | 表單標籤緊鄰輸入框 |
+| **相似性** | 相似外觀被視為同類 | 同類按鈕相同樣式 | 主按鈕都是藍色 |
+| **連續性** | 視線沿線條移動 | 引導閱讀順序 | 箭頭指示流程 |
+| **封閉性** | 大腦補齊不完整形狀 | 簡化圖示 | 缺口的圓形仍被視為圓 |
+| **圖地** | 區分前景與背景 | 對話框設計 | 遮罩層 + 浮動卡片 |
+| **共同命運** | 同方向移動被視為一組 | 動畫設計 | 相關元素同時移動 |
 
-#### Visual Hierarchy
+#### 視覺層級 (Visual Hierarchy)
 
 ```
-High Importance ──────────────────────────► Low Importance
+重要性高 ──────────────────────────► 重要性低
 
-Large Font        Medium Font         Small Font
-Bold             Normal              Fine
-High Contrast     Medium Contrast     Low Contrast
-Top/Left         Center              Bottom/Right
-Spacing/Whitespace  Grouped           Dense
+大字體        中字體         小字體
+粗體          一般           細體
+高對比色      中對比色       低對比色
+上方/左方     中間           下方/右方
+隔離/留白     群組           密集
 ```
 
-**Create Visual Hierarchy Methods:**
+**建立視覺層級的方法：**
 
-| Method | Description |
+| 方法 | 說明 |
 |------|------|
-| Size | Important elements larger |
-| Color | Critical information uses brand color |
-| Contrast | Important content high contrast |
-| Position | Main information at visual focus |
-| Whitespace | Independent elements more prominent |
-| Depth | Shadow indicates hierarchy |
+| 大小 | 重要元素更大 |
+| 顏色 | 關鍵資訊使用品牌色 |
+| 對比 | 重要內容高對比度 |
+| 位置 | 主要資訊在視覺焦點 |
+| 留白 | 獨立元素更突顯 |
+| 深度 | 陰影表示層級 |
 
-### Color Perception
+### 色彩感知
 
-**Color Psychology and UI Application:**
+**色彩心理與 UI 應用：**
 
-| Color | Psychological Association | UI Purpose |
+| 顏色 | 心理聯想 | UI 用途 |
 |------|---------|---------|
-| Blue | Trust, professional, calm | Primary color, links |
-| Green | Success, safety, natural | Confirm, positive status |
-| Red | Danger, emergency, error | Warning, error, delete |
-| Yellow | Attention, alert | Warning message |
-| Orange | Energy, action | CTA button |
-| Gray | Neutral, secondary | Disabled status, helper text |
+| 藍色 | 信任、專業、冷靜 | 主色調、連結 |
+| 綠色 | 成功、安全、自然 | 確認、正向狀態 |
+| 紅色 | 危險、緊急、錯誤 | 警告、錯誤、刪除 |
+| 黃色 | 注意、警示 | 警告訊息 |
+| 橙色 | 活力、行動 | CTA 按鈕 |
+| 灰色 | 中性、次要 | 停用狀態、輔助文字 |
 
-**Accessibility Considerations:**
-- 8% males have color blindness
-- Don't rely solely on color to convey information
-- Combine with icons or text
-- Contrast ratio at least 4.5:1 (WCAG AA)
+**無障礙考量：**
+- 8% 男性有色盲
+- 不僅依賴顏色傳達資訊
+- 搭配圖示或文字
+- 對比度至少 4.5:1 (WCAG AA)
 
 ---
 
-## 5. Affordance and Signifier
+## 5. 可供性與訊號 (Affordance & Signifier)
 
-### Don Norman's Design Principles
+### Don Norman 的設計原則
 
-| Principle | Definition | Good Design | Bad Design |
+| 原則 | 定義 | 好的設計 | 差的設計 |
 |------|------|---------|---------|
-| **Affordance** | Object suggests possible operations | Raised button suggests pressable | Flat element cannot be identified |
-| **Signifier** | Explicit instruction on how to operate | Icon+Text label | Mysterious icon with no description |
-| **Mapping** | Control and result correspondence | Upward swipe=upward scroll | Counter-intuitive operation |
-| **Feedback** | Immediate response after operation | Click has visual response | Click has no response |
-| **Conceptual Model** | System operation explanation | Progress bar explains waiting | No status indication |
-| **Constraint** | Prevent error operation | Disabled invalid button | Allow invalid operation |
+| **可供性** | 物件暗示的可能操作 | 凸起按鈕暗示可按 | 平面元素無法辨識 |
+| **訊號** | 明確指示如何操作 | 圖示+文字標籤 | 神秘圖示無說明 |
+| **映射** | 控制與結果的對應 | 向上滑動=向上捲動 | 反直覺操作 |
+| **回饋** | 操作後的即時反應 | 點擊有視覺反應 | 點擊無任何回應 |
+| **概念模型** | 系統運作的解釋 | 進度條解釋等待 | 無狀態指示 |
+| **限制** | 防止錯誤操作 | 禁用無效按鈕 | 允許無效操作 |
 
-### Button Affordance Design
+### 按鈕可供性設計
 
 ```
-High Affordance Button Characteristics:
+高可供性按鈕特徵：
 ┌─────────────────────┐
-│  ✓ 3D Sense (shadow)     │
-│  ✓ Explicit Border          │
-│  ✓ Contrasting Fill        │
-│  ✓ Appropriate Size (≥44pt)  │
-│  ✓ Icon+Text         │
-│  ✓ Hover/Click State     │
+│  ✓ 立體感 (陰影)     │
+│  ✓ 明確邊界          │
+│  ✓ 對比色填充        │
+│  ✓ 適當大小 (≥44pt)  │
+│  ✓ 圖示+文字         │
+│  ✓ 懸停/點擊狀態     │
 └─────────────────────┘
 
-Low Affordance Elements (Avoid):
+低可供性元素 (避免)：
 ┌─────────────────────┐
-│  ✗ Pure Text Link No Underline   │
-│  ✗ Flat Design No Border     │
-│  ✗ Low Contrast with Background     │
-│  ✗ Too Small Size          │
-│  ✗ Only Icon No Text     │
+│  ✗ 純文字連結無底線   │
+│  ✗ 扁平設計無邊界     │
+│  ✗ 與背景對比度低     │
+│  ✗ 尺寸過小          │
+│  ✗ 只有圖示無文字     │
 └─────────────────────┘
 ```
 
-### Feedback Design
+### 回饋設計
 
-| Feedback Type | Timing | Example |
+| 回饋類型 | 時機 | 範例 |
 |---------|------|------|
-| **Immediate Feedback** | During operation | Button color change on press |
-| **Status Feedback** | Processing | Loading animation |
-| **Result Feedback** | Operation complete | Success/Failed hint |
-| **System Feedback** | Background status | Connection status icon |
+| **即時回饋** | 操作當下 | 按鈕按下變色 |
+| **狀態回饋** | 處理中 | 載入動畫 |
+| **結果回饋** | 操作完成 | 成功/失敗提示 |
+| **系統回饋** | 背景狀態 | 連線狀態圖示 |
 
-**Feedback Methods:**
+**回饋方式：**
 
-| Method | Appropriate Use Situation |
+| 方式 | 適用情境 |
 |------|---------|
-| Visual | All operations (mandatory) |
-| Audio | Important events, errors |
-| Vibration | Mobile device tactile confirmation |
-| Text | Complex results needing description |
+| 視覺 | 所有操作（必要） |
+| 聲音 | 重要事件、錯誤 |
+| 震動 | 行動裝置觸覺確認 |
+| 文字 | 需要說明的複雜結果 |
 
 ---
 
-## 6. Error Prevention and Handling
+## 6. 錯誤預防與處理
 
-### Error Types (Norman's Error Classification)
+### 錯誤類型 (Norman's Error Classification)
 
-| Type | Description | Example | Prevention Method |
+| 類型 | 說明 | 範例 | 預防方式 |
 |------|------|------|---------|
-| **Slip** | Know correct but execute wrong | Press wrong button | Space dangerous buttons |
-| **Mistake** | Wrong intention or plan | Misunderstand function | Clear description |
+| **滑失** (Slip) | 知道正確但執行錯誤 | 按錯按鈕 | 間隔危險按鈕 |
+| **錯誤** (Mistake) | 錯誤的意圖或計畫 | 誤解功能 | 清楚的說明 |
 
-### Error Prevention Design
+### 錯誤預防設計
 
-| Strategy | Description | Implementation |
+| 策略 | 說明 | 實作方式 |
 |------|------|---------|
-| **Constraint** | Limit possible operations | Disabled invalid options |
-| **Confirmation** | Confirm before important operations | Dialog before delete |
-| **Undo** | Provide undo function | Undo button |
-| **Warning** | Remind before dangerous operations | Red warning text |
-| **Default** | Safe default values | Default not delete |
-| **Format** | Force correct format | Date picker |
+| **限制** | 限制可能的操作 | 禁用無效選項 |
+| **確認** | 重要操作前確認 | 刪除前對話框 |
+| **復原** | 提供撤銷功能 | Undo 按鈕 |
+| **警告** | 危險操作前提醒 | 紅色警告文字 |
+| **預設** | 安全的預設值 | 預設不刪除 |
+| **格式化** | 強制正確格式 | 日期選擇器 |
 
-### Error Message Design
+### 錯誤訊息設計
 
-**Bad Error Messages:**
+**差的錯誤訊息：**
 ```
 ❌ Error 500
-❌ Format Error
-❌ Operation Failed
+❌ 格式錯誤
+❌ 操作失敗
 ```
 
-**Good Error Messages:**
+**好的錯誤訊息：**
 ```
-✓ Password needs at least 8 characters, including numbers and letters
-✓ Cannot connect to server, please check network connection and try again
-✓ Email format incorrect, please enter as name@example.com
+✓ 密碼需至少 8 個字元，包含數字與英文字母
+✓ 無法連接伺服器，請檢查網路連線後再試
+✓ 電子郵件格式不正確，請輸入如 name@example.com
 ```
 
-**Error Message Elements:**
+**錯誤訊息要素：**
 
-| Element | Description |
+| 要素 | 說明 |
 |------|------|
-| Describe Problem | What happened |
-| Describe Reason | Why it happened |
-| Provide Solution | How to correct |
-| Friendly Tone | Don't blame user |
+| 說明問題 | 發生了什麼 |
+| 說明原因 | 為什麼發生 |
+| 提供解法 | 如何修正 |
+| 語氣友善 | 不責怪使用者 |
 
 ---
 
-## 7. Reading Psychology
+## 7. 閱讀心理學 (Reading Psychology)
 
-### Reading Patterns
+### 閱讀模式
 
-**F-Pattern Scan Pattern**
+**F 型掃描模式 (F-Pattern)**
 
 ```
 ████████████████████████
+████████████████
 ████████████
-██████████
 ██████████████████
 ██████████
 ████████
 ```
 
-Users tend to:
-1. Horizontal read top
-2. Move downward, then horizontal read
-3. Vertical scan leftmost
+使用者傾向：
+1. 水平閱讀頂部
+2. 向下移動，再水平閱讀
+3. 垂直掃描左側
 
-**Design Impact:**
-- Important information placed in upper left
-- Critical words placed at section beginning
-- Use titles and bullet points
+**設計影響：**
+- 重要資訊放左上角
+- 關鍵詞放在段落開頭
+- 使用標題與項目符號
 
-### Readability Principles
+### 可讀性原則
 
-| Principle | Recommended Value | Reason |
+| 原則 | 建議值 | 原因 |
 |------|--------|------|
-| Line Length | 45-75 characters | Too long difficult to track next line |
-| Line Height | 1.4-1.6 times | Too narrow crowded, too loose dispersed |
-| Paragraph | 3-5 sentences | Long paragraphs difficult to read |
-| Contrast | ≥4.5:1 | WCAG AA standard |
+| 行長 | 45-75 字元 | 過長難以追蹤下一行 |
+| 行高 | 1.4-1.6 倍 | 太窄擁擠，太寬分散 |
+| 段落 | 3-5 句 | 長段落難以閱讀 |
+| 對比度 | ≥4.5:1 | WCAG AA 標準 |
 
-### Font Selection
+### 字體選擇
 
-| Type | Appropriate Use | Example |
+| 類型 | 適用 | 範例 |
 |------|------|------|
-| Sans-serif | Screen reading, UI elements | SF Pro, Roboto, Arial |
-| Serif | Long article reading, print | Times, Georgia |
-| Monospace | Code, number alignment | Menlo, Courier |
+| 無襯線 | 螢幕閱讀、UI 元素 | SF Pro, Roboto, Arial |
+| 襯線 | 長篇閱讀、印刷 | Times, Georgia |
+| 等寬 | 程式碼、數字對齊 | Menlo, Courier |
 
-### Medical Information Display
+### 醫療資訊顯示
 
-**Number Formatting:**
+**數字格式化：**
 
-| Type | Format | Example |
+| 類型 | 格式 | 範例 |
 |------|------|------|
-| Large Numbers | Thousand separators | 1,234,567 |
-| Small Numbers | Max 2 decimals | 98.65 |
-| Percentage | With symbol | 85% |
-| Time | With unit | 7h 32m |
-| Temperature | With unit | 37.5°C |
-| Blood Pressure | Fractional format | 120/80 mmHg |
+| 大數字 | 千分位 | 1,234,567 |
+| 小數 | 最多 2 位 | 98.65 |
+| 百分比 | 帶符號 | 85% |
+| 時間 | 帶單位 | 7h 32m |
+| 溫度 | 帶單位 | 37.5°C |
+| 血壓 | 分數格式 | 120/80 mmHg |
 
-**Critical Medical Information Emphasis:**
+**關鍵醫療資訊強調：**
 
 ```
-Abnormal Value Display:
+異常值顯示：
 ┌─────────────────────────────┐
-│  Heart Rate: ❗ 125 bpm (Too High)     │  ← Red + Icon + Text Description
-│  SpO2: ✓ 98%                │  ← Green + Checkmark
-│  Temperature: ⚠️ 38.2°C (Elevated)     │  ← Yellow + Warning
+│  心率：❗ 125 bpm (過快)     │  ← 紅色 + 圖示 + 文字說明
+│  血氧：✓ 98%                │  ← 綠色 + 勾選
+│  體溫：⚠️ 38.2°C (偏高)     │  ← 黃色 + 警告
 └─────────────────────────────┘
 ```
 
 ---
 
-## 8. Learnability
+## 8. 可學習性 (Learnability)
 
-### Learning Curve Types
+### 學習曲線類型
 
 ```
-Efficiency
+效率
   │
-  │      ╭──────── Ideal Curve (gradual learning)
+  │      ╭──────── 理想曲線 (漸進學習)
   │     ╱
   │    ╱
   │   ╱
-  │  ╱ ╭──────── Steep Curve (expert system)
+  │  ╱ ╭──────── 陡峭曲線 (專家系統)
   │ ╱ ╱
   │╱ ╱
-  └──────────────────► Time
+  └──────────────────► 時間
 ```
 
-### Strategies to Improve Learnability
+### 提升可學習性的策略
 
-| Strategy | Description | Implementation |
+| 策略 | 說明 | 實作方式 |
 |------|------|---------|
-| **Progressive Reveal** | Gradually introduce functions | Newbie mode, tutorial hints |
-| **Consistency** | Similar situations similar operations | Unified design language |
-| **Immediate Feedback** | Operation results immediately visible | Form immediate validation |
-| **Explorability** | Safe to try without fear of errors | Undo, preview function |
-| **Context Description** | Provide help when needed | Tooltip, question mark icon |
+| **漸進揭露** | 逐步引入功能 | 新手模式、教學提示 |
+| **一致性** | 相似情境相似操作 | 統一的設計語言 |
+| **即時回饋** | 操作結果立即可見 | 表單即時驗證 |
+| **可探索** | 安全嘗試不懼錯誤 | Undo、預覽功能 |
+| **情境說明** | 需要時提供幫助 | 工具提示、問號圖示 |
 
-### Onboarding Guide Design
+### 新手引導設計
 
-**Onboarding Types:**
+**Onboarding 類型：**
 
-| Type | Appropriate Use Situation | Advantage | Disadvantage |
+| 類型 | 適用情境 | 優點 | 缺點 |
 |------|---------|------|------|
-| Tour Style | Complex functions | Complete introduction | May skip |
-| Progressive Style | Gradual learning | Doesn't interrupt flow | Learning slower |
-| Interactive Style | Learning by doing | Memory deeper | Development cost higher |
-| Contextual Style | Just-in-time help | Appears when needed | May interfere |
+| 導覽式 | 複雜功能 | 完整介紹 | 可能被跳過 |
+| 漸進式 | 逐步學習 | 不打斷流程 | 學習較慢 |
+| 互動式 | 實作學習 | 記憶深刻 | 開發成本高 |
+| 情境式 | 即時協助 | 需要時出現 | 可能干擾 |
 
 ---
 
-## Cognitive Psychology Review List
+## 認知心理學審查清單
 
-### Complete Checklist
+### 完整檢查清單
 
-| Category | Check Item | Pass Criteria | Weight |
+| 類別 | 檢查項目 | 通過標準 | 權重 |
 |------|---------|---------|------|
-| **Mental Model** | Operations align expectations? | No description needed to understand | High |
-| **Mental Model** | Use familiar metaphors? | Icons have explicit meaning | Medium |
-| **Attention** | Critical information highlighted? | Find key points within 3 seconds | High |
-| **Attention** | Avoid unnecessary interference? | No auto-play/popups | Medium |
-| **Working Memory** | Step quantity reasonable? | Simple flow ≤5 steps | High |
-| **Working Memory** | Reduce memory burden? | Important information continuously visible | High |
-| **Long-term Memory** | Design consistent? | Same function same appearance | High |
-| **Perception** | Visual grouping clear? | Related elements grouped | Medium |
-| **Perception** | Visual hierarchy explicit? | Importance distinguished | Medium |
-| **Affordance** | Interactive elements obvious? | Button looks clickable | High |
-| **Feedback** | All operations have feedback? | Click has response | High |
-| **Error Prevention** | Has foolproof design? | Invalid operations disabled | High |
-| **Error Handling** | Error messages friendly? | Describe problem + solution | Medium |
-| **Readability** | Text easy to read? | Contrast ≥4.5:1 | High |
-| **Learnability** | Newbies can get started? | Has guide or description | Medium |
+| **心智模型** | 操作符合預期？ | 無需說明即可理解 | 高 |
+| **心智模型** | 使用熟悉隱喻？ | 圖示具有明確意義 | 中 |
+| **注意力** | 關鍵資訊突顯？ | 3 秒內找到重點 | 高 |
+| **注意力** | 避免不必要干擾？ | 無自動播放/彈出 | 中 |
+| **工作記憶** | 步驟數量合理？ | 單流程 ≤5 步 | 高 |
+| **工作記憶** | 減少記憶負擔？ | 重要資訊持續可見 | 高 |
+| **長期記憶** | 設計一致？ | 相同功能相同外觀 | 高 |
+| **感知** | 視覺分組清楚？ | 相關元素成組 | 中 |
+| **感知** | 視覺層級明確？ | 重要性有區分 | 中 |
+| **可供性** | 互動元素明顯？ | 按鈕看起來可點 | 高 |
+| **回饋** | 所有操作有回饋？ | 點擊有反應 | 高 |
+| **錯誤預防** | 有防呆設計？ | 無效操作被禁用 | 高 |
+| **錯誤處理** | 錯誤訊息友善？ | 說明問題+解法 | 中 |
+| **閱讀性** | 文字易讀？ | 對比度 ≥4.5:1 | 高 |
+| **可學習性** | 新手能上手？ | 有引導或說明 | 中 |
 
-### Medical Software Special Check
+### 醫療軟體特殊檢查
 
-| Check Item | Standard | Severity |
+| 檢查項目 | 標準 | 嚴重性 |
 |---------|------|--------|
-| Critical values clear? | Large font, with unit | Serious |
-| Abnormal values highlighted? | Color+Icon+Text | Serious |
-| Operation confirm mechanism? | Important operations need confirmation | Serious |
-| Errors can undo? | Provide undo | High |
-| Accessibility support? | VoiceOver/TalkBack | Medium |
+| 關鍵數值清晰？ | 大字體、帶單位 | 嚴重 |
+| 異常值突顯？ | 顏色+圖示+文字 | 嚴重 |
+| 操作確認機制？ | 重要操作需確認 | 嚴重 |
+| 錯誤可復原？ | 提供 Undo | 高 |
+| 無障礙支援？ | VoiceOver/TalkBack | 中 |
 
 ---
 
-## Reference Resources
+## 參考資源
 
-### Classic Works
-- Don Norman - "The Design of Everyday Things"
+### 經典著作
+- Don Norman - "The Design of Everyday Things" (設計的心理學)
 - Susan Weinschenk - "100 Things Every Designer Needs to Know About People"
 - Steve Krug - "Don't Make Me Think"
 - Jeff Johnson - "Designing with the Mind in Mind"
 
-### Cognitive Psychology Principles
-- Miller's Law (1956) - 7±2 / 4±1 Memory capacity
-- Gestalt Principles (1920s) - Gestalt perception principles
-- Fitts' Law (1954) - Target acquisition time
-- Hick's Law (1952) - Decision time
+### 認知心理學原理
+- Miller's Law (1956) - 7±2 / 4±1 記憶容量
+- Gestalt Principles (1920s) - 格式塔感知原則
+- Fitts' Law (1954) - 目標獲取時間
+- Hick's Law (1952) - 決策時間
 
-### Medical Software Special Reference
-- IEC 62366-1:2015 - Medical device usability engineering
+### 醫療軟體特殊參考
+- IEC 62366-1:2015 - 醫療器材可用性工程
 - FDA Human Factors Guidance
 - AAMI HE75 - Human Factors Engineering Guidelines

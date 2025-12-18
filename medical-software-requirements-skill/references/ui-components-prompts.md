@@ -1,21 +1,21 @@
-# UI Component AI Prompt Library
+# UI 元件 AI Prompt 清單
 
-This document provides AI generation prompt templates for various UI components.
+本文件提供各類 UI 元件的 AI 產生 Prompt 範本。
 
-## Table of Contents
-1. [Buttons](#buttons)
-2. [Input Fields](#input-fields-inputs)
-3. [Cards](#cards)
-4. [Navigation](#navigation)
-5. [Icons](#icons)
-6. [Dialogs](#dialogs)
-7. [Lists](#lists)
-8. [Charts](#charts-diagrams)
-9. [Medical-Specific Components](#medical-specific-components)
+## 目錄
+1. [按鈕 (Buttons)](#按鈕-buttons)
+2. [輸入框 (Inputs)](#輸入框-inputs)
+3. [卡片 (Cards)](#卡片-cards)
+4. [導航 (Navigation)](#導航-navigation)
+5. [圖標 (Icons)](#圖標-icons)
+6. [對話框 (Dialogs)](#對話框-dialogs)
+7. [列表 (Lists)](#列表-lists)
+8. [圖表 (Charts)](#圖表-charts)
+9. [醫療專用元件](#醫療專用元件)
 
 ---
 
-## Buttons
+## 按鈕 (Buttons)
 
 ### Primary Button
 
@@ -32,7 +32,7 @@ transparent background PNG,
 high resolution
 ```
 
-### Button States Combination
+### Button States 組合
 
 ```
 UI button component design showing 4 states in a row:
@@ -73,7 +73,7 @@ transparent background
 
 ---
 
-## Input Fields (Inputs)
+## 輸入框 (Inputs)
 
 ### Text Field
 
@@ -127,7 +127,7 @@ Material Design style
 
 ---
 
-## Cards
+## 卡片 (Cards)
 
 ### Basic Card
 
@@ -142,7 +142,7 @@ placeholder for title and content areas,
 clean minimal design
 ```
 
-### Patient Information Card (Medical)
+### Patient Info Card (醫療)
 
 ```
 Medical patient information card UI,
@@ -182,7 +182,7 @@ width 300px
 
 ---
 
-## Navigation
+## 導航 (Navigation)
 
 ### Bottom Navigation Bar
 
@@ -237,7 +237,7 @@ Material Design style
 
 ---
 
-## Icons
+## 圖標 (Icons)
 
 ### System Icons Set
 
@@ -280,7 +280,7 @@ black or gray color
 
 ---
 
-## Dialogs
+## 對話框 (Dialogs)
 
 ### Alert Dialog
 
@@ -323,7 +323,7 @@ width 344px height 48px
 
 ---
 
-## Lists
+## 列表 (Lists)
 
 ### Simple List
 
@@ -337,7 +337,7 @@ Material Design list style,
 width 360px
 ```
 
-### Patient List Item (Medical)
+### Patient List Item (醫療)
 
 ```
 Patient list item UI for healthcare app,
@@ -362,7 +362,7 @@ modern messaging app style
 
 ---
 
-## Charts (Diagrams)
+## 圖表 (Charts)
 
 ### Line Chart
 
@@ -401,7 +401,7 @@ width 200px height 200px plus legend
 
 ---
 
-## Medical-Specific Components
+## 醫療專用元件
 
 ### Vital Signs Display
 
@@ -469,31 +469,31 @@ height 72px width 320px
 
 ---
 
-## Prompt Techniques Summary
+## Prompt 技巧總結
 
-### Structure Template
+### 結構模板
 
 ```
-[ComponentType] UI design for [Platform],
-[Shape/Size Description],
-[Color/Style Description],
-[Content/Text Description],
-[State/Interaction Description],
-[Design Style] style,
+[元件類型] UI design for [平台],
+[形狀/尺寸描述],
+[顏色/風格描述],
+[內容/文字描述],
+[狀態/互動描述],
+[設計風格] style,
 transparent background PNG,
 high resolution
 ```
 
-### Keywords
+### 關鍵詞彙
 
-**Style:**
+**風格：**
 - Material Design
 - iOS style
 - Flat design
 - Minimal
 - Modern
 
-**State:**
+**狀態：**
 - normal / default
 - pressed / active
 - disabled
@@ -501,12 +501,12 @@ high resolution
 - hover
 - loading
 
-**Background:**
+**背景：**
 - transparent background
 - white background
 - dark background
 
-**Quality:**
+**品質：**
 - high resolution
 - clean design
 - professional

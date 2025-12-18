@@ -1,60 +1,60 @@
-# UI Image Embedding in SDD Specification
+# UI 圖片嵌入 SDD 規範
 
-This document defines how to embed UI/UX design images into SDD (Software Design Specification) documents.
+本文件定義如何將 UI/UX 設計圖片嵌入 SDD (軟體設計規格書) 文件中。
 
-## Why Embed Images?
+## 為什麼要嵌入圖片？
 
-| Method | Advantages | Disadvantages |
+| 方式 | 優點 | 缺點 |
 |-----|------|------|
-| **External Link (URL)** | Small file size, easy to update | Link can break, requires network, cannot view offline |
-| **Direct Embedding** | Document is self-contained, can view offline, regulatory review friendly | Larger file size |
+| **外部連結 (URL)** | 檔案小、即時更新 | 連結失效、需網路、無法離線檢視 |
+| **直接嵌入圖片** | 文件獨立完整、可離線、法規送審友好 | 檔案較大 |
 
-**IEC 62304 Regulatory Consideration:** During regulatory review, documents must be self-contained and should not depend on external links. Therefore, it is recommended to directly embed UI design images into the SDD document.
+**IEC 62304 合規考量：** 法規送審時，文件必須獨立完整，不應依賴外部連結。因此建議將 UI 設計圖片直接嵌入 SDD 文件。
 
 ---
 
-## Image Specifications
+## 圖片規範
 
-### Format Requirements
+### 格式要求
 
-| Property | Recommended Value | Description |
+| 屬性 | 建議值 | 說明 |
 |-----|-------|------|
-| **Format** | PNG (recommended) | Supports transparency, lossless compression |
-| | JPG | Suitable for photo images |
-| **Resolution** | @2x (recommended) | Ensures clarity in DOCX output |
-| | @1x | Only for draft or low resolution requirements |
-| | @3x | High resolution requirements |
-| **Color Mode** | sRGB | Ensures cross-platform consistency |
-| **Maximum Size** | 2MB/image | Avoid documents being too large |
+| **格式** | PNG (推薦) | 支援透明背景，無損壓縮 |
+| | JPG | 適合照片類圖片 |
+| **解析度** | @2x (推薦) | 確保 DOCX 輸出清晰 |
+| | @1x | 僅供草稿或低解析度需求 |
+| | @3x | 高解析度需求 |
+| **色彩模式** | sRGB | 確保跨平台顯示一致 |
+| **最大尺寸** | 2MB/圖片 | 避免文件過大 |
 
-### Naming Specification
+### 命名規範
 
 ```
-SCR-{Module}-{Number}-{Description}.png
+SCR-{模組}-{序號}-{描述}.png
 ```
 
-**Examples:**
-- `SCR-AUTH-001-login.png` - Login Screen
-- `SCR-AUTH-002-signup.png` - Registration Screen
-- `SCR-HOME-001-dashboard.png` - Home Dashboard
-- `SCR-TRAIN-001-game-selection.png` - Game Selection Screen
-- `SCR-REPORT-001-daily.png` - Daily Report Screen
+**範例：**
+- `SCR-AUTH-001-login.png` - 登入畫面
+- `SCR-AUTH-002-signup.png` - 註冊畫面
+- `SCR-HOME-001-dashboard.png` - 首頁儀表板
+- `SCR-TRAIN-001-game-selection.png` - 遊戲選擇畫面
+- `SCR-REPORT-001-daily.png` - 每日報告畫面
 
-### Directory Structure
+### 目錄結構
 
 ```
 {project}/
 ├── 02-design/
 │   └── SDD/
 │       ├── SDD-{project}-{version}.md
-│       └── images/                    ← UI Image Storage Location
+│       └── images/                    ← UI 圖片存放位置
 │           ├── SCR-AUTH-001-login.png
 │           ├── SCR-AUTH-002-signup.png
 │           ├── SCR-HOME-001-dashboard.png
 │           └── ...
 │
 └── 03-assets/
-    └── ui-screens/                    ← Backup Location (source files)
+    └── ui-screens/                    ← 備用位置 (原始檔)
         ├── @1x/
         ├── @2x/
         └── @3x/
@@ -62,145 +62,145 @@ SCR-{Module}-{Number}-{Description}.png
 
 ---
 
-## Markdown Embedding Syntax
+## Markdown 嵌入語法
 
-### Basic Syntax
+### 基本語法
 
 ```markdown
-![{Image Description}](./images/{filename}.png)
+![{圖片描述}](./images/{檔名}.png)
 ```
 
-### Example
+### 範例
 
 ```markdown
-### 6.1 Authentication Module Screen Design
+### 6.1 認證模組畫面設計
 
-#### SCR-AUTH-001 Login Screen
+#### SCR-AUTH-001 登入畫面
 
-![SCR-AUTH-001 Login Screen](./images/SCR-AUTH-001-login.png)
+![SCR-AUTH-001 登入畫面](./images/SCR-AUTH-001-login.png)
 
-**Screen Description:**
-- Top: App Logo
-- Middle: Email and Password Input Fields
-- Bottom: Login Button, Forgot Password Link, Social Login Options
+**畫面說明：**
+- 頂部：App Logo
+- 中部：電子郵件與密碼輸入欄位
+- 底部：登入按鈕、忘記密碼連結、社群登入選項
 
-**Corresponding Requirements:** SRS-AUTH-001, SRS-AUTH-002
+**對應需求：** SRS-AUTH-001, SRS-AUTH-002
 ```
 
-### Multiple State Screens
+### 多狀態畫面
 
 ```markdown
-#### SCR-AUTH-001 Login Screen
+#### SCR-AUTH-001 登入畫面
 
-**Default State:**
-![SCR-AUTH-001 Login Screen - Default](./images/SCR-AUTH-001-login-default.png)
+**預設狀態：**
+![SCR-AUTH-001 登入畫面 - 預設](./images/SCR-AUTH-001-login-default.png)
 
-**Input State:**
-![SCR-AUTH-001 Login Screen - Input](./images/SCR-AUTH-001-login-input.png)
+**輸入中狀態：**
+![SCR-AUTH-001 登入畫面 - 輸入中](./images/SCR-AUTH-001-login-input.png)
 
-**Error State:**
-![SCR-AUTH-001 Login Screen - Error](./images/SCR-AUTH-001-login-error.png)
+**錯誤狀態：**
+![SCR-AUTH-001 登入畫面 - 錯誤](./images/SCR-AUTH-001-login-error.png)
 ```
 
 ---
 
-## Export from Design Tools
+## 從設計工具匯出
 
 ### Figma
 
-1. Select the Frame you want to export
-2. Right panel → Export
-3. Settings:
+1. 選擇要匯出的 Frame
+2. 右側面板 → Export
+3. 設定：
    - Format: PNG
    - Scale: 2x
-   - Include "id" attribute: Uncheck
-4. Click Export
+   - Include "id" attribute: 取消勾選
+4. 點擊 Export
 
 ### Sketch
 
-1. Select Artboard
+1. 選擇 Artboard
 2. File → Export → Export Selected...
-3. Settings:
+3. 設定：
    - Format: PNG
    - Scale: 2x
 4. Export
 
 ### Adobe XD
 
-1. Select Artboard
+1. 選擇 Artboard
 2. File → Export → Selected...
-3. Settings:
+3. 設定：
    - Format: PNG
    - Export for: Design (2x)
 4. Export
 
 ### Penpot
 
-1. Select Frame
-2. Right-click → Export selection
-3. Settings:
+1. 選擇 Frame
+2. 右鍵 → Export selection
+3. 設定：
    - Type: PNG
    - Scale: 2
 4. Export
 
 ---
 
-## DOCX Conversion Support
+## DOCX 轉換支援
 
-The converter in `md-to-docx-converter.md` already supports automatic image embedding.
+`md-to-docx-converter.md` 中的轉換器已支援自動嵌入圖片。
 
-### Conversion Flow
+### 轉換流程
 
 ```
-1. Read Markdown file
-2. Parse image syntax ![alt](path)
-3. Read corresponding image file
-4. Embed image into DOCX
-5. Output complete DOCX document
+1. 讀取 Markdown 檔案
+2. 解析圖片語法 ![alt](path)
+3. 讀取對應圖片檔案
+4. 將圖片嵌入 DOCX
+5. 輸出完整 DOCX 文件
 ```
 
-### Supported Image Paths
+### 支援的圖片路徑
 
-| Path Type | Example | Supported |
+| 路徑類型 | 範例 | 支援 |
 |---------|------|------|
-| Relative path | `./images/xxx.png` | ✓ |
-| Relative path (no ./) | `images/xxx.png` | ✓ |
-| Absolute path | `/path/to/xxx.png` | ✓ |
-| URL | `https://...` | ✗ (Not recommended) |
+| 相對路徑 | `./images/xxx.png` | ✓ |
+| 相對路徑 (無 ./) | `images/xxx.png` | ✓ |
+| 絕對路徑 | `/path/to/xxx.png` | ✓ |
+| URL | `https://...` | ✗ (不建議) |
 
 ---
 
-## Best Practices
+## 最佳實踐
 
 ### Do's ✓
 
-- Use @2x resolution to ensure clarity
-- Use PNG format to maintain quality
-- Follow naming specification `SCR-{Module}-{Number}-{Description}.png`
-- Place images in `02-design/SDD/images/` directory
-- Add text description for each image
-- Mark corresponding SRS requirement numbers
+- 使用 @2x 解析度確保清晰度
+- 使用 PNG 格式保持品質
+- 遵循命名規範 `SCR-{模組}-{序號}-{描述}.png`
+- 將圖片放在 `02-design/SDD/images/` 目錄
+- 每張圖片加上文字說明
+- 標註對應的 SRS 需求編號
 
 ### Don'ts ✗
 
-- Don't use external URL links
-- Don't use images that are too large (>2MB)
-- Don't include sensitive information in images
-- Don't use Chinese or special characters in filenames
-- Don't omit image alt descriptions
+- 不要使用外部 URL 連結
+- 不要使用過大的圖片 (>2MB)
+- 不要在圖片中包含敏感資訊
+- 不要使用中文或空格作為檔名
+- 不要遺漏圖片的 alt 描述
 
 ---
 
-## Checklist
+## 檢查清單
 
-When completing SDD UI sections, confirm the following items:
+在完成 SDD UI 章節時，確認以下項目：
 
-- [ ] All screens have corresponding images
-- [ ] Image naming follows specification
-- [ ] Image resolution is @2x
-- [ ] Image format is PNG
-- [ ] Images are placed in `images/` directory
-- [ ] Images are correctly embedded in Markdown
-- [ ] Each image has text description
-- [ ] Corresponding SRS requirement numbers are marked
-- [ ] DOCX conversion displays images correctly
+- [ ] 所有畫面都有對應的圖片
+- [ ] 圖片命名符合規範
+- [ ] 圖片解析度為 @2x
+- [ ] 圖片格式為 PNG
+- [ ] 圖片已放入 `images/` 目錄
+- [ ] Markdown 中正確嵌入圖片
+- [ ] 每張圖片都有文字說明
+- [ ] 標註對應的 SRS 需求編號
+- [ ] DOCX 轉換後圖片正常顯示
