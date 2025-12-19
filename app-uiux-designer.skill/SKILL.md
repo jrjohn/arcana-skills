@@ -57,24 +57,53 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
 >
 > 本 Template 為通用企業級 UI/UX 產出標準，
 > 確保所有產出具備一致性、可追溯性與專業品質。
+>
+> **Template 位置:** `templates/ui-flow/` (完整可用的 HTML template)
+
+### 📱 iPhone/iPad 雙平台支援
+
+**CRITICAL:** 所有 UI Flow 產出必須同時支援 iPhone 和 iPad 兩種裝置：
+
+| 平台 | 尺寸 | 畫面目錄 | 截圖目錄 | Flow Diagram |
+|------|------|----------|----------|--------------|
+| **iPad** | 1194 x 834 | `auth/`, `dash/`, etc. | `screenshots/auth/` | `docs/ui-flow-diagram-ipad.html` |
+| **iPhone** | 393 x 852 | `iphone/` | `screenshots/iphone/` | `docs/ui-flow-diagram-iphone.html` |
+
+#### index.html 整合
+
+`index.html` 的 UI Flow Diagram 區塊必須包含 iPhone/iPad 切換功能：
+
+```html
+<!-- Device Mode Switcher -->
+<div class="flex items-center gap-2 bg-gray-100 rounded-full p-1">
+  <button id="btn-flow-iphone" onclick="setFlowDevice('iphone')" class="active">iPhone</button>
+  <button id="btn-flow-ipad" onclick="setFlowDevice('ipad')">iPad</button>
+</div>
+
+<!-- Embedded Flow Diagrams -->
+<iframe id="flow-iframe-iphone" src="docs/ui-flow-diagram-iphone.html"></iframe>
+<iframe id="flow-iframe-ipad" src="docs/ui-flow-diagram-ipad.html" class="hidden"></iframe>
+```
 
 ### Template 目錄結構
 
 ```
 📁 generated-ui/
 ├── 📄 README.md                    # 專案說明文件
-├── 📄 index.html                   # 畫面總覽導覽頁 (必要)
-├── 📄 device-preview.html          # 裝置模擬器預覽頁
+├── 📄 index.html                   # 畫面總覽導覽頁 (必要，含 iPhone/iPad 切換)
+├── 📄 device-preview.html          # 裝置模擬器預覽頁 (iPad/iPad Mini/iPhone)
 ├── 📁 docs/
-│   ├── ui-flow-diagram.html        # 互動式流程圖 (必要，可縮放拖曳)
+│   ├── ui-flow-diagram-iphone.html # iPhone 互動式流程圖 (必要)
+│   ├── ui-flow-diagram-ipad.html   # iPad 互動式流程圖 (必要)
 │   └── APP-FLOW-DIAGRAMS.md        # Mermaid 格式流程圖
 ├── 📁 shared/                      # 共用資源
 │   ├── {project}-theme.css         # Design System CSS (必要)
 │   ├── notify-parent.js            # iframe 父層通知腳本
 │   └── navigation.js               # 導航邏輯
 ├── 📁 screenshots/                 # 畫面截圖 (供 SDD 嵌入)
-│   ├── auth/                       # SCR-AUTH-*.png
-│   ├── dash/                       # SCR-DASH-*.png
+│   ├── auth/                       # iPad: SCR-AUTH-*.png
+│   ├── iphone/                     # iPhone: SCR-AUTH-*.png
+│   ├── dash/                       # iPad: SCR-DASH-*.png
 │   └── [modules]/                  # 各模組截圖
 ├── 📁 assets/                      # 設計資源
 │   ├── backgrounds/                # 背景圖片
@@ -84,12 +113,16 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
 │   ├── ios/                        # iOS Assets.xcassets
 │   ├── android/                    # Android drawable/mipmap
 │   └── design-tokens.json          # Design Tokens
-├── 📁 auth/                        # 認證模組畫面
+├── 📁 auth/                        # iPad 認證模組畫面
 │   ├── SCR-AUTH-001-login.html
 │   ├── SCR-AUTH-002-register.html
 │   └── ...
-├── 📁 onboard/                     # 引導模組畫面
-├── 📁 dash/                        # Dashboard 模組
+├── 📁 iphone/                      # iPhone 版所有畫面
+│   ├── SCR-AUTH-001-login.html
+│   ├── SCR-DASH-001-home.html
+│   └── ...
+├── 📁 onboard/                     # iPad 引導模組畫面
+├── 📁 dash/                        # iPad Dashboard 模組
 ├── 📁 [custom-modules]/            # 專案自定義模組
 ├── 📁 setting/                     # 設定模組
 └── 📁 scripts/                     # 輔助腳本
@@ -499,163 +532,70 @@ body {
 .animate-pulse { animation: pulse 2s ease-in-out infinite; }
 ```
 
-### ui-flow-diagram.html Template (互動式流程圖)
+### ui-flow-diagram Template (互動式流程圖)
+
+> **重要：** UI Flow Diagram 必須產出 iPhone 和 iPad 兩個版本
+>
+> 完整 Template 位於：`templates/ui-flow/docs/`
+
+#### iPhone 版 (ui-flow-diagram-iphone.html)
+
+- **卡片尺寸:** 120 x 260 px (縱向 iPhone 外觀)
+- **Dynamic Island:** CSS ::before 模擬
+- **截圖路徑:** `../screenshots/iphone/SCR-*.png`
+- **畫面連結:** `../iphone/SCR-*.html`
+
+#### iPad 版 (ui-flow-diagram-ipad.html)
+
+- **卡片尺寸:** 200 x 140 px (橫向 iPad 外觀)
+- **截圖路徑:** `../screenshots/auth/SCR-*.png` (各模組目錄)
+- **畫面連結:** `../auth/SCR-*.html` (各模組目錄)
+
+#### 共同功能
+
+- **縮放:** 滑鼠滾輪 + Ctrl/Cmd 縮放
+- **拖曳:** 按住滑鼠拖曳平移
+- **模組顏色:** 不同模組使用不同色彩標識
+- **連接線:** SVG path 顯示流程方向
+
+#### Screen Card Template
 
 ```html
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{ProjectName} - Screen Flow Diagram</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { background: linear-gradient(135deg, #F1F5F9 0%, #E2E8F0 100%); margin: 0; padding: 0; overflow: auto; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-    .flow-container { min-width: 4000px; min-height: 3000px; position: relative; padding: 60px; }
-
-    .screen-card {
-      position: absolute;
-      width: 200px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    .screen-card:hover { transform: scale(1.08); z-index: 100; }
-    .screen-card:hover .device-frame { box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
-
-    .device-frame {
-      width: 200px; height: 140px;
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-      overflow: hidden;
-      position: relative;
-      border: 1px solid rgba(0,0,0,0.05);
-    }
-    .device-frame img { width: 100%; height: 100%; object-fit: cover; }
-
-    .screen-id {
-      position: absolute;
-      top: 8px; left: 8px;
-      padding: 2px 8px;
-      background: var(--module-color, #6366F1);
-      color: white;
-      border-radius: 6px;
-      font-size: 10px;
-      font-weight: 700;
-      z-index: 10;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    }
-
-    .screen-label {
-      margin-top: 10px;
-      text-align: center;
-      font-size: 12px;
-      color: #475569;
-      font-weight: 500;
-    }
-
-    /* Connection Lines */
-    .connection-svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
-
-    /* Legend */
-    .legend {
-      position: fixed; top: 24px; right: 24px;
-      background: white; padding: 24px; border-radius: 20px;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-      z-index: 1000;
-      border: 1px solid rgba(0,0,0,0.05);
-    }
-    .legend h3 { font-size: 14px; font-weight: 700; margin-bottom: 16px; color: #1E293B; }
-    .legend-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; color: #64748B; }
-    .legend-color { width: 18px; height: 18px; border-radius: 6px; }
-
-    /* Zoom Controls */
-    .zoom-controls {
-      position: fixed; bottom: 24px; right: 24px;
-      display: flex; gap: 8px; z-index: 1000;
-    }
-    .zoom-btn {
-      width: 48px; height: 48px;
-      background: white; border: none; border-radius: 14px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      cursor: pointer; font-size: 20px; color: #475569;
-      transition: all 0.2s;
-    }
-    .zoom-btn:hover { background: #F1F5F9; transform: scale(1.05); }
-  </style>
-</head>
-<body>
-  <!-- Legend -->
-  <div class="legend">
-    <h3>模組顏色</h3>
-    <div class="space-y-2">
-      <div class="legend-item"><div class="legend-color" style="background:#6366F1"></div><span>AUTH</span></div>
-      <div class="legend-item"><div class="legend-color" style="background:#8B5CF6"></div><span>ONBOARD</span></div>
-      <div class="legend-item"><div class="legend-color" style="background:#F59E0B"></div><span>DASH</span></div>
-      <div class="legend-item"><div class="legend-color" style="background:#10B981"></div><span>FEATURE</span></div>
-      <div class="legend-item"><div class="legend-color" style="background:#EC4899"></div><span>PROFILE</span></div>
-      <div class="legend-item"><div class="legend-color" style="background:#64748B"></div><span>SETTING</span></div>
-    </div>
-    <div class="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400">
-      總計: {totalScreens} 畫面
-    </div>
+<!-- iPhone Card -->
+<a href="../iphone/SCR-AUTH-001-login.html" class="screen-card module-auth" style="left: 60px; top: 100px;">
+  <div class="iphone-frame">
+    <div class="screen-id">AUTH-001</div>
+    <img src="../screenshots/iphone/SCR-AUTH-001-login.png" alt="Login">
   </div>
+  <div class="screen-label">SCR-AUTH-001 登入頁</div>
+</a>
 
-  <!-- Flow Container -->
-  <div class="flow-container" id="flowContainer">
-    <!-- Connection Lines SVG -->
-    <svg class="connection-svg">
-      <defs>
-        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-          <polygon points="0 0, 10 3.5, 0 7" fill="#94A3B8"/>
-        </marker>
-      </defs>
-      <!-- Connection lines here -->
-    </svg>
-
-    <!-- Screen Cards (positioned absolutely) -->
-    <a href="../auth/SCR-AUTH-001-login.html" class="screen-card" style="left: 100px; top: 200px; --module-color: #6366F1;">
-      <div class="device-frame">
-        <img src="../screenshots/auth/SCR-AUTH-001-login.png" alt="Login">
-        <div class="screen-id">AUTH-001</div>
-      </div>
-      <div class="screen-label">登入頁</div>
-    </a>
-    <!-- More screen cards... -->
+<!-- iPad Card -->
+<a href="../auth/SCR-AUTH-001-login.html" class="screen-card module-auth" style="left: 60px; top: 200px;">
+  <div class="ipad-frame">
+    <div class="screen-id">AUTH-001</div>
+    <img src="../screenshots/auth/SCR-AUTH-001-login.png" alt="Login">
   </div>
+  <div class="screen-label">SCR-AUTH-001 登入頁</div>
+</a>
+```
 
-  <!-- Zoom Controls -->
-  <div class="zoom-controls">
-    <button class="zoom-btn" onclick="zoomIn()">+</button>
-    <button class="zoom-btn" onclick="zoomOut()">−</button>
-    <button class="zoom-btn" onclick="resetZoom()">↺</button>
-  </div>
+#### 連接線 SVG Template
 
-  <script>
-    let scale = 1;
-    const container = document.getElementById('flowContainer');
-
-    function zoomIn() { scale = Math.min(scale * 1.2, 3); applyZoom(); }
-    function zoomOut() { scale = Math.max(scale / 1.2, 0.3); applyZoom(); }
-    function resetZoom() { scale = 1; applyZoom(); }
-    function applyZoom() {
-      container.style.transform = `scale(${scale})`;
-      container.style.transformOrigin = '0 0';
-    }
-
-    // Drag to pan
-    let isDragging = false, startX, startY, scrollL, scrollT;
-    document.body.onmousedown = e => { isDragging = true; startX = e.pageX; startY = e.pageY; scrollL = window.scrollX; scrollT = window.scrollY; };
-    document.body.onmouseup = () => isDragging = false;
-    document.body.onmouseleave = () => isDragging = false;
-    document.body.onmousemove = e => {
-      if (!isDragging) return;
-      e.preventDefault();
-      window.scrollTo(scrollL - (e.pageX - startX), scrollT - (e.pageY - startY));
-    };
-  </script>
-</body>
-</html>
+```html
+<svg class="connection-svg" viewBox="0 0 4000 3000">
+  <defs>
+    <marker id="arrow-auth" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6366F1"/>
+    </marker>
+  </defs>
+  <!-- 水平連接 -->
+  <path d="M 268 270 L 312 270" stroke="#6366F1" stroke-width="2.5" fill="none" marker-end="url(#arrow-auth)"/>
+  <!-- 垂直連接 -->
+  <path d="M 160 348 L 160 442" stroke="#6366F1" stroke-width="2.5" fill="none" marker-end="url(#arrow-auth)"/>
+  <!-- 曲線連接 -->
+  <path d="M 940 598 Q 550 660 160 702" stroke="#6366F1" stroke-width="2" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-auth)"/>
+</svg>
 ```
 
 ### README.md Template

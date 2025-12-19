@@ -51,10 +51,11 @@
 │           │                              │                   │
 │           └──────────────┬───────────────┘                   │
 │                          ▼                                  │
-│   ⑤ 重新產生文件                                            │
-│   ├── SRS.docx (含新需求)                                   │
-│   ├── SDD.docx (含截圖)                                     │
-│   └── RTM.md (100% 追溯)                                    │
+│   ⑤ 規範化 MD 並產生文件                                    │
+│   ├── 5a. 移除 MD 手動編號 (避免重複編號)                   │
+│   ├── 5b. SRS.docx (含新需求)                               │
+│   ├── 5c. SDD.docx (含截圖)                                 │
+│   └── 5d. RTM.md (100% 追溯)                                │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -489,6 +490,24 @@ def update_rtm_with_srs(rtm_path, new_srs_items):
         f.write(content)
 ```
 
+#### 步驟 5: 規範化 MD 並重新產生 DOCX
+
+⚠️ **重要：** 必須先移除 MD 文件中的手動編號，否則 DOCX 會出現重複編號問題。
+
+```bash
+# 步驟 5a: 移除手動編號（規範化 MD）
+bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SRS.md
+
+# 步驟 5b: 轉換為 DOCX
+node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js \
+    docs/SRS.md \
+    docs/SRS.docx
+
+# 一鍵執行（推薦）
+bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SRS.md && \
+node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SRS.md docs/SRS.docx
+```
+
 ### SRS 回補報告
 
 ```markdown
@@ -531,7 +550,9 @@ def update_rtm_with_srs(rtm_path, new_srs_items):
 - [ ] 審查新增的 5 筆功能需求
 - [ ] 確認驗收標準是否完整
 - [ ] 補充 SDD 對應章節
-- [ ] 重新產生 SRS.docx
+- [ ] 規範化 MD 並重新產生 DOCX
+  - [ ] 移除 SRS.md 手動編號
+  - [ ] 轉換 SRS.md → SRS.docx
 ```
 
 ---
@@ -616,13 +637,56 @@ def update_sdd(sdd_path, updates):
         f.write(content)
 ```
 
-### 步驟 5: 重新產生 DOCX
+### 步驟 5: 規範化 MD 並重新產生 DOCX
+
+⚠️ **重要：** 必須先移除 MD 文件中的手動編號，否則 DOCX 會出現重複編號問題。
+
+#### 步驟 5a: 移除手動編號（規範化 MD）
 
 ```bash
-# 使用 medical-software-requirements-skill 的轉換腳本
+# 使用 medical-software-requirements-skill 的標題編號移除腳本
+# 確保 MD 符合 IEC 62304 文件格式規範（無手動編號）
+bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SDD.md
+
+# 輸出範例：
+# ✅ 成功移除 12 個手動編號
+# 變更範例：
+# - ## 1. Introduction      → ## Introduction
+# - ### 1.1 Overview        → ### Overview
+# - #### 1.1.1 Purpose      → #### Purpose
+```
+
+**為什麼需要這個步驟？**
+
+| 問題 | 說明 | 範例 |
+|------|------|------|
+| **重複編號** | MD 有手動編號 + DOCX 自動編號 = 重複 | `## 1. Introduction` → DOCX 顯示 `1.1 1. Introduction` ❌ |
+| **正確格式** | MD 無編號，DOCX 自動產生階層編號 | `## Introduction` → DOCX 顯示 `1 Introduction` ✅ |
+
+#### 步驟 5b: 轉換為 DOCX
+
+```bash
+# 使用 medical-software-requirements-skill 的 MD 轉 DOCX 腳本
+# 自動產生階層式編號 (1., 1.1, 1.1.1, 1.1.1.1, 1.1.1.1.1)
+# 自動渲染 Mermaid 圖表為 SVG
+# 處理中英文字型（微軟正黑體 + Arial）
 node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js \
     docs/SDD.md \
     docs/SDD.docx
+
+# 輸出範例：
+# ✅ 成功產生 SDD.docx
+# 📊 Mermaid 圖表: 8 個已渲染為 SVG
+# 📄 標題階層: 自動編號 (1 ~ 1.1.1.1.1)
+# 📝 字型: 微軟正黑體 (中文) + Arial (英文)
+```
+
+**完整命令（一鍵執行）：**
+
+```bash
+# 規範化 MD + 轉換 DOCX（推薦使用）
+bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SDD.md && \
+node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SDD.md docs/SDD.docx
 ```
 
 ### 步驟 6: 更新 RTM
@@ -819,7 +883,11 @@ def auto_map_scr_to_srs(screens, srs_items):
 ## 後續動作
 
 - [ ] 確認推斷的 Button Navigation (2 筆)
-- [ ] 重新產生 SDD.docx
+- [ ] 規範化 MD 並重新產生 DOCX
+  - [ ] 移除 SDD.md 手動編號
+  - [ ] 轉換 SDD.md → SDD.docx
+  - [ ] 移除 SRS.md 手動編號
+  - [ ] 轉換 SRS.md → SRS.docx
 - [ ] 執行 RTM 100% 追溯驗證
 - [ ] 提交變更至版本控制
 ```
@@ -843,9 +911,24 @@ def auto_map_scr_to_srs(screens, srs_items):
 # 在 medical-software-requirements-skill 中呼叫
 執行 UI Review 並回補 SDD ./docs/SDD.md
 
-# 等同於
+# 等同於完整流程
 1. app-uiux-designer.skill 生成 UI
-2. 執行回補 SDD
-3. 重新產生 DOCX
-4. 驗證 RTM 追溯
+2. 執行回補 SDD.md 和 SRS.md（更新內容）
+3. 規範化 MD（移除手動編號）
+   bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SDD.md
+   bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SRS.md
+4. 重新產生 DOCX
+   node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SDD.md docs/SDD.docx
+   node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SRS.md docs/SRS.docx
+5. 驗證 RTM 追溯
+```
+
+**一鍵執行完整流程（推薦）：**
+
+```bash
+# 完整回補流程：更新 MD → 規範化 → 轉 DOCX
+bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SDD.md && \
+bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SRS.md && \
+node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SDD.md docs/SDD.docx && \
+node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SRS.md docs/SRS.docx
 ```

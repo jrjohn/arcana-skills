@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - UI Flow Diagram (iPad)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #F1F5F9 0%, #E2E8F0 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+    }
+
+    .flow-container {
+      min-width: 4000px;
+      min-height: 3000px;
+      position: relative;
+      padding: 60px;
+    }
+
+    /* Screen Card - iPad Landscape */
+    .screen-card {
+      position: absolute;
+      width: 200px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .screen-card:hover {
+      transform: scale(1.08);
+      z-index: 100;
+    }
+
+    .screen-card:hover .ipad-frame {
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+
+    .screen-card .ipad-frame {
+      width: 200px;
+      height: 140px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .screen-card .ipad-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+    }
+
+    .screen-card .screen-label {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 11px;
+      color: #475569;
+      font-weight: 500;
+      line-height: 1.3;
+      max-width: 200px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .screen-card .screen-id {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      min-width: 28px;
+      height: 22px;
+      padding: 0 6px;
+      background: var(--module-color, #6366F1);
+      color: white;
+      border-radius: 4px;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      z-index: 10;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      white-space: nowrap;
+    }
+
+    /* Connection Lines */
+    .connection-svg {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Row Labels */
+    .row-label {
+      position: absolute;
+      font-size: 18px;
+      font-weight: 700;
+      color: #1E293B;
+      padding: 8px 16px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    /* Legend */
+    .legend {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      z-index: 1000;
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .legend h3 {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: #1E293B;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #64748B;
+    }
+
+    .legend-color {
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+    }
+
+    /* Zoom Controls */
+    .zoom-controls {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    .zoom-btn {
+      width: 44px;
+      height: 44px;
+      background: white;
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      cursor: pointer;
+      font-size: 18px;
+      color: #475569;
+      transition: all 0.2s;
+    }
+
+    .zoom-btn:hover {
+      background: #F1F5F9;
+      transform: scale(1.05);
+    }
+
+    /* Module colors */
+    .module-auth { --module-color: #6366F1; }
+    .module-onboard { --module-color: #8B5CF6; }
+    .module-dash { --module-color: #F59E0B; }
+    .module-feature { --module-color: #10B981; }
+    .module-profile { --module-color: #EC4899; }
+    .module-report { --module-color: #3B82F6; }
+    .module-setting { --module-color: #64748B; }
+
+    /* Device Badge */
+    .device-badge {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    }
+
+    .device-badge svg {
+      width: 20px;
+      height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Device Badge -->
+  <div class="device-badge">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <rect x="3" y="2" width="18" height="20" rx="2" stroke-width="1.5"/>
+      <line x1="3" y1="18" x2="21" y2="18" stroke-width="1.5"/>
+    </svg>
+    iPad Pro 11" - 1194 x 834
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <h3>模組顏色</h3>
+    <div class="space-y-2">
+      <div class="legend-item"><div class="legend-color" style="background:#6366F1"></div><span>AUTH</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:#8B5CF6"></div><span>ONBOARD</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:#F59E0B"></div><span>DASH</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:#10B981"></div><span>FEATURE</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:#EC4899"></div><span>PROFILE</span></div>
+      <div class="legend-item"><div class="legend-color" style="background:#64748B"></div><span>SETTING</span></div>
+    </div>
+    <div class="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400">
+      總計: {{TOTAL_SCREENS}} 畫面 (iPad)
+    </div>
+  </div>
+
+  <!-- Flow Container -->
+  <div class="flow-container" id="flowContainer">
+
+    <!-- Connection Lines SVG -->
+    <svg class="connection-svg" viewBox="0 0 4000 3000" preserveAspectRatio="none">
+      <defs>
+        <marker id="arrow-auth" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#6366F1"/>
+        </marker>
+        <marker id="arrow-onboard" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#8B5CF6"/>
+        </marker>
+        <marker id="arrow-dash" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#F59E0B"/>
+        </marker>
+        <marker id="arrow-feature" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#10B981"/>
+        </marker>
+        <marker id="arrow-setting" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#64748B"/>
+        </marker>
+      </defs>
+
+      <!-- Connection lines - Add your flow connections here -->
+      <!-- Example: AUTH flow horizontal -->
+      <path d="M 268 270 L 312 270" stroke="#6366F1" stroke-width="2.5" fill="none" marker-end="url(#arrow-auth)"/>
+
+    </svg>
+
+    <!-- ==================== ROW 1: AUTH ==================== -->
+    <div class="row-label" style="left: 60px; top: 160px;">Authentication Flow</div>
+
+    <!-- AUTH-001 Login -->
+    <a href="../auth/SCR-AUTH-001-login.html" class="screen-card module-auth" style="left: 60px; top: 200px;">
+      <div class="ipad-frame">
+        <div class="screen-id">AUTH-001</div>
+        <img src="../screenshots/auth/SCR-AUTH-001-login.png" alt="Login">
+      </div>
+      <div class="screen-label">SCR-AUTH-001 登入頁</div>
+    </a>
+
+    <!-- AUTH-002 Register -->
+    <a href="../auth/SCR-AUTH-002-register.html" class="screen-card module-auth" style="left: 320px; top: 200px;">
+      <div class="ipad-frame">
+        <div class="screen-id">AUTH-002</div>
+        <img src="../screenshots/auth/SCR-AUTH-002-register.png" alt="Register">
+      </div>
+      <div class="screen-label">SCR-AUTH-002 註冊頁</div>
+    </a>
+
+    <!-- Add more screen cards positioned according to your flow -->
+
+    <!-- ==================== ROW 2: ONBOARD ==================== -->
+    <div class="row-label" style="left: 60px; top: 480px;">Onboarding Flow</div>
+
+    <!-- Add ONBOARD screen cards here -->
+
+    <!-- ==================== ROW 3: DASHBOARD ==================== -->
+    <div class="row-label" style="left: 60px; top: 760px;">Dashboard (Main Hub)</div>
+
+    <!-- Add DASH screen cards here -->
+
+    <!-- ==================== ROW 4: FEATURE ==================== -->
+    <div class="row-label" style="left: 60px; top: 1040px;">Core Features</div>
+
+    <!-- Add FEATURE screen cards here -->
+
+    <!-- ==================== ROW 5: SETTING ==================== -->
+    <div class="row-label" style="left: 60px; top: 1320px;">Settings</div>
+
+    <!-- Add SETTING screen cards here -->
+
+  </div>
+
+  <!-- Zoom Controls -->
+  <div class="zoom-controls">
+    <button class="zoom-btn" onclick="zoomIn()">+</button>
+    <button class="zoom-btn" onclick="zoomOut()">-</button>
+    <button class="zoom-btn" onclick="resetZoom()">&#8634;</button>
+  </div>
+
+  <script>
+    let currentZoom = 1.0;
+    const flowContainer = document.getElementById('flowContainer');
+
+    function updateZoom() {
+      flowContainer.style.transform = `scale(${currentZoom})`;
+      flowContainer.style.transformOrigin = '0 0';
+    }
+
+    function zoomIn() {
+      currentZoom = Math.min(1.5, currentZoom + 0.1);
+      updateZoom();
+    }
+
+    function zoomOut() {
+      currentZoom = Math.max(0.2, currentZoom - 0.1);
+      updateZoom();
+    }
+
+    function resetZoom() {
+      currentZoom = 1.0;
+      updateZoom();
+    }
+
+    // Initialize
+    updateZoom();
+
+    // Drag to pan
+    let isDragging = false;
+    let startX, startY, scrollLeft, scrollTop;
+
+    document.body.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.screen-card') || e.target.closest('.zoom-controls') || e.target.closest('.legend') || e.target.closest('.device-badge')) return;
+      isDragging = true;
+      startX = e.pageX;
+      startY = e.pageY;
+      scrollLeft = window.scrollX;
+      scrollTop = window.scrollY;
+      document.body.style.cursor = 'grabbing';
+    });
+
+    document.body.addEventListener('mouseup', () => {
+      isDragging = false;
+      document.body.style.cursor = 'default';
+    });
+
+    document.body.addEventListener('mouseleave', () => {
+      isDragging = false;
+      document.body.style.cursor = 'default';
+    });
+
+    document.body.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const dx = e.pageX - startX;
+      const dy = e.pageY - startY;
+      window.scrollTo(scrollLeft - dx, scrollTop - dy);
+    });
+
+    // Mouse wheel zoom
+    document.addEventListener('wheel', (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        if (e.deltaY < 0) {
+          zoomIn();
+        } else {
+          zoomOut();
+        }
+      }
+    }, { passive: false });
+  </script>
+</body>
+</html>
