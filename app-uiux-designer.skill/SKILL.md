@@ -21,123 +21,125 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
 - **Default Dimensions:** iPhone 14 Pro (390 x 844 pt) / Android Medium (360 x 800 dp)
 - **Default Format:** HTML + Tailwind CSS (browser-previewable)
 
-### 🎨 App Theme Style Designer Rule (App 風格設計規則)
+### 🎨 App Theme Style Designer Rule
 
-**CRITICAL:** 當需求涉及 App 風格設計、Theme 設計、配色設計時，**必須先詢問使用者以下問題**：
+**CRITICAL:** When the request involves App style design, Theme design, or color scheme design, **you MUST first ask the user the following questions**:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  🎨 App Theme Style Discovery                                    │
 │                                                                   │
-│  為了設計最適合您的 App 風格，請回答以下問題：                      │
+│  To design the best style for your App, please answer:           │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
-│  1️⃣ 目標使用者年齡層？                                            │
-│     □ 兒童 (3-12歲)      □ 青少年 (13-19歲)                       │
-│     □ 青年 (20-35歲)     □ 中年 (36-55歲)                         │
-│     □ 銀髮族 (55歲以上)  □ 全年齡                                  │
+│  1️⃣ Target User Age Group?                                       │
+│     □ Children (3-12)      □ Teenagers (13-19)                   │
+│     □ Young Adults (20-35) □ Middle-aged (36-55)                 │
+│     □ Seniors (55+)        □ All Ages                            │
 │                                                                   │
-│  2️⃣ App 類型/產業？                                               │
-│     □ 健康醫療    □ 金融理財    □ 教育學習                         │
-│     □ 社交娛樂    □ 電商購物    □ 生產力工具                       │
-│     □ 旅遊生活    □ 兒童遊戲    □ 企業商務                         │
+│  2️⃣ App Type / Industry?                                         │
+│     □ Healthcare      □ Finance       □ Education                │
+│     □ Social/Entertainment  □ E-commerce   □ Productivity        │
+│     □ Travel/Lifestyle     □ Kids Games   □ Enterprise/B2B       │
 │                                                                   │
-│  3️⃣ 期望的視覺風格？                                              │
-│     □ 極簡現代 (Minimalist)      □ 溫暖親切 (Warm & Friendly)     │
-│     □ 專業商務 (Professional)    □ 活潑俏皮 (Playful)              │
-│     □ 高端奢華 (Luxury)          □ 科技未來 (Futuristic)           │
-│     □ 自然有機 (Organic)         □ 復古懷舊 (Retro)                │
+│  3️⃣ Desired Visual Style?                                        │
+│     □ Minimalist              □ Warm & Friendly                  │
+│     □ Professional/Corporate  □ Playful                          │
+│     □ Luxury/Elegant          □ Futuristic/Tech                  │
+│     □ Organic/Natural         □ Retro/Vintage                    │
 │                                                                   │
-│  4️⃣ 品牌主色偏好？                                                │
-│     □ 藍色系 (信任、專業)        □ 綠色系 (健康、成長)              │
-│     □ 紫色系 (創意、奢華)        □ 橙色系 (活力、熱情)              │
-│     □ 粉色系 (溫柔、關懷)        □ 中性色 (黑白灰)                  │
-│     □ 已有品牌色: #______                                          │
+│  4️⃣ Brand Color Preference?                                      │
+│     □ Blue (Trust, Professional)    □ Green (Health, Growth)     │
+│     □ Purple (Creative, Luxury)     □ Orange (Energy, Passion)   │
+│     □ Pink (Gentle, Caring)         □ Neutral (Black/White/Gray) │
+│     □ Existing brand color: #______                              │
 │                                                                   │
-│  5️⃣ 主要使用語言/地區？                                           │
-│     □ 繁體中文 (台灣)    □ 簡體中文 (中國)    □ 英文               │
-│     □ 日文              □ 韓文              □ 多語言               │
+│  5️⃣ Primary Language / Region?                                   │
+│     □ English           □ Chinese (Traditional)                  │
+│     □ Chinese (Simplified)  □ Japanese                           │
+│     □ Korean            □ Arabic (RTL)                           │
+│     □ Multi-language support                                     │
 │                                                                   │
-│  6️⃣ 是否需要 Dark Mode？                                          │
-│     □ 是 (Light + Dark)  □ 否 (僅 Light)  □ 僅 Dark Mode          │
+│  6️⃣ Dark Mode Required?                                          │
+│     □ Yes (Light + Dark)  □ No (Light only)  □ Dark Mode only    │
 │                                                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-#### Style Discovery 後產出
+#### Post-Discovery Output
 
-收集使用者回答後，自動產出：
-1. **Design Token JSON** - 完整色彩、字體、間距、圓角定義
-2. **{project}-theme.css** - CSS 變數形式的 Design System
-3. **Style Guide 說明** - 設計理念與使用指南
-4. **配色心理學解釋** - 為何選擇此配色
+After collecting user responses, automatically generate:
+1. **Design Token JSON** - Complete color, typography, spacing, border-radius definitions
+2. **{project}-theme.css** - Design System in CSS variables format
+3. **Style Guide Documentation** - Design rationale and usage guidelines
+4. **Color Psychology Explanation** - Why this color scheme was chosen
 
-#### 年齡適性設計重點
+#### Age-Specific Design Guidelines
 
-| 年齡層 | 字體大小 | 按鈕尺寸 | 配色 | 特殊考量 |
-|--------|----------|----------|------|----------|
-| 兒童 | 18-24px+ | 60px+ | 鮮豔高飽和 | 圓角、插圖、獎勵動畫 |
-| 青少年 | 14-16px | 44px | 潮流漸層 | Dark Mode、手勢操作 |
-| 成人 | 14-17px | 44-48px | 專業和諧 | 效率導向、標準元件 |
-| 銀髮族 | 18-24px+ | 60px+ | 高對比 (7:1+) | 大間距、確認對話框 |
+| Age Group | Font Size | Button Size | Colors | Special Considerations |
+|-----------|-----------|-------------|--------|------------------------|
+| Children | 18-24px+ | 60px+ | Bright, high saturation | Rounded corners, illustrations, reward animations |
+| Teenagers | 14-16px | 44px | Trendy gradients | Dark Mode, gesture interactions |
+| Adults | 14-17px | 44-48px | Professional, harmonious | Efficiency-oriented, standard components |
+| Seniors | 18-24px+ | 60px+ | High contrast (7:1+) | Large spacing, confirmation dialogs |
 
-#### 詳細參考
+#### Detailed Reference
 
-完整指南請參閱: [references/app-theme-style-designer.md](references/app-theme-style-designer.md)
-
----
-
-### 🚀 Auto HTML UI Flow Generation Rule (自動 HTML UI Flow 產出規則)
-
-**CRITICAL:** 當需求涉及以下任一項目時，**必須自動產出 HTML UI Flow**：
-
-| 觸發條件 | 說明 | 自動產出 |
-|----------|------|----------|
-| UI Flow | 使用者要求設計 UI Flow、User Flow、App Flow | ✅ 必須產出 |
-| Screen / 畫面 | 使用者要求設計 Screen、畫面、頁面 | ✅ 必須產出 |
-| Wireframe | 使用者要求 Wireframe、線框圖 | ✅ 必須產出 |
-| Prototype | 使用者要求 Prototype、原型 | ✅ 必須產出 |
-| 畫面流程 | 使用者描述畫面之間的流程關係 | ✅ 必須產出 |
-
-#### 自動產出內容
-當觸發上述條件時，**無需詢問使用者**，直接產出：
-1. **HTML 互動原型** - 每個畫面一個 HTML 檔案
-2. **index.html 導覽頁** - 所有畫面的導覽目錄
-3. **ui-flow-diagram.html** - 互動式畫面流程圖 (可縮放、拖曳)
-4. **完整導航連結** - 所有按鈕與連結皆可點擊導航
-
-#### 範例觸發語句
-```
-✅ "請幫我設計登入的 UI Flow" → 自動產出 HTML UI Flow
-✅ "我需要一個購物車畫面" → 自動產出 HTML Screen + Flow
-✅ "設計 Onboarding 流程" → 自動產出 HTML UI Flow
-✅ "規劃 App 的主要頁面" → 自動產出 HTML Screens + Flow
-✅ "畫出使用者從登入到結帳的流程" → 自動產出 HTML UI Flow
-```
+See full guide: [references/app-theme-style-designer.md](references/app-theme-style-designer.md)
 
 ---
 
-## 📦 Official UI Flow Template (標準 Template 規範)
+### 🚀 Auto HTML UI Flow Generation Rule
 
-> ### ⚠️ 強制規則：所有 UI Flow / Screen 產出必須遵循此 Template
+**CRITICAL:** When the request involves any of the following, **you MUST automatically generate HTML UI Flow**:
+
+| Trigger | Description | Auto Generate |
+|---------|-------------|---------------|
+| UI Flow | User requests UI Flow, User Flow, App Flow design | ✅ Required |
+| Screen / Page | User requests Screen, Page design | ✅ Required |
+| Wireframe | User requests Wireframe | ✅ Required |
+| Prototype | User requests Prototype | ✅ Required |
+| Screen Flow | User describes flow relationships between screens | ✅ Required |
+
+#### Auto-Generated Content
+When triggered, **generate without asking**:
+1. **HTML Interactive Prototype** - One HTML file per screen
+2. **index.html Navigation Page** - Directory of all screens
+3. **ui-flow-diagram.html** - Interactive screen flow diagram (zoomable, draggable)
+4. **Complete Navigation Links** - All buttons and links clickable
+
+#### Example Trigger Phrases
+```
+✅ "Design the login UI Flow" → Auto-generate HTML UI Flow
+✅ "I need a shopping cart screen" → Auto-generate HTML Screen + Flow
+✅ "Design the Onboarding flow" → Auto-generate HTML UI Flow
+✅ "Plan the main pages of the App" → Auto-generate HTML Screens + Flow
+✅ "Map out the flow from login to checkout" → Auto-generate HTML UI Flow
+```
+
+---
+
+## 📦 Official UI Flow Template
+
+> ### ⚠️ Mandatory Rule: All UI Flow / Screen output must follow this Template
 >
-> 本 Template 為通用企業級 UI/UX 產出標準，
-> 確保所有產出具備一致性、可追溯性與專業品質。
+> This Template is the universal enterprise-grade UI/UX output standard,
+> ensuring consistency, traceability, and professional quality.
 >
-> **Template 位置:** `templates/ui-flow/` (完整可用的 HTML template)
+> **Template Location:** `templates/ui-flow/` (complete working HTML templates)
 
-### 📱 iPhone/iPad 雙平台支援
+### 📱 iPhone/iPad Dual Platform Support
 
-**CRITICAL:** 所有 UI Flow 產出必須同時支援 iPhone 和 iPad 兩種裝置：
+**CRITICAL:** All UI Flow output must support both iPhone and iPad devices:
 
-| 平台 | 尺寸 | 畫面目錄 | 截圖目錄 | Flow Diagram |
-|------|------|----------|----------|--------------|
+| Platform | Dimensions | Screen Directory | Screenshot Directory | Flow Diagram |
+|----------|------------|------------------|---------------------|--------------|
 | **iPad** | 1194 x 834 | `auth/`, `dash/`, etc. | `screenshots/auth/` | `docs/ui-flow-diagram-ipad.html` |
 | **iPhone** | 393 x 852 | `iphone/` | `screenshots/iphone/` | `docs/ui-flow-diagram-iphone.html` |
 
-#### index.html 整合
+#### index.html Integration
 
-`index.html` 的 UI Flow Diagram 區塊必須包含 iPhone/iPad 切換功能：
+The `index.html` UI Flow Diagram section must include iPhone/iPad toggle:
 
 ```html
 <!-- Device Mode Switcher -->
@@ -151,59 +153,59 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
 <iframe id="flow-iframe-ipad" src="docs/ui-flow-diagram-ipad.html" class="hidden"></iframe>
 ```
 
-### Template 目錄結構
+### Template Directory Structure
 
 ```
 📁 generated-ui/
-├── 📄 README.md                    # 專案說明文件
-├── 📄 index.html                   # 畫面總覽導覽頁 (必要，含 iPhone/iPad 切換)
-├── 📄 device-preview.html          # 裝置模擬器預覽頁 (iPad/iPad Mini/iPhone)
+├── 📄 README.md                    # Project documentation
+├── 📄 index.html                   # Screen overview navigation (required, with iPhone/iPad toggle)
+├── 📄 device-preview.html          # Device simulator preview (iPad/iPad Mini/iPhone)
 ├── 📁 docs/
-│   ├── ui-flow-diagram-iphone.html # iPhone 互動式流程圖 (必要)
-│   ├── ui-flow-diagram-ipad.html   # iPad 互動式流程圖 (必要)
-│   └── APP-FLOW-DIAGRAMS.md        # Mermaid 格式流程圖
-├── 📁 shared/                      # 共用資源
-│   ├── {project}-theme.css         # Design System CSS (必要)
-│   ├── notify-parent.js            # iframe 父層通知腳本
-│   └── navigation.js               # 導航邏輯
-├── 📁 screenshots/                 # 畫面截圖 (供 SDD 嵌入)
+│   ├── ui-flow-diagram-iphone.html # iPhone interactive flow diagram (required)
+│   ├── ui-flow-diagram-ipad.html   # iPad interactive flow diagram (required)
+│   └── APP-FLOW-DIAGRAMS.md        # Mermaid format flowcharts
+├── 📁 shared/                      # Shared resources
+│   ├── {project}-theme.css         # Design System CSS (required)
+│   ├── notify-parent.js            # iframe parent notification script
+│   └── navigation.js               # Navigation logic
+├── 📁 screenshots/                 # Screen captures (for SDD embedding)
 │   ├── auth/                       # iPad: SCR-AUTH-*.png
 │   ├── iphone/                     # iPhone: SCR-AUTH-*.png
 │   ├── dash/                       # iPad: SCR-DASH-*.png
-│   └── [modules]/                  # 各模組截圖
-├── 📁 assets/                      # 設計資源
-│   ├── backgrounds/                # 背景圖片
-│   ├── icons/                      # 圖標
-│   └── illustrations/              # 插圖素材
-├── 📁 platform-assets/             # 平台資產
+│   └── [modules]/                  # Module screenshots
+├── 📁 assets/                      # Design resources
+│   ├── backgrounds/                # Background images
+│   ├── icons/                      # Icons
+│   └── illustrations/              # Illustration assets
+├── 📁 platform-assets/             # Platform assets
 │   ├── ios/                        # iOS Assets.xcassets
 │   ├── android/                    # Android drawable/mipmap
 │   └── design-tokens.json          # Design Tokens
-├── 📁 auth/                        # iPad 認證模組畫面
+├── 📁 auth/                        # iPad authentication module screens
 │   ├── SCR-AUTH-001-login.html
 │   ├── SCR-AUTH-002-register.html
 │   └── ...
-├── 📁 iphone/                      # iPhone 版所有畫面
+├── 📁 iphone/                      # iPhone version of all screens
 │   ├── SCR-AUTH-001-login.html
 │   ├── SCR-DASH-001-home.html
 │   └── ...
-├── 📁 onboard/                     # iPad 引導模組畫面
-├── 📁 dash/                        # iPad Dashboard 模組
-├── 📁 [custom-modules]/            # 專案自定義模組
-├── 📁 setting/                     # 設定模組
-└── 📁 scripts/                     # 輔助腳本
-    └── capture-screenshots.sh      # 截圖腳本
+├── 📁 onboard/                     # iPad onboarding module screens
+├── 📁 dash/                        # iPad Dashboard module
+├── 📁 [custom-modules]/            # Project-specific modules
+├── 📁 setting/                     # Settings module
+└── 📁 scripts/                     # Helper scripts
+    └── capture-screenshots.sh      # Screenshot capture script
 ```
 
-### index.html Template (畫面總覽導覽頁)
+### index.html Template (Screen Overview Navigation)
 
 ```html
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{ProjectName} UI/UX - 畫面總覽</title>
+  <title>{ProjectName} UI/UX - Screen Overview</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="shared/{project}-theme.css">
   <style>
@@ -229,7 +231,7 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
           </div>
           <div>
             <h1 class="text-2xl font-bold text-gray-800">{ProjectName} UI/UX</h1>
-            <p class="text-sm text-gray-500">互動式原型畫面總覽</p>
+            <p class="text-sm text-gray-500">Interactive Prototype Overview</p>
           </div>
         </div>
         <div class="flex items-center gap-4">
@@ -237,10 +239,10 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <rect x="5" y="2" width="14" height="20" rx="3" stroke-width="2"/>
             </svg>
-            裝置預覽
+            Device Preview
           </a>
           <div class="text-right">
-            <p class="text-sm text-gray-500">UI/UX 覆蓋率</p>
+            <p class="text-sm text-gray-500">UI/UX Coverage</p>
             <p class="text-xl font-bold text-green-600">{coverage}%</p>
           </div>
         </div>
@@ -252,8 +254,8 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
     <!-- UI Flow Diagram Embed -->
     <div class="mb-10 bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-100">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-bold text-gray-800">📱 UI Flow Diagram ({totalScreens} 畫面)</h2>
-        <a href="docs/ui-flow-diagram.html" target="_blank" class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors">開新視窗</a>
+        <h2 class="text-xl font-bold text-gray-800">📱 UI Flow Diagram ({totalScreens} screens)</h2>
+        <a href="docs/ui-flow-diagram.html" target="_blank" class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors">Open in New Window</a>
       </div>
       <iframe src="docs/ui-flow-diagram.html" class="w-full border-0 rounded-xl border border-gray-200" style="height: 600px;"></iframe>
     </div>
@@ -269,7 +271,7 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
             </div>
             <div>
               <h2 class="text-xl font-bold text-white">{MODULE} {ModuleName}</h2>
-              <p class="text-white/80 text-sm">{count}/{total} 畫面 | {percentage}%</p>
+              <p class="text-white/80 text-sm">{count}/{total} screens | {percentage}%</p>
             </div>
           </div>
         </div>
@@ -288,7 +290,7 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
 
     <!-- Coverage Summary -->
     <div class="mt-12 bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg border border-gray-100">
-      <h2 class="text-2xl font-bold text-gray-800 mb-6">畫面覆蓋率統計</h2>
+      <h2 class="text-2xl font-bold text-gray-800 mb-6">Screen Coverage Statistics</h2>
       <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <!-- Per module stats card -->
         <div class="text-center p-4 bg-{module-color}-50 rounded-xl">
@@ -310,11 +312,11 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
 </html>
 ```
 
-### Screen HTML Template (畫面 HTML)
+### Screen HTML Template
 
 ```html
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -356,7 +358,7 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
         </svg>
-        <span class="text-xs">首頁</span>
+        <span class="text-xs">Home</span>
       </a>
       <!-- More nav items -->
     </nav>
@@ -598,31 +600,31 @@ body {
 .animate-pulse { animation: pulse 2s ease-in-out infinite; }
 ```
 
-### ui-flow-diagram Template (互動式流程圖)
+### ui-flow-diagram Template (Interactive Flow Diagram)
 
-> **重要：** UI Flow Diagram 必須產出 iPhone 和 iPad 兩個版本
+> **Important:** UI Flow Diagram must generate both iPhone and iPad versions
 >
-> 完整 Template 位於：`templates/ui-flow/docs/`
+> Full templates located at: `templates/ui-flow/docs/`
 
-#### iPhone 版 (ui-flow-diagram-iphone.html)
+#### iPhone Version (ui-flow-diagram-iphone.html)
 
-- **卡片尺寸:** 120 x 260 px (縱向 iPhone 外觀)
-- **Dynamic Island:** CSS ::before 模擬
-- **截圖路徑:** `../screenshots/iphone/SCR-*.png`
-- **畫面連結:** `../iphone/SCR-*.html`
+- **Card Size:** 120 x 260 px (portrait iPhone appearance)
+- **Dynamic Island:** CSS ::before simulation
+- **Screenshot Path:** `../screenshots/iphone/SCR-*.png`
+- **Screen Links:** `../iphone/SCR-*.html`
 
-#### iPad 版 (ui-flow-diagram-ipad.html)
+#### iPad Version (ui-flow-diagram-ipad.html)
 
-- **卡片尺寸:** 200 x 140 px (橫向 iPad 外觀)
-- **截圖路徑:** `../screenshots/auth/SCR-*.png` (各模組目錄)
-- **畫面連結:** `../auth/SCR-*.html` (各模組目錄)
+- **Card Size:** 200 x 140 px (landscape iPad appearance)
+- **Screenshot Path:** `../screenshots/auth/SCR-*.png` (per module directory)
+- **Screen Links:** `../auth/SCR-*.html` (per module directory)
 
-#### 共同功能
+#### Common Features
 
-- **縮放:** 滑鼠滾輪 + Ctrl/Cmd 縮放
-- **拖曳:** 按住滑鼠拖曳平移
-- **模組顏色:** 不同模組使用不同色彩標識
-- **連接線:** SVG path 顯示流程方向
+- **Zoom:** Mouse wheel + Ctrl/Cmd zoom
+- **Pan:** Click and drag to pan
+- **Module Colors:** Different modules use different color indicators
+- **Connection Lines:** SVG paths show flow direction
 
 #### Screen Card Template
 
@@ -633,7 +635,7 @@ body {
     <div class="screen-id">AUTH-001</div>
     <img src="../screenshots/iphone/SCR-AUTH-001-login.png" alt="Login">
   </div>
-  <div class="screen-label">SCR-AUTH-001 登入頁</div>
+  <div class="screen-label">SCR-AUTH-001 Login</div>
 </a>
 
 <!-- iPad Card -->
@@ -642,11 +644,11 @@ body {
     <div class="screen-id">AUTH-001</div>
     <img src="../screenshots/auth/SCR-AUTH-001-login.png" alt="Login">
   </div>
-  <div class="screen-label">SCR-AUTH-001 登入頁</div>
+  <div class="screen-label">SCR-AUTH-001 Login</div>
 </a>
 ```
 
-#### 連接線 SVG Template
+#### Connection Line SVG Template
 
 ```html
 <svg class="connection-svg" viewBox="0 0 4000 3000">
@@ -655,11 +657,11 @@ body {
       <polygon points="0 0, 10 3.5, 0 7" fill="#6366F1"/>
     </marker>
   </defs>
-  <!-- 水平連接 -->
+  <!-- Horizontal connection -->
   <path d="M 268 270 L 312 270" stroke="#6366F1" stroke-width="2.5" fill="none" marker-end="url(#arrow-auth)"/>
-  <!-- 垂直連接 -->
+  <!-- Vertical connection -->
   <path d="M 160 348 L 160 442" stroke="#6366F1" stroke-width="2.5" fill="none" marker-end="url(#arrow-auth)"/>
-  <!-- 曲線連接 -->
+  <!-- Curved connection -->
   <path d="M 940 598 Q 550 660 160 702" stroke="#6366F1" stroke-width="2" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-auth)"/>
 </svg>
 ```
@@ -678,9 +680,9 @@ body {
 
 ## Quick Start
 
-1. 開啟 `index.html` 查看畫面總覽
-2. 使用 `device-preview.html` 模擬裝置預覽 (iPad/iPhone)
-3. 開啟 `docs/ui-flow-diagram.html` 查看互動式流程圖
+1. Open `index.html` to view screen overview
+2. Use `device-preview.html` to simulate device preview (iPad/iPhone)
+3. Open `docs/ui-flow-diagram.html` to view interactive flow diagram
 
 ---
 
@@ -708,9 +710,9 @@ generated-ui/
 ### Color Palette
 | Token | Hex | Usage |
 |-------|-----|-------|
-| Primary | `#6366F1` | 主要按鈕、連結、強調 |
-| Secondary | `#10B981` | 成功狀態、正向回饋 |
-| Accent | `#8B5CF6` | 點綴、次要強調 |
+| Primary | `#6366F1` | Primary buttons, links, emphasis |
+| Secondary | `#10B981` | Success states, positive feedback |
+| Accent | `#8B5CF6` | Accents, secondary emphasis |
 
 ### Typography
 - **iOS:** SF Pro Display / SF Pro Text
@@ -724,42 +726,42 @@ generated-ui/
 
 ## Screen Coverage
 
-| 模組 | 已生成 | 總需求 | 覆蓋率 |
-|------|--------|--------|--------|
+| Module | Generated | Total Required | Coverage |
+|--------|-----------|----------------|----------|
 | AUTH | {n} | {total} | {%}% |
 | ONBOARD | {n} | {total} | {%}% |
 | DASH | {n} | {total} | {%}% |
 | ... | | | |
-| **總計** | **{n}** | **{total}** | **{%}%** |
+| **Total** | **{n}** | **{total}** | **{%}%** |
 
 ---
 
 ## Usage Notes
 
-1. **預覽方式:** 直接用瀏覽器開啟 HTML 檔案
-2. **互動導航:** 所有按鈕皆已實作 onclick 導航
-3. **響應式:** 畫面支援 iPad / iPhone 雙尺寸
-4. **無依賴:** 僅需 Tailwind CDN，無其他依賴
+1. **Preview:** Open HTML files directly in browser
+2. **Interactive Navigation:** All buttons have onclick navigation implemented
+3. **Responsive:** Screens support iPad / iPhone dual dimensions
+4. **No Dependencies:** Only requires Tailwind CDN, no other dependencies
 
 ---
 
 *Generated by app-uiux-designer skill*
 ```
 
-### Module Color Palette (模組色彩對照)
+### Module Color Palette
 
-| Module | Color Code | Tailwind Class | 用途 |
-|--------|------------|----------------|------|
-| AUTH | `#6366F1` | `from-indigo-500 to-indigo-600` | 認證模組 |
-| ONBOARD | `#8B5CF6` | `from-purple-500 to-purple-600` | 引導流程 |
+| Module | Color Code | Tailwind Class | Usage |
+|--------|------------|----------------|-------|
+| AUTH | `#6366F1` | `from-indigo-500 to-indigo-600` | Authentication module |
+| ONBOARD | `#8B5CF6` | `from-purple-500 to-purple-600` | Onboarding flow |
 | DASH | `#F59E0B` | `from-amber-500 to-amber-600` | Dashboard |
-| FEATURE | `#10B981` | `from-emerald-500 to-emerald-600` | 核心功能 |
-| PROFILE | `#EC4899` | `from-pink-500 to-pink-600` | 個人資料 |
-| REPORT | `#3B82F6` | `from-blue-500 to-blue-600` | 報告分析 |
-| SETTING | `#64748B` | `from-slate-500 to-slate-600` | 設定選項 |
-| COMMERCE | `#EF4444` | `from-red-500 to-red-600` | 電商購物 |
-| SOCIAL | `#14B8A6` | `from-teal-500 to-teal-600` | 社群互動 |
-| MEDIA | `#F97316` | `from-orange-500 to-orange-600` | 媒體內容 |
+| FEATURE | `#10B981` | `from-emerald-500 to-emerald-600` | Core features |
+| PROFILE | `#EC4899` | `from-pink-500 to-pink-600` | User profile |
+| REPORT | `#3B82F6` | `from-blue-500 to-blue-600` | Reports & analytics |
+| SETTING | `#64748B` | `from-slate-500 to-slate-600` | Settings |
+| COMMERCE | `#EF4444` | `from-red-500 to-red-600` | E-commerce |
+| SOCIAL | `#14B8A6` | `from-teal-500 to-teal-600` | Social interactions |
+| MEDIA | `#F97316` | `from-orange-500 to-orange-600` | Media content |
 
 ---
 
@@ -1187,49 +1189,49 @@ Suggested requirements to add to SRS:
 ```
 
 ### 20. Auto Platform Asset Generation 📱🤖
-當完成 UI 生成後，自動產生 iOS 和 Android 平台所需的所有資產。
+After UI generation completes, automatically generate all assets needed for iOS and Android platforms.
 
-#### 自動觸發條件
-當使用者要求「產生平台資產」或「generate platform assets」時，自動執行以下流程：
+#### Auto Trigger Conditions
+When user requests "generate platform assets" or similar, automatically execute the following workflow:
 
-#### 自動產生流程
+#### Auto Generation Workflow
 ```
-generated-ui/ 完成後
+After generated-ui/ completes
      ↓
-1. 掃描 shared/theme.css 提取 Design Tokens
-2. 掃描 assets/ 識別現有素材
-3. 產生 App Icon (從 SVG 或 PNG 來源)
-4. 產生 iOS Assets.xcassets 結構
-5. 產生 Android drawable/mipmap 結構
-6. 輸出 Design Tokens (JSON/Swift/Kotlin)
-7. 產生 README 說明文件
+1. Scan shared/theme.css to extract Design Tokens
+2. Scan assets/ to identify existing materials
+3. Generate App Icon (from SVG or PNG source)
+4. Generate iOS Assets.xcassets structure
+5. Generate Android drawable/mipmap structure
+6. Output Design Tokens (JSON/Swift/Kotlin)
+7. Generate README documentation
 ```
 
-#### App Icon 自動產生腳本
+#### App Icon Auto-Generation Script
 ```bash
-# 位置: scripts/generate-app-icons.sh
+# Location: scripts/generate-app-icons.sh
 
-# 使用方式
+# Usage
 ./generate-app-icons.sh [source_image] [output_dir]
 
-# 範例
+# Examples
 ./generate-app-icons.sh app-icon.svg ./platform-assets
 ./generate-app-icons.sh app-icon-1024.png
 ```
 
-#### 產生的資產結構
+#### Generated Asset Structure
 ```
 📁 platform-assets/
-├── 📄 README.md                    # 整合說明
+├── 📄 README.md                    # Integration documentation
 ├── 📄 design-tokens.json           # Design Tokens
 ├── 📁 app-icon/
-│   ├── app-icon-source.svg         # 來源 SVG
-│   └── app-icon-1024.png           # 來源 PNG
+│   ├── app-icon-source.svg         # Source SVG
+│   └── app-icon-1024.png           # Source PNG
 ├── 📁 ios/
 │   ├── Assets.xcassets/
-│   │   ├── AppIcon.appiconset/     # 18 個 PNG + Contents.json
-│   │   ├── Colors/                 # 色彩資產 (含 Dark Mode)
-│   │   └── *.imageset/             # 圖片資產
+│   │   ├── AppIcon.appiconset/     # 18 PNGs + Contents.json
+│   │   ├── Colors/                 # Color assets (with Dark Mode)
+│   │   └── *.imageset/             # Image assets
 │   ├── {ProjectName}Colors.swift   # SwiftUI Color Extension
 │   └── {ProjectName}Icons.swift    # SF Symbols + Icons
 └── 📁 android/
@@ -1244,9 +1246,9 @@ generated-ui/ 完成後
     └── {ProjectName}Theme.kt       # Jetpack Compose Theme
 ```
 
-#### iOS App Icon 尺寸
-| 檔案名稱 | 尺寸 | 用途 |
-|----------|------|------|
+#### iOS App Icon Sizes
+| Filename | Size | Usage |
+|----------|------|-------|
 | Icon-20@2x.png | 40x40 | iPhone Notification |
 | Icon-20@3x.png | 60x60 | iPhone Notification |
 | Icon-29@2x.png | 58x58 | Settings |
@@ -1260,9 +1262,9 @@ generated-ui/ 完成後
 | Icon-83.5@2x.png | 167x167 | iPad Pro |
 | Icon-1024.png | 1024x1024 | App Store |
 
-#### Android Mipmap 尺寸
-| 資料夾 | 尺寸 | DPI |
-|--------|------|-----|
+#### Android Mipmap Sizes
+| Directory | Size | DPI |
+|-----------|------|-----|
 | mipmap-ldpi | 36x36 | 120 |
 | mipmap-mdpi | 48x48 | 160 |
 | mipmap-hdpi | 72x72 | 240 |
@@ -1271,9 +1273,9 @@ generated-ui/ 完成後
 | mipmap-xxxhdpi | 192x192 | 640 |
 | playstore | 512x512 | - |
 
-#### 需求工具
-- **macOS:** `sips` (內建)
-- **SVG 轉換:** `rsvg-convert` (brew install librsvg) 或 `ImageMagick`
+#### Required Tools
+- **macOS:** `sips` (built-in)
+- **SVG Conversion:** `rsvg-convert` (brew install librsvg) or `ImageMagick`
 
 ---
 

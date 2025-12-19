@@ -1,29 +1,29 @@
-# Figma 設計指南與輸出規範
+# Figma Design Guide and Export Specifications
 
-本文件提供 Figma 設計工作流程、元件架構、以及輸出格式規範。
+This document provides Figma design workflows, component architecture, and export format specifications.
 
-## 目錄
-1. [檔案結構與組織](#檔案結構與組織)
+## Table of Contents
+1. [File Structure and Organization](#file-structure-and-organization)
 2. [Auto Layout](#auto-layout)
-3. [元件與變體](#元件與變體)
+3. [Components and Variants](#components-and-variants)
 4. [Design Tokens](#design-tokens)
-5. [設計輸出格式](#設計輸出格式)
-6. [開發交付](#開發交付)
-7. [外掛推薦](#外掛推薦)
+5. [Design Export Formats](#design-export-formats)
+6. [Developer Handoff](#developer-handoff)
+7. [Recommended Plugins](#recommended-plugins)
 8. [Figma API](#figma-api)
 
 ---
 
-## 檔案結構與組織
+## File Structure and Organization
 
-### 專案層級結構
+### Project-Level Structure
 
 ```
-📁 [專案名稱]
+📁 [Project Name]
 ├── 📄 🎨 Design System
-│   ├── Foundation (基礎)
-│   ├── Components (元件)
-│   └── Patterns (模式)
+│   ├── Foundation
+│   ├── Components
+│   └── Patterns
 │
 ├── 📄 📱 Mobile App
 │   ├── iOS
@@ -41,11 +41,11 @@
     └── Dev Specs
 ```
 
-### 頁面命名規範
+### Page Naming Conventions
 
 ```
-📄 Cover (封面)
-📄 📋 Index (索引)
+📄 Cover
+📄 📋 Index
 📄 🎨 Foundations
     ├── Colors
     ├── Typography
@@ -67,14 +67,14 @@
 📄 🗃️ Archive
 ```
 
-### Frame 命名規範
+### Frame Naming Conventions
 
 ```
-頁面: PageName / Variant / State
-元件: ComponentName / Size / Variant / State
-圖層: element-name (kebab-case)
+Page: PageName / Variant / State
+Component: ComponentName / Size / Variant / State
+Layer: element-name (kebab-case)
 
-範例:
+Examples:
 ├── Login / Default
 ├── Login / Error
 ├── Login / Loading
@@ -83,21 +83,21 @@
 └── Button / Large / Primary / Disabled
 ```
 
-### 圖層命名規則
+### Layer Naming Rules
 
 ```
 Frame: PascalCase (Login, UserCard, NavBar)
 Group: PascalCase (ButtonGroup, IconSet)
-元素: kebab-case (icon-left, text-label, bg-overlay)
-狀態: state=value (state=hover, state=active)
+Elements: kebab-case (icon-left, text-label, bg-overlay)
+States: state=value (state=hover, state=active)
 
-✅ 良好命名:
+✅ Good naming:
 ├── Button
 │   ├── icon-left
 │   ├── label
 │   └── icon-right
 
-❌ 避免:
+❌ Avoid:
 ├── Frame 123
 │   ├── Rectangle 1
 │   └── Text
@@ -107,31 +107,31 @@ Group: PascalCase (ButtonGroup, IconSet)
 
 ## Auto Layout
 
-### 基礎概念
+### Basic Concepts
 
 ```
 Auto Layout = Flexbox for Figma
 
-方向:
-├── Horizontal (水平) → Row
-└── Vertical (垂直) → Column
+Direction:
+├── Horizontal → Row
+└── Vertical → Column
 
-對齊:
-├── Main Axis: 主軸對齊
-└── Cross Axis: 交叉軸對齊
+Alignment:
+├── Main Axis: Primary axis alignment
+└── Cross Axis: Secondary axis alignment
 
-間距:
-├── Gap: 子元素間距
-└── Padding: 內距
+Spacing:
+├── Gap: Space between children
+└── Padding: Inner spacing
 ```
 
-### Auto Layout 設定
+### Auto Layout Settings
 
 ```
 ┌─────────────────────────────────────────┐
 │  Direction: Horizontal ↔️ / Vertical ↕️  │
 ├─────────────────────────────────────────┤
-│  Gap: 8px (元素間距)                     │
+│  Gap: 8px (spacing between elements)    │
 ├─────────────────────────────────────────┤
 │  Padding:                               │
 │  ┌──────┬──────────────────┬──────┐    │
@@ -147,75 +147,75 @@ Auto Layout = Flexbox for Figma
 └─────────────────────────────────────────┘
 ```
 
-### Resizing 調整行為
+### Resizing Behavior
 
 ```
-子元素 Resizing:
-├── Fixed (固定): 保持設定尺寸
-├── Hug (適應): 依內容調整
-└── Fill (填滿): 填滿可用空間
+Child Resizing:
+├── Fixed: Maintains set dimensions
+├── Hug: Adjusts to content
+└── Fill: Fills available space
 
-範例 - 按鈕:
+Example - Button:
 ┌─────────────────────────────────────┐
 │ [Icon]        Label        [Icon]   │
 │  Fixed    Fill Container    Fixed   │
 └─────────────────────────────────────┘
 ```
 
-### 實用技巧
+### Practical Tips
 
-**絕對定位 (Absolute Position):**
+**Absolute Position:**
 ```
-用於: Badge、關閉按鈕、浮動元素
-設定: 點擊元素 → 右側面板 → Absolute Position
-位置: 設定與父容器的相對位置 (constraints)
+Use for: Badges, close buttons, floating elements
+Setting: Click element → Right panel → Absolute Position
+Position: Set relative position to parent (constraints)
 ```
 
-**負間距效果:**
+**Negative Spacing:**
 ```
-用於: 重疊的頭像、堆疊卡片
-設定: Gap 設為負數 (如 -8)
+Use for: Overlapping avatars, stacked cards
+Setting: Set Gap to negative value (e.g., -8)
 ```
 
 **Space Between:**
 ```
-用於: 導航列兩端對齊
-設定: 選擇 "Space between" 對齊模式
+Use for: Navigation bars with items at both ends
+Setting: Select "Space between" alignment mode
 ```
 
 ---
 
-## 元件與變體
+## Components and Variants
 
-### 元件結構
+### Component Structure
 
 ```
-Main Component (主元件)
-├── Instance (實例)
-│   ├── Override 屬性
-│   └── 連結到主元件
-└── Variant (變體)
-    ├── 同一元件的不同狀態
-    └── 透過 Properties 切換
+Main Component
+├── Instance
+│   ├── Override properties
+│   └── Links to main component
+└── Variant
+    ├── Different states of same component
+    └── Switch via Properties
 ```
 
-### 建立元件最佳實踐
+### Component Creation Best Practices
 
 ```markdown
-1. 選取 Frame
-2. 右鍵 → Create Component (Ctrl/Cmd + Alt + K)
-3. 使用 Auto Layout
-4. 設定 Constraints
-5. 定義 Variants
-6. 新增 Component Properties
+1. Select Frame
+2. Right-click → Create Component (Ctrl/Cmd + Alt + K)
+3. Use Auto Layout
+4. Set Constraints
+5. Define Variants
+6. Add Component Properties
 ```
 
-### Variant 命名規範
+### Variant Naming Conventions
 
 ```
-Property=Value 格式
+Property=Value format
 
-範例 - Button:
+Example - Button:
 ├── Size=Large, Variant=Primary, State=Default
 ├── Size=Large, Variant=Primary, State=Hover
 ├── Size=Large, Variant=Primary, State=Disabled
@@ -230,27 +230,27 @@ Properties:
 └── Icon: True, False
 ```
 
-### Component Properties 類型
+### Component Property Types
 
 ```
-1. Variant (變體)
-   切換預定義的設計變化
-   用於: Size, Type, State
+1. Variant
+   Switch between predefined design variations
+   Use for: Size, Type, State
 
-2. Boolean (布林)
-   顯示/隱藏元素
-   用於: hasIcon, showBadge, isSelected
+2. Boolean
+   Show/hide elements
+   Use for: hasIcon, showBadge, isSelected
 
-3. Instance Swap (實例交換)
-   替換嵌套元件
-   用於: 更換圖標、頭像
+3. Instance Swap
+   Replace nested components
+   Use for: Swapping icons, avatars
 
-4. Text (文字)
-   覆寫文字內容
-   用於: Label, Title, Description
+4. Text
+   Override text content
+   Use for: Label, Title, Description
 ```
 
-### 元件範例
+### Component Example
 
 **Button Component:**
 ```
@@ -267,7 +267,7 @@ Button
 │   ├── label (Text Property)
 │   └── icon-right (Instance Swap, Hidden by default)
 │
-└── Variants Grid (共 60 個變體)
+└── Variants Grid (60 variants total)
     ├── Large/Primary/Default
     ├── Large/Primary/Hover
     └── ...
@@ -276,7 +276,7 @@ Button
 ### Slots Pattern
 
 ```
-用於可替換內容的元件 (如 Card)
+For components with replaceable content (e.g., Card)
 
 Card
 ├── slot-header (Frame with Auto Layout)
@@ -286,20 +286,20 @@ Card
 └── slot-footer
     └── .slot-footer
 
-使用時將內容貼入對應 slot 並隱藏 placeholder
+Paste content into corresponding slot and hide placeholder when using
 ```
 
 ---
 
 ## Design Tokens
 
-### Token 結構 in Figma
+### Token Structure in Figma
 
 ```
-Figma Variables (變數系統)
+Figma Variables (Variable System)
 
-Collections (集合):
-├── Primitives (原始值)
+Collections:
+├── Primitives
 │   ├── Colors
 │   │   ├── blue/50: #EFF6FF
 │   │   ├── blue/100: #DBEAFE
@@ -313,7 +313,7 @@ Collections (集合):
 │       ├── md: 8
 │       └── ...
 │
-└── Semantic (語義)
+└── Semantic
     ├── Colors
     │   ├── bg/primary: {primitives.white}
     │   ├── bg/secondary: {primitives.gray/50}
@@ -328,33 +328,33 @@ Collections (集合):
         └── component/gap: {primitives.spacing/4}
 ```
 
-### 建立 Variables
+### Creating Variables
 
 ```markdown
-1. 開啟 Variables Panel
-   - 右側欄 → Local Variables
-   - 或 Figma Menu → Plugins → Variables
+1. Open Variables Panel
+   - Right panel → Local Variables
+   - Or Figma Menu → Plugins → Variables
 
-2. 建立 Collection
-   - 點擊 + Create Collection
-   - 命名: Primitives, Semantic, Component
+2. Create Collection
+   - Click + Create Collection
+   - Name: Primitives, Semantic, Component
 
-3. 新增變數
-   - 點擊 + Create Variable
-   - 選擇類型: Color, Number, String, Boolean
-   - 設定值
+3. Add Variables
+   - Click + Create Variable
+   - Select type: Color, Number, String, Boolean
+   - Set value
 
-4. 建立 Alias (別名)
-   - 點擊變數值
-   - 選擇另一個變數作為參照
+4. Create Alias
+   - Click variable value
+   - Select another variable as reference
 ```
 
-### Modes (模式)
+### Modes
 
 ```
-用於: 淺色/深色主題、多品牌支援
+Use for: Light/Dark themes, multi-brand support
 
-範例 - 主題切換:
+Example - Theme switching:
 Collection: Semantic Colors
 ├── Mode 1: Light
 │   ├── bg/primary: #FFFFFF
@@ -364,12 +364,12 @@ Collection: Semantic Colors
     ├── bg/primary: #111827
     └── text/primary: #F9FAFB
 
-使用: 選取 Frame → 右側面板切換 Mode
+Usage: Select Frame → Right panel switch Mode
 ```
 
-### 匯出 Design Tokens
+### Exporting Design Tokens
 
-**Tokens Studio 外掛格式:**
+**Tokens Studio Plugin Format:**
 ```json
 {
   "colors": {
@@ -393,7 +393,7 @@ Collection: Semantic Colors
 }
 ```
 
-**Style Dictionary 輸出:**
+**Style Dictionary Output:**
 ```css
 /* CSS Variables */
 :root {
@@ -421,50 +421,50 @@ object Colors {
 
 ---
 
-## 設計輸出格式
+## Design Export Formats
 
-### 匯出圖片資源
+### Exporting Image Assets
 
-**匯出設定:**
+**Export Settings:**
 ```
-格式選擇:
-├── PNG: 點陣圖、截圖、複雜圖片
-├── JPG: 照片、大型背景
-├── SVG: 圖標、向量圖形、Logo
-├── PDF: 向量資源、iOS 圖標
-└── WebP: Web 優化圖片
+Format Selection:
+├── PNG: Raster images, screenshots, complex images
+├── JPG: Photos, large backgrounds
+├── SVG: Icons, vector graphics, logos
+├── PDF: Vector assets, iOS icons
+└── WebP: Web-optimized images
 
-解析度 (Scale):
-├── @1x: 基準尺寸
+Resolution (Scale):
+├── @1x: Base size
 ├── @2x: Retina (iOS @2x, Android xxhdpi)
 ├── @3x: Super Retina (iOS @3x, Android xxxhdpi)
-└── @4x: 高解析度螢幕
+└── @4x: High-resolution displays
 
-命名規範:
+Naming Convention:
 ├── icon-name.svg
 ├── icon-name@2x.png
 ├── icon-name@3x.png
 └── illustration-hero.webp
 ```
 
-**批次匯出設定:**
+**Batch Export Settings:**
 ```
-1. 選取元素
-2. 右側面板 → Export
-3. 點擊 + 新增多個匯出設定
-4. 使用 Suffix 區分: @2x, @3x
+1. Select element
+2. Right panel → Export
+3. Click + to add multiple export settings
+4. Use Suffix to differentiate: @2x, @3x
 
-範例:
+Example:
 ├── 1x → icon-home.png
 ├── 2x → icon-home@2x.png
 └── 3x → icon-home@3x.png
 ```
 
-### 匯出 CSS 樣式
+### Exporting CSS Styles
 
-**直接複製 CSS:**
+**Copy CSS Directly:**
 ```css
-/* 選取元素 → 右鍵 → Copy as CSS */
+/* Select element → Right-click → Copy as CSS */
 
 /* Frame */
 .element {
@@ -487,9 +487,9 @@ object Colors {
 }
 ```
 
-### 匯出 iOS/Android 程式碼
+### Exporting iOS/Android Code
 
-**Copy as Code 外掛:**
+**Copy as Code Plugin:**
 ```swift
 // iOS SwiftUI
 struct Button: View {
@@ -527,9 +527,9 @@ fun Button() {
 }
 ```
 
-### 匯出 JSON 規格
+### Exporting JSON Specs
 
-**Figma REST API 輸出:**
+**Figma REST API Output:**
 ```json
 {
   "id": "1:2",
@@ -564,120 +564,120 @@ fun Button() {
 
 ---
 
-## 開發交付
+## Developer Handoff
 
 ### Dev Mode
 
 ```
-Figma Dev Mode 功能:
-├── 自動標註尺寸與間距
-├── 複製 CSS/iOS/Android 程式碼
-├── 查看 Variables 對應
-├── 比較設計變更
-└── VS Code 整合
+Figma Dev Mode Features:
+├── Auto-annotate dimensions and spacing
+├── Copy CSS/iOS/Android code
+├── View Variables mapping
+├── Compare design changes
+└── VS Code integration
 ```
 
-### 交付規格文件
+### Handoff Specification Document
 
-**元件規格:**
+**Component Specs:**
 ```markdown
 ## Button Component
 
-### 視覺規格
-- 高度: 48px (Large), 40px (Medium), 32px (Small)
-- 圓角: 8px
-- 內距: 16px (水平), 12px (垂直)
-- 間距: 8px (icon 與 label)
+### Visual Specifications
+- Height: 48px (Large), 40px (Medium), 32px (Small)
+- Border radius: 8px
+- Padding: 16px (horizontal), 12px (vertical)
+- Gap: 8px (between icon and label)
 
-### 顏色
-| 狀態 | 背景 | 文字 | 邊框 |
-|------|------|------|------|
+### Colors
+| State | Background | Text | Border |
+|-------|------------|------|--------|
 | Default | primary-500 | white | - |
 | Hover | primary-600 | white | - |
 | Active | primary-700 | white | - |
 | Disabled | gray-200 | gray-400 | - |
 
-### 字型
+### Typography
 - Font: Inter
 - Size: 16px
 - Weight: 600 (Semibold)
 - Line Height: 24px
 
-### 動畫
+### Animation
 - Transition: all 150ms ease-out
 - Hover: scale(1.02)
 - Active: scale(0.98)
 ```
 
-### 標註最佳實踐
+### Annotation Best Practices
 
 ```
-1. 使用 Auto Layout
-   讓間距自動標註
+1. Use Auto Layout
+   Spacing auto-annotates
 
-2. 使用 Variables
-   顯示 Token 名稱而非數值
+2. Use Variables
+   Show Token names instead of values
 
-3. 統一命名
-   確保圖層命名清晰
+3. Consistent naming
+   Ensure layer names are clear
 
-4. 分組交付
-   ├── 已驗收 (Ready)
-   ├── 審核中 (Review)
-   └── 開發中 (In Progress)
+4. Organized handoff
+   ├── Ready
+   ├── In Review
+   └── In Progress
 
-5. 版本標記
+5. Version marking
    v1.0 → v1.1 → v2.0
 ```
 
 ---
 
-## 外掛推薦
+## Recommended Plugins
 
-### Design System 相關
+### Design System Related
 
-| 外掛 | 用途 |
-|------|------|
-| Tokens Studio | Design Tokens 管理與同步 |
-| Style Organizer | 整理 Styles |
-| Design Lint | 檢查設計一致性 |
-| Themer | 主題切換預覽 |
+| Plugin | Purpose |
+|--------|---------|
+| Tokens Studio | Design Token management and sync |
+| Style Organizer | Organize Styles |
+| Design Lint | Check design consistency |
+| Themer | Theme switching preview |
 
-### 效率工具
+### Efficiency Tools
 
-| 外掛 | 用途 |
-|------|------|
-| Autoflow | 自動產生流程線 |
-| Content Reel | 假資料填充 |
-| Unsplash | 免費圖片 |
-| Iconify | 圖標庫 |
-| Stark | 無障礙檢查 |
+| Plugin | Purpose |
+|--------|---------|
+| Autoflow | Auto-generate flow lines |
+| Content Reel | Placeholder data fill |
+| Unsplash | Free images |
+| Iconify | Icon library |
+| Stark | Accessibility checker |
 
-### 開發協作
+### Developer Collaboration
 
-| 外掛 | 用途 |
-|------|------|
-| Anima | 匯出 React/Vue/HTML |
-| Locofy | 設計轉程式碼 |
-| Zeplin | 設計交付平台 |
-| Storybook Connect | 連結 Storybook |
+| Plugin | Purpose |
+|--------|---------|
+| Anima | Export to React/Vue/HTML |
+| Locofy | Design to code |
+| Zeplin | Design handoff platform |
+| Storybook Connect | Link to Storybook |
 
-### 內容生成
+### Content Generation
 
-| 外掛 | 用途 |
-|------|------|
-| Lorem ipsum | 假文字 |
-| User Profile | 假用戶資料 |
-| Charts | 圖表產生 |
-| Mapsicle | 地圖嵌入 |
+| Plugin | Purpose |
+|--------|---------|
+| Lorem ipsum | Placeholder text |
+| User Profile | Fake user data |
+| Charts | Chart generation |
+| Mapsicle | Map embedding |
 
 ---
 
 ## Figma API
 
-### REST API 基礎
+### REST API Basics
 
-**取得檔案資訊:**
+**Get File Information:**
 ```bash
 GET https://api.figma.com/v1/files/:file_key
 
@@ -685,7 +685,7 @@ Headers:
 X-Figma-Token: your-personal-access-token
 ```
 
-**回應範例:**
+**Response Example:**
 ```json
 {
   "name": "My Design File",
@@ -702,42 +702,42 @@ X-Figma-Token: your-personal-access-token
 }
 ```
 
-### 常用 API Endpoints
+### Common API Endpoints
 
 ```
-檔案:
-GET /v1/files/:key                    # 取得檔案
-GET /v1/files/:key/nodes?ids=...      # 取得特定節點
-GET /v1/files/:key/images             # 匯出圖片
+Files:
+GET /v1/files/:key                    # Get file
+GET /v1/files/:key/nodes?ids=...      # Get specific nodes
+GET /v1/files/:key/images             # Export images
 
-元件:
-GET /v1/files/:key/components         # 取得元件
-GET /v1/files/:key/component_sets     # 取得元件集
+Components:
+GET /v1/files/:key/components         # Get components
+GET /v1/files/:key/component_sets     # Get component sets
 
-樣式:
-GET /v1/files/:key/styles             # 取得樣式
+Styles:
+GET /v1/files/:key/styles             # Get styles
 
-變數:
-GET /v1/files/:key/variables/local    # 取得 Variables
+Variables:
+GET /v1/files/:key/variables/local    # Get Variables
 
-專案:
-GET /v1/projects/:id/files            # 取得專案檔案
+Projects:
+GET /v1/projects/:id/files            # Get project files
 
-註解:
-GET /v1/files/:key/comments           # 取得註解
-POST /v1/files/:key/comments          # 新增註解
+Comments:
+GET /v1/files/:key/comments           # Get comments
+POST /v1/files/:key/comments          # Add comment
 ```
 
-### 匯出圖片
+### Exporting Images
 
 ```bash
-# 取得圖片 URL
+# Get image URLs
 GET https://api.figma.com/v1/images/:file_key
   ?ids=1:2,1:3
   &scale=2
   &format=png
 
-# 回應
+# Response
 {
   "images": {
     "1:2": "https://s3-us-west-2.amazonaws.com/figma-alpha-api/img/...",
@@ -746,10 +746,10 @@ GET https://api.figma.com/v1/images/:file_key
 }
 ```
 
-### Webhook 整合
+### Webhook Integration
 
 ```json
-// Webhook 設定
+// Webhook setup
 POST https://api.figma.com/v2/webhooks
 
 {
@@ -759,7 +759,7 @@ POST https://api.figma.com/v2/webhooks
   "passcode": "your-secret-passcode"
 }
 
-// Webhook 事件
+// Webhook event
 {
   "event_type": "FILE_UPDATE",
   "file_key": "abc123",
@@ -772,9 +772,9 @@ POST https://api.figma.com/v2/webhooks
 }
 ```
 
-### 自動化範例
+### Automation Example
 
-**Node.js - 匯出所有圖標:**
+**Node.js - Export All Icons:**
 ```javascript
 const axios = require('axios');
 
@@ -783,65 +783,65 @@ const FILE_KEY = 'your-file-key';
 const ICONS_FRAME_ID = '1:234';
 
 async function exportIcons() {
-  // 1. 取得 Frame 內所有節點
+  // 1. Get all nodes in Frame
   const { data } = await axios.get(
     `https://api.figma.com/v1/files/${FILE_KEY}/nodes?ids=${ICONS_FRAME_ID}`,
     { headers: { 'X-Figma-Token': FIGMA_TOKEN } }
   );
 
-  // 2. 收集所有圖標 ID
+  // 2. Collect all icon IDs
   const iconIds = data.nodes[ICONS_FRAME_ID].document.children
     .map(child => child.id)
     .join(',');
 
-  // 3. 匯出為 SVG
+  // 3. Export as SVG
   const { data: images } = await axios.get(
     `https://api.figma.com/v1/images/${FILE_KEY}?ids=${iconIds}&format=svg`,
     { headers: { 'X-Figma-Token': FIGMA_TOKEN } }
   );
 
-  // 4. 下載並儲存
+  // 4. Download and save
   for (const [id, url] of Object.entries(images.images)) {
     const svg = await axios.get(url);
-    // 儲存 SVG 檔案...
+    // Save SVG files...
   }
 }
 ```
 
 ---
 
-## Figma 輸出檢查清單
+## Figma Export Checklist
 
-### 設計交付前確認
+### Pre-Handoff Verification
 
 ```
-檔案組織
-□ 頁面命名清楚
-□ Frame 命名規範
-□ 圖層結構整潔
-□ 無多餘隱藏圖層
+File Organization
+□ Pages named clearly
+□ Frame naming follows conventions
+□ Layer structure is clean
+□ No unnecessary hidden layers
 
-元件品質
-□ 使用 Auto Layout
-□ Constraints 正確設定
-□ Variants 完整
-□ Properties 定義清楚
+Component Quality
+□ Using Auto Layout
+□ Constraints set correctly
+□ Variants complete
+□ Properties defined clearly
 
 Design Tokens
-□ Variables 已定義
-□ 顏色使用 Variables
-□ 間距使用 Variables
-□ 支援深色模式
+□ Variables defined
+□ Colors use Variables
+□ Spacing uses Variables
+□ Dark mode support
 
-匯出準備
-□ 圖片資源已設定 Export
-□ 多倍率匯出 (@1x, @2x, @3x)
-□ SVG 圖標已優化
-□ 圖片已壓縮
+Export Preparation
+□ Image assets have Export settings
+□ Multi-resolution export (@1x, @2x, @3x)
+□ SVG icons optimized
+□ Images compressed
 
-交付規格
-□ 元件規格文件
-□ 互動說明
-□ 動畫規格
-□ 響應式說明
+Handoff Specs
+□ Component specification documents
+□ Interaction descriptions
+□ Animation specifications
+□ Responsive design notes
 ```

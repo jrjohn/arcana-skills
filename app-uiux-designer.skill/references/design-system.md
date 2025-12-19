@@ -1,87 +1,87 @@
-# 設計系統建立指南
+# Design System Building Guide
 
-本文件提供建立可擴展設計系統的完整方法論，適用於 App 與 Web 專案。
+This document provides a complete methodology for building scalable design systems, applicable to App and Web projects.
 
-## 目錄
-1. [設計系統概述](#設計系統概述)
+## Table of Contents
+1. [Design System Overview](#design-system-overview)
 2. [Design Tokens](#design-tokens)
-3. [元件架構](#元件架構)
-4. [文件與規範](#文件與規範)
-5. [設計與開發協作](#設計與開發協作)
-6. [維護與演進](#維護與演進)
+3. [Component Architecture](#component-architecture)
+4. [Documentation and Specifications](#documentation-and-specifications)
+5. [Design and Development Collaboration](#design-and-development-collaboration)
+6. [Maintenance and Evolution](#maintenance-and-evolution)
 
 ---
 
-## 設計系統概述
+## Design System Overview
 
-### 什麼是設計系統？
+### What is a Design System?
 
-設計系統是一套完整的設計標準、元件庫與指導原則，確保產品在視覺與體驗上的一致性。
+A design system is a complete set of design standards, component libraries, and guiding principles that ensure consistency in visual appearance and user experience across products.
 
-### 核心組成
+### Core Components
 
 ```
-設計系統
-├── Design Tokens (設計標記)
-│   ├── Colors (顏色)
-│   ├── Typography (字型)
-│   ├── Spacing (間距)
-│   ├── Shadows (陰影)
-│   └── Border Radius (圓角)
+Design System
+├── Design Tokens
+│   ├── Colors
+│   ├── Typography
+│   ├── Spacing
+│   ├── Shadows
+│   └── Border Radius
 │
-├── Components (元件)
-│   ├── Atoms (原子)
-│   ├── Molecules (分子)
-│   ├── Organisms (有機體)
-│   └── Templates (模板)
+├── Components
+│   ├── Atoms
+│   ├── Molecules
+│   ├── Organisms
+│   └── Templates
 │
-├── Patterns (模式)
-│   ├── Navigation (導航)
-│   ├── Forms (表單)
-│   ├── Data Display (資料展示)
-│   └── Feedback (回饋)
+├── Patterns
+│   ├── Navigation
+│   ├── Forms
+│   ├── Data Display
+│   └── Feedback
 │
-└── Guidelines (指南)
-    ├── Brand (品牌)
-    ├── Voice & Tone (語氣)
-    ├── Accessibility (無障礙)
-    └── Motion (動畫)
+└── Guidelines
+    ├── Brand
+    ├── Voice & Tone
+    ├── Accessibility
+    └── Motion
 ```
 
-### 設計系統效益
+### Design System Benefits
 
-| 面向 | 效益 |
-|------|------|
-| 一致性 | 統一的視覺語言與使用體驗 |
-| 效率 | 減少重複設計與開發工作 |
-| 可擴展 | 易於新增元件與維護 |
-| 協作 | 設計師與工程師有共同語言 |
-| 品質 | 內建最佳實踐與無障礙考量 |
+| Aspect | Benefit |
+|--------|---------|
+| Consistency | Unified visual language and user experience |
+| Efficiency | Reduce repetitive design and development work |
+| Scalability | Easy to add components and maintain |
+| Collaboration | Common language for designers and engineers |
+| Quality | Built-in best practices and accessibility considerations |
 
 ---
 
 ## Design Tokens
 
-### 什麼是 Design Tokens？
+### What are Design Tokens?
 
-Design Tokens 是設計決策的最小單位，用於儲存視覺設計屬性。
+Design Tokens are the smallest units of design decisions, used to store visual design properties.
 
-### Token 層級架構
+### Token Layer Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    Semantic Tokens                       │
-│  (語義層: primary-color, text-body, spacing-page)        │
+│  (Semantic layer: primary-color, text-body, spacing-page)│
 ├─────────────────────────────────────────────────────────┤
 │                    Alias Tokens                          │
-│  (別名層: blue-500, gray-900, size-16)                   │
+│  (Alias layer: blue-500, gray-900, size-16)             │
 ├─────────────────────────────────────────────────────────┤
 │                    Primitive Tokens                      │
-│  (原始層: #3B82F6, 16px, 400)                           │
+│  (Primitive layer: #3B82F6, 16px, 400)                  │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 顏色 Tokens
+### Color Tokens
 
 ```json
 {
@@ -131,7 +131,7 @@ Design Tokens 是設計決策的最小單位，用於儲存視覺設計屬性。
 }
 ```
 
-### 字型 Tokens
+### Typography Tokens
 
 ```json
 {
@@ -188,7 +188,7 @@ Design Tokens 是設計決策的最小單位，用於儲存視覺設計屬性。
 }
 ```
 
-### 間距 Tokens
+### Spacing Tokens
 
 ```json
 {
@@ -216,7 +216,7 @@ Design Tokens 是設計決策的最小單位，用於儲存視覺設計屬性。
 }
 ```
 
-### 其他 Tokens
+### Other Tokens
 
 ```json
 {
@@ -247,69 +247,69 @@ Design Tokens 是設計決策的最小單位，用於儲存視覺設計屬性。
 }
 ```
 
-### Token 轉換工具
+### Token Transformation Tools
 
-| 工具 | 說明 |
-|------|------|
-| Style Dictionary | Amazon 開源，業界標準 |
-| Tokens Studio | Figma 外掛，支援匯出 |
-| Theo | Salesforce 開源 |
-| Diez | 跨平台 Token 工具 |
+| Tool | Description |
+|------|-------------|
+| Style Dictionary | Amazon open source, industry standard |
+| Tokens Studio | Figma plugin, supports export |
+| Theo | Salesforce open source |
+| Diez | Cross-platform token tool |
 
 ---
 
-## 元件架構
+## Component Architecture
 
-### Atomic Design 方法論
+### Atomic Design Methodology
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ Pages (頁面)                                             │
-│   完整頁面，由模板填入真實內容                             │
+│ Pages                                                    │
+│   Complete pages, templates filled with real content     │
 ├──────────────────────────────────────────────────────────┤
-│ Templates (模板)                                         │
-│   頁面結構，定義內容區域配置                              │
+│ Templates                                                │
+│   Page structure, defining content area layouts          │
 ├──────────────────────────────────────────────────────────┤
-│ Organisms (有機體)                                       │
-│   複雜元件: Header, Footer, Card Grid, Form              │
+│ Organisms                                                │
+│   Complex components: Header, Footer, Card Grid, Form    │
 ├──────────────────────────────────────────────────────────┤
-│ Molecules (分子)                                         │
-│   組合元件: Search Bar, Nav Item, Form Field             │
+│ Molecules                                                │
+│   Combined components: Search Bar, Nav Item, Form Field  │
 ├──────────────────────────────────────────────────────────┤
-│ Atoms (原子)                                             │
-│   基礎元件: Button, Input, Label, Icon                   │
+│ Atoms                                                    │
+│   Basic components: Button, Input, Label, Icon           │
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 元件設計原則
+### Component Design Principles
 
-1. **單一職責**: 每個元件只做一件事
-2. **可組合性**: 小元件組成大元件
-3. **可客製化**: 透過 Props/Variants 調整
-4. **無障礙**: 內建 a11y 支援
-5. **文件完善**: 含用法說明與範例
+1. **Single Responsibility**: Each component does one thing
+2. **Composability**: Small components compose larger ones
+3. **Customizability**: Adjust via Props/Variants
+4. **Accessibility**: Built-in a11y support
+5. **Well Documented**: Includes usage instructions and examples
 
-### 元件規格文件範例
+### Component Specification Document Example
 
 ```markdown
-# Button 按鈕
+# Button
 
-## 概述
-按鈕用於觸發操作或提交表單。
+## Overview
+Buttons are used to trigger actions or submit forms.
 
-## Variants (變體)
-- Primary: 主要動作
-- Secondary: 次要動作
-- Outline: 輔助動作
-- Ghost: 低調動作
-- Danger: 破壞性動作
+## Variants
+- Primary: Main action
+- Secondary: Secondary action
+- Outline: Auxiliary action
+- Ghost: Subtle action
+- Danger: Destructive action
 
-## Sizes (尺寸)
-- Small: 32px 高
-- Medium: 40px 高 (預設)
-- Large: 48px 高
+## Sizes
+- Small: 32px height
+- Medium: 40px height (default)
+- Large: 48px height
 
-## States (狀態)
+## States
 - Default
 - Hover
 - Focus
@@ -318,39 +318,39 @@ Design Tokens 是設計決策的最小單位，用於儲存視覺設計屬性。
 - Loading
 
 ## Props
-| 名稱 | 類型 | 預設值 | 說明 |
-|------|------|--------|------|
-| variant | string | 'primary' | 按鈕變體 |
-| size | string | 'medium' | 按鈕尺寸 |
-| disabled | boolean | false | 是否禁用 |
-| loading | boolean | false | 是否載入中 |
-| leftIcon | ReactNode | - | 左側圖標 |
-| rightIcon | ReactNode | - | 右側圖標 |
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| variant | string | 'primary' | Button variant |
+| size | string | 'medium' | Button size |
+| disabled | boolean | false | Whether disabled |
+| loading | boolean | false | Whether loading |
+| leftIcon | ReactNode | - | Left icon |
+| rightIcon | ReactNode | - | Right icon |
 
-## 使用範例
-[程式碼範例]
+## Usage Examples
+[Code examples]
 
-## 無障礙考量
-- 使用 `<button>` 元素
-- 提供清晰的 focus 狀態
-- 禁用時設定 aria-disabled
+## Accessibility Considerations
+- Use `<button>` element
+- Provide clear focus state
+- Set aria-disabled when disabled
 ```
 
-### 元件庫工具
+### Component Library Tools
 
-| 工具 | 平台 | 說明 |
-|------|------|------|
-| Storybook | Web | 業界標準元件文件工具 |
-| Figma | 設計 | 設計元件庫 |
-| SwiftUI | iOS | 原生元件 |
-| Jetpack Compose | Android | 原生元件 |
-| React Native | 跨平台 | 共用元件庫 |
+| Tool | Platform | Description |
+|------|----------|-------------|
+| Storybook | Web | Industry standard component documentation tool |
+| Figma | Design | Design component library |
+| SwiftUI | iOS | Native components |
+| Jetpack Compose | Android | Native components |
+| React Native | Cross-platform | Shared component library |
 
 ---
 
-## 文件與規範
+## Documentation and Specifications
 
-### 設計系統文件結構
+### Design System Documentation Structure
 
 ```
 design-system-docs/
@@ -385,54 +385,54 @@ design-system-docs/
     └── localization.md
 ```
 
-### 元件文件模板
+### Component Documentation Template
 
 ```markdown
-# [元件名稱]
+# [Component Name]
 
-## 用途
-描述這個元件的使用情境。
+## Purpose
+Describe use cases for this component.
 
-## 設計規格
-- 尺寸
-- 顏色
-- 間距
-- 狀態
+## Design Specifications
+- Size
+- Colors
+- Spacing
+- States
 
-## 互動行為
-描述各種互動狀態與動畫。
+## Interaction Behavior
+Describe various interaction states and animations.
 
-## 變體
-列出所有變體與使用時機。
+## Variants
+List all variants and when to use them.
 
-## 最佳實踐
-✅ Do: 正確用法
-❌ Don't: 錯誤用法
+## Best Practices
+✅ Do: Correct usage
+❌ Don't: Incorrect usage
 
-## 無障礙
-- 鍵盤操作
-- 螢幕閱讀器
-- 顏色對比
+## Accessibility
+- Keyboard operation
+- Screen reader
+- Color contrast
 
-## 相關元件
-連結到相關元件。
+## Related Components
+Links to related components.
 ```
 
 ---
 
-## 設計與開發協作
+## Design and Development Collaboration
 
-### 設計交付流程
+### Design Handoff Process
 
 ```
-設計稿 → Design Tokens → 元件開發 → 品質驗收
-   ↓           ↓              ↓           ↓
- Figma    Style Dictionary  Storybook   視覺回歸測試
+Design → Design Tokens → Component Development → Quality Acceptance
+   ↓           ↓              ↓                      ↓
+ Figma    Style Dictionary  Storybook         Visual Regression Testing
 ```
 
-### Figma 協作規範
+### Figma Collaboration Standards
 
-**檔案結構:**
+**File structure:**
 ```
 📁 Design System
 ├── 📄 🎨 Foundations
@@ -454,20 +454,20 @@ design-system-docs/
     └── Desktop
 ```
 
-**命名規範:**
+**Naming conventions:**
 ```
-元件: ComponentName/Variant/State
-例如: Button/Primary/Hover
+Components: ComponentName/Variant/State
+Example: Button/Primary/Hover
 
-圖層: element-name
-例如: icon-left, label, container
+Layers: element-name
+Example: icon-left, label, container
 
-Frame: 使用 Auto Layout
+Frame: Use Auto Layout
 ```
 
-### 設計與程式碼同步
+### Design to Code Sync
 
-**Token 同步流程:**
+**Token sync flow:**
 ```
 Figma Tokens Studio
         ↓
@@ -481,98 +481,98 @@ Figma Tokens Studio
 └───────┴────────┴─────────┘
 ```
 
-### 版本控制
+### Version Control
 
-**語義化版本:**
+**Semantic versioning:**
 ```
 MAJOR.MINOR.PATCH
 
-MAJOR: 破壞性變更
-MINOR: 新增功能 (向後相容)
-PATCH: Bug 修復
+MAJOR: Breaking changes
+MINOR: New features (backward compatible)
+PATCH: Bug fixes
 
-範例: 2.1.0 → 2.1.1 (修復) → 2.2.0 (新功能) → 3.0.0 (破壞性)
+Example: 2.1.0 → 2.1.1 (fix) → 2.2.0 (new feature) → 3.0.0 (breaking)
 ```
 
-**變更日誌:**
+**Changelog:**
 ```markdown
 # Changelog
 
 ## [2.2.0] - 2024-01-15
 ### Added
-- 新增 Tooltip 元件
-- Button 新增 loading 狀態
+- Added Tooltip component
+- Button now supports loading state
 
 ### Changed
-- 更新主色調色板
+- Updated primary color palette
 
 ### Fixed
-- 修復 Input 在 Safari 的對齊問題
+- Fixed Input alignment issue in Safari
 ```
 
 ---
 
-## 維護與演進
+## Maintenance and Evolution
 
-### 元件生命週期
+### Component Lifecycle
 
 ```
-提案 → 設計 → 開發 → 測試 → 發佈 → 維護 → 棄用
- ↓      ↓      ↓      ↓       ↓       ↓       ↓
-RFC   Figma  Code   QA    Release  Iterate  Deprecated
+Proposal → Design → Development → Testing → Release → Maintenance → Deprecation
+   ↓         ↓         ↓           ↓         ↓          ↓            ↓
+  RFC      Figma      Code         QA      Release    Iterate    Deprecated
 ```
 
-### 新增元件流程
+### New Component Process
 
-1. **提案**: 提交 RFC 說明需求
-2. **審核**: 設計系統團隊評估
-3. **設計**: 在 Figma 建立元件
-4. **開發**: 實作程式碼
-5. **測試**: 視覺回歸、無障礙測試
-6. **文件**: 撰寫使用說明
-7. **發佈**: 加入版本發布
+1. **Proposal**: Submit RFC describing requirements
+2. **Review**: Design system team evaluation
+3. **Design**: Create component in Figma
+4. **Development**: Implement code
+5. **Testing**: Visual regression, accessibility testing
+6. **Documentation**: Write usage instructions
+7. **Release**: Include in version release
 
-### 棄用策略
+### Deprecation Strategy
 
 ```markdown
-## 棄用公告
+## Deprecation Notice
 
-### 棄用元件: OldButton
-- 棄用版本: v2.5.0
-- 移除版本: v3.0.0
-- 替代方案: 使用新的 Button 元件
+### Deprecated Component: OldButton
+- Deprecated version: v2.5.0
+- Removal version: v3.0.0
+- Alternative: Use new Button component
 
-### 遷移指南
-[提供遷移步驟]
+### Migration Guide
+[Provide migration steps]
 ```
 
-### 設計系統成熟度模型
+### Design System Maturity Model
 
-| 階段 | 特徵 |
-|------|------|
-| Level 1: 起步 | 有基本色彩與字型規範 |
-| Level 2: 成長 | 有元件庫與基本文件 |
-| Level 3: 成熟 | Design Tokens、版本控制、CI/CD |
-| Level 4: 規模化 | 跨團隊採用、貢獻流程、治理機制 |
+| Level | Characteristics |
+|-------|-----------------|
+| Level 1: Starting | Basic color and typography standards |
+| Level 2: Growing | Component library and basic documentation |
+| Level 3: Mature | Design Tokens, version control, CI/CD |
+| Level 4: Scaling | Cross-team adoption, contribution process, governance |
 
-### 衡量指標
+### Metrics
 
-| 指標 | 說明 |
-|------|------|
-| 採用率 | 專案使用設計系統的比例 |
-| 元件覆蓋率 | 設計系統元件 vs 客製元件 |
-| 貢獻數 | 團隊貢獻的元件數量 |
-| 問題回報 | Bug 數量與解決時間 |
-| 滿意度 | 設計師/開發者滿意度調查 |
+| Metric | Description |
+|--------|-------------|
+| Adoption Rate | Percentage of projects using design system |
+| Component Coverage | Design system components vs custom components |
+| Contributions | Number of components contributed by teams |
+| Issues Reported | Bug count and resolution time |
+| Satisfaction | Designer/developer satisfaction surveys |
 
 ---
 
-## 實用資源
+## Useful Resources
 
-### 設計系統範例
+### Design System Examples
 
-| 名稱 | 公司 | 連結 |
-|------|------|------|
+| Name | Company | Link |
+|------|---------|------|
 | Material Design | Google | material.io |
 | Human Interface | Apple | developer.apple.com/design |
 | Carbon | IBM | carbondesignsystem.com |
@@ -582,12 +582,12 @@ RFC   Figma  Code   QA    Release  Iterate  Deprecated
 | Lightning | Salesforce | lightningdesignsystem.com |
 | Atlassian | Atlassian | atlassian.design |
 
-### 工具清單
+### Tool List
 
-| 類別 | 工具 |
-|------|------|
-| 設計 | Figma, Sketch, Adobe XD |
-| Token 管理 | Tokens Studio, Style Dictionary |
-| 元件文件 | Storybook, Docusaurus, Zeroheight |
-| 視覺測試 | Chromatic, Percy, BackstopJS |
-| 無障礙測試 | axe, WAVE, Lighthouse |
+| Category | Tools |
+|----------|-------|
+| Design | Figma, Sketch, Adobe XD |
+| Token Management | Tokens Studio, Style Dictionary |
+| Component Documentation | Storybook, Docusaurus, Zeroheight |
+| Visual Testing | Chromatic, Percy, BackstopJS |
+| Accessibility Testing | axe, WAVE, Lighthouse |

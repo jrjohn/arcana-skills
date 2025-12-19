@@ -1,981 +1,982 @@
-# 規格文件驅動 UI 生成指南
+# Specification-Driven UI Generation Guide
 
-本指南說明如何從 SRS (軟體需求規格書)、SDD (軟體設計文件) 或其他規格文件自動生成完整的 UI/UX 畫面系列。
+This guide explains how to automatically generate complete UI/UX screen series from SRS (Software Requirements Specification), SDD (Software Design Document), or other specification documents.
 
-## 目錄
-1. [支援的文件格式](#支援的文件格式)
-2. [規格文件解析流程](#規格文件解析流程)
-3. [SRS 文件解析](#srs-文件解析)
-4. [SDD 文件解析](#sdd-文件解析)
-5. [需求到 UI 映射](#需求到-ui-映射)
-6. [批次 UI 生成](#批次-ui-生成)
-7. [輸出目錄結構](#輸出目錄結構)
-8. [生成報告模板](#生成報告模板)
-
----
-
-## 支援的文件格式
-
-### 可解析的規格文件類型
-
-```
-📄 支援格式
-├── Markdown (.md)
-│   ├── SRS-*.md (軟體需求規格書)
-│   ├── SDD-*.md (軟體設計文件)
-│   ├── PRD-*.md (產品需求文件)
-│   ├── FSD-*.md (功能規格文件)
-│   └── *.md (其他規格文件)
-│
-├── Word 文件 (.docx)
-│   ├── SRS-*.docx
-│   ├── SDD-*.docx
-│   ├── PRD-*.docx
-│   └── *.docx
-│
-├── PDF (.pdf)
-│   └── 各類規格文件
-│
-└── 其他
-    ├── .txt (純文字)
-    └── .json (結構化規格)
-```
-
-### 文件類型說明
-
-| 文件類型 | 全名 | 主要內容 | UI 生成重點 |
-|----------|------|----------|-------------|
-| **SRS** | Software Requirements Specification | 功能需求、使用者故事、用例 | 功能畫面、流程 |
-| **SDD** | Software Design Document | 系統架構、畫面規格、資料模型 | 詳細畫面設計 |
-| **PRD** | Product Requirements Document | 產品願景、功能清單、優先級 | 功能範圍、MVP |
-| **FSD** | Functional Specification Document | 詳細功能規格、業務規則 | 互動邏輯、驗證 |
-| **Wireframe Doc** | 線框圖文件 | 畫面佈局、元件配置 | 視覺實現 |
+## Table of Contents
+1. [Supported Document Formats](#supported-document-formats)
+2. [Specification Document Parsing Workflow](#specification-document-parsing-workflow)
+3. [SRS Document Parsing](#srs-document-parsing)
+4. [SDD Document Parsing](#sdd-document-parsing)
+5. [Requirements to UI Mapping](#requirements-to-ui-mapping)
+6. [Batch UI Generation](#batch-ui-generation)
+7. [Output Directory Structure](#output-directory-structure)
+8. [Generation Report Templates](#generation-report-templates)
 
 ---
 
-## 規格文件解析流程
+## Supported Document Formats
 
-### 整體流程
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    規格驅動 UI 生成流程                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  📄 輸入規格文件                                                 │
-│  (SRS/SDD/PRD.md 或 .docx)                                      │
-│           │                                                     │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │   文件解析       │                                           │
-│  │  ─────────────  │                                           │
-│  │  • 結構識別      │                                           │
-│  │  • 章節提取      │                                           │
-│  │  • 需求萃取      │                                           │
-│  └────────┬────────┘                                           │
-│           │                                                     │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │   需求分析       │                                           │
-│  │  ─────────────  │                                           │
-│  │  • 功能清單      │                                           │
-│  │  • 使用者角色    │                                           │
-│  │  • 流程識別      │                                           │
-│  │  • 畫面推導      │                                           │
-│  └────────┬────────┘                                           │
-│           │                                                     │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │   UI 規劃        │                                           │
-│  │  ─────────────  │                                           │
-│  │  • 畫面清單      │                                           │
-│  │  • 流程圖        │                                           │
-│  │  • 元件需求      │                                           │
-│  │  • 風格確認      │                                           │
-│  └────────┬────────┘                                           │
-│           │                                                     │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │   批次生成       │                                           │
-│  │  ─────────────  │                                           │
-│  │  • 依序生成畫面  │                                           │
-│  │  • 套用風格      │                                           │
-│  │  • 多格式輸出    │                                           │
-│  └────────┬────────┘                                           │
-│           │                                                     │
-│           ▼                                                     │
-│  📁 輸出目錄                                                    │
-│  └── generated-ui/                                              │
-│      ├── html/                                                  │
-│      ├── react/                                                 │
-│      ├── swiftui/                                               │
-│      ├── compose/                                               │
-│      └── report.md                                              │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### 解析步驟
+### Parseable Specification Document Types
 
 ```
-Step 1: 文件讀取
-        ├── 識別文件格式 (.md/.docx/.pdf)
-        ├── 讀取文件內容
-        └── 轉換為統一格式
-
-Step 2: 結構解析
-        ├── 識別章節標題
-        ├── 提取表格資料
-        ├── 解析列表項目
-        └── 識別圖片/流程圖
-
-Step 3: 需求萃取
-        ├── 提取功能需求 (FR)
-        ├── 提取使用者故事 (User Story)
-        ├── 提取用例 (Use Case)
-        ├── 提取畫面規格 (Screen Spec)
-        └── 提取業務規則 (Business Rule)
-
-Step 4: UI 映射
-        ├── 需求 → 畫面對應
-        ├── 流程 → 導航結構
-        ├── 資料 → 表單/列表
-        └── 規則 → 驗證/狀態
-
-Step 5: 批次生成
-        ├── 建立輸出目錄
-        ├── 依序生成各畫面
-        ├── 產生導航/路由
-        └── 輸出生成報告
+Supported Formats
++-- Markdown (.md)
+|   +-- SRS-*.md (Software Requirements Specification)
+|   +-- SDD-*.md (Software Design Document)
+|   +-- PRD-*.md (Product Requirements Document)
+|   +-- FSD-*.md (Functional Specification Document)
+|   +-- *.md (Other specification documents)
+|
++-- Word Documents (.docx)
+|   +-- SRS-*.docx
+|   +-- SDD-*.docx
+|   +-- PRD-*.docx
+|   +-- *.docx
+|
++-- PDF (.pdf)
+|   +-- Various specification documents
+|
++-- Other
+    +-- .txt (Plain text)
+    +-- .json (Structured specifications)
 ```
+
+### Document Type Descriptions
+
+| Document Type | Full Name | Main Content | UI Generation Focus |
+|---------------|-----------|--------------|---------------------|
+| **SRS** | Software Requirements Specification | Functional requirements, user stories, use cases | Feature screens, workflows |
+| **SDD** | Software Design Document | System architecture, screen specs, data models | Detailed screen design |
+| **PRD** | Product Requirements Document | Product vision, feature list, priorities | Feature scope, MVP |
+| **FSD** | Functional Specification Document | Detailed functional specs, business rules | Interaction logic, validation |
+| **Wireframe Doc** | Wireframe Document | Screen layouts, component arrangements | Visual implementation |
 
 ---
 
-## SRS 文件解析
+## Specification Document Parsing Workflow
 
-### SRS 常見結構
+### Overall Workflow
 
-```markdown
-# SRS 典型章節結構
-
-1. 簡介 (Introduction)
-   1.1 目的
-   1.2 範圍
-   1.3 定義與縮寫
-
-2. 整體描述 (Overall Description)
-   2.1 產品觀點
-   2.2 產品功能        ← 【重要】功能清單
-   2.3 使用者類別      ← 【重要】使用者角色
-   2.4 操作環境
-   2.5 限制條件
-
-3. 功能需求 (Functional Requirements) ← 【核心】
-   3.1 使用者故事
-   3.2 用例描述
-   3.3 功能規格
-
-4. 外部介面需求 (External Interface Requirements)
-   4.1 使用者介面      ← 【重要】UI 規格
-   4.2 硬體介面
-   4.3 軟體介面
-   4.4 通訊介面
-
-5. 非功能需求 (Non-functional Requirements)
-   5.1 效能需求
-   5.2 安全需求
-   5.3 可用性需求      ← 【參考】UX 要求
+```
++-------------------------------------------------------------------+
+|                Specification-Driven UI Generation Workflow         |
++-------------------------------------------------------------------+
+|                                                                   |
+|  Input Specification Document                                     |
+|  (SRS/SDD/PRD.md or .docx)                                       |
+|           |                                                       |
+|           v                                                       |
+|  +-------------------+                                            |
+|  |  Document Parsing |                                            |
+|  |  ---------------  |                                            |
+|  |  - Structure ID   |                                            |
+|  |  - Section extract|                                            |
+|  |  - Requirements   |                                            |
+|  +--------+----------+                                            |
+|           |                                                       |
+|           v                                                       |
+|  +-------------------+                                            |
+|  | Requirements      |                                            |
+|  | Analysis          |                                            |
+|  |  ---------------  |                                            |
+|  |  - Feature list   |                                            |
+|  |  - User roles     |                                            |
+|  |  - Flow ID        |                                            |
+|  |  - Screen derive  |                                            |
+|  +--------+----------+                                            |
+|           |                                                       |
+|           v                                                       |
+|  +-------------------+                                            |
+|  |   UI Planning     |                                            |
+|  |  ---------------  |                                            |
+|  |  - Screen list    |                                            |
+|  |  - Flow diagrams  |                                            |
+|  |  - Component reqs |                                            |
+|  |  - Style confirm  |                                            |
+|  +--------+----------+                                            |
+|           |                                                       |
+|           v                                                       |
+|  +-------------------+                                            |
+|  |  Batch Generation |                                            |
+|  |  ---------------  |                                            |
+|  |  - Generate screens|                                           |
+|  |  - Apply styles   |                                            |
+|  |  - Multi-format   |                                            |
+|  +--------+----------+                                            |
+|           |                                                       |
+|           v                                                       |
+|  Output Directory                                                 |
+|  +-- generated-ui/                                                |
+|      +-- html/                                                    |
+|      +-- react/                                                   |
+|      +-- swiftui/                                                 |
+|      +-- compose/                                                 |
+|      +-- report.md                                                |
+|                                                                   |
++-------------------------------------------------------------------+
 ```
 
-### SRS 解析重點
+### Parsing Steps
 
-#### 1. 功能需求萃取
-
-```markdown
-## 從 SRS 萃取的內容
-
-### 使用者故事格式
-As a [使用者角色]
-I want to [功能描述]
-So that [價值/目的]
-
-→ 萃取:
-  - 使用者角色 → 決定畫面權限/入口
-  - 功能描述 → 對應畫面/功能
-  - 價值目的 → 決定 UX 重點
-
-### 用例格式
-用例名稱: UC-001 使用者登入
-主要參與者: 一般使用者
-前置條件: 使用者已註冊
-主要流程:
-  1. 使用者開啟 App
-  2. 系統顯示登入畫面
-  3. 使用者輸入帳號密碼
-  4. 系統驗證
-  5. 登入成功，跳轉首頁
-替代流程:
-  3a. 使用者選擇社群登入
-  4a. 驗證失敗，顯示錯誤
-
-→ 萃取:
-  - 用例名稱 → 功能模組
-  - 主要流程 → 畫面流程
-  - 替代流程 → 分支/錯誤狀態
 ```
+Step 1: Document Reading
+        +-- Identify document format (.md/.docx/.pdf)
+        +-- Read document content
+        +-- Convert to unified format
 
-#### 2. 功能清單萃取
+Step 2: Structure Parsing
+        +-- Identify section headings
+        +-- Extract table data
+        +-- Parse list items
+        +-- Identify images/flowcharts
 
-```markdown
-## SRS 功能清單範例
+Step 3: Requirements Extraction
+        +-- Extract functional requirements (FR)
+        +-- Extract user stories (User Story)
+        +-- Extract use cases (Use Case)
+        +-- Extract screen specifications (Screen Spec)
+        +-- Extract business rules (Business Rule)
 
-| ID | 功能名稱 | 描述 | 優先級 |
-|----|----------|------|--------|
-| FR-001 | 使用者註冊 | 新使用者可透過 Email 註冊帳號 | Must |
-| FR-002 | 使用者登入 | 使用者可透過 Email/密碼登入 | Must |
-| FR-003 | 社群登入 | 支援 Google/Apple 登入 | Should |
-| FR-004 | 忘記密碼 | 使用者可重設密碼 | Must |
-| FR-005 | 瀏覽商品 | 使用者可瀏覽商品列表 | Must |
-| FR-006 | 搜尋商品 | 使用者可搜尋商品 | Must |
-| FR-007 | 商品詳情 | 使用者可查看商品詳情 | Must |
-| FR-008 | 加入購物車 | 使用者可將商品加入購物車 | Must |
-| FR-009 | 結帳 | 使用者可完成購買流程 | Must |
-| FR-010 | 訂單查詢 | 使用者可查詢訂單狀態 | Should |
+Step 4: UI Mapping
+        +-- Requirements -> Screen mapping
+        +-- Flows -> Navigation structure
+        +-- Data -> Forms/Lists
+        +-- Rules -> Validation/States
 
-→ 自動推導畫面:
-  - FR-001 → 註冊頁 (多步驟)
-  - FR-002 → 登入頁
-  - FR-003 → 社群登入按鈕 (整合至登入頁)
-  - FR-004 → 忘記密碼流程 (3頁)
-  - FR-005 → 商品列表頁
-  - FR-006 → 搜尋頁/搜尋結果
-  - FR-007 → 商品詳情頁
-  - FR-008 → 購物車頁
-  - FR-009 → 結帳流程 (多頁)
-  - FR-010 → 訂單列表/訂單詳情
-```
-
-#### 3. 使用者角色萃取
-
-```markdown
-## 使用者類別範例
-
-| 角色 | 描述 | 主要功能 |
-|------|------|----------|
-| 訪客 | 未登入使用者 | 瀏覽、搜尋 |
-| 會員 | 已註冊使用者 | 購買、收藏、訂單 |
-| VIP 會員 | 付費會員 | 專屬優惠、優先服務 |
-| 管理員 | 後台管理者 | 商品管理、訂單管理 |
-
-→ 自動推導:
-  - 不同角色的導航結構
-  - 權限控制畫面
-  - 角色專屬功能頁
+Step 5: Batch Generation
+        +-- Create output directories
+        +-- Generate screens sequentially
+        +-- Generate navigation/routing
+        +-- Output generation report
 ```
 
 ---
 
-## SDD 文件解析
+## SRS Document Parsing
 
-### SDD 常見結構
+### Common SRS Structure
 
 ```markdown
-# SDD 典型章節結構
+# Typical SRS Section Structure
 
-1. 簡介
-   1.1 目的
-   1.2 範圍
+1. Introduction
+   1.1 Purpose
+   1.2 Scope
+   1.3 Definitions and Abbreviations
 
-2. 系統架構 (System Architecture)
-   2.1 架構概覽
-   2.2 模組設計
+2. Overall Description
+   2.1 Product Perspective
+   2.2 Product Features        <- [Important] Feature List
+   2.3 User Classes            <- [Important] User Roles
+   2.4 Operating Environment
+   2.5 Constraints
 
-3. 資料設計 (Data Design)        ← 【重要】
-   3.1 資料模型
-   3.2 資料庫設計
+3. Functional Requirements    <- [Core]
+   3.1 User Stories
+   3.2 Use Case Descriptions
+   3.3 Functional Specifications
 
-4. 介面設計 (Interface Design)   ← 【核心】
-   4.1 使用者介面設計
-   4.2 畫面規格
-   4.3 導航結構
-   4.4 互動設計
+4. External Interface Requirements
+   4.1 User Interface         <- [Important] UI Specs
+   4.2 Hardware Interface
+   4.3 Software Interface
+   4.4 Communication Interface
 
-5. 元件設計 (Component Design)
-   5.1 元件規格
-   5.2 API 設計
+5. Non-functional Requirements
+   5.1 Performance Requirements
+   5.2 Security Requirements
+   5.3 Usability Requirements <- [Reference] UX Requirements
 ```
 
-### SDD 解析重點
+### SRS Parsing Focus
 
-#### 1. 畫面規格萃取
+#### 1. Functional Requirements Extraction
 
 ```markdown
-## SDD 畫面規格範例
+## Content Extracted from SRS
 
-### 4.2.1 登入畫面 (SCR-001)
+### User Story Format
+As a [user role]
+I want to [feature description]
+So that [value/purpose]
 
-**畫面名稱:** 登入畫面
-**畫面 ID:** SCR-001
-**存取權限:** 公開
+-> Extraction:
+  - User role -> Determines screen permissions/entry
+  - Feature description -> Maps to screens/features
+  - Value purpose -> Determines UX focus
 
-**畫面元素:**
-| 元素 | 類型 | 說明 | 驗證規則 |
-|------|------|------|----------|
+### Use Case Format
+Use Case Name: UC-001 User Login
+Primary Actor: General User
+Preconditions: User has registered
+Main Flow:
+  1. User opens App
+  2. System displays login screen
+  3. User enters username and password
+  4. System validates
+  5. Login successful, redirect to home
+Alternative Flows:
+  3a. User selects social login
+  4a. Validation fails, show error
+
+-> Extraction:
+  - Use case name -> Feature module
+  - Main flow -> Screen flow
+  - Alternative flows -> Branches/error states
+```
+
+#### 2. Feature List Extraction
+
+```markdown
+## SRS Feature List Example
+
+| ID | Feature Name | Description | Priority |
+|----|--------------|-------------|----------|
+| FR-001 | User Registration | New users can register via Email | Must |
+| FR-002 | User Login | Users can login via Email/password | Must |
+| FR-003 | Social Login | Support Google/Apple login | Should |
+| FR-004 | Forgot Password | Users can reset password | Must |
+| FR-005 | Browse Products | Users can browse product list | Must |
+| FR-006 | Search Products | Users can search products | Must |
+| FR-007 | Product Details | Users can view product details | Must |
+| FR-008 | Add to Cart | Users can add products to cart | Must |
+| FR-009 | Checkout | Users can complete purchase flow | Must |
+| FR-010 | Order Inquiry | Users can check order status | Should |
+
+-> Auto-derived Screens:
+  - FR-001 -> Registration page (multi-step)
+  - FR-002 -> Login page
+  - FR-003 -> Social login buttons (integrated into login page)
+  - FR-004 -> Forgot password flow (3 pages)
+  - FR-005 -> Product list page
+  - FR-006 -> Search page/search results
+  - FR-007 -> Product details page
+  - FR-008 -> Cart page
+  - FR-009 -> Checkout flow (multi-page)
+  - FR-010 -> Order list/order details
+```
+
+#### 3. User Role Extraction
+
+```markdown
+## User Class Example
+
+| Role | Description | Main Features |
+|------|-------------|---------------|
+| Guest | Non-logged in user | Browse, search |
+| Member | Registered user | Purchase, favorites, orders |
+| VIP Member | Paid member | Exclusive offers, priority service |
+| Admin | Backend administrator | Product management, order management |
+
+-> Auto-derived:
+  - Different navigation structures per role
+  - Permission control screens
+  - Role-specific feature pages
+```
+
+---
+
+## SDD Document Parsing
+
+### Common SDD Structure
+
+```markdown
+# Typical SDD Section Structure
+
+1. Introduction
+   1.1 Purpose
+   1.2 Scope
+
+2. System Architecture
+   2.1 Architecture Overview
+   2.2 Module Design
+
+3. Data Design                <- [Important]
+   3.1 Data Models
+   3.2 Database Design
+
+4. Interface Design           <- [Core]
+   4.1 User Interface Design
+   4.2 Screen Specifications
+   4.3 Navigation Structure
+   4.4 Interaction Design
+
+5. Component Design
+   5.1 Component Specifications
+   5.2 API Design
+```
+
+### SDD Parsing Focus
+
+#### 1. Screen Specification Extraction
+
+```markdown
+## SDD Screen Specification Example
+
+### 4.2.1 Login Screen (SCR-001)
+
+**Screen Name:** Login Screen
+**Screen ID:** SCR-001
+**Access Permission:** Public
+
+**Screen Elements:**
+| Element | Type | Description | Validation Rules |
+|---------|------|-------------|------------------|
 | Logo | Image | App Logo | - |
-| 標題 | Text | "歡迎回來" | - |
-| Email 輸入 | TextField | 使用者 Email | Email 格式 |
-| 密碼輸入 | SecureField | 使用者密碼 | 最少 8 字 |
-| 登入按鈕 | Button | 主要 CTA | - |
-| 忘記密碼 | Link | 跳轉忘記密碼 | - |
-| Google 登入 | Button | 社群登入 | - |
-| Apple 登入 | Button | 社群登入 | - |
-| 註冊連結 | Link | 跳轉註冊頁 | - |
+| Title | Text | "Welcome Back" | - |
+| Email Input | TextField | User Email | Email format |
+| Password Input | SecureField | User Password | Min 8 chars |
+| Login Button | Button | Primary CTA | - |
+| Forgot Password | Link | Navigate to forgot password | - |
+| Google Login | Button | Social login | - |
+| Apple Login | Button | Social login | - |
+| Register Link | Link | Navigate to registration | - |
 
-**畫面狀態:**
-- Default: 初始空白狀態
-- Loading: 登入驗證中
-- Error: 登入失敗 (顯示錯誤訊息)
-- Success: 登入成功 (跳轉首頁)
+**Screen States:**
+- Default: Initial empty state
+- Loading: Login validation in progress
+- Error: Login failed (show error message)
+- Success: Login successful (redirect to home)
 
-**導航:**
-- 來源: 啟動畫面、登出後
-- 目標: 首頁 (成功)、註冊頁、忘記密碼頁
+**Navigation:**
+- Source: Splash screen, after logout
+- Destination: Home (success), Registration page, Forgot password page
 
-→ 直接生成畫面程式碼
+-> Directly generate screen code
 ```
 
-#### 2. 導航結構萃取
+#### 2. Navigation Structure Extraction
 
 ```markdown
-## SDD 導航結構範例
+## SDD Navigation Structure Example
 
-### 4.3 導航結構
+### 4.3 Navigation Structure
 
 ```
 App
-├── 🔓 公開區域
-│   ├── 啟動畫面 (Splash)
-│   ├── 引導頁 (Onboarding)
-│   ├── 登入 (Login)
-│   ├── 註冊 (Register)
-│   └── 忘記密碼 (ForgotPassword)
-│
-├── 🔐 會員區域 (需登入)
-│   ├── 首頁 (Home)
-│   │   ├── 推薦商品
-│   │   └── 最新消息
-│   │
-│   ├── 探索 (Explore)
-│   │   ├── 分類列表
-│   │   ├── 商品列表
-│   │   └── 搜尋結果
-│   │
-│   ├── 購物車 (Cart)
-│   │   ├── 購物車列表
-│   │   └── 結帳流程
-│   │
-│   └── 我的 (Profile)
-│       ├── 個人資料
-│       ├── 訂單記錄
-│       ├── 收藏清單
-│       └── 設定
-│
-└── 🔒 管理區域 (需管理權限)
-    ├── 儀表板 (Dashboard)
-    ├── 商品管理
-    └── 訂單管理
++-- Public Area
+|   +-- Splash Screen
+|   +-- Onboarding
+|   +-- Login
+|   +-- Register
+|   +-- Forgot Password
+|
++-- Member Area (Login Required)
+|   +-- Home
+|   |   +-- Recommended Products
+|   |   +-- Latest News
+|   |
+|   +-- Explore
+|   |   +-- Category List
+|   |   +-- Product List
+|   |   +-- Search Results
+|   |
+|   +-- Cart
+|   |   +-- Cart List
+|   |   +-- Checkout Flow
+|   |
+|   +-- Profile
+|       +-- Personal Info
+|       +-- Order History
+|       +-- Favorites
+|       +-- Settings
+|
++-- Admin Area (Admin Permission Required)
+    +-- Dashboard
+    +-- Product Management
+    +-- Order Management
 ```
 
-→ 自動生成:
-  - Tab Bar 導航
+-> Auto-generate:
+  - Tab Bar navigation
   - Navigation Stack
-  - 路由配置
+  - Routing configuration
 ```
 
-#### 3. 資料模型萃取
+#### 3. Data Model Extraction
 
 ```markdown
-## SDD 資料模型範例
+## SDD Data Model Example
 
-### 3.1 資料模型
+### 3.1 Data Models
 
-**User (使用者)**
-| 欄位 | 類型 | 說明 |
-|------|------|------|
-| id | UUID | 主鍵 |
-| email | String | 電子郵件 |
-| name | String | 姓名 |
-| avatar | URL | 頭像 |
-| createdAt | DateTime | 建立時間 |
+**User**
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| email | String | Email address |
+| name | String | Full name |
+| avatar | URL | Avatar image |
+| createdAt | DateTime | Creation time |
 
-**Product (商品)**
-| 欄位 | 類型 | 說明 |
-|------|------|------|
-| id | UUID | 主鍵 |
-| name | String | 商品名稱 |
-| description | String | 描述 |
-| price | Decimal | 價格 |
-| images | [URL] | 圖片列表 |
-| category | Category | 分類 |
+**Product**
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| name | String | Product name |
+| description | String | Description |
+| price | Decimal | Price |
+| images | [URL] | Image list |
+| category | Category | Category |
 
-→ 自動推導:
-  - 表單欄位配置
-  - 列表顯示欄位
-  - 詳情頁結構
+-> Auto-derived:
+  - Form field configuration
+  - List display fields
+  - Detail page structure
 ```
 
 ---
 
-## 需求到 UI 映射
+## Requirements to UI Mapping
 
-### 自動映射規則
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     需求 → UI 自動映射                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  需求類型              →    UI 畫面                             │
-│  ─────────────────────────────────────────────────────────      │
-│  使用者註冊            →    註冊流程 (1-3 頁)                    │
-│  使用者登入            →    登入頁 + 社群登入                    │
-│  密碼重設              →    忘記密碼流程 (3 頁)                  │
-│  瀏覽列表              →    列表頁 + 篩選 + 排序                 │
-│  搜尋功能              →    搜尋頁 + 搜尋結果                    │
-│  查看詳情              →    詳情頁 + 相關推薦                    │
-│  CRUD 操作             →    列表 + 新增 + 編輯 + 詳情            │
-│  購物車功能            →    購物車頁 + 數量調整                  │
-│  結帳流程              →    結帳多步驟 (3-5 頁)                  │
-│  訂單管理              →    訂單列表 + 訂單詳情                  │
-│  個人資料              →    個人檔案 + 編輯頁                    │
-│  設定功能              →    設定列表 + 各項設定頁                │
-│  通知功能              →    通知列表 + 通知詳情                  │
-│  社群功能              →    動態牆 + 發布 + 互動                 │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### 畫面狀態自動補齊
+### Auto-Mapping Rules
 
 ```
-每個功能畫面自動產生:
-
-列表頁狀態:
-├── Default (有資料)
-├── Empty (空狀態 + CTA)
-├── Loading (載入中 + Skeleton)
-├── Error (錯誤 + 重試)
-├── Refreshing (下拉更新)
-└── LoadMore (載入更多)
-
-表單頁狀態:
-├── Default (空白)
-├── Filled (有資料)
-├── Validating (驗證中)
-├── ValidationError (驗證錯誤)
-├── Submitting (提交中)
-├── SubmitSuccess (成功)
-└── SubmitError (失敗)
-
-詳情頁狀態:
-├── Default (成功)
-├── Loading (載入中)
-└── Error (資料不存在)
++-------------------------------------------------------------------+
+|                  Requirements -> UI Auto-Mapping                   |
++-------------------------------------------------------------------+
+|                                                                   |
+|  Requirement Type          ->    UI Screen                        |
+|  ---------------------------------------------------------        |
+|  User Registration         ->    Registration flow (1-3 pages)    |
+|  User Login                ->    Login page + social login        |
+|  Password Reset            ->    Forgot password flow (3 pages)   |
+|  Browse List               ->    List page + filter + sort        |
+|  Search Feature            ->    Search page + search results     |
+|  View Details              ->    Detail page + recommendations    |
+|  CRUD Operations           ->    List + Create + Edit + Details   |
+|  Shopping Cart             ->    Cart page + quantity adjust      |
+|  Checkout Flow             ->    Multi-step checkout (3-5 pages)  |
+|  Order Management          ->    Order list + order details       |
+|  Profile                   ->    Profile page + edit page         |
+|  Settings                  ->    Settings list + setting pages    |
+|  Notifications             ->    Notification list + details      |
+|  Social Features           ->    Feed + post + interactions       |
+|                                                                   |
++-------------------------------------------------------------------+
 ```
 
-### 映射範例
+### Screen State Auto-Completion
+
+```
+Auto-generated states for each feature screen:
+
+List Page States:
++-- Default (with data)
++-- Empty (empty state + CTA)
++-- Loading (loading + Skeleton)
++-- Error (error + retry)
++-- Refreshing (pull to refresh)
++-- LoadMore (load more)
+
+Form Page States:
++-- Default (empty)
++-- Filled (with data)
++-- Validating (validation in progress)
++-- ValidationError (validation error)
++-- Submitting (submitting)
++-- SubmitSuccess (success)
++-- SubmitError (failure)
+
+Detail Page States:
++-- Default (success)
++-- Loading (loading)
++-- Error (data not found)
+```
+
+### Mapping Example
 
 ```markdown
-## 輸入: SRS 功能需求
+## Input: SRS Functional Requirement
 
-FR-005: 瀏覽商品
-- 使用者可瀏覽商品列表
-- 支援分類篩選
-- 支援價格排序
-- 顯示商品圖片、名稱、價格
+FR-005: Browse Products
+- Users can browse product list
+- Support category filtering
+- Support price sorting
+- Display product image, name, price
 
-## 輸出: UI 畫面清單
+## Output: UI Screen List
 
-### SCR-010 商品列表頁
-- 頁面類型: 列表頁
-- 元件:
-  - 頂部: 搜尋欄 + 篩選按鈕
-  - 篩選: 分類篩選 Sheet
-  - 排序: 排序選單
-  - 列表: 商品卡片網格 (2 欄)
-  - 卡片: 圖片 + 名稱 + 價格 + 收藏
-- 狀態: Default/Empty/Loading/Error/LoadMore
-- 導航: Tab Bar → 首頁 Tab
+### SCR-010 Product List Page
+- Page Type: List page
+- Components:
+  - Top: Search bar + filter button
+  - Filter: Category filter sheet
+  - Sort: Sort menu
+  - List: Product card grid (2 columns)
+  - Card: Image + name + price + favorite
+- States: Default/Empty/Loading/Error/LoadMore
+- Navigation: Tab Bar -> Home Tab
 
-### SCR-011 分類篩選 Sheet
-- 頁面類型: Bottom Sheet
-- 元件: 分類列表 (單選/多選)
+### SCR-011 Category Filter Sheet
+- Page Type: Bottom Sheet
+- Components: Category list (single/multi select)
 
-### SCR-012 排序選單
-- 頁面類型: Action Sheet
-- 選項: 推薦/價格低到高/價格高到低/最新
+### SCR-012 Sort Menu
+- Page Type: Action Sheet
+- Options: Recommended/Price low to high/Price high to low/Newest
 ```
 
 ---
 
-## 批次 UI 生成
+## Batch UI Generation
 
-### 生成請求格式
+### Generation Request Format
 
 ```markdown
-## 規格驅動 UI 生成請求
+## Specification-Driven UI Generation Request
 
-### 輸入文件
-- 文件路徑: /path/to/SRS-ProjectName-1.0.md
-- 文件類型: SRS (軟體需求規格書)
+### Input Document
+- Document Path: /path/to/SRS-ProjectName-1.0.md
+- Document Type: SRS (Software Requirements Specification)
 
-### 輸出設定
-- 輸出目錄: /path/to/generated-ui/
-- 輸出格式:
+### Output Settings
+- Output Directory: /path/to/generated-ui/
+- Output Formats:
   - [x] HTML + Tailwind
   - [x] React
   - [ ] SwiftUI
   - [ ] Jetpack Compose
-- 風格設定:
-  - 主色: #6366F1
-  - 風格: 現代簡約
-  - 圓角: 12px
+- Style Settings:
+  - Primary Color: #6366F1
+  - Style: Modern minimalist
+  - Border Radius: 12px
 
-### 生成範圍
-- [x] 全部功能
-- [ ] 僅指定功能: [功能列表]
+### Generation Scope
+- [x] All features
+- [ ] Specific features only: [feature list]
 
-### 額外選項
-- [x] 產生導航/路由配置
-- [x] 產生元件庫
-- [x] 產生生成報告
-- [ ] 套用已萃取風格
+### Additional Options
+- [x] Generate navigation/routing configuration
+- [x] Generate component library
+- [x] Generate generation report
+- [ ] Apply extracted style
 ```
 
-### 批次生成流程
+### Batch Generation Flow
 
 ```
-1. 解析規格文件
-   ├── 讀取 SRS/SDD
-   ├── 萃取功能需求
-   └── 產生畫面清單
+1. Parse Specification Document
+   +-- Read SRS/SDD
+   +-- Extract functional requirements
+   +-- Generate screen list
 
-2. 確認生成範圍
-   ├── 顯示畫面清單
-   ├── 估計畫面數量
-   └── 使用者確認
+2. Confirm Generation Scope
+   +-- Display screen list
+   +-- Estimate screen count
+   +-- User confirmation
 
-3. 依序生成畫面
-   ├── 按模組分組
-   ├── 依優先級排序
-   ├── 逐一生成程式碼
-   └── 顯示進度
+3. Generate Screens Sequentially
+   +-- Group by module
+   +-- Sort by priority
+   +-- Generate code one by one
+   +-- Display progress
 
-4. 產生支援檔案
-   ├── 路由配置
-   ├── 共用元件
-   ├── 主題設定
-   └── 型別定義
+4. Generate Supporting Files
+   +-- Routing configuration
+   +-- Shared components
+   +-- Theme settings
+   +-- Type definitions
 
-5. 輸出報告
-   ├── 生成摘要
-   ├── 畫面清單
-   ├── 檔案目錄
-   └── 後續建議
-```
-
----
-
-## 輸出目錄結構
-
-### 標準輸出目錄
-
-```
-📁 generated-ui/
-│
-├── 📄 README.md                    # 生成報告與使用說明
-├── 📄 SCREENS.md                   # 畫面清單與規格
-│
-├── 📁 html/                        # HTML + Tailwind 輸出
-│   ├── 📁 auth/                    # 認證模組
-│   │   ├── login.html
-│   │   ├── register.html
-│   │   ├── forgot-password.html
-│   │   └── reset-password.html
-│   │
-│   ├── 📁 home/                    # 首頁模組
-│   │   ├── home.html
-│   │   └── dashboard.html
-│   │
-│   ├── 📁 product/                 # 商品模組
-│   │   ├── product-list.html
-│   │   ├── product-detail.html
-│   │   └── product-search.html
-│   │
-│   ├── 📁 cart/                    # 購物車模組
-│   │   ├── cart.html
-│   │   ├── checkout.html
-│   │   └── order-confirmation.html
-│   │
-│   ├── 📁 profile/                 # 個人檔案模組
-│   │   ├── profile.html
-│   │   ├── edit-profile.html
-│   │   ├── orders.html
-│   │   └── settings.html
-│   │
-│   ├── 📁 components/              # 共用元件
-│   │   ├── navbar.html
-│   │   ├── tabbar.html
-│   │   ├── card.html
-│   │   └── button.html
-│   │
-│   └── 📁 states/                  # 狀態頁面
-│       ├── empty.html
-│       ├── loading.html
-│       └── error.html
-│
-├── 📁 react/                       # React 輸出
-│   ├── 📁 src/
-│   │   ├── 📁 components/
-│   │   │   ├── 📁 ui/              # 基礎元件
-│   │   │   │   ├── Button.tsx
-│   │   │   │   ├── Input.tsx
-│   │   │   │   ├── Card.tsx
-│   │   │   │   └── index.ts
-│   │   │   │
-│   │   │   └── 📁 layout/          # 佈局元件
-│   │   │       ├── Header.tsx
-│   │   │       ├── TabBar.tsx
-│   │   │       └── Container.tsx
-│   │   │
-│   │   ├── 📁 screens/             # 畫面元件
-│   │   │   ├── 📁 auth/
-│   │   │   │   ├── LoginScreen.tsx
-│   │   │   │   ├── RegisterScreen.tsx
-│   │   │   │   └── ForgotPasswordScreen.tsx
-│   │   │   │
-│   │   │   ├── 📁 home/
-│   │   │   │   └── HomeScreen.tsx
-│   │   │   │
-│   │   │   ├── 📁 product/
-│   │   │   │   ├── ProductListScreen.tsx
-│   │   │   │   └── ProductDetailScreen.tsx
-│   │   │   │
-│   │   │   └── 📁 profile/
-│   │   │       ├── ProfileScreen.tsx
-│   │   │       └── SettingsScreen.tsx
-│   │   │
-│   │   ├── 📁 styles/
-│   │   │   └── theme.ts            # 主題設定
-│   │   │
-│   │   ├── 📁 types/
-│   │   │   └── index.ts            # 型別定義
-│   │   │
-│   │   └── 📁 routes/
-│   │       └── index.tsx           # 路由配置
-│   │
-│   └── package.json
-│
-├── 📁 swiftui/                     # SwiftUI 輸出
-│   ├── 📁 Sources/
-│   │   ├── 📁 Views/
-│   │   │   ├── 📁 Auth/
-│   │   │   ├── 📁 Home/
-│   │   │   ├── 📁 Product/
-│   │   │   └── 📁 Profile/
-│   │   │
-│   │   ├── 📁 Components/
-│   │   │   ├── AppButton.swift
-│   │   │   ├── AppTextField.swift
-│   │   │   └── AppCard.swift
-│   │   │
-│   │   └── 📁 Theme/
-│   │       └── AppTheme.swift
-│   │
-│   └── Package.swift
-│
-├── 📁 compose/                     # Jetpack Compose 輸出
-│   └── 📁 app/src/main/java/
-│       └── 📁 com/example/app/
-│           ├── 📁 ui/
-│           │   ├── 📁 screens/
-│           │   ├── 📁 components/
-│           │   └── 📁 theme/
-│           └── 📁 navigation/
-│
-├── 📁 assets/                      # 共用資源
-│   ├── 📁 icons/
-│   ├── 📁 images/
-│   └── 📁 fonts/
-│
-└── 📁 figma/                       # Figma 匯出
-    └── screens.json                # Figma 結構 JSON
-```
-
-### 按專案命名
-
-```
-📁 generated-ui-{ProjectName}/
-│
-├── 📄 README.md
-├── 📄 SCREENS.md
-├── 📄 CHANGELOG.md
-│
-├── 📁 v1.0/                        # 版本化輸出
-│   ├── html/
-│   ├── react/
-│   └── ...
-│
-└── 📁 latest/                      # 最新版本
-    └── (symlink to v1.0)
+5. Output Report
+   +-- Generation summary
+   +-- Screen list
+   +-- File directory
+   +-- Recommendations
 ```
 
 ---
 
-## 生成報告模板
+## Output Directory Structure
 
-### README.md 模板
+### Standard Output Directory
+
+```
+generated-ui/
+|
++-- README.md                    # Generation report and usage guide
++-- SCREENS.md                   # Screen list and specifications
+|
++-- html/                        # HTML + Tailwind output
+|   +-- auth/                    # Auth module
+|   |   +-- login.html
+|   |   +-- register.html
+|   |   +-- forgot-password.html
+|   |   +-- reset-password.html
+|   |
+|   +-- home/                    # Home module
+|   |   +-- home.html
+|   |   +-- dashboard.html
+|   |
+|   +-- product/                 # Product module
+|   |   +-- product-list.html
+|   |   +-- product-detail.html
+|   |   +-- product-search.html
+|   |
+|   +-- cart/                    # Cart module
+|   |   +-- cart.html
+|   |   +-- checkout.html
+|   |   +-- order-confirmation.html
+|   |
+|   +-- profile/                 # Profile module
+|   |   +-- profile.html
+|   |   +-- edit-profile.html
+|   |   +-- orders.html
+|   |   +-- settings.html
+|   |
+|   +-- components/              # Shared components
+|   |   +-- navbar.html
+|   |   +-- tabbar.html
+|   |   +-- card.html
+|   |   +-- button.html
+|   |
+|   +-- states/                  # State pages
+|       +-- empty.html
+|       +-- loading.html
+|       +-- error.html
+|
++-- react/                       # React output
+|   +-- src/
+|   |   +-- components/
+|   |   |   +-- ui/              # Base components
+|   |   |   |   +-- Button.tsx
+|   |   |   |   +-- Input.tsx
+|   |   |   |   +-- Card.tsx
+|   |   |   |   +-- index.ts
+|   |   |   |
+|   |   |   +-- layout/          # Layout components
+|   |   |       +-- Header.tsx
+|   |   |       +-- TabBar.tsx
+|   |   |       +-- Container.tsx
+|   |   |
+|   |   +-- screens/             # Screen components
+|   |   |   +-- auth/
+|   |   |   |   +-- LoginScreen.tsx
+|   |   |   |   +-- RegisterScreen.tsx
+|   |   |   |   +-- ForgotPasswordScreen.tsx
+|   |   |   |
+|   |   |   +-- home/
+|   |   |   |   +-- HomeScreen.tsx
+|   |   |   |
+|   |   |   +-- product/
+|   |   |   |   +-- ProductListScreen.tsx
+|   |   |   |   +-- ProductDetailScreen.tsx
+|   |   |   |
+|   |   |   +-- profile/
+|   |   |       +-- ProfileScreen.tsx
+|   |   |       +-- SettingsScreen.tsx
+|   |   |
+|   |   +-- styles/
+|   |   |   +-- theme.ts            # Theme settings
+|   |   |
+|   |   +-- types/
+|   |   |   +-- index.ts            # Type definitions
+|   |   |
+|   |   +-- routes/
+|   |       +-- index.tsx           # Route configuration
+|   |
+|   +-- package.json
+|
++-- swiftui/                     # SwiftUI output
+|   +-- Sources/
+|   |   +-- Views/
+|   |   |   +-- Auth/
+|   |   |   +-- Home/
+|   |   |   +-- Product/
+|   |   |   +-- Profile/
+|   |   |
+|   |   +-- Components/
+|   |   |   +-- AppButton.swift
+|   |   |   +-- AppTextField.swift
+|   |   |   +-- AppCard.swift
+|   |   |
+|   |   +-- Theme/
+|   |       +-- AppTheme.swift
+|   |
+|   +-- Package.swift
+|
++-- compose/                     # Jetpack Compose output
+|   +-- app/src/main/java/
+|       +-- com/example/app/
+|           +-- ui/
+|           |   +-- screens/
+|           |   +-- components/
+|           |   +-- theme/
+|           +-- navigation/
+|
++-- assets/                      # Shared resources
+|   +-- icons/
+|   +-- images/
+|   +-- fonts/
+|
++-- figma/                       # Figma export
+    +-- screens.json                # Figma structure JSON
+```
+
+### Project-Named Output
+
+```
+generated-ui-{ProjectName}/
+|
++-- README.md
++-- SCREENS.md
++-- CHANGELOG.md
+|
++-- v1.0/                        # Versioned output
+|   +-- html/
+|   +-- react/
+|   +-- ...
+|
++-- latest/                      # Latest version
+    +-- (symlink to v1.0)
+```
+
+---
+
+## Generation Report Templates
+
+### README.md Template
 
 ```markdown
-# {ProjectName} UI 生成報告
+# {ProjectName} UI Generation Report
 
-## 生成資訊
+## Generation Info
 
-| 項目 | 內容 |
-|------|------|
-| 專案名稱 | {ProjectName} |
-| 規格文件 | SRS-{ProjectName}-1.0.md |
-| 生成時間 | {DateTime} |
-| 生成版本 | v1.0 |
+| Item | Content |
+|------|---------|
+| Project Name | {ProjectName} |
+| Specification Document | SRS-{ProjectName}-1.0.md |
+| Generation Time | {DateTime} |
+| Generation Version | v1.0 |
 
-## 生成摘要
+## Generation Summary
 
-| 統計 | 數量 |
-|------|------|
-| 總畫面數 | {TotalScreens} |
-| 模組數 | {TotalModules} |
-| 元件數 | {TotalComponents} |
+| Statistic | Count |
+|-----------|-------|
+| Total Screens | {TotalScreens} |
+| Modules | {TotalModules} |
+| Components | {TotalComponents} |
 
-### 輸出格式
+### Output Formats
 
-- [x] HTML + Tailwind ({ScreenCount} 頁)
-- [x] React ({ScreenCount} 元件)
+- [x] HTML + Tailwind ({ScreenCount} pages)
+- [x] React ({ScreenCount} components)
 - [ ] SwiftUI
 - [ ] Jetpack Compose
 
-## 畫面清單
+## Screen List
 
-### 認證模組 (Auth)
+### Auth Module
 
-| 畫面 | 檔案 | 狀態 |
-|------|------|------|
-| 登入 | auth/login.html | ✅ |
-| 註冊 | auth/register.html | ✅ |
-| 忘記密碼 | auth/forgot-password.html | ✅ |
+| Screen | File | Status |
+|--------|------|--------|
+| Login | auth/login.html | Done |
+| Register | auth/register.html | Done |
+| Forgot Password | auth/forgot-password.html | Done |
 
-### 首頁模組 (Home)
+### Home Module
 
-| 畫面 | 檔案 | 狀態 |
-|------|------|------|
-| 首頁 | home/home.html | ✅ |
+| Screen | File | Status |
+|--------|------|--------|
+| Home | home/home.html | Done |
 
-### 商品模組 (Product)
+### Product Module
 
-| 畫面 | 檔案 | 狀態 |
-|------|------|------|
-| 商品列表 | product/list.html | ✅ |
-| 商品詳情 | product/detail.html | ✅ |
-| 搜尋結果 | product/search.html | ✅ |
+| Screen | File | Status |
+|--------|------|--------|
+| Product List | product/list.html | Done |
+| Product Detail | product/detail.html | Done |
+| Search Results | product/search.html | Done |
 
-... (更多模組)
+... (more modules)
 
-## 風格設定
+## Style Settings
 
 ```
-主色: #6366F1
-次色: #EC4899
-背景: #FFFFFF
-圓角: 12px
-字型: Inter / SF Pro
+Primary Color: #6366F1
+Secondary Color: #EC4899
+Background: #FFFFFF
+Border Radius: 12px
+Font: Inter / SF Pro
 ```
 
-## 如何使用
+## How to Use
 
-### HTML 預覽
+### HTML Preview
 ```bash
 cd generated-ui/html
 open login.html
 ```
 
-### React 開發
+### React Development
 ```bash
 cd generated-ui/react
 npm install
 npm run dev
 ```
 
-## 後續建議
+## Next Steps
 
-1. **功能完善**
-   - [ ] 串接後端 API
-   - [ ] 實作表單驗證邏輯
-   - [ ] 加入狀態管理
+1. **Feature Completion**
+   - [ ] Connect backend API
+   - [ ] Implement form validation logic
+   - [ ] Add state management
 
-2. **設計調整**
-   - [ ] 根據品牌調整色彩
-   - [ ] 替換 placeholder 圖片
-   - [ ] 微調間距與字型
+2. **Design Adjustments**
+   - [ ] Adjust colors to brand
+   - [ ] Replace placeholder images
+   - [ ] Fine-tune spacing and typography
 
-3. **測試**
-   - [ ] 響應式測試
-   - [ ] 無障礙測試
-   - [ ] 瀏覽器相容性測試
+3. **Testing**
+   - [ ] Responsive testing
+   - [ ] Accessibility testing
+   - [ ] Browser compatibility testing
 
-## 檔案目錄
+## File Directory
 
 ```
 generated-ui/
-├── html/           # {HTMLCount} 個檔案
-├── react/          # {ReactCount} 個檔案
-├── assets/         # 共用資源
-└── README.md       # 本文件
++-- html/           # {HTMLCount} files
++-- react/          # {ReactCount} files
++-- assets/         # Shared resources
++-- README.md       # This document
 ```
 
 ---
 
-*由 App UI/UX Designer Skill 自動生成*
-*生成時間: {DateTime}*
+*Auto-generated by App UI/UX Designer Skill*
+*Generation Time: {DateTime}*
 ```
 
-### SCREENS.md 模板
+### SCREENS.md Template
 
 ```markdown
-# {ProjectName} 畫面規格
+# {ProjectName} Screen Specifications
 
-## 畫面總覽
+## Screen Overview
 
 ```
-總畫面數: {Total}
-├── 認證模組: {AuthCount} 頁
-├── 首頁模組: {HomeCount} 頁
-├── 商品模組: {ProductCount} 頁
-├── 購物車模組: {CartCount} 頁
-└── 個人檔案模組: {ProfileCount} 頁
+Total Screens: {Total}
++-- Auth Module: {AuthCount} pages
++-- Home Module: {HomeCount} pages
++-- Product Module: {ProductCount} pages
++-- Cart Module: {CartCount} pages
++-- Profile Module: {ProfileCount} pages
 ```
 
 ---
 
-## SCR-001 登入頁
+## SCR-001 Login Page
 
-**基本資訊**
-| 項目 | 內容 |
-|------|------|
-| 畫面 ID | SCR-001 |
-| 畫面名稱 | 登入頁 |
-| 模組 | 認證 (Auth) |
-| 存取權限 | 公開 |
+**Basic Info**
+| Item | Content |
+|------|---------|
+| Screen ID | SCR-001 |
+| Screen Name | Login Page |
+| Module | Auth |
+| Access Permission | Public |
 
-**畫面元素**
-| 元素 | 類型 | 必要 |
-|------|------|------|
-| Logo | Image | ✓ |
-| 標題 | Text | ✓ |
-| Email 輸入 | TextField | ✓ |
-| 密碼輸入 | SecureField | ✓ |
-| 登入按鈕 | Button | ✓ |
-| 忘記密碼 | Link | ✓ |
-| 社群登入 | ButtonGroup | ○ |
-| 註冊連結 | Link | ✓ |
+**Screen Elements**
+| Element | Type | Required |
+|---------|------|----------|
+| Logo | Image | Yes |
+| Title | Text | Yes |
+| Email Input | TextField | Yes |
+| Password Input | SecureField | Yes |
+| Login Button | Button | Yes |
+| Forgot Password | Link | Yes |
+| Social Login | ButtonGroup | No |
+| Register Link | Link | Yes |
 
-**畫面狀態**
+**Screen States**
 - Default
 - Loading
 - Error
 
-**導航**
-- 來源: 啟動畫面
-- 目標: 首頁、註冊頁、忘記密碼
+**Navigation**
+- Source: Splash screen
+- Destination: Home, Register page, Forgot password
 
-**對應需求**
-- FR-002: 使用者登入
-- FR-003: 社群登入
-
----
-
-## SCR-002 註冊頁
-
-... (更多畫面規格)
-```
+**Requirements Covered**
+- FR-002: User Login
+- FR-003: Social Login
 
 ---
 
-## 快速開始指令
+## SCR-002 Register Page
 
-### 從 SRS 生成 UI
-
-```
-請讀取 /path/to/SRS-ProjectName-1.0.md
-並生成完整的 UI 畫面
-
-輸出設定:
-- 目錄: ./generated-ui/
-- 格式: HTML + React
-- 風格: 現代簡約，主色 #6366F1
-```
-
-### 從 SDD 生成 UI
-
-```
-請讀取 /path/to/SDD-ProjectName-1.0.docx
-根據畫面規格生成 UI
-
-輸出設定:
-- 目錄: ./generated-ui/
-- 格式: SwiftUI
-- 嚴格遵循 SDD 定義的畫面結構
-```
-
-### 從多份文件生成
-
-```
-請讀取以下文件:
-1. /path/to/SRS-ProjectName-1.0.md (功能需求)
-2. /path/to/SDD-ProjectName-1.0.md (畫面規格)
-
-整合兩份文件，生成完整 UI
-
-輸出設定:
-- 目錄: ./generated-ui-ProjectName/
-- 格式: 全平台 (HTML/React/SwiftUI/Compose)
+... (more screen specifications)
 ```
 
 ---
 
-## 生成檢查清單
+## Quick Start Commands
+
+### Generate UI from SRS
 
 ```
-文件解析
-□ 文件格式識別正確
-□ 章節結構解析完整
-□ 功能需求萃取完整
-□ 使用者角色識別
-□ 畫面規格提取
+Please read /path/to/SRS-ProjectName-1.0.md
+and generate complete UI screens
 
-UI 規劃
-□ 畫面清單完整
-□ 流程邏輯正確
-□ 狀態覆蓋完整
-□ 導航結構合理
+Output Settings:
+- Directory: ./generated-ui/
+- Format: HTML + React
+- Style: Modern minimalist, primary color #6366F1
+```
 
-生成品質
-□ 程式碼可執行
-□ 風格一致
-□ 命名規範
-□ 目錄結構清晰
+### Generate UI from SDD
 
-輸出完整性
-□ 所有畫面已生成
-□ 共用元件已建立
-□ 路由配置已產生
-□ 生成報告已輸出
+```
+Please read /path/to/SDD-ProjectName-1.0.docx
+and generate UI based on screen specifications
+
+Output Settings:
+- Directory: ./generated-ui/
+- Format: SwiftUI
+- Strictly follow SDD-defined screen structure
+```
+
+### Generate from Multiple Documents
+
+```
+Please read the following documents:
+1. /path/to/SRS-ProjectName-1.0.md (Functional requirements)
+2. /path/to/SDD-ProjectName-1.0.md (Screen specifications)
+
+Integrate both documents to generate complete UI
+
+Output Settings:
+- Directory: ./generated-ui-ProjectName/
+- Format: All platforms (HTML/React/SwiftUI/Compose)
+```
+
+---
+
+## Generation Checklist
+
+```
+Document Parsing
+[ ] Document format identified correctly
+[ ] Section structure parsed completely
+[ ] Functional requirements extracted completely
+[ ] User roles identified
+[ ] Screen specifications extracted
+
+UI Planning
+[ ] Screen list complete
+[ ] Flow logic correct
+[ ] State coverage complete
+[ ] Navigation structure reasonable
+
+Generation Quality
+[ ] Code is executable
+[ ] Style is consistent
+[ ] Naming follows conventions
+[ ] Directory structure is clear
+
+Output Completeness
+[ ] All screens generated
+[ ] Shared components created
+[ ] Route configuration generated
+[ ] Generation report output
 ```
