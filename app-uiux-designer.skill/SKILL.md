@@ -1,7 +1,7 @@
 ---
 name: app-uiux-designer
 description: |
-  Enterprise-grade UI/UX design expert. **SRS/SDD → Batch UI Generation** (HTML/React/Angular/SwiftUI/Compose) + **100% Coverage Validation** (RTM/Gap Analysis). Features: Visual Style Extraction, Production-Ready Assets (Android drawable-*/iOS Assets.xcassets/Web favicon), **Motion Design** (Micro-interactions/Lottie), **Dark Mode**, **UX Writing**, **Data Visualization**, **i18n/RTL Localization**, **Design Review** (Nielsen 10 Heuristics), HIG/Material Design 3/WCAG. 17 professional reference docs covering the complete design-to-delivery workflow.
+  Enterprise-grade UI/UX design expert. **SRS/SDD → Batch UI Generation** (HTML/React/Angular/SwiftUI/Compose) + **100% Coverage Validation** (RTM/Gap Analysis). Features: **App Theme Style Designer** (Age-specific/Color Psychology/Typography), Visual Style Extraction, Production-Ready Assets (Android drawable-*/iOS Assets.xcassets/Web favicon), **Motion Design** (Micro-interactions/Lottie), **Dark Mode**, **UX Writing**, **Data Visualization**, **i18n/RTL Localization**, **Design Review** (Nielsen 10 Heuristics), HIG/Material Design 3/WCAG. 18 professional reference docs covering the complete design-to-delivery workflow.
 ---
 
 # UI/UX Designer Skill
@@ -9,8 +9,8 @@ description: |
 Enterprise-grade App & Web UI/UX design guide covering the complete design-to-delivery workflow.
 
 **Core Capabilities:** SRS/SDD → Batch UI Generation + 100% Coverage Validation | Visual Style Extraction | Production-Ready Asset Output
-**Advanced Features:** Motion Design | Dark Mode | UX Writing | Data Visualization | i18n Localization | Design Review
-**Platform Guidelines:** iOS HIG | Android Material 3 | Web WCAG | Figma | 17 Professional Reference Docs
+**Advanced Features:** **App Theme Style Designer** | Motion Design | Dark Mode | UX Writing | Data Visualization | i18n Localization | Design Review
+**Platform Guidelines:** iOS HIG | Android Material 3 | Web WCAG | Figma | 18 Professional Reference Docs
 
 ---
 
@@ -20,6 +20,72 @@ Enterprise-grade App & Web UI/UX design guide covering the complete design-to-de
 - **Default Platform:** Mobile App UI/UX (iOS/Android guidelines prioritized)
 - **Default Dimensions:** iPhone 14 Pro (390 x 844 pt) / Android Medium (360 x 800 dp)
 - **Default Format:** HTML + Tailwind CSS (browser-previewable)
+
+### 🎨 App Theme Style Designer Rule (App 風格設計規則)
+
+**CRITICAL:** 當需求涉及 App 風格設計、Theme 設計、配色設計時，**必須先詢問使用者以下問題**：
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  🎨 App Theme Style Discovery                                    │
+│                                                                   │
+│  為了設計最適合您的 App 風格，請回答以下問題：                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  1️⃣ 目標使用者年齡層？                                            │
+│     □ 兒童 (3-12歲)      □ 青少年 (13-19歲)                       │
+│     □ 青年 (20-35歲)     □ 中年 (36-55歲)                         │
+│     □ 銀髮族 (55歲以上)  □ 全年齡                                  │
+│                                                                   │
+│  2️⃣ App 類型/產業？                                               │
+│     □ 健康醫療    □ 金融理財    □ 教育學習                         │
+│     □ 社交娛樂    □ 電商購物    □ 生產力工具                       │
+│     □ 旅遊生活    □ 兒童遊戲    □ 企業商務                         │
+│                                                                   │
+│  3️⃣ 期望的視覺風格？                                              │
+│     □ 極簡現代 (Minimalist)      □ 溫暖親切 (Warm & Friendly)     │
+│     □ 專業商務 (Professional)    □ 活潑俏皮 (Playful)              │
+│     □ 高端奢華 (Luxury)          □ 科技未來 (Futuristic)           │
+│     □ 自然有機 (Organic)         □ 復古懷舊 (Retro)                │
+│                                                                   │
+│  4️⃣ 品牌主色偏好？                                                │
+│     □ 藍色系 (信任、專業)        □ 綠色系 (健康、成長)              │
+│     □ 紫色系 (創意、奢華)        □ 橙色系 (活力、熱情)              │
+│     □ 粉色系 (溫柔、關懷)        □ 中性色 (黑白灰)                  │
+│     □ 已有品牌色: #______                                          │
+│                                                                   │
+│  5️⃣ 主要使用語言/地區？                                           │
+│     □ 繁體中文 (台灣)    □ 簡體中文 (中國)    □ 英文               │
+│     □ 日文              □ 韓文              □ 多語言               │
+│                                                                   │
+│  6️⃣ 是否需要 Dark Mode？                                          │
+│     □ 是 (Light + Dark)  □ 否 (僅 Light)  □ 僅 Dark Mode          │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Style Discovery 後產出
+
+收集使用者回答後，自動產出：
+1. **Design Token JSON** - 完整色彩、字體、間距、圓角定義
+2. **{project}-theme.css** - CSS 變數形式的 Design System
+3. **Style Guide 說明** - 設計理念與使用指南
+4. **配色心理學解釋** - 為何選擇此配色
+
+#### 年齡適性設計重點
+
+| 年齡層 | 字體大小 | 按鈕尺寸 | 配色 | 特殊考量 |
+|--------|----------|----------|------|----------|
+| 兒童 | 18-24px+ | 60px+ | 鮮豔高飽和 | 圓角、插圖、獎勵動畫 |
+| 青少年 | 14-16px | 44px | 潮流漸層 | Dark Mode、手勢操作 |
+| 成人 | 14-17px | 44-48px | 專業和諧 | 效率導向、標準元件 |
+| 銀髮族 | 18-24px+ | 60px+ | 高對比 (7:1+) | 大間距、確認對話框 |
+
+#### 詳細參考
+
+完整指南請參閱: [references/app-theme-style-designer.md](references/app-theme-style-designer.md)
+
+---
 
 ### 🚀 Auto HTML UI Flow Generation Rule (自動 HTML UI Flow 產出規則)
 
@@ -1753,7 +1819,7 @@ Combine with "Visual Style Extraction" to auto-apply styles from reference image
 
 ---
 
-## Reference Guide (17 Reference Documents)
+## Reference Guide (18 Reference Documents)
 
 ### Specs & Generation
 - 📋 [spec-driven-generation.md](references/spec-driven-generation.md) - SRS/SDD → Batch UI Generation
@@ -1764,6 +1830,7 @@ Combine with "Visual Style Extraction" to auto-apply styles from reference image
 - 🎨 [style-extraction.md](references/style-extraction.md) - Visual Style Extraction
 - 📦 [asset-extraction.md](references/asset-extraction.md) - Production-Ready Assets
 - 🌙 [dark-mode.md](references/dark-mode.md) - Dark Mode Design
+- 🎭 [app-theme-style-designer.md](references/app-theme-style-designer.md) - **App Theme Style Designer (NEW)**
 
 ### Design Expertise
 - 🎬 [motion-design.md](references/motion-design.md) - Motion Design
@@ -1783,3 +1850,6 @@ Combine with "Visual Style Extraction" to auto-apply styles from reference image
 - 🔮 [flow-prediction.md](references/flow-prediction.md) - Flow Prediction
 - 🔬 [ux-research.md](references/ux-research.md) - User Research
 - ♿ [accessibility.md](references/accessibility.md) - WCAG Accessibility
+
+### Templates
+- 📱 [templates/ui-flow/](templates/ui-flow/) - UI Flow Template (iPhone/iPad)
