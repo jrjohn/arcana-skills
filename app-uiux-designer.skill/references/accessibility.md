@@ -1,134 +1,134 @@
-# 無障礙設計指南 (Accessibility)
+# Accessibility Design Guide
 
-本文件提供符合 WCAG 2.1 標準的無障礙設計原則與實作指南。
+This document provides accessibility design principles and implementation guidelines compliant with WCAG 2.1 standards.
 
-## 目錄
-1. [無障礙概述](#無障礙概述)
-2. [WCAG 原則](#wcag-原則)
-3. [視覺無障礙](#視覺無障礙)
-4. [聽覺無障礙](#聽覺無障礙)
-5. [運動無障礙](#運動無障礙)
-6. [認知無障礙](#認知無障礙)
-7. [平台特定指南](#平台特定指南)
-8. [測試與驗證](#測試與驗證)
-
----
-
-## 無障礙概述
-
-### 為什麼需要無障礙設計？
-
-```
-全球約 15% 人口有某種形式的障礙
-無障礙設計受益者:
-├── 永久性障礙: 視障、聽障、肢障
-├── 暫時性障礙: 骨折、眼睛發炎
-├── 情境性障礙: 強光下、吵雜環境、單手操作
-└── 年長使用者: 視力退化、動作變慢
-```
-
-### 無障礙效益
-
-| 面向 | 效益 |
-|------|------|
-| 使用者 | 更多人能使用您的產品 |
-| 法規 | 符合無障礙法規要求 |
-| SEO | 改善搜尋引擎優化 |
-| 品質 | 整體使用體驗提升 |
-| 品牌 | 展現社會責任 |
+## Table of Contents
+1. [Accessibility Overview](#accessibility-overview)
+2. [WCAG Principles](#wcag-principles)
+3. [Visual Accessibility](#visual-accessibility)
+4. [Auditory Accessibility](#auditory-accessibility)
+5. [Motor Accessibility](#motor-accessibility)
+6. [Cognitive Accessibility](#cognitive-accessibility)
+7. [Platform-Specific Guidelines](#platform-specific-guidelines)
+8. [Testing and Verification](#testing-and-verification)
 
 ---
 
-## WCAG 原則
+## Accessibility Overview
 
-### WCAG 2.1 四大原則 (POUR)
+### Why is Accessible Design Needed?
 
 ```
-P - Perceivable (可感知)
-    資訊必須能被使用者感知
-
-O - Operable (可操作)
-    介面元件必須能被操作
-
-U - Understandable (可理解)
-    資訊與操作必須能被理解
-
-R - Robust (穩健)
-    內容必須能被各種輔助技術詮釋
+Approximately 15% of the global population has some form of disability
+Accessibility benefits:
+├── Permanent disabilities: Visual, hearing, motor impairments
+├── Temporary disabilities: Broken arm, eye infection
+├── Situational disabilities: Bright sunlight, noisy environment, one-handed use
+└── Elderly users: Declining vision, slower movements
 ```
 
-### 合規等級
+### Accessibility Benefits
 
-| 等級 | 說明 | 要求 |
-|------|------|------|
-| A | 基本 | 最低門檻 |
-| AA | 標準 | 一般網站/App 目標 |
-| AAA | 最高 | 特定需求 |
+| Aspect | Benefit |
+|--------|---------|
+| Users | More people can use your product |
+| Legal | Comply with accessibility regulations |
+| SEO | Improve search engine optimization |
+| Quality | Overall user experience improves |
+| Brand | Demonstrate social responsibility |
 
 ---
 
-## 視覺無障礙
+## WCAG Principles
 
-### 顏色對比
+### WCAG 2.1 Four Principles (POUR)
 
-**WCAG 對比度要求:**
+```
+P - Perceivable
+    Information must be perceivable by users
 
-| 等級 | 一般文字 | 大型文字 |
-|------|----------|----------|
+O - Operable
+    Interface components must be operable
+
+U - Understandable
+    Information and operations must be understandable
+
+R - Robust
+    Content must be interpretable by various assistive technologies
+```
+
+### Conformance Levels
+
+| Level | Description | Requirements |
+|-------|-------------|--------------|
+| A | Basic | Minimum threshold |
+| AA | Standard | General website/App target |
+| AAA | Highest | Specific needs |
+
+---
+
+## Visual Accessibility
+
+### Color Contrast
+
+**WCAG Contrast Requirements:**
+
+| Level | Normal Text | Large Text |
+|-------|-------------|------------|
 | AA | 4.5:1 | 3:1 |
 | AAA | 7:1 | 4.5:1 |
 
-**大型文字定義:**
+**Large Text Definition:**
 ```
-≥ 18pt (24px) 一般字重
-≥ 14pt (18.5px) 粗體
-```
-
-**對比度範例:**
-```
-✅ 良好: #000000 on #FFFFFF = 21:1
-✅ 通過 AA: #595959 on #FFFFFF = 7:1
-⚠️ 僅大字: #757575 on #FFFFFF = 4.48:1
-❌ 失敗: #AAAAAA on #FFFFFF = 2.32:1
+≥ 18pt (24px) normal weight
+≥ 14pt (18.5px) bold
 ```
 
-**工具推薦:**
+**Contrast Examples:**
+```
+✅ Good: #000000 on #FFFFFF = 21:1
+✅ Passes AA: #595959 on #FFFFFF = 7:1
+⚠️ Large text only: #757575 on #FFFFFF = 4.48:1
+❌ Fails: #AAAAAA on #FFFFFF = 2.32:1
+```
+
+**Recommended Tools:**
 - WebAIM Contrast Checker
-- Stark (Figma 外掛)
+- Stark (Figma plugin)
 - Color Contrast Analyzer
 
-### 不只依賴顏色
+### Don't Rely on Color Alone
 
 ```
-❌ 錯誤: 僅用紅色標示錯誤
-✅ 正確: 紅色 + 圖標 + 文字說明
+❌ Wrong: Only use red to indicate errors
+✅ Correct: Red + icon + text description
 
-❌ 錯誤: 連結僅用藍色區分
-✅ 正確: 藍色 + 底線
+❌ Wrong: Links distinguished only by blue color
+✅ Correct: Blue + underline
 
-❌ 錯誤: 圖表僅用顏色區分
-✅ 正確: 顏色 + 圖案/標籤
+❌ Wrong: Charts distinguished only by color
+✅ Correct: Color + patterns/labels
 ```
 
-### 文字大小與縮放
+### Text Size and Scaling
 
 ```
-最小字級: 16px (內文)
-支援 200% 縮放不破版
-使用相對單位: rem, em
-避免固定高度容器
+Minimum font size: 16px (body text)
+Support 200% zoom without breaking layout
+Use relative units: rem, em
+Avoid fixed height containers
 
-CSS 範例:
+CSS example:
 html { font-size: 100%; }  /* 16px */
 body { font-size: 1rem; }
 h1 { font-size: 2rem; }    /* 32px */
 ```
 
-### 焦點指示器
+### Focus Indicators
 
 ```
-❌ 移除: outline: none;
-✅ 自訂但保持可見:
+❌ Remove: outline: none;
+✅ Customize but keep visible:
 
 :focus {
   outline: 2px solid #0066CC;
@@ -136,33 +136,33 @@ h1 { font-size: 2rem; }    /* 32px */
 }
 
 :focus-visible {
-  /* 僅鍵盤導航時顯示 */
+  /* Only show during keyboard navigation */
   outline: 2px solid #0066CC;
 }
 ```
 
-### 圖片替代文字
+### Image Alternative Text
 
-**alt 文字原則:**
+**Alt text principles:**
 ```
-資訊性圖片: 描述內容與目的
-  <img alt="折線圖顯示銷售額從 1 月到 6 月成長 50%">
+Informational images: Describe content and purpose
+  <img alt="Line chart showing sales grew 50% from January to June">
 
-裝飾性圖片: 空 alt 或 CSS 背景
+Decorative images: Empty alt or CSS background
   <img alt="" role="presentation">
 
-功能性圖片: 描述功能
-  <img alt="搜尋">
+Functional images: Describe function
+  <img alt="Search">
 
-複雜圖表: 提供長描述
-  <img alt="2024 年銷售報告" aria-describedby="chart-desc">
-  <p id="chart-desc">詳細說明...</p>
+Complex charts: Provide long description
+  <img alt="2024 Sales Report" aria-describedby="chart-desc">
+  <p id="chart-desc">Detailed description...</p>
 ```
 
-### 動畫安全
+### Animation Safety
 
 ```css
-/* 尊重使用者偏好 */
+/* Respect user preferences */
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;
@@ -170,139 +170,139 @@ h1 { font-size: 2rem; }    /* 32px */
   }
 }
 
-/* 避免閃爍 */
-不得超過每秒 3 次閃爍
+/* Avoid flashing */
+Must not exceed 3 flashes per second
 ```
 
 ---
 
-## 聽覺無障礙
+## Auditory Accessibility
 
-### 影片字幕
+### Video Captions
 
-**字幕類型:**
-| 類型 | 說明 |
-|------|------|
-| 隱藏式字幕 (CC) | 可開關，包含音效描述 |
-| 開放式字幕 | 永久顯示 |
-| 語音轉文字 | 即時產生 |
+**Caption Types:**
+| Type | Description |
+|------|-------------|
+| Closed Captions (CC) | Can be toggled, includes sound effect descriptions |
+| Open Captions | Always displayed |
+| Live Transcription | Generated in real-time |
 
-**字幕規範:**
+**Caption Specifications:**
 ```
-一次顯示: 1-2 行
-字數: 每行最多 32 字元
-顯示時間: 至少 1 秒
-同步: 與音訊同步
-位置: 不遮擋重要內容
-```
-
-### 音訊替代
-
-```
-提供:
-- 影片逐字稿
-- 音檔文字版本
-- 口述影像 (視障者)
+Display at once: 1-2 lines
+Characters: Maximum 32 per line
+Display time: At least 1 second
+Sync: Synchronized with audio
+Position: Don't obstruct important content
 ```
 
-### 不自動播放
+### Audio Alternatives
 
 ```
-❌ 自動播放有聲音的影片
-✅ 預設靜音或由使用者啟動
-✅ 提供暫停/停止控制
+Provide:
+- Video transcripts
+- Audio text versions
+- Audio descriptions (for visually impaired)
+```
+
+### No Auto-play
+
+```
+❌ Auto-play videos with sound
+✅ Default muted or user-initiated
+✅ Provide pause/stop controls
 ```
 
 ---
 
-## 運動無障礙
+## Motor Accessibility
 
-### 鍵盤導航
+### Keyboard Navigation
 
-**可鍵盤操作的元素:**
+**Keyboard-focusable elements:**
 ```html
-<!-- 原生可聚焦 -->
-<button>按鈕</button>
-<a href="#">連結</a>
+<!-- Natively focusable -->
+<button>Button</button>
+<a href="#">Link</a>
 <input type="text">
 <select>...</select>
 <textarea>...</textarea>
 
-<!-- 自訂元素需加 tabindex -->
-<div role="button" tabindex="0">自訂按鈕</div>
+<!-- Custom elements need tabindex -->
+<div role="button" tabindex="0">Custom button</div>
 ```
 
-**鍵盤操作規範:**
+**Keyboard Operation Standards:**
 
-| 按鍵 | 操作 |
-|------|------|
-| Tab | 移至下一個元素 |
-| Shift + Tab | 移至上一個元素 |
-| Enter / Space | 啟動按鈕/連結 |
-| Arrow Keys | 在群組內移動 |
-| Escape | 關閉 Modal/Dropdown |
-| Home / End | 移至首/尾項目 |
+| Key | Action |
+|-----|--------|
+| Tab | Move to next element |
+| Shift + Tab | Move to previous element |
+| Enter / Space | Activate button/link |
+| Arrow Keys | Move within groups |
+| Escape | Close Modal/Dropdown |
+| Home / End | Move to first/last item |
 
-**焦點順序:**
+**Focus Order:**
 ```
-邏輯順序: 由左至右、由上至下
-避免焦點陷阱
-Modal 開啟時: 焦點移入 Modal
-Modal 關閉時: 焦點回到觸發元素
+Logical order: Left to right, top to bottom
+Avoid focus traps
+Modal opens: Focus moves into Modal
+Modal closes: Focus returns to trigger element
 ```
 
-### 觸控目標
+### Touch Targets
 
 ```
-最小觸控目標:
+Minimum touch targets:
 iOS: 44 × 44 pt
 Android: 48 × 48 dp
 Web: 44 × 44 px
 
-間距: 相鄰目標間至少 8px
+Spacing: At least 8px between adjacent targets
 ```
 
-### 手勢替代
+### Gesture Alternatives
 
 ```
-❌ 僅支援滑動手勢
-✅ 提供按鈕替代
+❌ Only support swipe gestures
+✅ Provide button alternatives
 
-❌ 僅支援捏合縮放
-✅ 提供 +/- 按鈕
+❌ Only support pinch to zoom
+✅ Provide +/- buttons
 
-❌ 需要精確拖曳
-✅ 提供其他輸入方式
+❌ Require precise dragging
+✅ Provide other input methods
 ```
 
-### 時間限制
+### Time Limits
 
 ```
-❌ 限時操作無法延長
-✅ 提供延長或關閉選項
-✅ 自動儲存使用者進度
-✅ 警告即將逾時
+❌ Timed operations cannot be extended
+✅ Provide extend or disable options
+✅ Auto-save user progress
+✅ Warn before timeout
 ```
 
 ---
 
-## 認知無障礙
+## Cognitive Accessibility
 
-### 清晰的結構
+### Clear Structure
 
-**標題層級:**
+**Heading Hierarchy:**
 ```html
-<h1>頁面主標題</h1>        <!-- 每頁僅一個 -->
-  <h2>章節標題</h2>
-    <h3>子章節</h3>
-    <h3>子章節</h3>
-  <h2>章節標題</h2>
+<h1>Page Main Title</h1>        <!-- Only one per page -->
+  <h2>Section Title</h2>
+    <h3>Subsection</h3>
+    <h3>Subsection</h3>
+  <h2>Section Title</h2>
 
-❌ 跳過層級: h1 → h3
-❌ 僅用於樣式而非結構
+❌ Skip levels: h1 → h3
+❌ Use only for styling, not structure
 ```
 
-**地標區域:**
+**Landmark Regions:**
 ```html
 <header role="banner">
   <nav role="navigation">...</nav>
@@ -317,20 +317,20 @@ Web: 44 × 44 px
 <footer role="contentinfo">...</footer>
 ```
 
-### 一致的導航
+### Consistent Navigation
 
 ```
-✅ 每頁相同位置的導航
-✅ 一致的命名與圖示
-✅ 提供多種導航方式 (選單、搜尋、網站地圖)
-✅ 顯示當前位置 (Breadcrumb、高亮)
+✅ Navigation in same position on every page
+✅ Consistent naming and icons
+✅ Provide multiple navigation methods (menu, search, sitemap)
+✅ Show current location (Breadcrumb, highlighting)
 ```
 
-### 錯誤處理
+### Error Handling
 
-**表單驗證:**
+**Form Validation:**
 ```html
-<!-- 清楚的錯誤訊息 -->
+<!-- Clear error messages -->
 <label for="email">Email</label>
 <input
   id="email"
@@ -339,43 +339,43 @@ Web: 44 × 44 px
   aria-describedby="email-error"
 >
 <span id="email-error" role="alert">
-  請輸入有效的 Email 格式，例如: name@example.com
+  Please enter a valid email format, e.g.: name@example.com
 </span>
 
-✅ 具體說明錯誤
-✅ 提供修正建議
-✅ 錯誤訊息在欄位附近
-✅ 不只依賴顏色
+✅ Specifically describe the error
+✅ Provide correction suggestions
+✅ Error message near the field
+✅ Don't rely only on color
 ```
 
-### 簡單的語言
+### Simple Language
 
 ```
-✅ 使用常見詞彙
-✅ 短句子 (20 字以內)
-✅ 主動語態
-✅ 避免行話與縮寫
-✅ 提供縮寫說明: <abbr title="World Wide Web">WWW</abbr>
+✅ Use common vocabulary
+✅ Short sentences (under 20 words)
+✅ Active voice
+✅ Avoid jargon and abbreviations
+✅ Provide abbreviation explanations: <abbr title="World Wide Web">WWW</abbr>
 ```
 
 ---
 
-## 平台特定指南
+## Platform-Specific Guidelines
 
-### iOS 無障礙
+### iOS Accessibility
 
-**VoiceOver 支援:**
+**VoiceOver Support:**
 ```swift
-// 設定無障礙標籤
-button.accessibilityLabel = "新增項目"
+// Set accessibility label
+button.accessibilityLabel = "Add item"
 
-// 設定提示
-button.accessibilityHint = "點兩下以新增項目到清單"
+// Set hint
+button.accessibilityHint = "Double tap to add item to list"
 
-// 設定特徵
+// Set traits
 button.accessibilityTraits = .button
 
-// 群組元素
+// Group elements
 view.accessibilityElements = [label, textField, button]
 ```
 
@@ -385,24 +385,24 @@ label.font = UIFont.preferredFont(forTextStyle: .body)
 label.adjustsFontForContentSizeCategory = true
 ```
 
-**減少動態效果:**
+**Reduce Motion:**
 ```swift
 if UIAccessibility.isReduceMotionEnabled {
-    // 使用簡單動畫或無動畫
+    // Use simple or no animations
 }
 ```
 
-### Android 無障礙
+### Android Accessibility
 
-**TalkBack 支援:**
+**TalkBack Support:**
 ```kotlin
-// 設定內容描述
-button.contentDescription = "新增項目"
+// Set content description
+button.contentDescription = "Add item"
 
-// 重要性
+// Importance
 view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
 
-// 自訂操作
+// Custom actions
 ViewCompat.setAccessibilityDelegate(view, object : AccessibilityDelegateCompat() {
     override fun onInitializeAccessibilityNodeInfo(
         host: View,
@@ -412,59 +412,59 @@ ViewCompat.setAccessibilityDelegate(view, object : AccessibilityDelegateCompat()
         info.addAction(
             AccessibilityNodeInfoCompat.AccessibilityActionCompat(
                 AccessibilityNodeInfoCompat.ACTION_CLICK,
-                "新增項目"
+                "Add item"
             )
         )
     }
 })
 ```
 
-**可縮放文字:**
+**Scalable Text:**
 ```kotlin
 textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
 ```
 
-### Web 無障礙 (WAI-ARIA)
+### Web Accessibility (WAI-ARIA)
 
-**ARIA 角色:**
+**ARIA Roles:**
 ```html
-<!-- 地標 -->
+<!-- Landmarks -->
 <div role="navigation">...</div>
 <div role="main">...</div>
 <div role="search">...</div>
 
-<!-- 小工具 -->
+<!-- Widgets -->
 <div role="tablist">
   <button role="tab" aria-selected="true">Tab 1</button>
   <button role="tab" aria-selected="false">Tab 2</button>
 </div>
 
-<!-- 即時區域 -->
-<div role="alert">錯誤訊息</div>
-<div role="status" aria-live="polite">載入中...</div>
+<!-- Live regions -->
+<div role="alert">Error message</div>
+<div role="status" aria-live="polite">Loading...</div>
 ```
 
-**ARIA 屬性:**
+**ARIA Attributes:**
 ```html
-<!-- 狀態 -->
+<!-- States -->
 aria-expanded="true|false"
 aria-selected="true|false"
 aria-checked="true|false|mixed"
 aria-disabled="true"
 aria-hidden="true"
 
-<!-- 關係 -->
+<!-- Relationships -->
 aria-labelledby="id"
 aria-describedby="id"
 aria-controls="id"
 aria-owns="id"
 
-<!-- 即時區域 -->
+<!-- Live regions -->
 aria-live="polite|assertive|off"
 aria-atomic="true|false"
 ```
 
-**範例：Accordion:**
+**Example: Accordion:**
 ```html
 <div class="accordion">
   <h3>
@@ -486,166 +486,167 @@ aria-atomic="true|false"
 </div>
 ```
 
-**範例：Modal:**
+**Example: Modal:**
 ```html
 <div
   role="dialog"
   aria-modal="true"
   aria-labelledby="modal-title"
 >
-  <h2 id="modal-title">確認刪除</h2>
-  <p>確定要刪除這個項目嗎？</p>
-  <button>取消</button>
-  <button>確認</button>
+  <h2 id="modal-title">Confirm Delete</h2>
+  <p>Are you sure you want to delete this item?</p>
+  <button>Cancel</button>
+  <button>Confirm</button>
 </div>
 ```
 
 ---
 
-## 測試與驗證
+## Testing and Verification
 
-### 自動化測試工具
+### Automated Testing Tools
 
-| 工具 | 類型 | 說明 |
-|------|------|------|
-| axe | 瀏覽器擴充 | 自動檢測 WCAG 問題 |
-| WAVE | 瀏覽器擴充 | 視覺化顯示問題 |
-| Lighthouse | Chrome 內建 | 無障礙分數 |
-| Pa11y | CLI | CI/CD 整合 |
-| jest-axe | 測試庫 | 自動化測試 |
+| Tool | Type | Description |
+|------|------|-------------|
+| axe | Browser extension | Auto-detect WCAG issues |
+| WAVE | Browser extension | Visualize problems |
+| Lighthouse | Chrome built-in | Accessibility score |
+| Pa11y | CLI | CI/CD integration |
+| jest-axe | Testing library | Automated testing |
 
-### 手動測試清單
+### Manual Testing Checklist
 
-**鍵盤測試:**
+**Keyboard Testing:**
 ```
-□ 所有功能可用鍵盤操作
-□ 焦點順序合理
-□ 焦點指示器可見
-□ 無焦點陷阱
-□ 快捷鍵不衝突
-```
-
-**螢幕閱讀器測試:**
-```
-□ 所有內容可被朗讀
-□ 圖片有替代文字
-□ 表單欄位有標籤
-□ 錯誤訊息被宣告
-□ 動態內容更新被宣告
+□ All features operable via keyboard
+□ Focus order is logical
+□ Focus indicator is visible
+□ No focus traps
+□ Shortcuts don't conflict
 ```
 
-**視覺測試:**
+**Screen Reader Testing:**
 ```
-□ 對比度符合標準
-□ 200% 縮放不破版
-□ 不只依賴顏色
-□ 動畫可關閉
-□ 文字可調整大小
-```
-
-**認知測試:**
-```
-□ 標題結構正確
-□ 連結文字清楚
-□ 錯誤訊息明確
-□ 說明文字足夠
-□ 操作可復原
+□ All content can be read
+□ Images have alt text
+□ Form fields have labels
+□ Error messages are announced
+□ Dynamic content updates are announced
 ```
 
-### 螢幕閱讀器測試
-
-| 平台 | 螢幕閱讀器 |
-|------|------------|
-| macOS | VoiceOver (內建) |
-| Windows | NVDA (免費), JAWS |
-| iOS | VoiceOver (內建) |
-| Android | TalkBack (內建) |
-
-**VoiceOver 快捷鍵 (macOS):**
+**Visual Testing:**
 ```
-開啟/關閉: Cmd + F5
-導航: VO + 左右箭頭
-標題: VO + Cmd + H
-連結: VO + Cmd + L
-表單: VO + Cmd + J
+□ Contrast meets standards
+□ 200% zoom doesn't break layout
+□ Don't rely only on color
+□ Animations can be disabled
+□ Text is resizable
 ```
 
-### 無障礙聲明範本
+**Cognitive Testing:**
+```
+□ Heading structure is correct
+□ Link text is clear
+□ Error messages are specific
+□ Instructions are sufficient
+□ Actions are reversible
+```
+
+### Screen Reader Testing
+
+| Platform | Screen Reader |
+|----------|---------------|
+| macOS | VoiceOver (built-in) |
+| Windows | NVDA (free), JAWS |
+| iOS | VoiceOver (built-in) |
+| Android | TalkBack (built-in) |
+
+**VoiceOver Shortcuts (macOS):**
+```
+Toggle on/off: Cmd + F5
+Navigate: VO + Left/Right arrows
+Headings: VO + Cmd + H
+Links: VO + Cmd + L
+Forms: VO + Cmd + J
+```
+
+### Accessibility Statement Template
 
 ```markdown
-# 無障礙聲明
+# Accessibility Statement
 
-## 承諾
-[公司名稱] 致力於確保我們的 [產品名稱] 對所有人都能使用，
-包括身心障礙者。
+## Commitment
+[Company Name] is committed to ensuring that our [Product Name]
+is accessible to everyone, including people with disabilities.
 
-## 合規狀態
-本產品符合 WCAG 2.1 AA 等級標準。
+## Conformance Status
+This product conforms to WCAG 2.1 Level AA standards.
 
-## 已知限制
-- [列出已知問題與預計修復時間]
+## Known Limitations
+- [List known issues and expected fix dates]
 
-## 回饋
-如果您在使用過程中遇到任何無障礙問題，請聯繫我們：
+## Feedback
+If you encounter any accessibility issues while using our product,
+please contact us:
 - Email: accessibility@example.com
-- 電話: 02-1234-5678
+- Phone: 1-800-XXX-XXXX
 
-## 最後更新
-2024 年 1 月 15 日
+## Last Updated
+January 15, 2024
 ```
 
 ---
 
-## 快速檢查清單
+## Quick Checklists
 
-### 設計師檢查清單
+### Designer Checklist
 
 ```
-視覺
-□ 顏色對比度 ≥ 4.5:1
-□ 不只依賴顏色傳達資訊
-□ 最小字級 16px
-□ 觸控目標 ≥ 44px
-□ 焦點狀態明顯
+Visual
+□ Color contrast ≥ 4.5:1
+□ Don't rely only on color to convey information
+□ Minimum font size 16px
+□ Touch targets ≥ 44px
+□ Focus states are obvious
 
-互動
-□ 所有功能可鍵盤操作
-□ 焦點順序合理
-□ 提供手勢替代方案
-□ 錯誤訊息清楚
+Interaction
+□ All features keyboard operable
+□ Focus order is logical
+□ Provide gesture alternatives
+□ Error messages are clear
 
-內容
-□ 標題層級正確
-□ 連結文字有意義
-□ 圖片有替代文字
-□ 表單有標籤
+Content
+□ Heading hierarchy is correct
+□ Link text is meaningful
+□ Images have alt text
+□ Forms have labels
 ```
 
-### 開發者檢查清單
+### Developer Checklist
 
 ```
 HTML
-□ 使用語義化標籤
-□ 標題層級正確 (h1-h6)
-□ 表單有關聯 label
-□ 圖片有 alt
-□ 表格有 caption 和 th
+□ Use semantic tags
+□ Heading hierarchy correct (h1-h6)
+□ Forms have associated labels
+□ Images have alt
+□ Tables have caption and th
 
 ARIA
-□ 自訂元件有正確 role
-□ 狀態用 aria-* 表示
-□ 動態內容用 aria-live
-□ Modal 有 aria-modal
+□ Custom components have correct roles
+□ States expressed with aria-*
+□ Dynamic content uses aria-live
+□ Modals have aria-modal
 
-鍵盤
-□ 可 Tab 導航
-□ 可 Enter/Space 啟動
-□ 可 Escape 關閉
-□ 焦點管理正確
+Keyboard
+□ Can Tab navigate
+□ Can Enter/Space activate
+□ Can Escape close
+□ Focus management is correct
 
-測試
-□ axe 檢測通過
-□ 鍵盤測試通過
-□ 螢幕閱讀器測試
-□ 縮放測試通過
+Testing
+□ axe checks pass
+□ Keyboard testing passes
+□ Screen reader testing
+□ Zoom testing passes
 ```

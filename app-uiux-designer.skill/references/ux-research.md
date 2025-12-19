@@ -1,584 +1,598 @@
-# 使用者研究方法論
+# User Research Methodology
 
-本文件提供完整的 UX 研究方法，協助設計師深入了解使用者需求與行為。
+This document provides comprehensive UX research methods to help designers deeply understand user needs and behaviors.
 
-## 目錄
-1. [研究概述](#研究概述)
-2. [質性研究方法](#質性研究方法)
-3. [量化研究方法](#量化研究方法)
-4. [使用者建模](#使用者建模)
-5. [可用性測試](#可用性測試)
-6. [研究工具與範本](#研究工具與範本)
+## Table of Contents
+1. [Research Overview](#research-overview)
+2. [Qualitative Research Methods](#qualitative-research-methods)
+3. [Quantitative Research Methods](#quantitative-research-methods)
+4. [User Modeling](#user-modeling)
+5. [Usability Testing](#usability-testing)
+6. [Research Tools and Templates](#research-tools-and-templates)
 
 ---
 
-## 研究概述
+## Research Overview
 
-### 研究類型比較
+### Research Type Comparison
 
-| 類型 | 目的 | 方法 | 產出 |
-|------|------|------|------|
-| 探索性 | 發現問題與機會 | 訪談、田野調查 | Insights、機會點 |
-| 描述性 | 了解現狀 | 問卷、分析 | 數據報告 |
-| 評估性 | 驗證設計 | 可用性測試 | 改善建議 |
-| 因果性 | 驗證假設 | A/B 測試 | 統計結論 |
+| Type | Purpose | Methods | Output |
+|------|---------|---------|--------|
+| Exploratory | Discover problems and opportunities | Interviews, field studies | Insights, opportunity areas |
+| Descriptive | Understand current state | Surveys, analytics | Data reports |
+| Evaluative | Validate designs | Usability testing | Improvement recommendations |
+| Causal | Validate hypotheses | A/B testing | Statistical conclusions |
 
-### 研究時機
+### Research Timing
 
 ```
-專案階段          研究方法
+Project Phase          Research Methods
 ─────────────────────────────────────
-探索期            使用者訪談
-                  競品分析
-                  田野調查
+Discovery             User interviews
+                      Competitive analysis
+                      Field studies
 
-定義期            問卷調查
-                  卡片分類
-                  使用者旅程地圖
+Definition            Surveys
+                      Card sorting
+                      User journey maps
 
-設計期            概念測試
-                  紙本原型測試
+Design                Concept testing
+                      Paper prototype testing
 
-驗證期            可用性測試
-                  A/B 測試
+Validation            Usability testing
+                      A/B testing
 
-上線後            分析數據
-                  滿意度調查
-                  持續優化
+Post-launch           Analytics data
+                      Satisfaction surveys
+                      Continuous optimization
 ```
 
 ---
 
-## 質性研究方法
+## Qualitative Research Methods
 
-### 使用者訪談
+### User Interviews
 
-**訪談類型:**
-| 類型 | 說明 | 時長 |
-|------|------|------|
-| 結構式 | 固定問題順序 | 30-45 分鐘 |
-| 半結構式 | 有大綱但彈性 | 45-60 分鐘 |
-| 開放式 | 自由對話 | 60-90 分鐘 |
+**Interview Types:**
+| Type | Description | Duration |
+|------|-------------|----------|
+| Structured | Fixed question order | 30-45 minutes |
+| Semi-structured | Has outline but flexible | 45-60 minutes |
+| Open-ended | Free conversation | 60-90 minutes |
 
-**訪談準備:**
+**Interview Preparation:**
 ```markdown
-1. 定義研究目標
-2. 撰寫訪談大綱
-3. 招募受訪者 (5-8 人)
-4. 準備錄音/錄影設備
-5. 準備同意書
+1. Define research objectives
+2. Write interview guide
+3. Recruit participants (5-8 people)
+4. Prepare recording equipment
+5. Prepare consent forms
 ```
 
-**訪談技巧:**
+**Interview Techniques:**
 ```
-✅ 開放式問題: "請告訴我您通常如何...?"
-✅ 追問細節: "可以再多說明一些嗎?"
-✅ 探索情境: "在什麼情況下會發生?"
-✅ 沉默等待: 給受訪者思考時間
+✅ Open-ended questions: "Tell me about how you usually...?"
+✅ Probe for details: "Can you tell me more about that?"
+✅ Explore context: "Under what circumstances does this happen?"
+✅ Silent pauses: Give participants time to think
 
-❌ 避免引導: "您應該會想要這個功能吧?"
-❌ 避免假設: "大家都會這樣做..."
-❌ 避免專業術語: "您會使用 API 嗎?"
+❌ Avoid leading: "You would probably want this feature, right?"
+❌ Avoid assumptions: "Everyone does it this way..."
+❌ Avoid jargon: "Do you use APIs?"
 ```
 
-**訪談大綱範本:**
+**Interview Guide Template:**
 ```markdown
-## 開場 (5 分鐘)
-- 自我介紹
-- 說明訪談目的
-- 確認錄音同意
+## Opening (5 minutes)
+- Self-introduction
+- Explain interview purpose
+- Confirm recording consent
 
-## 背景了解 (10 分鐘)
-- 請簡單介紹您自己
-- 您的職業/角色是什麼?
-- 您使用 [產品類型] 的經驗有多久?
+## Background (10 minutes)
+- Please briefly introduce yourself
+- What is your profession/role?
+- How long have you been using [product type]?
 
-## 核心問題 (30 分鐘)
-- 請描述您最近一次 [目標行為] 的經驗
-- 過程中遇到什麼困難?
-- 您是如何解決這些問題的?
-- 理想的體驗應該是什麼樣子?
+## Core Questions (30 minutes)
+- Describe your most recent experience with [target behavior]
+- What difficulties did you encounter?
+- How did you solve these problems?
+- What would the ideal experience look like?
 
-## 總結 (5 分鐘)
-- 還有什麼想補充的嗎?
-- 感謝參與
+## Wrap-up (5 minutes)
+- Is there anything else you'd like to add?
+- Thank you for participating
 ```
 
-### 脈絡訪查 (Contextual Inquiry)
+### Contextual Inquiry
 
-在使用者實際使用環境中觀察並訪談。
+Observe and interview users in their actual usage environment.
 
-**進行方式:**
+**Process:**
 ```
-1. 觀察: 使用者執行日常任務
-2. 詢問: "您剛才為什麼這樣做?"
-3. 記錄: 行為、環境、工具、痛點
-4. 驗證: 確認理解是否正確
-```
-
-**適用情境:**
-- 了解工作流程
-- 發現隱性需求
-- 觀察實際環境限制
-
-### 焦點團體 (Focus Group)
-
-**規格:**
-```
-人數: 6-10 人
-時長: 90-120 分鐘
-場次: 2-3 場
-主持人: 1 人
-記錄者: 1 人
+1. Observe: User performs daily tasks
+2. Ask: "Why did you do it that way?"
+3. Record: Behaviors, environment, tools, pain points
+4. Verify: Confirm understanding is correct
 ```
 
-**適用情境:**
-- 探索態度與偏好
-- 收集多元觀點
-- 產生新想法
+**Suitable Scenarios:**
+- Understanding workflows
+- Discovering hidden needs
+- Observing real environmental constraints
 
-**注意事項:**
+### Focus Groups
+
+**Specifications:**
 ```
-⚠️ 群體迷思風險
-⚠️ 主導者影響
-⚠️ 社會期望偏誤
-```
-
-### 日記研究 (Diary Study)
-
-使用者在一段時間內記錄經驗。
-
-**設計:**
-```
-時長: 1-4 週
-頻率: 每日或事件觸發
-工具: App、表單、語音
-內容: 行為、情緒、情境
+Participants: 6-10 people
+Duration: 90-120 minutes
+Sessions: 2-3 sessions
+Moderator: 1 person
+Note-taker: 1 person
 ```
 
-**記錄範本:**
+**Suitable Scenarios:**
+- Exploring attitudes and preferences
+- Collecting diverse perspectives
+- Generating new ideas
+
+**Considerations:**
+```
+⚠️ Groupthink risk
+⚠️ Dominant participant influence
+⚠️ Social desirability bias
+```
+
+### Diary Studies
+
+Users record experiences over a period of time.
+
+**Design:**
+```
+Duration: 1-4 weeks
+Frequency: Daily or event-triggered
+Tools: App, forms, voice
+Content: Behaviors, emotions, context
+```
+
+**Record Template:**
 ```markdown
-## 日期: ___________
-## 時間: ___________
+## Date: ___________
+## Time: ___________
 
-發生了什麼事?
+What happened?
 _________________________
 
-當時的情緒? (1-5)
+How were you feeling? (1-5)
 😞 😐 😊 😄 🤩
 
-為什麼會有這種感覺?
+Why did you feel this way?
 _________________________
 
-截圖或照片 (選填)
+Screenshot or photo (optional)
 ```
 
 ---
 
-## 量化研究方法
+## Quantitative Research Methods
 
-### 問卷調查
+### Surveys
 
-**問卷設計原則:**
+**Survey Design Principles:**
 ```
-✅ 問題清晰簡潔
-✅ 避免雙重否定
-✅ 提供適當選項
-✅ 邏輯順序排列
-✅ 控制問卷長度 (5-10 分鐘)
+✅ Questions are clear and concise
+✅ Avoid double negatives
+✅ Provide appropriate options
+✅ Arrange in logical order
+✅ Control survey length (5-10 minutes)
 
-❌ 避免引導性問題
-❌ 避免專業術語
-❌ 避免敏感問題在前
+❌ Avoid leading questions
+❌ Avoid jargon
+❌ Avoid sensitive questions at the start
 ```
 
-**常用量表:**
+**Common Scales:**
 
-**李克特量表 (Likert Scale):**
+**Likert Scale:**
 ```
-非常不同意 ─ 不同意 ─ 普通 ─ 同意 ─ 非常同意
-    1          2       3      4         5
+Strongly Disagree ─ Disagree ─ Neutral ─ Agree ─ Strongly Agree
+       1              2          3        4           5
 ```
 
 **NPS (Net Promoter Score):**
 ```
-您有多大可能會推薦我們的產品給朋友或同事?
+How likely are you to recommend our product to a friend or colleague?
 
 0  1  2  3  4  5  6  7  8  9  10
 └────────┴──────────┴─────────┘
- 批評者    被動者     推薦者
- (0-6)    (7-8)     (9-10)
+Detractors  Passives   Promoters
+  (0-6)      (7-8)      (9-10)
 
-NPS = 推薦者% - 批評者%
+NPS = Promoters% - Detractors%
 ```
 
 **SUS (System Usability Scale):**
 ```
-10 題標準化問卷，分數 0-100
-> 80.3: 優秀
-68-80.3: 良好
-68: 平均
-< 68: 需改善
+10-question standardized survey, score 0-100
+> 80.3: Excellent
+68-80.3: Good
+68: Average
+< 68: Needs improvement
 ```
 
 **CSAT (Customer Satisfaction):**
 ```
-您對這次體驗的滿意度如何?
+How satisfied are you with this experience?
 😞 😐 😊 😄 🤩
  1   2   3   4   5
 
-CSAT = (滿意回答數 / 總回答數) × 100%
+CSAT = (Satisfied responses / Total responses) × 100%
 ```
 
-### 分析數據
+### Analytics Data
 
-**關鍵指標:**
-| 指標 | 說明 |
-|------|------|
-| DAU/MAU | 日/月活躍使用者 |
-| Retention | 留存率 |
-| Churn | 流失率 |
-| Conversion | 轉換率 |
-| Task Success | 任務完成率 |
-| Time on Task | 任務時間 |
-| Error Rate | 錯誤率 |
+**Key Metrics:**
+| Metric | Description |
+|--------|-------------|
+| DAU/MAU | Daily/Monthly active users |
+| Retention | Retention rate |
+| Churn | Churn rate |
+| Conversion | Conversion rate |
+| Task Success | Task completion rate |
+| Time on Task | Task duration |
+| Error Rate | Error rate |
 
-**漏斗分析:**
+**Funnel Analysis:**
 ```
-首頁訪問    100%
+Homepage visit    100%
     ↓
-商品頁      60%  (-40%)
+Product page      60%  (-40%)
     ↓
-加入購物車  25%  (-35%)
+Add to cart       25%  (-35%)
     ↓
-結帳頁      15%  (-10%)
+Checkout page     15%  (-10%)
     ↓
-完成購買    8%   (-7%)
+Purchase complete 8%   (-7%)
 ```
 
-### A/B 測試
+### A/B Testing
 
-**測試流程:**
+**Testing Process:**
 ```
-1. 定義假設
-   "將按鈕從藍色改為綠色會提升點擊率"
+1. Define hypothesis
+   "Changing the button from blue to green will increase click rate"
 
-2. 設計變體
-   A: 藍色按鈕 (對照組)
-   B: 綠色按鈕 (實驗組)
+2. Design variants
+   A: Blue button (control)
+   B: Green button (treatment)
 
-3. 分配流量
-   50% / 50% 隨機分配
+3. Allocate traffic
+   50% / 50% random assignment
 
-4. 收集數據
-   運行足夠時間達到統計顯著性
+4. Collect data
+   Run long enough to reach statistical significance
 
-5. 分析結果
-   計算 p-value，確認是否顯著
+5. Analyze results
+   Calculate p-value, confirm significance
 ```
 
-**樣本數計算:**
+**Sample Size Calculation:**
 ```
-需考量:
-- 基準轉換率
-- 最小可偵測效果 (MDE)
-- 統計顯著性 (通常 95%)
-- 統計檢定力 (通常 80%)
+Consider:
+- Baseline conversion rate
+- Minimum Detectable Effect (MDE)
+- Statistical significance (usually 95%)
+- Statistical power (usually 80%)
 ```
 
 ---
 
-## 使用者建模
+## User Modeling
 
-### Persona (人物誌)
+### Persona
 
-**Persona 範本:**
+**Persona Template:**
 ```markdown
 ┌─────────────────────────────────────────────────────┐
 │ 📷                                                  │
-│ [照片]    Amy Chen, 32 歲                           │
-│           行銷經理 @ 科技公司                        │
-│           台北市                                    │
+│ [Photo]    Amy Chen, 32                             │
+│           Marketing Manager @ Tech Company          │
+│           San Francisco, CA                         │
 ├─────────────────────────────────────────────────────┤
-│ 背景                                                │
-│ 在科技產業工作 8 年，負責數位行銷策略。              │
-│ 每天使用多種 SaaS 工具管理專案與團隊。               │
+│ Background                                          │
+│ 8 years in tech industry, responsible for digital  │
+│ marketing strategy. Uses multiple SaaS tools daily │
+│ to manage projects and teams.                      │
 ├─────────────────────────────────────────────────────┤
-│ 目標                                  │ 痛點        │
-│ • 提升團隊工作效率                    │ • 工具太多  │
-│ • 追蹤專案進度                        │ • 資訊分散  │
-│ • 產出有說服力的報告                  │ • 學習成本  │
+│ Goals                                  │ Pain Points│
+│ • Improve team efficiency              │ • Too many │
+│ • Track project progress               │   tools    │
+│ • Produce compelling reports           │ • Scattered│
+│                                        │   info     │
+│                                        │ • Learning │
+│                                        │   curve    │
 ├─────────────────────────────────────────────────────┤
-│ "我需要一個能整合所有資料的地方，                    │
-│  讓我不用在不同工具間切換。"                         │
+│ "I need a place that integrates all my data,        │
+│  so I don't have to switch between different tools."│
 ├─────────────────────────────────────────────────────┤
-│ 常用工具: Slack, Notion, Google Analytics, Figma    │
-│ 技術熟悉度: ████████░░ 80%                          │
+│ Tools: Slack, Notion, Google Analytics, Figma       │
+│ Tech Proficiency: ████████░░ 80%                    │
 └─────────────────────────────────────────────────────┘
 ```
 
-**Persona 類型:**
-| 類型 | 說明 |
-|------|------|
-| Primary | 主要目標使用者 |
-| Secondary | 次要使用者 |
-| Supplemental | 邊緣使用者 |
-| Negative | 非目標使用者 |
+**Persona Types:**
+| Type | Description |
+|------|-------------|
+| Primary | Main target users |
+| Secondary | Secondary users |
+| Supplemental | Edge case users |
+| Negative | Non-target users |
 
-### 使用者旅程地圖 (User Journey Map)
+### User Journey Map
 
 ```
-階段     發現        研究        購買        使用        推薦
+Stage       Discover    Research    Purchase    Use         Advocate
 ─────────────────────────────────────────────────────────────
-接觸點   廣告        網站        購物車      App         社群
-         搜尋        評論        客服        通知        口碑
+Touchpoints  Ads         Website     Cart        App         Social
+             Search      Reviews     Support     Notifs      Word of mouth
 ─────────────────────────────────────────────────────────────
-行為     看到廣告    比較功能    加入購物車  每日使用    分享
-         點擊連結    閱讀評價    填寫資料    設定提醒    推薦
+Behaviors    See ad      Compare     Add to      Daily       Share
+             Click link  features    cart        use         Recommend
+                        Read        Fill info   Set
+                        reviews                 reminders
 ─────────────────────────────────────────────────────────────
-想法     這是什麼?   適合我嗎?   值得嗎?     怎麼用?     真好用!
-         看起來有趣  有其他選擇? 安全嗎?     有問題怎辦  要推薦
+Thoughts     What is     Is this     Worth it?   How to      This is
+             this?       for me?     Safe?       use?        great!
+             Looks       Other
+             interesting options?               Problems?    Should
+                                                            recommend
 ─────────────────────────────────────────────────────────────
-情緒     😐         🤔          😰          😊          😄
+Emotions     😐         🤔          😰          😊          😄
 ─────────────────────────────────────────────────────────────
-機會點   ・清楚傳達  ・突出優勢  ・簡化流程  ・引導教學  ・獎勵機制
-         價值主張   ・社會證明  ・安全保證  ・即時支援  ・分享功能
+Opportunities・Clear     ・Highlight ・Simplify  ・Onboarding・Reward
+             value prop  advantages  process     tutorial    program
+                        ・Social    ・Security  ・Instant   ・Share
+                        proof       guarantee   support     features
 ```
 
-### 同理心地圖 (Empathy Map)
+### Empathy Map
 
 ```
 ┌─────────────────────┬─────────────────────┐
 │       Says          │       Thinks        │
-│     (說什麼)         │      (想什麼)        │
 │                     │                     │
-│ "這個流程太複雜了"   │ 為什麼這麼麻煩?      │
-│ "找不到我要的功能"   │ 應該有更簡單的方法   │
+│ "This process is    │ Why is this so      │
+│  too complicated"   │ complicated?        │
+│ "Can't find the     │ There must be an    │
+│  feature I need"    │ easier way          │
 │                     │                     │
 ├─────────────────────┼─────────────────────┤
 │       Does          │       Feels         │
-│     (做什麼)         │      (感受)         │
 │                     │                     │
-│ 反覆嘗試不同按鈕     │ 😤 挫折             │
-│ 尋求同事幫助        │ 😰 焦慮             │
-│ 放棄改用其他工具     │ 😞 失望             │
+│ Repeatedly tries    │ 😤 Frustrated       │
+│ different buttons   │ 😰 Anxious          │
+│ Asks colleagues     │ 😞 Disappointed     │
+│ for help            │                     │
+│ Gives up and uses   │                     │
+│ another tool        │                     │
 │                     │                     │
 └─────────────────────┴─────────────────────┘
 ```
 
 ---
 
-## 可用性測試
+## Usability Testing
 
-### 測試規劃
+### Test Planning
 
-**測試類型:**
-| 類型 | 說明 | 適用階段 |
-|------|------|----------|
-| 形成性 | 發現問題並改善 | 設計中 |
-| 總結性 | 評估整體表現 | 上線前 |
-| 比較性 | 比較不同版本 | 迭代中 |
+**Test Types:**
+| Type | Description | Stage |
+|------|-------------|-------|
+| Formative | Find problems and improve | During design |
+| Summative | Evaluate overall performance | Pre-launch |
+| Comparative | Compare different versions | During iteration |
 
-**參與者數量:**
+**Number of Participants:**
 
 ```
-5 人原則 (Jakob Nielsen):
-- 5 位使用者可發現約 85% 的可用性問題
-- 更多人數報酬遞減
-- 建議: 多輪測試 (3-5 人/輪)
+5-User Rule (Jakob Nielsen):
+- 5 users can find approximately 85% of usability problems
+- More users have diminishing returns
+- Recommended: Multiple rounds (3-5 people/round)
 
-大型測試:
-- 量化數據需要更多樣本
-- 建議 20+ 人達統計顯著性
+Large-scale testing:
+- Quantitative data needs larger samples
+- Recommend 20+ people for statistical significance
 ```
 
-### 測試腳本
+### Test Script
 
 ```markdown
-## 開場 (5 分鐘)
+## Introduction (5 minutes)
 
-嗨，感謝您參與今天的測試。我是 [名字]，今天會請您
-試用我們的 [產品名稱]。
+Hi, thank you for participating in today's test. I'm [name], and today
+I'll ask you to try our [product name].
 
-幾點說明:
-- 這是測試產品，不是測試您
-- 沒有對錯之分
-- 請說出您的想法 (Think Aloud)
-- 遇到困難很正常，這正是我們要發現的
-- 過程約 45 分鐘
-- 需要錄影，可以嗎?
+A few notes:
+- We're testing the product, not testing you
+- There are no right or wrong answers
+- Please think aloud
+- Difficulties are normal, that's what we want to find
+- This will take about 45 minutes
+- We need to record, is that okay?
 
-有任何問題嗎?
+Any questions?
 
-## 暖身任務 (5 分鐘)
+## Warm-up Task (5 minutes)
 
-首先，請瀏覽一下首頁，告訴我您看到什麼?
-您認為這個產品是做什麼的?
+First, please browse the homepage and tell me what you see.
+What do you think this product does?
 
-## 核心任務 (25-30 分鐘)
+## Core Tasks (25-30 minutes)
 
-### 任務 1: [任務名稱]
-情境: [描述使用情境]
-目標: [具體要完成的事]
+### Task 1: [Task Name]
+Scenario: [Describe usage context]
+Goal: [Specific thing to accomplish]
 
-"假設您想要 [情境]，請開始操作。"
+"Suppose you want to [scenario], please begin."
 
-觀察點:
-- [ ] 是否完成
-- [ ] 時間: _____ 秒
-- [ ] 錯誤次數: _____
-- [ ] 求助次數: _____
+Observations:
+- [ ] Completed
+- [ ] Time: _____ seconds
+- [ ] Error count: _____
+- [ ] Help requests: _____
 
-### 任務 2: [任務名稱]
+### Task 2: [Task Name]
 ...
 
-## 結尾問題 (5-10 分鐘)
+## Closing Questions (5-10 minutes)
 
-- 整體來說，您覺得這個產品如何?
-- 最喜歡的部分是?
-- 最困擾的部分是?
-- 還有什麼建議嗎?
+- Overall, what do you think of this product?
+- What did you like most?
+- What was most frustrating?
+- Any other suggestions?
 
-感謝您的參與!
+Thank you for participating!
 ```
 
-### 測試指標
+### Test Metrics
 
-| 指標 | 說明 | 目標 |
-|------|------|------|
-| 任務完成率 | 成功完成任務的比例 | > 80% |
-| 任務時間 | 完成任務所需時間 | 視任務而定 |
-| 錯誤率 | 操作錯誤的次數 | < 2 次 |
-| 求助率 | 需要幫助的比例 | < 10% |
-| 滿意度 | 主觀滿意程度 | > 4/5 |
+| Metric | Description | Target |
+|--------|-------------|--------|
+| Task Completion Rate | Percentage successfully completing tasks | > 80% |
+| Task Time | Time needed to complete tasks | Varies by task |
+| Error Rate | Number of errors made | < 2 |
+| Help Rate | Percentage needing assistance | < 10% |
+| Satisfaction | Subjective satisfaction level | > 4/5 |
 
-### 問題嚴重度分級
+### Problem Severity Levels
 
 ```
-🔴 Critical (嚴重)
-   使用者無法完成任務
-   立即修復
+🔴 Critical
+   User cannot complete the task
+   Fix immediately
 
-🟠 Major (重大)
-   使用者可完成但非常困難
-   優先修復
+🟠 Major
+   User can complete but with great difficulty
+   Priority fix
 
-🟡 Minor (輕微)
-   造成不便但可完成
-   排程修復
+🟡 Minor
+   Causes inconvenience but can complete
+   Scheduled fix
 
-🟢 Cosmetic (外觀)
-   不影響使用
-   有空再修
+🟢 Cosmetic
+   Does not affect usage
+   Fix when time permits
 ```
 
-### 測試報告
+### Test Report
 
 ```markdown
-# 可用性測試報告
+# Usability Test Report
 
-## 摘要
-- 測試日期: 2024/01/15-20
-- 參與人數: 6 人
-- 測試版本: v2.1.0
+## Summary
+- Test dates: 2024/01/15-20
+- Participants: 6
+- Version tested: v2.1.0
 
-## 關鍵發現
+## Key Findings
 
-### 🔴 嚴重問題
-1. **問題描述**
-   - 發生頻率: 6/6 人
-   - 影響: 無法完成註冊
-   - 建議: [解決方案]
+### 🔴 Critical Issues
+1. **Problem Description**
+   - Frequency: 6/6 people
+   - Impact: Cannot complete registration
+   - Recommendation: [Solution]
 
-### 🟠 重大問題
-1. **問題描述**
+### 🟠 Major Issues
+1. **Problem Description**
    ...
 
-## 指標摘要
+## Metrics Summary
 
-| 任務 | 完成率 | 平均時間 | 滿意度 |
-|------|--------|----------|--------|
-| 註冊 | 50% | 180秒 | 2.5/5 |
-| 搜尋 | 100% | 45秒 | 4.2/5 |
-| 購買 | 83% | 120秒 | 3.8/5 |
+| Task | Completion | Avg Time | Satisfaction |
+|------|------------|----------|--------------|
+| Registration | 50% | 180s | 2.5/5 |
+| Search | 100% | 45s | 4.2/5 |
+| Purchase | 83% | 120s | 3.8/5 |
 
-## 後續建議
-1. [優先改善項目]
-2. [次要改善項目]
-3. [長期規劃項目]
+## Recommendations
+1. [Priority improvements]
+2. [Secondary improvements]
+3. [Long-term planning]
 ```
 
 ---
 
-## 研究工具與範本
+## Research Tools and Templates
 
-### 研究工具推薦
+### Recommended Research Tools
 
-| 用途 | 工具 |
-|------|------|
-| 遠端訪談 | Zoom, Google Meet, Teams |
-| 可用性測試 | Maze, UserTesting, Lookback |
-| 問卷 | Typeform, Google Forms, SurveyMonkey |
-| 分析 | Google Analytics, Mixpanel, Amplitude |
-| 熱點圖 | Hotjar, FullStory, Crazy Egg |
-| 協作筆記 | Notion, Miro, FigJam |
-| 招募 | UserInterviews, Respondent |
+| Purpose | Tools |
+|---------|-------|
+| Remote interviews | Zoom, Google Meet, Teams |
+| Usability testing | Maze, UserTesting, Lookback |
+| Surveys | Typeform, Google Forms, SurveyMonkey |
+| Analytics | Google Analytics, Mixpanel, Amplitude |
+| Heatmaps | Hotjar, FullStory, Crazy Egg |
+| Collaboration notes | Notion, Miro, FigJam |
+| Recruitment | UserInterviews, Respondent |
 
-### 研究計畫範本
+### Research Plan Template
 
 ```markdown
-# 研究計畫
+# Research Plan
 
-## 專案資訊
-- 專案名稱:
-- 研究者:
-- 日期:
+## Project Information
+- Project name:
+- Researcher:
+- Date:
 
-## 研究目標
-1. [目標 1]
-2. [目標 2]
+## Research Objectives
+1. [Objective 1]
+2. [Objective 2]
 
-## 研究問題
-1. [問題 1]
-2. [問題 2]
+## Research Questions
+1. [Question 1]
+2. [Question 2]
 
-## 方法
-- 方法: [訪談/測試/問卷]
-- 參與者: [人數與條件]
-- 時程: [日期]
+## Method
+- Method: [Interview/Testing/Survey]
+- Participants: [Number and criteria]
+- Timeline: [Dates]
 
-## 招募條件
-- 年齡:
-- 經驗:
-- 排除:
+## Recruitment Criteria
+- Age:
+- Experience:
+- Exclusions:
 
-## 時程
-| 階段 | 日期 |
-|------|------|
-| 準備 | |
-| 招募 | |
-| 執行 | |
-| 分析 | |
-| 報告 | |
+## Timeline
+| Phase | Date |
+|-------|------|
+| Preparation | |
+| Recruitment | |
+| Execution | |
+| Analysis | |
+| Report | |
 
-## 交付物
-- [ ] 研究報告
-- [ ] 簡報
-- [ ] 影片剪輯
+## Deliverables
+- [ ] Research report
+- [ ] Presentation
+- [ ] Video clips
 ```
 
-### 研究倫理
+### Research Ethics
 
 ```markdown
-## 知情同意書要點
+## Informed Consent Key Points
 
-□ 研究目的說明
-□ 參與內容與時長
-□ 錄音/錄影告知
-□ 資料使用範圍
-□ 保密條款
-□ 自願參與聲明
-□ 中途退出權利
-□ 聯絡方式
-□ 簽名欄位
+□ Research purpose explanation
+□ Participation content and duration
+□ Recording notification
+□ Data usage scope
+□ Confidentiality clause
+□ Voluntary participation statement
+□ Right to withdraw
+□ Contact information
+□ Signature field
 ```

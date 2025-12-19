@@ -1,163 +1,164 @@
-# UI/UX 覆蓋率驗證與追溯指南
+# UI/UX Coverage Validation and Traceability Guide
 
-## 概述
+## Overview
 
-本指南提供完整的 UI/UX 與規格文件（SRS/SDD/PRD/FSD）的覆蓋率驗證機制，確保產出的每個畫面都能追溯到原始需求，達成 **100% Coverage**。
+This guide provides a complete UI/UX coverage validation mechanism for specification documents (SRS/SDD/PRD/FSD), ensuring every generated screen can be traced back to original requirements, achieving **100% Coverage**.
 
 ---
 
-## 1. 需求追溯矩陣 (Requirements Traceability Matrix, RTM)
+## 1. Requirements Traceability Matrix (RTM)
 
-### 1.1 RTM 結構
+### 1.1 RTM Structure
 
 ```markdown
-# 需求追溯矩陣 - {ProjectName}
+# Requirements Traceability Matrix - {ProjectName}
 
-| 需求 ID | 需求描述 | 來源文件 | 對應畫面 | UI 元件 | 狀態 | 驗證日期 |
-|---------|----------|----------|----------|---------|------|----------|
-| FR-001 | 使用者登入功能 | SRS 3.1.1 | login.html | LoginForm, PasswordInput | ✅ 已覆蓋 | 2024-01-15 |
-| FR-002 | 社群帳號登入 | SRS 3.1.2 | login.html | SocialLoginButtons | ✅ 已覆蓋 | 2024-01-15 |
-| FR-003 | 忘記密碼流程 | SRS 3.1.3 | forgot-password.html | ForgotPasswordForm | ✅ 已覆蓋 | 2024-01-15 |
-| FR-004 | 使用者註冊 | SRS 3.2.1 | register.html | RegisterForm | ⏳ 進行中 | - |
-| FR-005 | Email 驗證 | SRS 3.2.2 | - | - | ❌ 未覆蓋 | - |
+| Req ID | Requirement Description | Source Document | Mapped Screen | UI Components | Status | Validation Date |
+|--------|------------------------|-----------------|---------------|---------------|--------|-----------------|
+| FR-001 | User login feature | SRS 3.1.1 | login.html | LoginForm, PasswordInput | Covered | 2024-01-15 |
+| FR-002 | Social account login | SRS 3.1.2 | login.html | SocialLoginButtons | Covered | 2024-01-15 |
+| FR-003 | Forgot password flow | SRS 3.1.3 | forgot-password.html | ForgotPasswordForm | Covered | 2024-01-15 |
+| FR-004 | User registration | SRS 3.2.1 | register.html | RegisterForm | In Progress | - |
+| FR-005 | Email verification | SRS 3.2.2 | - | - | Not Covered | - |
 ```
 
-### 1.2 狀態定義
+### 1.2 Status Definitions
 
-| 狀態 | 符號 | 說明 |
-|------|------|------|
-| 已覆蓋 | ✅ | UI 已完成且通過驗證 |
-| 進行中 | ⏳ | UI 正在開發中 |
-| 未覆蓋 | ❌ | 尚未有對應 UI |
-| 部分覆蓋 | ⚠️ | UI 存在但未完全滿足需求 |
-| 不適用 | N/A | 該需求不需要 UI |
+| Status | Symbol | Description |
+|--------|--------|-------------|
+| Covered | Done | UI completed and verified |
+| In Progress | WIP | UI currently in development |
+| Not Covered | TODO | No corresponding UI yet |
+| Partial | Partial | UI exists but doesn't fully satisfy requirements |
+| N/A | N/A | Requirement doesn't need UI |
 
 ---
 
-## 2. 覆蓋率分析
+## 2. Coverage Analysis
 
-### 2.1 覆蓋率計算公式
+### 2.1 Coverage Calculation Formulas
 
 ```
-功能覆蓋率 = (已覆蓋需求數 / 總需求數) × 100%
-畫面覆蓋率 = (已產出畫面數 / 規劃畫面數) × 100%
-元件覆蓋率 = (已實作元件數 / 規劃元件數) × 100%
-整體覆蓋率 = (功能覆蓋率 + 畫面覆蓋率 + 元件覆蓋率) / 3
+Feature Coverage = (Covered Requirements / Total Requirements) x 100%
+Screen Coverage = (Generated Screens / Planned Screens) x 100%
+Component Coverage = (Implemented Components / Planned Components) x 100%
+Overall Coverage = (Feature Coverage + Screen Coverage + Component Coverage) / 3
 ```
 
-### 2.2 覆蓋率報告模板
+### 2.2 Coverage Report Template
 
 ```markdown
-# 覆蓋率驗證報告
+# Coverage Validation Report
 
-**專案名稱：** {ProjectName}
-**驗證日期：** {Date}
-**驗證版本：** v{Version}
+**Project Name:** {ProjectName}
+**Validation Date:** {Date}
+**Validation Version:** v{Version}
 
-## 摘要
+## Summary
 
-| 指標 | 數值 | 目標 | 狀態 |
-|------|------|------|------|
-| 功能覆蓋率 | 95% | 100% | ⚠️ |
-| 畫面覆蓋率 | 100% | 100% | ✅ |
-| 元件覆蓋率 | 98% | 100% | ⚠️ |
-| **整體覆蓋率** | **97.67%** | **100%** | ⚠️ |
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
+| Feature Coverage | 95% | 100% | Warning |
+| Screen Coverage | 100% | 100% | Pass |
+| Component Coverage | 98% | 100% | Warning |
+| **Overall Coverage** | **97.67%** | **100%** | Warning |
 
-## 詳細分析
+## Detailed Analysis
 
-### 功能需求覆蓋
-- 總需求數：120
-- 已覆蓋：114
-- 部分覆蓋：4
-- 未覆蓋：2
+### Feature Requirements Coverage
+- Total Requirements: 120
+- Covered: 114
+- Partial Coverage: 4
+- Not Covered: 2
 
-### 未覆蓋項目清單
-| 需求 ID | 描述 | 優先級 | 預計完成日 |
-|---------|------|--------|------------|
-| FR-045 | 多語系切換 | High | 2024-02-01 |
-| FR-089 | 深色模式 | Medium | 2024-02-15 |
+### Uncovered Items List
+| Req ID | Description | Priority | Expected Completion |
+|--------|-------------|----------|---------------------|
+| FR-045 | Multi-language switch | High | 2024-02-01 |
+| FR-089 | Dark mode | Medium | 2024-02-15 |
 
-### 部分覆蓋項目清單
-| 需求 ID | 描述 | 覆蓋程度 | 缺少項目 |
-|---------|------|----------|----------|
-| FR-023 | 搜尋功能 | 70% | 進階篩選 UI |
-| FR-056 | 通知設定 | 80% | 排程選項 |
+### Partial Coverage Items List
+| Req ID | Description | Coverage Level | Missing Items |
+|--------|-------------|----------------|---------------|
+| FR-023 | Search feature | 70% | Advanced filter UI |
+| FR-056 | Notification settings | 80% | Schedule options |
 ```
 
 ---
 
-## 3. 自動化驗證流程
+## 3. Automated Validation Workflow
 
-### 3.1 驗證工作流程
+### 3.1 Validation Workflow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    覆蓋率驗證工作流程                              │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                 ┌────────────────────────┐
-                 │  1. 載入規格文件        │
-                 │  (SRS/SDD/PRD/FSD)     │
-                 └────────────────────────┘
-                              │
-                              ▼
-                 ┌────────────────────────┐
-                 │  2. 解析需求項目        │
-                 │  - 功能需求 (FR)        │
-                 │  - 非功能需求 (NFR)     │
-                 │  - 使用案例 (UC)        │
-                 └────────────────────────┘
-                              │
-                              ▼
-                 ┌────────────────────────┐
-                 │  3. 掃描產出 UI 檔案    │
-                 │  - HTML/React/Angular  │
-                 │  - SwiftUI/Compose     │
-                 │  - Figma JSON          │
-                 └────────────────────────┘
-                              │
-                              ▼
-                 ┌────────────────────────┐
-                 │  4. 建立映射關係        │
-                 │  需求 ID ↔ UI 元件     │
-                 └────────────────────────┘
-                              │
-                              ▼
-                 ┌────────────────────────┐
-                 │  5. 計算覆蓋率         │
-                 │  - 功能/畫面/元件      │
-                 └────────────────────────┘
-                              │
-                              ▼
-                 ┌────────────────────────┐
-                 │  6. 產生驗證報告        │
-                 │  - RTM / Gap Report   │
-                 └────────────────────────┘
-                              │
-                              ▼
-                 ┌────────────────────────┐
-                 │  7. 100% 達成？         │
-                 └────────────────────────┘
-                        │         │
-                   Yes  │         │ No
-                        ▼         ▼
-              ┌──────────────┐  ┌──────────────┐
-              │ 驗證通過 ✅   │  │ 列出 Gap ❌  │
-              │ 產出憑證     │  │ 產生修補計畫  │
-              └──────────────┘  └──────────────┘
++-------------------------------------------------------------------+
+|                    Coverage Validation Workflow                    |
++-------------------------------------------------------------------+
+                              |
+                              v
+                 +------------------------+
+                 |  1. Load Specification |
+                 |  (SRS/SDD/PRD/FSD)    |
+                 +------------------------+
+                              |
+                              v
+                 +------------------------+
+                 |  2. Parse Requirements |
+                 |  - Functional (FR)     |
+                 |  - Non-functional (NFR)|
+                 |  - Use Cases (UC)      |
+                 +------------------------+
+                              |
+                              v
+                 +------------------------+
+                 |  3. Scan Output UI     |
+                 |  - HTML/React/Angular  |
+                 |  - SwiftUI/Compose     |
+                 |  - Figma JSON          |
+                 +------------------------+
+                              |
+                              v
+                 +------------------------+
+                 |  4. Build Mapping      |
+                 |  Req ID <-> UI Element |
+                 +------------------------+
+                              |
+                              v
+                 +------------------------+
+                 |  5. Calculate Coverage |
+                 |  - Feature/Screen/Comp |
+                 +------------------------+
+                              |
+                              v
+                 +------------------------+
+                 |  6. Generate Report    |
+                 |  - RTM / Gap Report    |
+                 +------------------------+
+                              |
+                              v
+                 +------------------------+
+                 |  7. 100% Achieved?     |
+                 +------------------------+
+                        |         |
+                   Yes  |         | No
+                        v         v
+              +--------------+  +--------------+
+              | Validation   |  | List Gaps    |
+              | Passed       |  | Create Fix   |
+              | Issue Cert   |  | Plan         |
+              +--------------+  +--------------+
 ```
 
-### 3.2 需求 ID 標註規範
+### 3.2 Requirement ID Annotation Standards
 
-在產出的 UI 檔案中標註對應的需求 ID：
+Annotate corresponding requirement IDs in generated UI files:
 
 #### HTML/React/Angular
 
 ```html
 <!--
-  @requirement FR-001: 使用者登入功能
-  @requirement FR-002: 社群帳號登入
+  @requirement FR-001: User login feature
+  @requirement FR-002: Social account login
   @source SRS-ProjectName-1.0.md Section 3.1
 -->
 <div class="login-container" data-requirement="FR-001,FR-002">
@@ -172,9 +173,9 @@
  * LoginForm Component
  *
  * @requirements
- * - FR-001: 使用者登入功能
- * - FR-002: 社群帳號登入
- * - NFR-003: 登入回應時間 < 2秒
+ * - FR-001: User login feature
+ * - FR-002: Social account login
+ * - NFR-003: Login response time < 2 seconds
  *
  * @source SRS-ProjectName-1.0.md Section 3.1.1-3.1.2
  * @coverage 100%
@@ -191,8 +192,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ ... }) => {
  * LoginPageComponent
  *
  * @requirements
- * - FR-001: 使用者登入功能
- * - FR-002: 社群帳號登入
+ * - FR-001: User login feature
+ * - FR-002: Social account login
  *
  * @source SRS-ProjectName-1.0.md Section 3.1
  * @coverage 100%
@@ -211,8 +212,8 @@ export class LoginPageComponent { }
 /// LoginView
 ///
 /// - Requirements:
-///   - FR-001: 使用者登入功能
-///   - FR-002: 社群帳號登入
+///   - FR-001: User login feature
+///   - FR-002: Social account login
 /// - Source: SRS-ProjectName-1.0.md Section 3.1
 /// - Coverage: 100%
 struct LoginView: View {
@@ -229,8 +230,8 @@ struct LoginView: View {
  * LoginScreen
  *
  * Requirements:
- * - FR-001: 使用者登入功能
- * - FR-002: 社群帳號登入
+ * - FR-001: User login feature
+ * - FR-002: Social account login
  *
  * Source: SRS-ProjectName-1.0.md Section 3.1
  * Coverage: 100%
@@ -246,93 +247,93 @@ fun LoginScreen(
 
 ---
 
-## 4. Gap 分析與修補
+## 4. Gap Analysis and Remediation
 
-### 4.1 Gap 識別
+### 4.1 Gap Identification
 
 ```markdown
-# Gap 分析報告
+# Gap Analysis Report
 
-**分析日期：** {Date}
-**分析範圍：** SRS v1.0 vs UI v0.9
+**Analysis Date:** {Date}
+**Analysis Scope:** SRS v1.0 vs UI v0.9
 
-## 識別的 Gaps
+## Identified Gaps
 
-### Critical Gaps (必須修補)
-| Gap ID | 需求 | 描述 | 影響範圍 | 建議解決方案 |
-|--------|------|------|----------|--------------|
-| GAP-001 | FR-045 | 缺少多語系切換 UI | 全域 | 新增 LanguageSwitcher 元件 |
-| GAP-002 | FR-078 | 缺少錯誤提示畫面 | 全域 | 新增 ErrorBoundary 元件 |
+### Critical Gaps (Must Fix)
+| Gap ID | Requirement | Description | Impact Scope | Recommended Solution |
+|--------|-------------|-------------|--------------|---------------------|
+| GAP-001 | FR-045 | Missing multi-language switch UI | Global | Add LanguageSwitcher component |
+| GAP-002 | FR-078 | Missing error prompt screen | Global | Add ErrorBoundary component |
 
-### Major Gaps (應修補)
-| Gap ID | 需求 | 描述 | 影響範圍 | 建議解決方案 |
-|--------|------|------|----------|--------------|
-| GAP-003 | FR-089 | 深色模式未實作 | 全域 | 新增 ThemeProvider |
+### Major Gaps (Should Fix)
+| Gap ID | Requirement | Description | Impact Scope | Recommended Solution |
+|--------|-------------|-------------|--------------|---------------------|
+| GAP-003 | FR-089 | Dark mode not implemented | Global | Add ThemeProvider |
 
-### Minor Gaps (可延後)
-| Gap ID | 需求 | 描述 | 影響範圍 | 建議解決方案 |
-|--------|------|------|----------|--------------|
-| GAP-004 | FR-102 | 動畫效果不完整 | 局部 | 補充 micro-interactions |
+### Minor Gaps (Can Defer)
+| Gap ID | Requirement | Description | Impact Scope | Recommended Solution |
+|--------|-------------|-------------|--------------|---------------------|
+| GAP-004 | FR-102 | Animation effects incomplete | Partial | Add micro-interactions |
 ```
 
-### 4.2 修補計畫模板
+### 4.2 Remediation Plan Template
 
 ```markdown
-# Gap 修補計畫
+# Gap Remediation Plan
 
-## GAP-001: 多語系切換 UI
+## GAP-001: Multi-language Switch UI
 
-### 需求追溯
-- **需求 ID:** FR-045
-- **來源:** SRS-ProjectName-1.0.md Section 4.5
-- **原始描述:** "系統應支援繁中/簡中/英文三種語言切換"
+### Requirements Traceability
+- **Requirement ID:** FR-045
+- **Source:** SRS-ProjectName-1.0.md Section 4.5
+- **Original Description:** "System should support Traditional Chinese/Simplified Chinese/English language switching"
 
-### 修補內容
-1. 新增 `LanguageSwitcher` 元件
-2. 新增 `LanguageProvider` Context
-3. 修改 Header 加入語言切換入口
-4. 新增 i18n 資源檔結構
+### Remediation Content
+1. Add `LanguageSwitcher` component
+2. Add `LanguageProvider` Context
+3. Modify Header to include language switch entry
+4. Add i18n resource file structure
 
-### 影響的畫面
+### Affected Screens
 - [ ] header.html
 - [ ] settings.html
-- [ ] 所有含文字的頁面
+- [ ] All pages with text content
 
-### 預估工作量
-- UI 設計：2hr
-- 元件開發：4hr
-- 整合測試：2hr
+### Estimated Effort
+- UI Design: 2hr
+- Component Development: 4hr
+- Integration Testing: 2hr
 
-### 驗收標準
-- [ ] 可切換三種語言
-- [ ] 切換後立即生效
-- [ ] 記住使用者偏好
+### Acceptance Criteria
+- [ ] Can switch between three languages
+- [ ] Immediate effect after switching
+- [ ] Remember user preference
 ```
 
 ---
 
-## 5. 覆蓋率驗證輸出
+## 5. Coverage Validation Output
 
-### 5.1 輸出目錄結構
+### 5.1 Output Directory Structure
 
 ```
-📁 generated-ui/{ProjectName}/
-├── 📄 README.md
-├── 📄 COVERAGE-REPORT.md          # 覆蓋率報告
-├── 📄 TRACEABILITY-MATRIX.md      # 需求追溯矩陣
-├── 📄 GAP-ANALYSIS.md             # Gap 分析報告
-├── 📁 validation/
-│   ├── 📄 requirements-map.json   # 需求映射 JSON
-│   ├── 📄 coverage-summary.json   # 覆蓋率摘要 JSON
-│   └── 📄 gaps.json               # Gap 清單 JSON
-├── 📁 html/
-├── 📁 react/
-├── 📁 angular/
-├── 📁 swiftui/
-└── 📁 compose/
+generated-ui/{ProjectName}/
++-- README.md
++-- COVERAGE-REPORT.md          # Coverage report
++-- TRACEABILITY-MATRIX.md      # Requirements traceability matrix
++-- GAP-ANALYSIS.md             # Gap analysis report
++-- validation/
+|   +-- requirements-map.json   # Requirements mapping JSON
+|   +-- coverage-summary.json   # Coverage summary JSON
+|   +-- gaps.json               # Gap list JSON
++-- html/
++-- react/
++-- angular/
++-- swiftui/
++-- compose/
 ```
 
-### 5.2 requirements-map.json 結構
+### 5.2 requirements-map.json Structure
 
 ```json
 {
@@ -356,7 +357,7 @@ fun LoginScreen(
     {
       "id": "FR-001",
       "type": "functional",
-      "description": "使用者登入功能",
+      "description": "User login feature",
       "source": "SRS 3.1.1",
       "priority": "high",
       "mapped_screens": ["login"],
@@ -368,7 +369,7 @@ fun LoginScreen(
     {
       "id": "FR-002",
       "type": "functional",
-      "description": "社群帳號登入",
+      "description": "Social account login",
       "source": "SRS 3.1.2",
       "priority": "high",
       "mapped_screens": ["login"],
@@ -381,7 +382,7 @@ fun LoginScreen(
   "screens": [
     {
       "id": "login",
-      "name": "登入頁面",
+      "name": "Login Page",
       "files": {
         "html": "html/login.html",
         "react": "react/pages/LoginPage.tsx",
@@ -396,7 +397,7 @@ fun LoginScreen(
 }
 ```
 
-### 5.3 coverage-summary.json 結構
+### 5.3 coverage-summary.json Structure
 
 ```json
 {
@@ -452,13 +453,13 @@ fun LoginScreen(
   "uncovered_requirements": [
     {
       "id": "FR-045",
-      "description": "多語系切換",
+      "description": "Multi-language switch",
       "priority": "high",
       "category": "global"
     },
     {
       "id": "FR-089",
-      "description": "深色模式",
+      "description": "Dark mode",
       "priority": "medium",
       "category": "global"
     }
@@ -468,238 +469,237 @@ fun LoginScreen(
 
 ---
 
-## 6. 驗證檢查清單
+## 6. Validation Checklists
 
-### 6.1 功能需求驗證檢查清單
-
-```markdown
-# 功能需求驗證檢查清單
-
-## 認證模組
-- [x] FR-001: 使用者登入 → login.html ✅
-- [x] FR-002: 社群登入 → login.html ✅
-- [x] FR-003: 忘記密碼 → forgot-password.html ✅
-- [x] FR-004: 使用者註冊 → register.html ✅
-- [x] FR-005: Email 驗證 → verify-email.html ✅
-- [x] FR-006: 雙因素認證 → 2fa-setup.html ✅
-
-## 使用者管理
-- [x] FR-010: 個人資料檢視 → profile.html ✅
-- [x] FR-011: 個人資料編輯 → profile-edit.html ✅
-- [x] FR-012: 頭像上傳 → profile-edit.html ✅
-- [ ] FR-013: 帳號刪除 → ❌ 未覆蓋
-
-## 核心功能
-- [x] FR-020: 首頁儀表板 → dashboard.html ✅
-- [x] FR-021: 資料列表 → list.html ✅
-- [x] FR-022: 資料詳情 → detail.html ✅
-- [x] FR-023: 搜尋功能 → search.html ⚠️ 部分覆蓋 (缺進階篩選)
-```
-
-### 6.2 非功能需求驗證檢查清單
+### 6.1 Functional Requirements Validation Checklist
 
 ```markdown
-# 非功能需求驗證檢查清單
+# Functional Requirements Validation Checklist
 
-## 可用性 (Usability)
-- [x] NFR-001: 符合 WCAG 2.1 AA 標準 ✅
-- [x] NFR-002: 支援鍵盤導航 ✅
-- [x] NFR-003: 錯誤訊息清晰明確 ✅
+## Authentication Module
+- [x] FR-001: User login -> login.html Done
+- [x] FR-002: Social login -> login.html Done
+- [x] FR-003: Forgot password -> forgot-password.html Done
+- [x] FR-004: User registration -> register.html Done
+- [x] FR-005: Email verification -> verify-email.html Done
+- [x] FR-006: Two-factor authentication -> 2fa-setup.html Done
 
-## 響應式設計
-- [x] NFR-010: 支援 Mobile (320px+) ✅
-- [x] NFR-011: 支援 Tablet (768px+) ✅
-- [x] NFR-012: 支援 Desktop (1024px+) ✅
+## User Management
+- [x] FR-010: Profile view -> profile.html Done
+- [x] FR-011: Profile edit -> profile-edit.html Done
+- [x] FR-012: Avatar upload -> profile-edit.html Done
+- [ ] FR-013: Account deletion -> Not Covered
 
-## 效能
-- [x] NFR-020: 首次載入 < 3秒 ✅
-- [x] NFR-021: 互動回應 < 100ms ✅
-
-## 安全性
-- [x] NFR-030: 密碼欄位 masked ✅
-- [x] NFR-031: 敏感資料不顯示於 URL ✅
+## Core Features
+- [x] FR-020: Dashboard -> dashboard.html Done
+- [x] FR-021: Data list -> list.html Done
+- [x] FR-022: Data details -> detail.html Done
+- [x] FR-023: Search feature -> search.html Partial (missing advanced filter)
 ```
 
----
-
-## 7. 100% 覆蓋達成確認
-
-### 7.1 達成確認流程
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   100% 覆蓋達成確認流程                          │
-└─────────────────────────────────────────────────────────────────┘
-
-Step 1: 執行覆蓋率分析
-        ↓
-Step 2: 檢視 COVERAGE-REPORT.md
-        ↓
-Step 3: 整體覆蓋率 = 100%?
-        │
-        ├── Yes → Step 4: 產生覆蓋證明
-        │         ↓
-        │         Step 5: 簽核確認
-        │         ↓
-        │         ✅ 驗證完成
-        │
-        └── No  → Step 4: 檢視 GAP-ANALYSIS.md
-                  ↓
-                  Step 5: 執行 Gap 修補
-                  ↓
-                  Step 6: 重新產生 UI
-                  ↓
-                  回到 Step 1
-```
-
-### 7.2 覆蓋證明模板
+### 6.2 Non-Functional Requirements Validation Checklist
 
 ```markdown
-# UI/UX 覆蓋率驗證證明
+# Non-Functional Requirements Validation Checklist
+
+## Usability
+- [x] NFR-001: WCAG 2.1 AA compliant Done
+- [x] NFR-002: Keyboard navigation support Done
+- [x] NFR-003: Clear error messages Done
+
+## Responsive Design
+- [x] NFR-010: Mobile support (320px+) Done
+- [x] NFR-011: Tablet support (768px+) Done
+- [x] NFR-012: Desktop support (1024px+) Done
+
+## Performance
+- [x] NFR-020: Initial load < 3 seconds Done
+- [x] NFR-021: Interaction response < 100ms Done
+
+## Security
+- [x] NFR-030: Password field masked Done
+- [x] NFR-031: Sensitive data not in URL Done
+```
 
 ---
 
-**專案名稱：** {ProjectName}
-**驗證版本：** v{Version}
-**驗證日期：** {Date}
+## 7. 100% Coverage Achievement Confirmation
+
+### 7.1 Achievement Confirmation Flow
+
+```
++-------------------------------------------------------------------+
+|                100% Coverage Achievement Confirmation Flow          |
++-------------------------------------------------------------------+
+
+Step 1: Run coverage analysis
+        |
+Step 2: Review COVERAGE-REPORT.md
+        |
+Step 3: Overall coverage = 100%?
+        |
+        +-- Yes -> Step 4: Generate coverage certificate
+        |          |
+        |          Step 5: Sign-off confirmation
+        |          |
+        |          Validation Complete
+        |
+        +-- No  -> Step 4: Review GAP-ANALYSIS.md
+                   |
+                   Step 5: Execute gap remediation
+                   |
+                   Step 6: Regenerate UI
+                   |
+                   Return to Step 1
+```
+
+### 7.2 Coverage Certificate Template
+
+```markdown
+# UI/UX Coverage Validation Certificate
 
 ---
 
-## 驗證結果
-
-| 項目 | 結果 |
-|------|------|
-| 功能需求覆蓋率 | 100% (120/120) |
-| 畫面覆蓋率 | 100% (45/45) |
-| 元件覆蓋率 | 100% (89/89) |
-| **整體覆蓋率** | **100%** |
+**Project Name:** {ProjectName}
+**Validation Version:** v{Version}
+**Validation Date:** {Date}
 
 ---
 
-## 驗證範圍
+## Validation Results
 
-### 來源文件
+| Item | Result |
+|------|--------|
+| Feature Coverage | 100% (120/120) |
+| Screen Coverage | 100% (45/45) |
+| Component Coverage | 100% (89/89) |
+| **Overall Coverage** | **100%** |
+
+---
+
+## Validation Scope
+
+### Source Documents
 - SRS-{ProjectName}-1.0.md (v1.0, 2024-01-10)
 - SDD-{ProjectName}-1.0.md (v1.0, 2024-01-12)
 
-### 產出 UI
-- HTML/Tailwind: 45 畫面
-- React Components: 89 元件
-- Angular Components: 89 元件
-- SwiftUI Views: 45 畫面
-- Jetpack Compose Screens: 45 畫面
+### Generated UI
+- HTML/Tailwind: 45 screens
+- React Components: 89 components
+- Angular Components: 89 components
+- SwiftUI Views: 45 screens
+- Jetpack Compose Screens: 45 screens
 
 ---
 
-## 確認聲明
+## Confirmation Statement
 
-本證明確認所有規格文件中定義的功能需求、非功能需求及使用案例，
-均已在產出的 UI/UX 設計中完整實現，覆蓋率達到 100%。
-
----
-
-**驗證人員：** _________________
-**驗證日期：** _________________
-**簽核主管：** _________________
+This certificate confirms that all functional requirements, non-functional requirements, and use cases defined in the specification documents have been fully implemented in the generated UI/UX design, achieving 100% coverage.
 
 ---
 
-_此證明由 App UI/UX Designer Skill 自動產生_
+**Validator:** _________________
+**Validation Date:** _________________
+**Approving Manager:** _________________
+
+---
+
+_This certificate was auto-generated by App UI/UX Designer Skill_
 ```
 
 ---
 
-## 8. 整合指令
+## 8. Integration Commands
 
-### 8.1 覆蓋率驗證指令
+### 8.1 Coverage Validation Command
 
-當使用者提供規格文件與 UI 檔案時，執行以下驗證：
-
-```
-輸入：
-- 規格文件: SRS-{Project}.md, SDD-{Project}.md
-- UI 目錄: generated-ui/{Project}/
-
-輸出：
-1. TRACEABILITY-MATRIX.md - 完整追溯矩陣
-2. COVERAGE-REPORT.md - 覆蓋率報告
-3. GAP-ANALYSIS.md - Gap 分析 (如有)
-4. validation/*.json - 機器可讀格式
-
-驗證標準：
-- 每個 FR/NFR/UC 都必須對應至少一個 UI 元素
-- 每個 UI 畫面都必須標註對應的需求 ID
-- 整體覆蓋率必須達到 100%
-```
-
-### 8.2 自動標註指令
-
-產生 UI 時自動在程式碼中加入需求追溯標註：
+When user provides specification documents and UI files, execute the following validation:
 
 ```
-每個產出的 UI 檔案必須包含：
-1. 檔案頭部的需求清單註解
-2. 元件的 @requirements JSDoc/DocBlock
-3. HTML 的 data-requirement 屬性
-4. 來源文件與章節參照
+Input:
+- Specification Documents: SRS-{Project}.md, SDD-{Project}.md
+- UI Directory: generated-ui/{Project}/
+
+Output:
+1. TRACEABILITY-MATRIX.md - Complete traceability matrix
+2. COVERAGE-REPORT.md - Coverage report
+3. GAP-ANALYSIS.md - Gap analysis (if any)
+4. validation/*.json - Machine-readable formats
+
+Validation Standards:
+- Every FR/NFR/UC must map to at least one UI element
+- Every UI screen must annotate corresponding requirement IDs
+- Overall coverage must reach 100%
+```
+
+### 8.2 Auto-Annotation Command
+
+Automatically add requirement traceability annotations in code when generating UI:
+
+```
+Every generated UI file must include:
+1. Requirement list comment in file header
+2. @requirements JSDoc/DocBlock for components
+3. data-requirement attributes for HTML
+4. Source document and section references
 ```
 
 ---
 
-## 9. 最佳實踐
+## 9. Best Practices
 
-### 9.1 確保 100% 覆蓋的最佳實踐
+### 9.1 Best Practices for Ensuring 100% Coverage
 
-1. **前置作業**
-   - 確保規格文件有明確的需求編號
-   - 建立統一的需求 ID 命名規範
-   - 確認所有需求都有清晰的驗收標準
+1. **Preparation**
+   - Ensure specification documents have clear requirement IDs
+   - Establish unified requirement ID naming conventions
+   - Confirm all requirements have clear acceptance criteria
 
-2. **產生過程**
-   - 每產生一個畫面就更新追溯矩陣
-   - 立即標註需求 ID 於程式碼中
-   - 定期執行覆蓋率檢查
+2. **Generation Process**
+   - Update traceability matrix for each generated screen
+   - Immediately annotate requirement IDs in code
+   - Periodically run coverage checks
 
-3. **驗證階段**
-   - 使用自動化工具掃描標註
-   - 人工複核 Critical/High 優先級需求
-   - 確認所有 Gap 都有修補計畫
+3. **Validation Phase**
+   - Use automated tools to scan annotations
+   - Manually review Critical/High priority requirements
+   - Confirm all Gaps have remediation plans
 
-4. **維護階段**
-   - 規格變更時同步更新 UI 與追溯矩陣
-   - 版本化管理覆蓋報告
-   - 定期重新驗證覆蓋率
+4. **Maintenance Phase**
+   - Sync update UI and traceability matrix when specs change
+   - Version control coverage reports
+   - Periodically revalidate coverage
 
-### 9.2 常見問題處理
+### 9.2 Common Issue Handling
 
-| 問題 | 解決方案 |
-|------|----------|
-| 規格文件無編號 | 協助建立需求編號體系 |
-| 需求過於模糊 | 要求釐清後再產生 UI |
-| 一個需求對應多畫面 | 在所有相關畫面都標註 |
-| 一個畫面滿足多需求 | 列出所有對應的需求 ID |
-| 發現規格缺漏 | 記錄於 Gap 分析，建議補充規格 |
+| Issue | Solution |
+|-------|----------|
+| Specification documents have no IDs | Help establish requirement ID system |
+| Requirements are too vague | Request clarification before generating UI |
+| One requirement maps to multiple screens | Annotate in all related screens |
+| One screen satisfies multiple requirements | List all corresponding requirement IDs |
+| Specification gaps discovered | Record in Gap analysis, recommend spec supplement |
 
 ---
 
-## 附錄：快速參考
+## Appendix: Quick Reference
 
-### 需求 ID 格式
+### Requirement ID Formats
 
-| 前綴 | 類型 | 範例 |
-|------|------|------|
-| FR- | 功能需求 | FR-001 |
-| NFR- | 非功能需求 | NFR-001 |
-| UC- | 使用案例 | UC-001 |
-| US- | 使用者故事 | US-001 |
-| BR- | 商業規則 | BR-001 |
+| Prefix | Type | Example |
+|--------|------|---------|
+| FR- | Functional Requirement | FR-001 |
+| NFR- | Non-Functional Requirement | NFR-001 |
+| UC- | Use Case | UC-001 |
+| US- | User Story | US-001 |
+| BR- | Business Rule | BR-001 |
 
-### 覆蓋率等級
+### Coverage Level Grades
 
-| 等級 | 覆蓋率 | 狀態 |
-|------|--------|------|
-| A | 100% | ✅ 完全覆蓋 |
-| B | 95-99% | ⚠️ 接近完成 |
-| C | 80-94% | ⚠️ 需要補強 |
-| D | 60-79% | ❌ 嚴重不足 |
-| F | <60% | ❌ 需重新規劃 |
+| Grade | Coverage | Status |
+|-------|----------|--------|
+| A | 100% | Fully Covered |
+| B | 95-99% | Near Complete |
+| C | 80-94% | Needs Improvement |
+| D | 60-79% | Seriously Lacking |
+| F | <60% | Needs Replanning |

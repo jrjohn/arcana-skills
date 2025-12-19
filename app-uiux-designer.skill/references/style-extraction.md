@@ -1,167 +1,169 @@
-# 視覺風格萃取與複製指南
+# Visual Style Extraction and Replication Guide
 
-本指南提供從參考圖片萃取視覺風格並產生一致 UI/UX 設計的方法論。
+This guide provides methodology for extracting visual styles from reference images and generating consistent UI/UX designs.
 
-## 目錄
-1. [風格萃取流程](#風格萃取流程)
-2. [色彩分析](#色彩分析)
-3. [字型分析](#字型分析)
-4. [形狀與佈局](#形狀與佈局)
-5. [效果與質感](#效果與質感)
-6. [風格 Token 產生](#風格-token-產生)
-7. [Figma 風格輸出](#figma-風格輸出)
-8. [風格應用範例](#風格應用範例)
+## Table of Contents
+1. [Style Extraction Process](#style-extraction-process)
+2. [Color Analysis](#color-analysis)
+3. [Typography Analysis](#typography-analysis)
+4. [Shape and Layout](#shape-and-layout)
+5. [Effects and Textures](#effects-and-textures)
+6. [Style Token Generation](#style-token-generation)
+7. [Figma Style Output](#figma-style-output)
+8. [Style Application Examples](#style-application-examples)
 
 ---
 
-## 風格萃取流程
+## Style Extraction Process
 
-### 整體流程
+### Overall Flow
 
 ```
-輸入參考圖片
+Input Reference Image
      ↓
 ┌─────────────────────────────────────────────┐
-│              視覺風格分析                     │
+│              Visual Style Analysis           │
 ├─────────────┬─────────────┬─────────────────┤
-│   色彩分析   │   字型分析   │   形狀分析      │
+│ Color       │ Typography  │ Shape           │
+│ Analysis    │ Analysis    │ Analysis        │
 ├─────────────┼─────────────┼─────────────────┤
-│   效果分析   │   佈局分析   │   圖像風格      │
+│ Effects     │ Layout      │ Imagery         │
+│ Analysis    │ Analysis    │ Style           │
 └─────────────┴─────────────┴─────────────────┘
      ↓
-風格 Token 產生
+Style Token Generation
      ↓
-Figma 樣式輸出
+Figma Style Output
      ↓
-產生一致風格 UI
+Generate Consistent Style UI
 ```
 
-### 風格分析維度
+### Style Analysis Dimensions
 
 ```
-視覺風格 7 大維度:
+7 Dimensions of Visual Style:
 
-1. 🎨 色彩 (Color)
-   ├── 主色調
-   ├── 配色方案
-   └── 色彩情緒
+1. 🎨 Color
+   ├── Primary colors
+   ├── Color scheme
+   └── Color mood
 
-2. 🔤 字型 (Typography)
-   ├── 字體家族
-   ├── 字重分佈
-   └── 排版風格
+2. 🔤 Typography
+   ├── Font families
+   ├── Weight distribution
+   └── Typographic style
 
-3. 📐 形狀 (Shape)
-   ├── 圓角程度
-   ├── 幾何特徵
-   └── 圖標風格
+3. 📐 Shape
+   ├── Border radius
+   ├── Geometric features
+   └── Icon style
 
-4. 📏 間距 (Spacing)
-   ├── 密度感
-   ├── 留白比例
-   └── 網格系統
+4. 📏 Spacing
+   ├── Density feel
+   ├── Whitespace ratio
+   └── Grid system
 
-5. ✨ 效果 (Effects)
-   ├── 陰影風格
-   ├── 模糊效果
-   └── 邊框處理
+5. ✨ Effects
+   ├── Shadow style
+   ├── Blur effects
+   └── Border treatment
 
-6. 🖼️ 圖像 (Imagery)
-   ├── 攝影風格
-   ├── 插畫風格
-   └── 圖標風格
+6. 🖼️ Imagery
+   ├── Photography style
+   ├── Illustration style
+   └── Icon style
 
-7. 🎭 整體氛圍 (Mood)
-   ├── 現代/經典
-   ├── 簡約/豐富
-   └── 專業/活潑
+7. 🎭 Overall Mood
+   ├── Modern/Classic
+   ├── Minimal/Rich
+   └── Professional/Playful
 ```
 
-### 風格萃取報告模板
+### Style Extraction Report Template
 
 ```markdown
-# 風格萃取報告
+# Style Extraction Report
 
-## 📷 參考圖片
-[圖片描述或連結]
+## 📷 Reference Image
+[Image description or link]
 
-## 🎨 整體風格定位
+## 🎨 Overall Style Positioning
 
-| 維度 | 分析結果 |
-|------|----------|
-| 風格類型 | [Minimal/Glassmorphism/Neumorphism/...] |
-| 情緒調性 | [專業/活潑/優雅/科技/...] |
-| 目標受眾 | [年輕族群/商務人士/...] |
+| Dimension | Analysis Result |
+|-----------|-----------------|
+| Style Type | [Minimal/Glassmorphism/Neumorphism/...] |
+| Mood | [Professional/Playful/Elegant/Tech/...] |
+| Target Audience | [Young/Business/...] |
 
-## 萃取結果
+## Extraction Results
 
-### 色彩
-[詳細色彩分析]
+### Colors
+[Detailed color analysis]
 
-### 字型
-[詳細字型分析]
+### Typography
+[Detailed typography analysis]
 
-### 形狀
-[詳細形狀分析]
+### Shape
+[Detailed shape analysis]
 
-### 效果
-[詳細效果分析]
+### Effects
+[Detailed effects analysis]
 
-## 輸出 Token
+## Output Tokens
 [Design Token JSON]
 
-## Figma 樣式
-[Figma 樣式設定]
+## Figma Styles
+[Figma style settings]
 ```
 
 ---
 
-## 色彩分析
+## Color Analysis
 
-### 色彩萃取方法
-
-```
-1. 主色識別
-   ├── 品牌色/強調色
-   ├── 佔比最大的顏色
-   └── 視覺焦點顏色
-
-2. 配色方案判斷
-   ├── 單色 (Monochromatic)
-   ├── 類似色 (Analogous)
-   ├── 互補色 (Complementary)
-   ├── 三色 (Triadic)
-   └── 分裂互補 (Split-Complementary)
-
-3. 色彩角色分配
-   ├── Primary: 主要品牌色
-   ├── Secondary: 輔助色
-   ├── Accent: 強調色
-   ├── Background: 背景色
-   ├── Surface: 表面色
-   └── Text: 文字色
-```
-
-### 色彩情緒對應
+### Color Extraction Methods
 
 ```
-冷色調 (Cool):
-├── 藍色系: 專業、信任、科技
-├── 綠色系: 自然、健康、成長
-└── 紫色系: 創意、奢華、神秘
+1. Primary Color Identification
+   ├── Brand/Accent color
+   ├── Largest color proportion
+   └── Visual focal color
 
-暖色調 (Warm):
-├── 紅色系: 熱情、緊急、能量
-├── 橙色系: 活力、友善、創新
-└── 黃色系: 樂觀、警示、溫暖
+2. Color Scheme Determination
+   ├── Monochromatic
+   ├── Analogous
+   ├── Complementary
+   ├── Triadic
+   └── Split-Complementary
 
-中性色 (Neutral):
-├── 黑白灰: 專業、簡約、現代
-├── 米色系: 溫暖、自然、舒適
-└── 棕色系: 穩重、傳統、可靠
+3. Color Role Assignment
+   ├── Primary: Main brand color
+   ├── Secondary: Supporting color
+   ├── Accent: Emphasis color
+   ├── Background: Background color
+   ├── Surface: Surface color
+   └── Text: Text color
 ```
 
-### 色彩萃取輸出
+### Color Mood Mapping
+
+```
+Cool Tones:
+├── Blue family: Professional, Trust, Tech
+├── Green family: Natural, Health, Growth
+└── Purple family: Creative, Luxury, Mystery
+
+Warm Tones:
+├── Red family: Passion, Urgency, Energy
+├── Orange family: Vitality, Friendly, Innovation
+└── Yellow family: Optimism, Warning, Warmth
+
+Neutral Tones:
+├── Black/White/Gray: Professional, Minimal, Modern
+├── Beige family: Warm, Natural, Comfortable
+└── Brown family: Stable, Traditional, Reliable
+```
+
+### Color Extraction Output
 
 ```json
 {
@@ -171,25 +173,25 @@ Figma 樣式輸出
         "value": "#6366F1",
         "hsl": "239, 84%, 67%",
         "name": "Indigo",
-        "usage": "主要互動元件、品牌標識"
+        "usage": "Main interactive elements, brand identity"
       },
       "secondary": {
         "value": "#EC4899",
         "hsl": "330, 81%, 60%",
         "name": "Pink",
-        "usage": "輔助強調、標籤"
+        "usage": "Secondary emphasis, tags"
       },
       "background": {
         "value": "#0F172A",
         "hsl": "222, 47%, 11%",
         "name": "Slate 900",
-        "usage": "深色背景"
+        "usage": "Dark background"
       },
       "surface": {
         "value": "#1E293B",
         "hsl": "217, 33%, 17%",
         "name": "Slate 800",
-        "usage": "卡片、容器"
+        "usage": "Cards, containers"
       },
       "text": {
         "primary": "#F8FAFC",
@@ -199,88 +201,88 @@ Figma 樣式輸出
     },
     "palette": {
       "type": "Complementary",
-      "harmony": "藍紫 + 粉紅對比"
+      "harmony": "Blue-purple + Pink contrast"
     },
-    "mood": "現代科技感、專業、活力"
+    "mood": "Modern tech, professional, vibrant"
   }
 }
 ```
 
-### 色彩比例分析
+### Color Proportion Analysis
 
 ```
-60-30-10 法則:
+60-30-10 Rule:
 
 ┌─────────────────────────────────────┐
 │                                     │
-│         60% 主要背景色               │
+│         60% Primary Background      │
 │         (Background/Surface)        │
 │                                     │
 ├─────────────────────────────────────┤
 │                                     │
-│         30% 次要色                   │
-│         (Secondary/Containers)       │
+│         30% Secondary Color         │
+│         (Secondary/Containers)      │
 │                                     │
 ├─────────────────────────────────────┤
-│         10% 強調色 (Primary/Accent) │
+│         10% Accent (Primary/Accent) │
 └─────────────────────────────────────┘
 ```
 
 ---
 
-## 字型分析
+## Typography Analysis
 
-### 字型識別方法
-
-```
-1. 字體分類判斷
-   ├── Sans-serif (無襯線): 現代、簡潔
-   ├── Serif (襯線): 經典、優雅
-   ├── Monospace (等寬): 技術、程式
-   ├── Display (裝飾): 標題、特殊
-   └── Handwriting (手寫): 親切、創意
-
-2. 字體特徵識別
-   ├── x-height (小寫高度)
-   ├── 筆畫粗細對比
-   ├── 字腔開放度
-   ├── 終端形狀
-   └── 幾何 vs 人文
-
-3. 常見字體匹配
-   [圖片字體] → [建議替代字體]
-```
-
-### 常見字體風格對照
+### Font Identification Methods
 
 ```
-現代幾何風格:
+1. Font Category Determination
+   ├── Sans-serif: Modern, Clean
+   ├── Serif: Classic, Elegant
+   ├── Monospace: Technical, Code
+   ├── Display: Headlines, Special
+   └── Handwriting: Friendly, Creative
+
+2. Font Characteristics
+   ├── x-height
+   ├── Stroke contrast
+   ├── Aperture openness
+   ├── Terminal shapes
+   └── Geometric vs Humanist
+
+3. Common Font Matching
+   [Image font] → [Suggested alternative]
+```
+
+### Common Font Style Reference
+
+```
+Modern Geometric:
 ├── Geometric Sans → Inter, Poppins, Montserrat
-├── 特徵: 圓形字腔、均勻筆畫
-└── 適用: 科技、現代品牌
+├── Features: Circular bowls, uniform strokes
+└── Use for: Tech, modern brands
 
-人文主義風格:
+Humanist Style:
 ├── Humanist Sans → Open Sans, Lato, Source Sans
-├── 特徵: 書寫感、筆畫變化
-└── 適用: 友善、易讀內容
+├── Features: Calligraphic feel, stroke variation
+└── Use for: Friendly, readable content
 
-新怪誕風格:
+Neo-Grotesque:
 ├── Neo-Grotesque → Helvetica, SF Pro, Roboto
-├── 特徵: 中性、功能性
-└── 適用: 系統界面、專業
+├── Features: Neutral, functional
+└── Use for: System interfaces, professional
 
-優雅襯線:
+Elegant Serif:
 ├── Modern Serif → Playfair, Didot, Bodoni
-├── 特徵: 高對比、精緻
-└── 適用: 時尚、奢侈品
+├── Features: High contrast, refined
+└── Use for: Fashion, luxury
 
-經典襯線:
+Classic Serif:
 ├── Traditional Serif → Georgia, Merriweather
-├── 特徵: 易讀、溫暖
-└── 適用: 編輯、閱讀內容
+├── Features: Readable, warm
+└── Use for: Editorial, reading content
 ```
 
-### 字型風格輸出
+### Typography Style Output
 
 ```json
 {
@@ -335,59 +337,59 @@ Figma 樣式輸出
 
 ---
 
-## 形狀與佈局
+## Shape and Layout
 
-### 圓角風格分析
-
-```
-圓角程度 (Border Radius):
-
-無圓角 (0px)
-├── 風格: 銳利、專業、技術
-└── 適用: 數據儀表板、企業軟體
-
-小圓角 (4-8px)
-├── 風格: 精緻、現代、專業
-└── 適用: SaaS、商務應用
-
-中圓角 (12-16px)
-├── 風格: 友善、柔和、平衡
-└── 適用: 消費者 App、一般用途
-
-大圓角 (20-24px)
-├── 風格: 活潑、現代、iOS 風格
-└── 適用: 社群、娛樂 App
-
-全圓角 (9999px / Pill)
-├── 風格: 圓潤、可愛、按鈕
-└── 適用: 標籤、Chip、按鈕
-```
-
-### 佈局密度分析
+### Border Radius Style Analysis
 
 ```
-密度等級:
+Border Radius Levels:
 
-緊湊 (Compact):
-├── 間距: 4-8px 為主
-├── 元素密集
-├── 資訊密度高
-└── 適用: 數據表格、專業工具
+No radius (0px)
+├── Style: Sharp, professional, technical
+└── Use for: Data dashboards, enterprise software
 
-標準 (Default):
-├── 間距: 12-16px 為主
-├── 平衡留白
-├── 舒適閱讀
-└── 適用: 一般應用
+Small radius (4-8px)
+├── Style: Refined, modern, professional
+└── Use for: SaaS, business applications
 
-寬鬆 (Comfortable):
-├── 間距: 24-32px 為主
-├── 大量留白
-├── 聚焦內容
-└── 適用: 行銷頁面、閱讀 App
+Medium radius (12-16px)
+├── Style: Friendly, soft, balanced
+└── Use for: Consumer apps, general purpose
+
+Large radius (20-24px)
+├── Style: Playful, modern, iOS-style
+└── Use for: Social, entertainment apps
+
+Full radius (9999px / Pill)
+├── Style: Rounded, cute, button-like
+└── Use for: Tags, chips, buttons
 ```
 
-### 形狀輸出
+### Layout Density Analysis
+
+```
+Density Levels:
+
+Compact:
+├── Spacing: Mainly 4-8px
+├── Dense elements
+├── High information density
+└── Use for: Data tables, professional tools
+
+Default:
+├── Spacing: Mainly 12-16px
+├── Balanced whitespace
+├── Comfortable reading
+└── Use for: General applications
+
+Comfortable:
+├── Spacing: Mainly 24-32px
+├── Generous whitespace
+├── Content focused
+└── Use for: Marketing pages, reading apps
+```
+
+### Shape Output
 
 ```json
 {
@@ -417,64 +419,64 @@ Figma 樣式輸出
 
 ---
 
-## 效果與質感
+## Effects and Textures
 
-### 陰影風格分析
+### Shadow Style Analysis
 
 ```
-陰影類型:
+Shadow Types:
 
-無陰影 (Flat):
-├── 風格: 扁平、現代
+No shadow (Flat):
+├── Style: Flat, modern
 └── CSS: none
 
-輕微陰影 (Subtle):
-├── 風格: 精緻、浮動感
+Subtle shadow:
+├── Style: Refined, floating feel
 └── CSS: 0 1px 3px rgba(0,0,0,0.1)
 
-標準陰影 (Default):
-├── 風格: 層次、卡片感
+Default shadow:
+├── Style: Layered, card-like
 └── CSS: 0 4px 6px rgba(0,0,0,0.1)
 
-深度陰影 (Elevated):
-├── 風格: 強烈層次、彈窗
+Elevated shadow:
+├── Style: Strong layering, popups
 └── CSS: 0 10px 25px rgba(0,0,0,0.15)
 
-彩色陰影 (Colored):
-├── 風格: 時尚、霓虹
+Colored shadow:
+├── Style: Trendy, neon
 └── CSS: 0 4px 14px rgba(99,102,241,0.4)
 ```
 
-### 特殊效果風格
+### Special Effect Styles
 
 ```
-Glassmorphism (玻璃擬態):
-├── 特徵: 半透明、模糊背景
+Glassmorphism:
+├── Features: Semi-transparent, blurred background
 ├── CSS:
 │   background: rgba(255,255,255,0.1)
 │   backdrop-filter: blur(10px)
 │   border: 1px solid rgba(255,255,255,0.2)
-└── 適用: 現代、科技感 UI
+└── Use for: Modern, tech-feel UI
 
-Neumorphism (新擬態):
-├── 特徵: 凸起/凹陷、柔和陰影
+Neumorphism:
+├── Features: Raised/recessed, soft shadows
 ├── CSS:
 │   background: #e0e0e0
 │   box-shadow: 20px 20px 60px #bebebe,
 │               -20px -20px 60px #ffffff
-└── 適用: 簡約、高級感
+└── Use for: Minimal, premium feel
 
-Gradient (漸層):
-├── 特徵: 色彩過渡、豐富感
-├── 類型: 線性/放射/圓錐
-└── 適用: 背景、按鈕、裝飾
+Gradient:
+├── Features: Color transitions, richness
+├── Types: Linear/Radial/Conic
+└── Use for: Backgrounds, buttons, decorations
 
-Grain/Noise (顆粒紋理):
-├── 特徵: 復古、質感
-└── 適用: 背景、插畫風格
+Grain/Noise:
+├── Features: Retro, textured
+└── Use for: Backgrounds, illustration style
 ```
 
-### 效果輸出
+### Effects Output
 
 ```json
 {
@@ -512,9 +514,9 @@ Grain/Noise (顆粒紋理):
 
 ---
 
-## 風格 Token 產生
+## Style Token Generation
 
-### 完整風格 Token 結構
+### Complete Style Token Structure
 
 ```json
 {
@@ -609,7 +611,7 @@ Grain/Noise (顆粒紋理):
 }
 ```
 
-### CSS Variables 輸出
+### CSS Variables Output
 
 ```css
 :root {
@@ -654,9 +656,9 @@ Grain/Noise (顆粒紋理):
 
 ---
 
-## Figma 風格輸出
+## Figma Style Output
 
-### Figma 樣式設定
+### Figma Style Settings
 
 ```
 📁 Styles
@@ -694,7 +696,7 @@ Grain/Noise (顆粒紋理):
     └── Blur / Overlay
 ```
 
-### Figma Variables 設定
+### Figma Variables Settings
 
 ```
 📁 Variables
@@ -725,10 +727,10 @@ Grain/Noise (顆粒紋理):
         └── ...
 ```
 
-### 元件風格應用範例
+### Component Style Application Example
 
 ```
-Button Component (套用萃取風格):
+Button Component (applying extracted style):
 
 ┌─────────────────────────────────────────┐
 │           Primary Button                │
@@ -758,57 +760,57 @@ Effects:
 
 ---
 
-## 風格應用範例
+## Style Application Examples
 
-### 輸入參考圖分析
+### Reference Image Analysis
 
 ```markdown
-## 參考圖片分析
+## Reference Image Analysis
 
-### 圖片描述
-深色主題的科技感儀表板界面，使用紫藍色漸層作為強調色。
+### Image Description
+Dark theme tech dashboard interface using purple-blue gradient as accent color.
 
-### 萃取結果
+### Extraction Results
 
-**色彩:**
-- 主色: 靛藍紫 (#6366F1 → #8B5CF6 漸層)
-- 背景: 深藍灰 (#0F172A)
-- 表面: 深灰 (#1E293B)
-- 文字: 淺灰白 (#F1F5F9)
-- 強調: 青色 (#22D3EE)
+**Colors:**
+- Primary: Indigo-purple (#6366F1 → #8B5CF6 gradient)
+- Background: Deep blue-gray (#0F172A)
+- Surface: Dark gray (#1E293B)
+- Text: Light gray-white (#F1F5F9)
+- Accent: Cyan (#22D3EE)
 
-**字型:**
-- 標題: Geometric Sans (類似 Poppins)
-- 內文: Neo-Grotesque (類似 Inter)
-- 數據: Monospace (類似 JetBrains Mono)
+**Typography:**
+- Headings: Geometric Sans (like Poppins)
+- Body: Neo-Grotesque (like Inter)
+- Data: Monospace (like JetBrains Mono)
 
-**形狀:**
-- 圓角: 中等 (12-16px)
-- 卡片: 大圓角 (24px)
-- 按鈕: 全圓角 (Pill)
+**Shape:**
+- Border radius: Medium (12-16px)
+- Cards: Large radius (24px)
+- Buttons: Full radius (Pill)
 
-**效果:**
-- 風格: Glassmorphism
-- 陰影: 彩色陰影 (紫色光暈)
-- 邊框: 半透明白邊
+**Effects:**
+- Style: Glassmorphism
+- Shadows: Colored shadows (purple glow)
+- Borders: Semi-transparent white
 
-**佈局:**
-- 密度: 標準
-- 網格: 12 欄
-- 間距: 16-24px 為主
+**Layout:**
+- Density: Default
+- Grid: 12 columns
+- Spacing: Mainly 16-24px
 ```
 
-### 產生一致風格的 UI 元件
+### Generating Consistent Style UI Components
 
 ```
-根據萃取風格產生的元件:
+Components generated from extracted style:
 
 ┌─────────────────────────────────────────────────────────┐
 │                                                         │
 │  ┌──────────────────────────────────────────────────┐  │
 │  │  Dashboard Card                                   │  │
 │  │  ┌─────────────────────────────────────────────┐ │  │
-│  │  │  背景: rgba(30, 41, 59, 0.8)                │ │  │
+│  │  │  background: rgba(30, 41, 59, 0.8)          │ │  │
 │  │  │  backdrop-filter: blur(10px)                │ │  │
 │  │  │  border: 1px solid rgba(255,255,255,0.1)    │ │  │
 │  │  │  border-radius: 24px                        │ │  │
@@ -831,79 +833,79 @@ Effects:
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 完整頁面風格應用
+### Complete Page Style Application
 
 ```
-套用萃取風格的完整頁面:
+Complete page with extracted style applied:
 
 ┌─────────────────────────────────────────────────────────┐
-│ 🔮 背景: #0F172A (深色)                                  │
+│ 🔮 Background: #0F172A (dark)                           │
 │                                                         │
 │ ┌─ Sidebar ──┐ ┌─ Main Content ────────────────────┐   │
 │ │            │ │                                    │   │
 │ │ Glass Card │ │  Header (Glass)                    │   │
-│ │ 半透明背景  │ │  ┌────────────────────────────┐  │   │
-│ │ 模糊效果   │ │  │  Welcome back, User        │  │   │
-│ │            │ │  │  Here's your dashboard     │  │   │
-│ │ 🏠 Home    │ │  └────────────────────────────┘  │   │
-│ │ 📊 Stats   │ │                                    │   │
-│ │ ⚙️ Settings│ │  ┌──────────┐ ┌──────────┐        │   │
-│ │            │ │  │ Card 1   │ │ Card 2   │        │   │
-│ │            │ │  │ Glass    │ │ Glass    │        │   │
+│ │ Semi-trans │ │  ┌────────────────────────────┐   │   │
+│ │ background │ │  │  Welcome back, User        │   │   │
+│ │ Blur       │ │  │  Here's your dashboard     │   │   │
+│ │ effect     │ │  └────────────────────────────┘   │   │
+│ │            │ │                                    │   │
+│ │ 🏠 Home    │ │  ┌──────────┐ ┌──────────┐        │   │
+│ │ 📊 Stats   │ │  │ Card 1   │ │ Card 2   │        │   │
+│ │ ⚙️ Settings│ │  │ Glass    │ │ Glass    │        │   │
 │ │            │ │  │ + Glow   │ │ + Glow   │        │   │
 │ │            │ │  └──────────┘ └──────────┘        │   │
 │ │            │ │                                    │   │
-│ │            │ │  ┌─────────────────────────────┐  │   │
-│ │            │ │  │ Chart Area (Glass)          │  │   │
-│ │            │ │  │ 漸層線條圖                   │  │   │
-│ │            │ │  └─────────────────────────────┘  │   │
+│ │            │ │  ┌─────────────────────────────┐   │   │
+│ │            │ │  │ Chart Area (Glass)          │   │   │
+│ │            │ │  │ Gradient line chart         │   │   │
+│ │            │ │  └─────────────────────────────┘   │   │
 │ └────────────┘ └────────────────────────────────────┘   │
 │                                                         │
-│ 字型: Poppins (標題) + Inter (內文)                      │
-│ 強調色: Indigo-Purple Gradient                          │
-│ 圓角: 24px (卡片) / Full (按鈕)                         │
-│ 效果: Glassmorphism + Colored Shadow                    │
+│ Fonts: Poppins (headings) + Inter (body)                │
+│ Accent: Indigo-Purple Gradient                          │
+│ Radius: 24px (cards) / Full (buttons)                   │
+│ Effects: Glassmorphism + Colored Shadow                 │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 風格萃取檢查清單
+## Style Extraction Checklist
 
-### 分析完整性
+### Analysis Completeness
 
 ```
-色彩 (必要)
-□ 主色調識別
-□ 配色方案判斷
-□ 背景/表面色
-□ 文字色階
-□ 強調色/輔助色
-□ 語義色 (成功/警告/錯誤)
+Colors (Required)
+□ Primary color identified
+□ Color scheme determined
+□ Background/surface colors
+□ Text color scale
+□ Accent/secondary colors
+□ Semantic colors (success/warning/error)
 
-字型 (必要)
-□ 字體家族識別
-□ 字重分佈
-□ 字級比例
-□ 行高設定
-□ 字距建議
+Typography (Required)
+□ Font families identified
+□ Weight distribution
+□ Font size scale
+□ Line height settings
+□ Letter spacing recommendations
 
-形狀 (必要)
-□ 圓角程度
-□ 元件圓角對應
-□ 密度/間距
+Shape (Required)
+□ Border radius levels
+□ Component radius mapping
+□ Density/spacing
 
-效果 (建議)
-□ 陰影風格
-□ 特殊效果 (Glass/Neumorphism)
-□ 邊框處理
-□ 動畫風格
+Effects (Recommended)
+□ Shadow style
+□ Special effects (Glass/Neumorphism)
+□ Border treatment
+□ Animation style
 
-輸出 (必要)
+Output (Required)
 □ Token JSON
 □ CSS Variables
 □ Figma Styles
 □ Figma Variables
-□ 元件範例
+□ Component examples
 ```

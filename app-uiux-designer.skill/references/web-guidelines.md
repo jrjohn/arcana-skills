@@ -1,76 +1,76 @@
-# Web UI/UX 設計指南
+# Web UI/UX Design Guide
 
-本文件提供 Web 應用程式設計的核心規範，涵蓋響應式設計、元件規範、佈局系統等。
+This document provides core specifications for Web application design, covering responsive design, component specifications, layout systems, and more.
 
-## 目錄
-1. [設計原則](#設計原則)
-2. [響應式設計](#響應式設計)
-3. [佈局系統](#佈局系統)
-4. [導航模式](#導航模式)
-5. [元件規範](#元件規範)
-6. [字型系統](#字型系統)
-7. [顏色系統](#顏色系統)
-8. [表單設計](#表單設計)
-9. [資料表格](#資料表格)
-10. [動畫與互動](#動畫與互動)
-
----
-
-## 設計原則
-
-### Web 設計核心理念
-
-1. **Mobile First (行動優先)**
-   - 從最小螢幕開始設計
-   - 逐步增強至大螢幕
-
-2. **Progressive Enhancement (漸進增強)**
-   - 基礎功能在所有瀏覽器運作
-   - 進階功能依瀏覽器能力啟用
-
-3. **Content First (內容優先)**
-   - 內容決定設計
-   - 減少不必要裝飾
-
-4. **Performance (效能)**
-   - 快速載入時間
-   - 優化圖片與資源
-
-5. **Accessibility (無障礙)**
-   - 所有人都能使用
-   - 符合 WCAG 標準
+## Table of Contents
+1. [Design Principles](#design-principles)
+2. [Responsive Design](#responsive-design)
+3. [Layout System](#layout-system)
+4. [Navigation Patterns](#navigation-patterns)
+5. [Component Specifications](#component-specifications)
+6. [Typography System](#typography-system)
+7. [Color System](#color-system)
+8. [Form Design](#form-design)
+9. [Data Tables](#data-tables)
+10. [Animation and Interaction](#animation-and-interaction)
 
 ---
 
-## 響應式設計
+## Design Principles
 
-### 斷點系統 (Breakpoints)
+### Web Design Core Philosophy
+
+1. **Mobile First**
+   - Design from smallest screen first
+   - Progressively enhance for larger screens
+
+2. **Progressive Enhancement**
+   - Basic functionality works in all browsers
+   - Advanced features enabled based on browser capabilities
+
+3. **Content First**
+   - Content determines design
+   - Reduce unnecessary decoration
+
+4. **Performance**
+   - Fast loading times
+   - Optimize images and resources
+
+5. **Accessibility**
+   - Usable by everyone
+   - Comply with WCAG standards
+
+---
+
+## Responsive Design
+
+### Breakpoint System
 
 ```css
-/* 標準斷點 */
---breakpoint-xs: 0;        /* < 576px: 手機直向 */
---breakpoint-sm: 576px;    /* ≥ 576px: 手機橫向 */
---breakpoint-md: 768px;    /* ≥ 768px: 平板 */
---breakpoint-lg: 1024px;   /* ≥ 1024px: 小桌面 */
---breakpoint-xl: 1280px;   /* ≥ 1280px: 桌面 */
---breakpoint-2xl: 1536px;  /* ≥ 1536px: 大桌面 */
+/* Standard breakpoints */
+--breakpoint-xs: 0;        /* < 576px: Mobile portrait */
+--breakpoint-sm: 576px;    /* ≥ 576px: Mobile landscape */
+--breakpoint-md: 768px;    /* ≥ 768px: Tablet */
+--breakpoint-lg: 1024px;   /* ≥ 1024px: Small desktop */
+--breakpoint-xl: 1280px;   /* ≥ 1280px: Desktop */
+--breakpoint-2xl: 1536px;  /* ≥ 1536px: Large desktop */
 ```
 
-### 常見設計尺寸
+### Common Design Sizes
 
-| 裝置 | 寬度 | 設計建議 |
-|------|------|----------|
-| Mobile S | 320px | 最小支援寬度 |
-| Mobile M | 375px | iPhone 標準 |
-| Mobile L | 425px | 大型手機 |
-| Tablet | 768px | iPad 直向 |
-| Laptop | 1024px | 小型筆電 |
-| Desktop | 1440px | 標準桌面 |
-| 4K | 2560px | 大型顯示器 |
+| Device | Width | Design Recommendation |
+|--------|-------|----------------------|
+| Mobile S | 320px | Minimum supported width |
+| Mobile M | 375px | iPhone standard |
+| Mobile L | 425px | Large phones |
+| Tablet | 768px | iPad portrait |
+| Laptop | 1024px | Small laptop |
+| Desktop | 1440px | Standard desktop |
+| 4K | 2560px | Large monitors |
 
-### 設計策略
+### Design Strategies
 
-**流動式佈局 (Fluid Layout):**
+**Fluid Layout:**
 ```css
 .container {
   width: 100%;
@@ -92,20 +92,20 @@
 }
 ```
 
-**內容適應策略:**
+**Content Adaptation Strategy:**
 ```
-Mobile: 單欄佈局，堆疊內容
-Tablet: 雙欄佈局，側邊選單可收合
-Desktop: 多欄佈局，固定側邊欄
+Mobile: Single column layout, stacked content
+Tablet: Two column layout, collapsible sidebar
+Desktop: Multi-column layout, fixed sidebar
 ```
 
 ---
 
-## 佈局系統
+## Layout System
 
-### Grid 系統
+### Grid System
 
-**12 欄網格:**
+**12-Column Grid:**
 ```css
 .grid {
   display: grid;
@@ -113,17 +113,17 @@ Desktop: 多欄佈局，固定側邊欄
   gap: 16px; /* Gutter */
 }
 
-/* 響應式欄位 */
-.col-12 { grid-column: span 12; }  /* 全寬 */
-.col-6 { grid-column: span 6; }    /* 半寬 */
-.col-4 { grid-column: span 4; }    /* 1/3 寬 */
-.col-3 { grid-column: span 3; }    /* 1/4 寬 */
+/* Responsive columns */
+.col-12 { grid-column: span 12; }  /* Full width */
+.col-6 { grid-column: span 6; }    /* Half width */
+.col-4 { grid-column: span 4; }    /* 1/3 width */
+.col-3 { grid-column: span 3; }    /* 1/4 width */
 ```
 
-### 間距系統 (Spacing Scale)
+### Spacing Scale
 
 ```css
-/* 8px 基礎單位 */
+/* 8px base unit */
 --space-1: 4px;    /* 0.5x */
 --space-2: 8px;    /* 1x */
 --space-3: 12px;   /* 1.5x */
@@ -136,7 +136,7 @@ Desktop: 多欄佈局，固定側邊欄
 --space-10: 128px; /* 16x */
 ```
 
-### 常見佈局模式
+### Common Layout Patterns
 
 **Holy Grail Layout:**
 ```
@@ -173,18 +173,18 @@ Desktop: 多欄佈局，固定側邊欄
 
 ---
 
-## 導航模式
+## Navigation Patterns
 
 ### Top Navigation Bar
 
 ```
-桌面版:
+Desktop:
 ┌─────────────────────────────────────────────────┐
 │ Logo    Nav1  Nav2  Nav3  Nav4     Search  User │
 └─────────────────────────────────────────────────┘
-高度: 64px (桌面) / 56px (平板) / 48px (手機)
+Height: 64px (desktop) / 56px (tablet) / 48px (mobile)
 
-手機版:
+Mobile:
 ┌─────────────────────────────────────────────────┐
 │ ☰ Hamburger        Logo               Search 🔍 │
 └─────────────────────────────────────────────────┘
@@ -193,7 +193,7 @@ Desktop: 多欄佈局，固定側邊欄
 ### Side Navigation
 
 ```
-展開狀態 (寬度: 240-280px):
+Expanded state (width: 240-280px):
 ┌────────────────────┐
 │ Logo               │
 ├────────────────────┤
@@ -206,7 +206,7 @@ Desktop: 多欄佈局，固定側邊欄
 │ 🚪 Logout          │
 └────────────────────┘
 
-收合狀態 (寬度: 64-72px):
+Collapsed state (width: 64-72px):
 ┌────┐
 │ 🏠 │
 │ 📊 │
@@ -220,7 +220,7 @@ Desktop: 多欄佈局，固定側邊欄
 ```
 Home > Category > Subcategory > Current Page
 └─────┴──────────┴─────────────┴────────────┘
-  可點擊連結          當前頁面（不可點擊）
+  Clickable links              Current page (not clickable)
 ```
 
 ### Tab Navigation
@@ -238,44 +238,44 @@ Home > Category > Subcategory > Current Page
 
 ---
 
-## 元件規範
+## Component Specifications
 
-### 按鈕 (Buttons)
+### Buttons
 
-**尺寸:**
-| 類型 | 高度 | 內距 | 字級 |
-|------|------|------|------|
+**Sizes:**
+| Type | Height | Padding | Font Size |
+|------|--------|---------|-----------|
 | Small | 32px | 12px 16px | 14px |
 | Medium | 40px | 10px 20px | 16px |
 | Large | 48px | 12px 24px | 18px |
 
-**類型與用途:**
+**Types and usage:**
 ```
-Primary: 主要動作 (提交、確認)
-Secondary: 次要動作 (取消、返回)
-Outline: 輔助動作 (更多選項)
-Ghost: 低調動作 (關閉、略過)
-Danger: 破壞性動作 (刪除、移除)
+Primary: Main action (submit, confirm)
+Secondary: Secondary action (cancel, back)
+Outline: Auxiliary action (more options)
+Ghost: Subtle action (close, skip)
+Danger: Destructive action (delete, remove)
 ```
 
-**狀態:**
+**States:**
 ```css
-Default: 正常狀態
-Hover: 滑鼠懸停 (亮度 +10%)
-Focus: 鍵盤聚焦 (顯示 outline)
-Active: 點擊中 (亮度 -10%)
-Disabled: 禁用 (opacity: 0.5)
-Loading: 載入中 (顯示 spinner)
+Default: Normal state
+Hover: Mouse hover (brightness +10%)
+Focus: Keyboard focus (show outline)
+Active: Clicking (brightness -10%)
+Disabled: Disabled (opacity: 0.5)
+Loading: Loading (show spinner)
 ```
 
-### 卡片 (Cards)
+### Cards
 
 ```
 ┌─────────────────────────────────┐
-│         Image (可選)            │
+│         Image (optional)        │
 ├─────────────────────────────────┤
 │ Title                           │
-│ Subtitle (可選)                 │
+│ Subtitle (optional)             │
 │                                 │
 │ Body content goes here...       │
 │                                 │
@@ -283,15 +283,15 @@ Loading: 載入中 (顯示 spinner)
 │ [Action 1]         [Action 2]   │
 └─────────────────────────────────┘
 
-圓角: 8px - 16px
-陰影: 0 2px 8px rgba(0,0,0,0.1)
-內距: 16px - 24px
+Border radius: 8px - 16px
+Shadow: 0 2px 8px rgba(0,0,0,0.1)
+Padding: 16px - 24px
 ```
 
 ### Modal / Dialog
 
 ```
-背景遮罩: rgba(0,0,0,0.5)
+Background overlay: rgba(0,0,0,0.5)
 
 ┌─────────────────────────────────┐
 │ Title                       ✕   │ Header
@@ -303,30 +303,30 @@ Loading: 載入中 (顯示 spinner)
 │           [Cancel]  [Confirm]   │ Footer
 └─────────────────────────────────┘
 
-寬度: 400px (小) / 600px (中) / 800px (大)
-最大高度: 90vh
+Width: 400px (small) / 600px (medium) / 800px (large)
+Max height: 90vh
 ```
 
 ### Toast / Notification
 
 ```
-位置: 右上角 / 右下角 / 頂部中央
+Position: Top right / Bottom right / Top center
 
 ┌────────────────────────────────┐
 │ ✓ Success message here     ✕   │
 └────────────────────────────────┘
 
-類型: Success (綠), Error (紅), Warning (黃), Info (藍)
-持續時間: 3-5 秒自動消失
+Types: Success (green), Error (red), Warning (yellow), Info (blue)
+Duration: 3-5 seconds auto dismiss
 ```
 
 ### Tooltip
 
 ```
-觸發: Hover / Focus
-延遲: 300ms 顯示 / 0ms 隱藏
-位置: Top / Bottom / Left / Right
-最大寬度: 250px
+Trigger: Hover / Focus
+Delay: 300ms to show / 0ms to hide
+Position: Top / Bottom / Left / Right
+Max width: 250px
 
       ┌───────────────────┐
       │ Tooltip content   │
@@ -348,36 +348,36 @@ Loading: 載入中 (顯示 spinner)
 │ Option 4            │
 └─────────────────────┘
 
-最大高度: 300px (可捲動)
-項目高度: 36px - 44px
+Max height: 300px (scrollable)
+Item height: 36px - 44px
 ```
 
 ---
 
-## 字型系統
+## Typography System
 
-### 字型堆疊 (Font Stack)
+### Font Stack
 
 ```css
-/* 系統字型 */
+/* System fonts */
 --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI",
              Roboto, "Helvetica Neue", Arial, sans-serif;
 
-/* 等寬字型 */
+/* Monospace fonts */
 --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
 
-/* 中文字型 */
+/* Chinese fonts */
 --font-chinese: "PingFang TC", "Microsoft JhengHei",
                 "Noto Sans TC", sans-serif;
 ```
 
-### 字型大小 (Type Scale)
+### Font Size (Type Scale)
 
 ```css
---text-xs: 12px;    /* 輔助說明 */
---text-sm: 14px;    /* 次要內容 */
---text-base: 16px;  /* 內文 */
---text-lg: 18px;    /* 大內文 */
+--text-xs: 12px;    /* Helper text */
+--text-sm: 14px;    /* Secondary content */
+--text-base: 16px;  /* Body text */
+--text-lg: 18px;    /* Large body */
 --text-xl: 20px;    /* H5 */
 --text-2xl: 24px;   /* H4 */
 --text-3xl: 30px;   /* H3 */
@@ -386,78 +386,78 @@ Loading: 載入中 (顯示 spinner)
 --text-6xl: 60px;   /* Display */
 ```
 
-### 行高 (Line Height)
+### Line Height
 
 ```css
---leading-tight: 1.25;   /* 標題 */
---leading-snug: 1.375;   /* 副標題 */
---leading-normal: 1.5;   /* 內文 */
---leading-relaxed: 1.625; /* 大段落 */
---leading-loose: 2;      /* 特殊用途 */
+--leading-tight: 1.25;   /* Headings */
+--leading-snug: 1.375;   /* Subheadings */
+--leading-normal: 1.5;   /* Body text */
+--leading-relaxed: 1.625; /* Large paragraphs */
+--leading-loose: 2;      /* Special use */
 ```
 
-### 字重 (Font Weight)
+### Font Weight
 
 ```css
 --font-light: 300;
---font-normal: 400;    /* 內文 */
---font-medium: 500;    /* 強調 */
---font-semibold: 600;  /* 副標題 */
---font-bold: 700;      /* 標題 */
+--font-normal: 400;    /* Body text */
+--font-medium: 500;    /* Emphasis */
+--font-semibold: 600;  /* Subheadings */
+--font-bold: 700;      /* Headings */
 ```
 
 ---
 
-## 顏色系統
+## Color System
 
-### 中性色 (Neutral Colors)
+### Neutral Colors
 
 ```css
---gray-50: #FAFAFA;   /* 背景 */
---gray-100: #F5F5F5;  /* 次要背景 */
---gray-200: #EEEEEE;  /* 邊框 */
---gray-300: #E0E0E0;  /* 分隔線 */
+--gray-50: #FAFAFA;   /* Background */
+--gray-100: #F5F5F5;  /* Secondary background */
+--gray-200: #EEEEEE;  /* Borders */
+--gray-300: #E0E0E0;  /* Dividers */
 --gray-400: #BDBDBD;  /* Placeholder */
---gray-500: #9E9E9E;  /* 禁用文字 */
---gray-600: #757575;  /* 輔助文字 */
---gray-700: #616161;  /* 次要文字 */
---gray-800: #424242;  /* 主要文字 */
---gray-900: #212121;  /* 標題文字 */
+--gray-500: #9E9E9E;  /* Disabled text */
+--gray-600: #757575;  /* Helper text */
+--gray-700: #616161;  /* Secondary text */
+--gray-800: #424242;  /* Primary text */
+--gray-900: #212121;  /* Heading text */
 ```
 
-### 語義顏色 (Semantic Colors)
+### Semantic Colors
 
 ```css
-/* 主色 */
+/* Primary color */
 --primary-50 to --primary-900
 
-/* 成功 */
+/* Success */
 --success: #22C55E;
 --success-light: #DCFCE7;
 
-/* 警告 */
+/* Warning */
 --warning: #F59E0B;
 --warning-light: #FEF3C7;
 
-/* 錯誤 */
+/* Error */
 --error: #EF4444;
 --error-light: #FEE2E2;
 
-/* 資訊 */
+/* Info */
 --info: #3B82F6;
 --info-light: #DBEAFE;
 ```
 
-### 深色模式
+### Dark Mode
 
 ```css
-/* 淺色模式 */
+/* Light mode */
 --bg-primary: #FFFFFF;
 --bg-secondary: #F5F5F5;
 --text-primary: #212121;
 --text-secondary: #757575;
 
-/* 深色模式 */
+/* Dark mode */
 --bg-primary-dark: #121212;
 --bg-secondary-dark: #1E1E1E;
 --text-primary-dark: #FFFFFF;
@@ -466,9 +466,9 @@ Loading: 載入中 (顯示 spinner)
 
 ---
 
-## 表單設計
+## Form Design
 
-### Input 輸入框
+### Input Fields
 
 ```
 ┌─ Label ──────────────────────────┐
@@ -478,18 +478,18 @@ Loading: 載入中 (顯示 spinner)
 └──────────────────────────────────┘
   Helper text or error message
 
-高度: 40px (中) / 48px (大)
-圓角: 4px - 8px
-內距: 12px 16px
+Height: 40px (medium) / 48px (large)
+Border radius: 4px - 8px
+Padding: 12px 16px
 ```
 
-**狀態:**
+**States:**
 ```
-Default: 灰色邊框 (#E0E0E0)
-Hover: 深灰邊框 (#BDBDBD)
-Focus: 主色邊框 + 陰影
-Error: 紅色邊框 + 錯誤訊息
-Disabled: 灰色背景 + 50% 透明度
+Default: Gray border (#E0E0E0)
+Hover: Dark gray border (#BDBDBD)
+Focus: Primary color border + shadow
+Error: Red border + error message
+Disabled: Gray background + 50% opacity
 ```
 
 ### Checkbox & Radio
@@ -500,11 +500,11 @@ Disabled: 灰色背景 + 50% 透明度
 ☒ Indeterminate
 □ Disabled           ○ Disabled
 
-尺寸: 16px (小) / 20px (中) / 24px (大)
-標籤間距: 8px
+Size: 16px (small) / 20px (medium) / 24px (large)
+Label spacing: 8px
 ```
 
-### Select 下拉選單
+### Select Dropdown
 
 ```
 ┌──────────────────────────────┐
@@ -512,10 +512,10 @@ Disabled: 灰色背景 + 50% 透明度
 └──────────────────────────────┘
 ```
 
-### 表單佈局
+### Form Layout
 
 ```
-垂直堆疊 (推薦):
+Vertical stack (recommended):
 ┌─────────────────────────────┐
 │ Label                       │
 │ [Input field]               │
@@ -526,7 +526,7 @@ Disabled: 灰色背景 + 50% 透明度
 │ [Submit]                    │
 └─────────────────────────────┘
 
-水平排列 (短表單):
+Horizontal layout (short forms):
 ┌─────────────────────────────────────────┐
 │ Label    [Input]    Label    [Input]    │
 └─────────────────────────────────────────┘
@@ -534,9 +534,9 @@ Disabled: 灰色背景 + 50% 透明度
 
 ---
 
-## 資料表格
+## Data Tables
 
-### 基本結構
+### Basic Structure
 
 ```
 ┌────────┬────────────┬──────────┬──────────┐
@@ -551,28 +551,28 @@ Disabled: 灰色背景 + 50% 透明度
   Showing 1-10 of 100        < 1 2 3 ... 10 >
 ```
 
-### 規格
+### Specifications
 
 ```
-行高: 48px - 56px
-標頭背景: #F5F5F5
-Hover 背景: #FAFAFA
-選中背景: Primary 色 5%
-邊框: 1px #E0E0E0
+Row height: 48px - 56px
+Header background: #F5F5F5
+Hover background: #FAFAFA
+Selected background: Primary color 5%
+Border: 1px #E0E0E0
 ```
 
-### 響應式表格
+### Responsive Tables
 
-**小螢幕處理:**
-1. 水平捲動
-2. 卡片式堆疊
-3. 優先欄位顯示
+**Small screen handling:**
+1. Horizontal scrolling
+2. Card-style stacking
+3. Priority column display
 
 ---
 
-## 動畫與互動
+## Animation and Interaction
 
-### 時間曲線
+### Timing Curves
 
 ```css
 --ease-in: cubic-bezier(0.4, 0, 1, 1);
@@ -580,15 +580,15 @@ Hover 背景: #FAFAFA
 --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 ```
 
-### 持續時間
+### Duration
 
 ```css
---duration-fast: 150ms;    /* 微互動 */
---duration-normal: 250ms;  /* 標準轉場 */
---duration-slow: 350ms;    /* 複雜動畫 */
+--duration-fast: 150ms;    /* Micro-interactions */
+--duration-normal: 250ms;  /* Standard transitions */
+--duration-slow: 350ms;    /* Complex animations */
 ```
 
-### 常見動畫
+### Common Animations
 
 ```css
 /* Fade */
@@ -605,28 +605,28 @@ background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
 animation: shimmer 1.5s infinite;
 ```
 
-### 互動反饋
+### Interaction Feedback
 
 ```
-按鈕 Hover: 背景色變亮
-按鈕 Active: 背景色變暗
-連結 Hover: 底線或顏色變化
-卡片 Hover: 陰影加深或微微上浮
+Button Hover: Background color lightens
+Button Active: Background color darkens
+Link Hover: Underline or color change
+Card Hover: Shadow deepens or slight lift
 ```
 
 ---
 
-## 設計檢查清單
+## Design Checklist
 
-### 上線前確認
+### Pre-launch Verification
 
-- [ ] 支援主流瀏覽器 (Chrome, Firefox, Safari, Edge)
-- [ ] 響應式設計 (320px - 2560px)
-- [ ] 支援深色模式
-- [ ] 觸控友善 (44x44px 最小觸控目標)
-- [ ] 鍵盤導航支援
-- [ ] 螢幕閱讀器相容
-- [ ] 載入時間 < 3 秒
-- [ ] 圖片優化 (WebP, 延遲載入)
-- [ ] 表單驗證與錯誤處理
-- [ ] SEO 基本優化
+- [ ] Support major browsers (Chrome, Firefox, Safari, Edge)
+- [ ] Responsive design (320px - 2560px)
+- [ ] Support dark mode
+- [ ] Touch-friendly (44x44px minimum touch targets)
+- [ ] Keyboard navigation support
+- [ ] Screen reader compatible
+- [ ] Load time < 3 seconds
+- [ ] Image optimization (WebP, lazy loading)
+- [ ] Form validation and error handling
+- [ ] Basic SEO optimization
