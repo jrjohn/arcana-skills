@@ -89,6 +89,187 @@ See full guide: [references/app-theme-style-designer.md](references/app-theme-st
 
 ---
 
+### 🔄 Mandatory SRS/SDD Feedback Rule (回補規則)
+
+**CRITICAL:** After UI Flow generation completes, **you MUST automatically execute the SRS/SDD feedback process**:
+
+#### Trigger Condition
+When any of the following events occur:
+1. UI Flow generation completes (all screens created)
+2. `generated-ui/` directory is populated with HTML screens
+3. User explicitly requests "回補" or "feedback to docs"
+
+#### Mandatory Feedback Steps
+```
+After UI Flow Generation Completes:
+     ↓
+1. 📸 Generate Screenshots (Puppeteer)
+   - Install: npm install puppeteer --save-dev (in 04-ui-flow/)
+   - Customize capture-screenshots.js with project screen list
+   - Run: node capture-screenshots.js
+   - Output: 02-design/SDD/images/iphone/*.png, images/ipad/*.png
+     ↓
+2. 📝 Update SDD.md
+   - Add "**UI 原型：**" section to each SCR-* block
+   - Add image references: ![Device](images/device/SCR-*.png)
+   - Keep original Wireframe as "**Wireframe (參考)：**"
+   - Update Revision History
+     ↓
+3. 📋 Update SRS.md (⚠️ MANDATORY - 強制執行)
+   - Add Screen References section mapping REQ-* to SCR-*
+   - Add inferred requirements from button navigation
+   - Update User Flows with actual navigation paths
+   - Add Acceptance Criteria for button operations
+   - Update Revision History
+     ↓
+4. 🔗 Update RTM (if exists)
+   - Map SRS requirements to SCR screen IDs
+   - Add new traceability entries
+     ↓
+5. 📄 Regenerate DOCX (using md-to-docx.js)
+   - Remove manual heading numbers from MD
+   - Convert SDD: node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SDD-*.md
+   - Convert SRS: node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SRS-*.md
+   - Verify images embedded (check file size > 500KB indicates images included)
+```
+
+> **⚠️ Prerequisites for DOCX Generation:**
+> ```bash
+> # Install docx library (first time only)
+> cd ~/.claude/skills/medical-software-requirements-skill
+> npm install docx
+> ```
+
+#### SDD UI Prototype Section Format
+```markdown
+**UI 原型：**
+
+| 裝置 | 原型檔案 |
+|------|---------|
+| iPad | [`auth/SCR-AUTH-001-login.html`](../04-ui-flow/generated-ui/auth/SCR-AUTH-001-login.html) |
+| iPhone | [`iphone/SCR-AUTH-001-login.html`](../04-ui-flow/generated-ui/iphone/SCR-AUTH-001-login.html) |
+
+| iPad | iPhone |
+|------|--------|
+| ![iPad](images/ipad/SCR-AUTH-001-login.png) | ![iPhone](images/iphone/SCR-AUTH-001-login.png) |
+```
+
+#### SRS Feedback Section Format (⚠️ MANDATORY)
+
+> **重要：SDD 回補完成後，必須立即執行 SRS 回補，不可跳過！**
+
+**1. 新增 Screen References 章節**
+
+在 SRS 的 Functional Requirements 章節後新增：
+
+```markdown
+## Screen References
+
+本章節記錄 SRS 需求與 UI 畫面 (SCR-*) 的對應關係。
+
+| 需求 ID | 需求名稱 | 對應畫面 | 說明 |
+|---------|---------|---------|------|
+| REQ-AUTH-001 | 使用者登入 | SCR-AUTH-002-login | 登入畫面實作此需求 |
+| REQ-AUTH-002 | 使用者註冊 | SCR-AUTH-003-register | 註冊畫面實作此需求 |
+| REQ-VOCAB-001 | 字庫列表顯示 | SCR-VOCAB-001-list | 字庫列表畫面 |
+| ... | ... | ... | ... |
+```
+
+**2. 新增/更新 Inferred Requirements (從 UI 推斷的需求)**
+
+```markdown
+### Inferred Requirements from UI Flow
+
+以下需求從 UI Flow 按鈕導航推斷產生：
+
+#### REQ-NAV-001: 登入成功導航
+| 欄位 | 內容 |
+|------|------|
+| ID | REQ-NAV-001 |
+| 來源 | UI Flow Inference (SCR-AUTH-002 → SCR-DASH-001) |
+| 描述 | 登入成功後，系統應自動導航至首頁 Dashboard |
+| 驗收條件 | AC1: 點擊「登入」按鈕且驗證通過後，畫面切換至 SCR-DASH-001 |
+| 追溯 | SCR-AUTH-002-login, SDD-AUTH-002 |
+
+#### REQ-NAV-002: 返回上一頁
+| 欄位 | 內容 |
+|------|------|
+| ID | REQ-NAV-002 |
+| 來源 | UI Flow Inference (通用返回按鈕) |
+| 描述 | 所有畫面的返回按鈕應返回上一個瀏覽的畫面 |
+| 驗收條件 | AC1: 點擊返回按鈕後，返回前一畫面 |
+| 追溯 | 全部 SCR-* 畫面 |
+```
+
+**3. 更新 User Flows 章節**
+
+```markdown
+### User Flows (Updated from UI Flow)
+
+#### UF-001: 登入流程
+```mermaid
+flowchart LR
+    A[SCR-AUTH-001<br>Splash] --> B[SCR-AUTH-002<br>Login]
+    B -->|登入成功| C[SCR-DASH-001<br>Home]
+    B -->|忘記密碼| D[SCR-AUTH-004<br>Forgot Password]
+    B -->|註冊| E[SCR-AUTH-003<br>Register]
+```
+
+#### UF-002: 字庫管理流程
+```mermaid
+flowchart LR
+    A[SCR-VOCAB-001<br>List] --> B[SCR-VOCAB-002<br>Create]
+    A --> C[SCR-VOCAB-003<br>Detail]
+    C --> D[SCR-VOCAB-004<br>Add Word]
+```
+```
+
+**4. 更新 Revision History**
+
+```markdown
+| Name | Date | Reason For Changes | Version |
+|------|------|--------------------|---------|
+| AI Assistant | 2025-12-24 | UI Flow 回補：新增 Screen References、Inferred Requirements、User Flows 更新 | 1.1 |
+```
+
+#### Feedback Report Output
+After feedback completes, output summary:
+```markdown
+## 回補完成報告
+
+### SDD 回補
+| 項目 | 數量 | 狀態 |
+|------|------|------|
+| SCR 畫面更新 | 18 | ✅ 完成 |
+| 圖片參考新增 (iPad + iPhone) | 36 | ✅ 完成 |
+| Revision History | 已更新 | ✅ 完成 |
+
+### SRS 回補 (⚠️ 強制)
+| 項目 | 數量 | 狀態 |
+|------|------|------|
+| Screen References 對應 | 18 | ✅ 完成 |
+| Inferred Requirements 新增 | 5 | ✅ 完成 |
+| User Flows 更新 | 6 | ✅ 完成 |
+| Acceptance Criteria 新增 | 12 | ✅ 完成 |
+| Revision History | 已更新 | ✅ 完成 |
+
+### DOCX 產生
+| 項目 | 狀態 |
+|------|------|
+| SDD.docx | ✅ 完成 |
+| SRS.docx | ✅ 完成 |
+```
+
+> **⚠️ 完成檢查清單：**
+> - [ ] SDD.md 已更新所有 SCR-* 區塊
+> - [ ] SRS.md 已新增 Screen References 章節
+> - [ ] SRS.md 已新增 Inferred Requirements
+> - [ ] SRS.md 已更新 User Flows
+> - [ ] 兩份文件的 Revision History 都已更新
+> - [ ] SDD.docx 和 SRS.docx 都已重新產生
+
+---
+
 ### 🚀 Auto HTML UI Flow Generation Rule
 
 **CRITICAL:** When the request involves any of the following, **you MUST automatically generate HTML UI Flow**:
@@ -193,8 +374,153 @@ The `index.html` UI Flow Diagram section must include iPhone/iPad toggle:
 ├── 📁 dash/                        # iPad Dashboard module
 ├── 📁 [custom-modules]/            # Project-specific modules
 ├── 📁 setting/                     # Settings module
-└── 📁 scripts/                     # Helper scripts
-    └── capture-screenshots.sh      # Screenshot capture script
+├── 📁 scripts/                     # Helper scripts
+│   └── capture-screenshots.js      # Screenshot capture script (Puppeteer)
+└── 📄 package.json                  # npm dependencies (puppeteer)
+```
+
+### 📸 Screenshot Generation Tool (Puppeteer)
+
+**CRITICAL:** After UI Flow HTML prototypes are complete, screenshots MUST be generated for SDD embedding.
+
+#### Prerequisites
+
+```bash
+# Navigate to project's 04-ui-flow directory
+cd ./04-ui-flow
+
+# Install Puppeteer (required for screenshot generation)
+npm init -y  # If package.json doesn't exist
+npm install puppeteer --save-dev
+```
+
+#### capture-screenshots.js Template
+
+Create `capture-screenshots.js` in the `04-ui-flow/` directory:
+
+```javascript
+const puppeteer = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
+
+const BASE_DIR = './generated-ui';
+const SDD_IMAGES_DIR = '../02-design/SDD/images';
+
+// Screen configurations - customize per project
+const screens = {
+  iphone: {
+    width: 393,
+    height: 852,
+    files: [
+      // List all iPhone HTML files (without .html extension)
+      'SCR-AUTH-001-splash',
+      'SCR-AUTH-002-login',
+      'SCR-DASH-001-home',
+      // ... add all screen files
+    ],
+    sourceDir: 'iphone'
+  },
+  ipad: {
+    width: 1194,
+    height: 834,
+    files: [
+      // List iPad files with their module directory
+      { name: 'SCR-AUTH-001-login', dir: 'auth' },
+      { name: 'SCR-DASH-001-home', dir: 'dash' },
+      // ... add all screen files
+    ]
+  }
+};
+
+async function captureScreenshots() {
+  // Ensure output directories exist
+  const iphoneDir = path.join(SDD_IMAGES_DIR, 'iphone');
+  const ipadDir = path.join(SDD_IMAGES_DIR, 'ipad');
+
+  if (!fs.existsSync(iphoneDir)) fs.mkdirSync(iphoneDir, { recursive: true });
+  if (!fs.existsSync(ipadDir)) fs.mkdirSync(ipadDir, { recursive: true });
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+
+  try {
+    // Capture iPhone screenshots
+    console.log('📱 Capturing iPhone screenshots...');
+    const iphonePage = await browser.newPage();
+    await iphonePage.setViewport({ width: screens.iphone.width, height: screens.iphone.height });
+
+    for (const file of screens.iphone.files) {
+      const htmlPath = path.join(BASE_DIR, screens.iphone.sourceDir, `${file}.html`);
+      const pngPath = path.join(iphoneDir, `${file}.png`);
+
+      if (fs.existsSync(htmlPath)) {
+        await iphonePage.goto(`file://${path.resolve(htmlPath)}`, { waitUntil: 'networkidle0', timeout: 10000 });
+        await iphonePage.screenshot({ path: pngPath, fullPage: false });
+        console.log(`  ✅ ${file}.png`);
+      } else {
+        console.log(`  ⚠️ ${file}.html not found`);
+      }
+    }
+
+    // Capture iPad screenshots
+    console.log('\n📱 Capturing iPad screenshots...');
+    const ipadPage = await browser.newPage();
+    await ipadPage.setViewport({ width: screens.ipad.width, height: screens.ipad.height });
+
+    for (const item of screens.ipad.files) {
+      const htmlPath = path.join(BASE_DIR, item.dir, `${item.name}.html`);
+      const pngPath = path.join(ipadDir, `${item.name}.png`);
+
+      if (fs.existsSync(htmlPath)) {
+        await ipadPage.goto(`file://${path.resolve(htmlPath)}`, { waitUntil: 'networkidle0', timeout: 10000 });
+        await ipadPage.screenshot({ path: pngPath, fullPage: false });
+        console.log(`  ✅ ${item.name}.png`);
+      } else {
+        console.log(`  ⚠️ ${item.name}.html not found`);
+      }
+    }
+
+    console.log('\n✅ Screenshot capture complete!');
+
+    // Count results
+    const iphoneCount = fs.readdirSync(iphoneDir).filter(f => f.endsWith('.png')).length;
+    const ipadCount = fs.readdirSync(ipadDir).filter(f => f.endsWith('.png')).length;
+    console.log(`   iPhone: ${iphoneCount} screenshots`);
+    console.log(`   iPad: ${ipadCount} screenshots`);
+
+  } catch (error) {
+    console.error('Error:', error);
+  } finally {
+    await browser.close();
+  }
+}
+
+captureScreenshots();
+```
+
+#### Running Screenshot Capture
+
+```bash
+# From the 04-ui-flow directory
+node capture-screenshots.js
+```
+
+#### Output Location
+
+Screenshots are saved to SDD images directory for direct embedding:
+
+```
+02-design/SDD/images/
+├── iphone/
+│   ├── SCR-AUTH-001-splash.png
+│   ├── SCR-AUTH-002-login.png
+│   └── ...
+└── ipad/
+    ├── SCR-AUTH-001-login.png
+    ├── SCR-DASH-001-home.png
+    └── ...
 ```
 
 ### index.html Template (Screen Overview Navigation)
