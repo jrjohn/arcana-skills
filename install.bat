@@ -47,12 +47,24 @@ if exist "%SCRIPT_DIR%install.ps1" (
     %PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install.ps1" %*
 ) else (
     echo [INFO] Downloading installer...
-    %PS_EXE% -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.ps1' -OutFile '%TEMP%\arcana-install.ps1'; & '%TEMP%\arcana-install.ps1' %*; Remove-Item '%TEMP%\arcana-install.ps1' -ErrorAction SilentlyContinue"
+    %PS_EXE% -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.ps1' -OutFile '%TEMP%\arcana-install.ps1'"
+    if !ERRORLEVEL! NEQ 0 (
+        echo [ERROR] Failed to download installer.
+        pause
+        exit /b 1
+    )
+    %PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%TEMP%\arcana-install.ps1" %*
 )
 
-if %ERRORLEVEL% NEQ 0 (
+REM Capture exit code before cleanup
+set "INSTALL_RESULT=!ERRORLEVEL!"
+
+REM Clean up temp file if it exists
+if exist "%TEMP%\arcana-install.ps1" del /q "%TEMP%\arcana-install.ps1" 2>nul
+
+if !INSTALL_RESULT! NEQ 0 (
     echo.
-    echo [ERROR] Installation failed. Error code: %ERRORLEVEL%
+    echo [ERROR] Installation failed. Error code: !INSTALL_RESULT!
     echo.
     echo Troubleshooting:
     echo   1. Ensure you have administrator privileges if needed
@@ -62,7 +74,7 @@ if %ERRORLEVEL% NEQ 0 (
     echo      powershell -ExecutionPolicy Bypass -File install.ps1
     echo.
     pause
-    exit /b %ERRORLEVEL%
+    exit /b !INSTALL_RESULT!
 )
 
 echo.
