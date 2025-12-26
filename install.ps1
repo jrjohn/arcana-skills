@@ -321,9 +321,17 @@ function Remove-DirectoryRobust {
         return $true
     }
     catch {
-        # If failed, try with \\?\ prefix for reserved names
+        # If failed, try cmd.exe rd command which handles some edge cases better
         try {
-            # Use robocopy trick - mirror an empty folder to delete everything
+            $cmdResult = cmd.exe /c "rd /s /q `"$Path`"" 2>&1
+            if (-not (Test-Path $Path)) {
+                return $true
+            }
+        }
+        catch { }
+
+        # Try robocopy trick - mirror an empty folder to delete everything
+        try {
             $emptyDir = Join-Path $env:TEMP "empty-$(Get-Random)"
             New-Item -ItemType Directory -Path $emptyDir -Force | Out-Null
             $robocopyResult = robocopy $emptyDir $Path /MIR /NFL /NDL /NJH /NJS /nc /ns /np 2>$null
@@ -334,12 +342,37 @@ function Remove-DirectoryRobust {
                 Remove-Item -Path $Path -Force -ErrorAction SilentlyContinue
             }
 
-            return (-not (Test-Path $Path))
+            if (-not (Test-Path $Path)) {
+                return $true
+            }
         }
-        catch {
-            Write-Warn "Could not completely remove $Path - some files may remain"
-            return $false
+        catch { }
+
+        # Last resort: use \\?\ prefix to delete reserved names via cmd.exe
+        try {
+            # Convert path to \\?\ format for handling reserved names
+            $longPath = "\\?\$Path"
+            # Find and delete files with reserved names first
+            Get-ChildItem -Path $Path -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                $itemPath = $_.FullName
+                $itemLongPath = "\\?\$itemPath"
+                if ($_.PSIsContainer) {
+                    cmd.exe /c "rd /s /q `"$itemLongPath`"" 2>$null
+                } else {
+                    cmd.exe /c "del /f /q `"$itemLongPath`"" 2>$null
+                }
+            }
+            # Try to remove the main directory
+            cmd.exe /c "rd /s /q `"$longPath`"" 2>$null
+
+            if (-not (Test-Path $Path)) {
+                return $true
+            }
         }
+        catch { }
+
+        Write-Warn "Could not completely remove $Path - some files may remain"
+        return $false
     }
 }
 
