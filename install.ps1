@@ -285,11 +285,23 @@ function Get-Repository {
     $tempDir = Join-Path $env:TEMP "arcana-skills-$(Get-Random)"
     Write-Info "Cloning repository..."
 
-    git clone --depth 1 $RepoUrl $tempDir 2>$null
+    # Clone with visible output so users can see any errors
+    $gitOutput = git clone --depth 1 $RepoUrl $tempDir 2>&1
 
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to clone repository"
-        exit 1
+        Write-Host ""
+        Write-Host "Git output:" -ForegroundColor Yellow
+        Write-Host $gitOutput
+        Write-Host ""
+        Write-Info "Troubleshooting:"
+        Write-Host "  1. Check your internet connection"
+        Write-Host "  2. Verify git is working: git --version"
+        Write-Host "  3. Try cloning manually: git clone $RepoUrl"
+        Write-Host "  4. If behind a proxy, configure git proxy settings"
+        Write-Host ""
+        # Use throw to ensure proper error propagation
+        throw "Repository clone failed"
     }
 
     return $tempDir
@@ -484,16 +496,16 @@ function Main {
     $sourcePath = $null
     $tempDir = $null
 
-    if (Test-LocalRepo) {
-        $sourcePath = $PSScriptRoot
-        Write-Info "Using local repository"
-    }
-    else {
-        $tempDir = Get-Repository
-        $sourcePath = $tempDir
-    }
-
     try {
+        if (Test-LocalRepo) {
+            $sourcePath = $PSScriptRoot
+            Write-Info "Using local repository"
+        }
+        else {
+            $tempDir = Get-Repository
+            $sourcePath = $tempDir
+        }
+
         if ($All) {
             Install-AllSkills -SourcePath $sourcePath -TargetPath $skillsDir
         }
@@ -503,6 +515,10 @@ function Main {
 
         Show-Completion
     }
+    catch {
+        Write-Error $_.Exception.Message
+        exit 1
+    }
     finally {
         if ($tempDir) {
             Remove-TempFiles -TempDir $tempDir
@@ -511,4 +527,10 @@ function Main {
 }
 
 # Run
-Main
+try {
+    Main
+}
+catch {
+    Write-Color "[ERROR] $($_.Exception.Message)" "Red"
+    exit 1
+}

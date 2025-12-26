@@ -45,19 +45,18 @@ REM Check if install.ps1 exists locally
 if exist "%SCRIPT_DIR%install.ps1" (
     echo [INFO] Running local installer...
     %PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install.ps1" %*
+    set "INSTALL_RESULT=!ERRORLEVEL!"
 ) else (
     echo [INFO] Downloading installer...
-    %PS_EXE% -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.ps1' -OutFile '%TEMP%\arcana-install.ps1'"
+    %PS_EXE% -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.ps1' -OutFile '%TEMP%\arcana-install.ps1'; exit $LASTEXITCODE"
     if !ERRORLEVEL! NEQ 0 (
         echo [ERROR] Failed to download installer.
         pause
         exit /b 1
     )
     %PS_EXE% -NoProfile -ExecutionPolicy Bypass -File "%TEMP%\arcana-install.ps1" %*
+    set "INSTALL_RESULT=!ERRORLEVEL!"
 )
-
-REM Capture exit code before cleanup
-set "INSTALL_RESULT=!ERRORLEVEL!"
 
 REM Clean up temp file if it exists
 if exist "%TEMP%\arcana-install.ps1" del /q "%TEMP%\arcana-install.ps1" 2>nul
