@@ -307,6 +307,42 @@ function Get-Repository {
     return $tempDir
 }
 
+# Remove directory robustly (handles Windows reserved names like nul, con, etc.)
+function Remove-DirectoryRobust {
+    param([string]$Path)
+
+    if (-not (Test-Path $Path)) {
+        return $true
+    }
+
+    # First try normal removal
+    try {
+        Remove-Item -Path $Path -Recurse -Force -ErrorAction Stop
+        return $true
+    }
+    catch {
+        # If failed, try with \\?\ prefix for reserved names
+        try {
+            # Use robocopy trick - mirror an empty folder to delete everything
+            $emptyDir = Join-Path $env:TEMP "empty-$(Get-Random)"
+            New-Item -ItemType Directory -Path $emptyDir -Force | Out-Null
+            $robocopyResult = robocopy $emptyDir $Path /MIR /NFL /NDL /NJH /NJS /nc /ns /np 2>$null
+            Remove-Item -Path $emptyDir -Force -ErrorAction SilentlyContinue
+
+            # Now try to remove the empty directory
+            if (Test-Path $Path) {
+                Remove-Item -Path $Path -Force -ErrorAction SilentlyContinue
+            }
+
+            return (-not (Test-Path $Path))
+        }
+        catch {
+            Write-Warn "Could not completely remove $Path - some files may remain"
+            return $false
+        }
+    }
+}
+
 # Install a single skill
 function Install-Skill {
     param(
@@ -326,7 +362,7 @@ function Install-Skill {
     # Auto-remove old skill if exists (for clean reinstall)
     if (Test-Path $targetFull) {
         Write-Info "Removing old version: $SkillName"
-        Remove-Item -Path $targetFull -Recurse -Force
+        Remove-DirectoryRobust -Path $targetFull | Out-Null
     }
 
     Write-Info "Installing: $SkillName"
@@ -469,7 +505,7 @@ function Remove-TempFiles {
     param([string]$TempDir)
 
     if ($TempDir -and (Test-Path $TempDir)) {
-        Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-DirectoryRobust -Path $TempDir | Out-Null
     }
 }
 
