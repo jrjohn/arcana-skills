@@ -2,6 +2,14 @@
 name: app-uiux-designer
 description: |
   Enterprise UI/UX design expert. SRS/SDD → HTML UI Flow + Coverage Validation. Features: App Theme Style Designer, Visual Style Extraction, Multi-platform Assets, Motion Design, Dark Mode, i18n. Platform: iOS HIG / Material Design 3 / WCAG.
+
+  【心理學整合】
+  本 Skill 整合專業設計心理學知識：
+  • 格式塔心理學 (Gestalt) - 接近性、相似性、連續性、閉合性、圖地關係等 7 原則
+  • 美學設計原則 - 黃金比例、視覺層級、對齊、對比、留白、視覺平衡
+  • 情感設計 (Don Norman) - 本能層、行為層、反思層三層次設計
+  • 認知心理學 - 認知負荷、Fitts' Law、Hick's Law、漸進式揭露
+  • 色彩心理學 - 色彩情感對照、文化差異、60-30-10 配色法則
 ---
 
 # UI/UX Designer Skill
@@ -97,9 +105,13 @@ function openScreen(screen) {
 | **Advanced** | `ux-writing.md` | Microcopy guidelines |
 | **Advanced** | `data-visualization.md` | Charts, graphs |
 | **QA** | `accessibility.md` | WCAG compliance |
-| **QA** | `psychology-validation.md` | UX psychology |
+| **QA** | `psychology-validation.md` | UX psychology validation |
 | **QA** | `design-review.md` | Nielsen heuristics |
+| **Psychology** | `gestalt-psychology.md` | 格式塔視覺心理學 (7 原則) |
+| **Psychology** | `aesthetic-design.md` | 美學設計原則 (黃金比例、視覺層級) |
+| **Psychology** | `emotional-design.md` | 情感設計理論 (Don Norman 三層次) |
 | **Research** | `ux-research.md` | User research methods |
+| **Templates** | `standard-app-screens.md` | 標準 App 畫面參考 (60+ 畫面) |
 
 ---
 

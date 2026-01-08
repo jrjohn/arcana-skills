@@ -10,12 +10,15 @@ description: |
   Fitts' Law、Hick's Law、Dashboard、使用者流程、UX Flow、回補、feedback to docs。
 
   【功能說明】
-  第一階段 - 需求收集：專案願景訪談、利害關係人分析、功能/非功能需求收集、驗收標準定義。
+  第一階段 - 需求收集：
+    ⚠️ 開始需求收集時，必須先啟用 app-uiux-designer.skill 詢問 UI 需求
+    → 專案願景訪談、利害關係人分析
+    → UI 需求收集（目標用戶、平台、畫面估算、設計偏好）
+    → 功能/非功能需求收集、驗收標準定義
+    → 參考 standard-app-requirements.md 確保不遺漏標準功能
   第二階段 - 文件產出：SRS/SDD/SWD/STP/STC/SVV/RTM 文件，SDD 階段整合 UI/UX 設計與 AI 資產產生。
   第三階段 - UI Flow 產生：
-    ⚠️ 強制先啟用 app-uiux-designer.skill 詢問 UI 設計偏好（App Theme Style Discovery）
-    → 收集使用者年齡層、APP類型、視覺風格、品牌色彩、語言地區、深色模式偏好
-    → 產生 Design Token + Theme CSS + Style Guide
+    → 依據第一階段收集的 UI 需求產生 Design Token + Theme CSS
     → 依據 Theme Style 產生 HTML UI Flow
     → 回補 SDD 和 SRS
   第四階段 - DOCX 產生：MD 轉 DOCX，自動編號，圖片嵌入。
@@ -27,29 +30,51 @@ description: |
   ⚠️ 圖表格式：所有圖表必須使用 Mermaid 語法，禁止使用 ASCII 文字製圖。
   ⚠️ 標題編號：MD 檔案禁止包含手動編號，DOCX 轉換時自動產生階層式編號。
   ⚠️ SRS 回補強制：UI Flow 回補 SDD 後，必須同時回補 SRS (Screen References + Inferred Requirements)。
-  ⚠️ UI 設計偏好收集：產生 UI Flow 前，必須先啟用 app-uiux-designer.skill 詢問使用者 UI 設計偏好。
+  ⚠️ 需求收集階段 UI 需求：開始需求收集時，必須先啟用 app-uiux-designer.skill 詢問 UI 需求。
 
-  【🚀 SDD 產出後自動 UI Flow 產生規則 (Critical)】
-  當 SDD 文件產出完成後，必須自動執行：
+  【🚀 需求收集階段 - UI 需求詢問 (Critical - 最先執行)】
+  當開始需求收集時，必須立即啟用 app-uiux-designer.skill 詢問以下 UI 需求：
 
-  ⚠️ Step 0: 啟用 app-uiux-designer.skill 並詢問 UI 設計偏好 (強制)
-     在產生任何 UI 之前，必須先使用 app-uiux-designer.skill 的
-     「App Theme Style Designer」功能詢問使用者以下問題：
+  ⚠️ Step 0: 啟用 app-uiux-designer.skill 並詢問 UI 需求 (強制 - 需求收集開始時)
      ┌─────────────────────────────────────────────────────────┐
-     │  🎨 App Theme Style Discovery                          │
-     │  1️⃣ 目標使用者年齡層？                                  │
-     │  2️⃣ APP 類型 / 產業？                                   │
-     │  3️⃣ 期望的視覺風格？                                    │
-     │  4️⃣ 品牌色彩偏好？                                      │
-     │  5️⃣ 主要語言 / 地區？                                   │
-     │  6️⃣ 是否需要深色模式？                                  │
+     │  📱 UI 需求收集 (Phase 1)                               │
+     │  1️⃣ 目標平台？(iOS / Android / Both / Web)              │
+     │  2️⃣ 目標裝置？(iPhone / iPad / Android Phone / Tablet)  │
+     │  3️⃣ 預估畫面數量？(參考 standard-app-screens.md)        │
+     │  4️⃣ 需要哪些標準模組？                                  │
+     │     □ 認證 (登入/註冊/社群登入)                         │
+     │     □ Onboarding (歡迎畫面/權限請求)                    │
+     │     □ 個人檔案                                         │
+     │     □ 設定 (通知/隱私/外觀/語言)                        │
+     │     □ 幫助支援                                         │
+     │     □ 搜尋                                             │
+     │     □ 通知列表                                         │
+     │     □ 交易/購物車 (電商類)                              │
+     │     □ 訊息/聊天 (社群類)                               │
      └─────────────────────────────────────────────────────────┘
-     收集回答後產生：Design Token JSON、{project}-theme.css、
-     Style Guide Documentation、Color Psychology Explanation
 
-  1. 依據 Theme Style 產生 HTML UI Flow (互動原型 + 截圖)
-  2. 回補 SDD (UI 原型 + 圖片)
-  3. 回補 SRS (Screen References + Inferred Requirements + User Flows) ⚠️強制
+     ┌─────────────────────────────────────────────────────────┐
+     │  🎨 App Theme Style Discovery (Phase 2)                │
+     │  5️⃣ 目標使用者年齡層？                                  │
+     │  6️⃣ APP 類型 / 產業？                                   │
+     │  7️⃣ 期望的視覺風格？                                    │
+     │  8️⃣ 品牌色彩偏好？                                      │
+     │  9️⃣ 主要語言 / 地區？                                   │
+     │  🔟 是否需要深色模式？                                  │
+     └─────────────────────────────────────────────────────────┘
+
+     收集後：
+     - 記錄至 SRS 的 User Interface Requirements 章節
+     - 產生初步畫面清單 (SCR-* 預估)
+     - 計算需求數量估算 (參考 standard-app-requirements.md)
+
+  【🚀 SDD 產出後 - UI Flow 產生規則 (Critical)】
+  當 SDD 文件產出完成後，依據需求收集階段的 UI 需求：
+
+  1. 產生 Design Token JSON、{project}-theme.css、Style Guide
+  2. 依據 Theme Style 產生 HTML UI Flow (互動原型 + 截圖)
+  3. 回補 SDD (UI 原型 + 圖片)
+  4. 回補 SRS (Screen References + Inferred Requirements + User Flows) ⚠️強制
 
   【🔄 UI Flow 回補接收規則 (Critical)】
   當 app-uiux-designer.skill 完成 UI Flow 產生後：
@@ -211,6 +236,9 @@ bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers
 ### 需求收集
 - `medical-nfr-checklist.md` - 醫療軟體非功能需求檢核清單
 - `interview-questions.md` - 需求訪談問題庫
+
+### 需求參考
+- `standard-app-requirements.md` - 標準 App 功能需求清單 (60+ 需求)
 
 ---
 
