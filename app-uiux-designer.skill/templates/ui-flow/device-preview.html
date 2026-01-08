@@ -622,8 +622,16 @@
     document.addEventListener('DOMContentLoaded', function() {
       setupIframeListeners();
 
-      // Check for screen parameter in URL
+      // Check for URL parameters
       const urlParams = new URLSearchParams(window.location.search);
+
+      // Read device parameter and set device (default: ipad)
+      const deviceParam = urlParams.get('device');
+      if (deviceParam && ['ipad', 'ipad-mini', 'iphone'].includes(deviceParam)) {
+        setDevice(deviceParam);
+      }
+
+      // Check for screen parameter in URL
       const screenParam = urlParams.get('screen');
 
       if (screenParam) {

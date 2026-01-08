@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - Screen Flow Diagram</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #F1F5F9 0%, #E2E8F0 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+    }
+
+    .flow-container {
+      min-width: 4000px;
+      min-height: 3000px;
+      position: relative;
+      padding: 40px;
+    }
+
+    /* Screen Card - Base styles (IMPORTANT: Use onclick, NOT href) */
+    .screen-card {
+      position: absolute;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      z-index: 5; /* IMPORTANT: Above connection lines (z-index: 1) so arrows don't overlap cards */
+    }
+
+    .screen-card:hover {
+      transform: scale(1.08);
+      z-index: 100;
+    }
+
+    .screen-card:hover .device-frame,
+    .screen-card:hover .ipad-frame {
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+
+    .screen-card .device-frame,
+    .screen-card .ipad-frame {
+      background: white;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    /* Use IMG with screenshots (NOT scaled iframe) for better performance */
+    .screen-card .device-frame img,
+    .screen-card .ipad-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+    }
+
+    .screen-card .screen-label {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 11px;
+      color: #475569;
+      font-weight: 500;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .screen-card .screen-id {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      min-width: 28px;
+      height: 22px;
+      padding: 0 6px;
+      background: var(--module-color, #6366F1);
+      color: white;
+      border-radius: 4px;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      z-index: 10;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      white-space: nowrap;
+    }
+
+    /* iPad Mode - Landscape cards (default) */
+    body.device-ipad .screen-card {
+      width: 200px;
+    }
+    body.device-ipad .screen-card .device-frame,
+    body.device-ipad .screen-card .ipad-frame {
+      width: 200px;
+      height: 140px;
+      border-radius: 14px;
+      border: 3px solid #1a1a1a;
+      position: relative;
+    }
+    /* iPad camera notch (top center) */
+    body.device-ipad .screen-card .device-frame::before,
+    body.device-ipad .screen-card .ipad-frame::before {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 6px;
+      height: 6px;
+      background: #333;
+      border-radius: 50%;
+      z-index: 20;
+    }
+    body.device-ipad .screen-card .screen-label {
+      max-width: 200px;
+    }
+
+    /* iPhone Mode - Portrait cards */
+    body.device-iphone .screen-card {
+      width: 120px;
+    }
+    body.device-iphone .screen-card .device-frame,
+    body.device-iphone .screen-card .ipad-frame {
+      width: 120px;
+      height: 260px;
+      border-radius: 16px;
+      border: 3px solid #1a1a1a;
+    }
+    body.device-iphone .screen-card .device-frame::before,
+    body.device-iphone .screen-card .ipad-frame::before {
+      content: '';
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 40px;
+      height: 6px;
+      background: #1a1a1a;
+      border-radius: 3px;
+      z-index: 20;
+    }
+    body.device-iphone .screen-card .screen-label {
+      max-width: 120px;
+      font-size: 10px;
+    }
+    body.device-iphone .screen-card .screen-id {
+      top: 18px;
+      font-size: 9px;
+      min-width: 24px;
+      height: 18px;
+    }
+
+    /* Connection Lines */
+    .connection-svg {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      overflow: visible; /* IMPORTANT: Allow arrow markers to render outside paths */
+    }
+
+    /* Row Labels */
+    .row-label {
+      position: absolute;
+      font-size: 18px;
+      font-weight: 700;
+      color: #1E293B;
+      padding: 8px 16px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    /* Zoom Controls */
+    .zoom-controls {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    .zoom-btn {
+      width: 44px;
+      height: 44px;
+      background: white;
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      cursor: pointer;
+      font-size: 18px;
+      color: #475569;
+      transition: all 0.2s;
+    }
+
+    .zoom-btn:hover {
+      background: #F1F5F9;
+      transform: scale(1.05);
+    }
+
+    /* Module colors - Customize these for your project */
+    .module-auth .screen-id { background: #6366F1; }
+    .module-onboard .screen-id { background: #8B5CF6; }
+    .module-dash .screen-id { background: #F59E0B; }
+    .module-train .screen-id { background: #10B981; }
+    .module-vocab .screen-id { background: #10B981; }
+    .module-device .screen-id { background: #E57373; }
+    .module-report .screen-id { background: #3B82F6; }
+    .module-reward .screen-id { background: #FFB74D; }
+    .module-setting .screen-id { background: #64748B; }
+    .module-profile .screen-id { background: #EC4899; }
+
+    /* Device Badge */
+    .device-badge {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    }
+
+    .device-badge svg {
+      width: 20px;
+      height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Device Badge -->
+  <div class="device-badge">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <rect x="3" y="2" width="18" height="20" rx="2" stroke-width="1.5"/>
+      <line x1="3" y1="18" x2="21" y2="18" stroke-width="1.5"/>
+    </svg>
+    iPad Pro 11" - 1194 x 834
+  </div>
+
+  <!-- Flow Container -->
+  <div class="flow-container" id="flowContainer">
+
+    <!-- Connection Lines SVG -->
+    <svg class="connection-svg">
+      <defs>
+        <marker id="arrow-auth" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#6366F1"/>
+        </marker>
+        <marker id="arrow-onboard" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#8B5CF6"/>
+        </marker>
+        <marker id="arrow-dash" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#F59E0B"/>
+        </marker>
+        <marker id="arrow-feature" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#10B981"/>
+        </marker>
+        <marker id="arrow-setting" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#64748B"/>
+        </marker>
+      </defs>
+
+      <!--
+      ============================================================
+      ARROW POSITIONING GUIDE
+      ============================================================
+      Card width: 200px, Gap between cards: 60px
+      Arrow should go through the gap, not through the card!
+
+      Card X positions: 60, 320, 580, 840, 1100, 1360, 1620
+      Card right edges: 260, 520, 780, 1040, 1300, 1560, 1820
+
+      Arrow from card A to card B:
+      - Start X: card_A_right + 8 = card_A_left + 208
+      - End X: card_B_left - 8
+
+      Example: Card at X=60 → Card at X=320
+      - Arrow: M 268 Y L 312 Y (from 60+208=268 to 320-8=312)
+
+      Vertical arrows (card center to next row):
+      - Card center X = card_left + 100
+      - Start Y: card_bottom + 8 = card_top + 148
+      - End Y: next_card_top - 8
+      ============================================================
+      -->
+
+      <!-- Connection lines - Add your flow connections here -->
+      <!-- Example: AUTH flow horizontal (cards at Y=200, center Y=270) -->
+      <path d="M 268 270 L 312 270" stroke="#6366F1" stroke-width="2.5" fill="none" marker-end="url(#arrow-auth)"/>
+
+    </svg>
+
+    <!--
+    ============================================================
+    LAYOUT SPACING GUIDE
+    ============================================================
+    Card dimensions: width 200px, height 140px (frame) + 30px (label) = 170px total
+
+    Row spacing formula:
+    - Row label: Y position
+    - Cards: Y + 90px (to avoid overlap with label)
+    - Next row label: Y + 280px (card height 170 + gap 110)
+
+    Example layout:
+    - Row 1: label=110, cards=200
+    - Row 2: label=390, cards=480
+    - Row 3: label=670, cards=760
+    - Row 4: label=950, cards=1040
+    ============================================================
+    -->
+
+    <!-- ==================== ROW 1: AUTH ==================== -->
+    <div class="row-label" style="left: 60px; top: 110px;">Authentication Flow</div>
+
+    <!--
+    IMPORTANT: Screen cards use onclick to open device-preview.html
+    DO NOT use <a href="..."> which causes direct navigation
+
+    Pattern:
+    <div class="screen-card module-{module}" style="left: Xpx; top: Ypx;" onclick="openScreen('{module}/SCR-{MODULE}-{NNN}-{name}.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">{MODULE}-{NNN}</div>
+        <img src="../screenshots/{module}/SCR-{MODULE}-{NNN}-{name}.png" alt="{Screen Name}">
+      </div>
+      <div class="screen-label">SCR-{MODULE}-{NNN} {Screen Name}</div>
+    </div>
+    -->
+
+    <!-- AUTH-001 Login -->
+    <div class="screen-card module-auth" style="left: 60px; top: 200px;" onclick="openScreen('auth/SCR-AUTH-001-login.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">AUTH-001</div>
+        <img src="../screenshots/auth/SCR-AUTH-001-login.png" alt="Login">
+      </div>
+      <div class="screen-label">SCR-AUTH-001 Login</div>
+    </div>
+
+    <!-- AUTH-002 Register -->
+    <div class="screen-card module-auth" style="left: 320px; top: 200px;" onclick="openScreen('auth/SCR-AUTH-002-register.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">AUTH-002</div>
+        <img src="../screenshots/auth/SCR-AUTH-002-register.png" alt="Register">
+      </div>
+      <div class="screen-label">SCR-AUTH-002 Register</div>
+    </div>
+
+    <!-- Add more screen cards positioned according to your flow -->
+
+    <!-- ==================== ROW 2: ONBOARD ==================== -->
+    <div class="row-label" style="left: 60px; top: 390px;">Onboarding Flow</div>
+
+    <!-- Add ONBOARD screen cards at top: 480px -->
+
+    <!-- ==================== ROW 3: DASHBOARD ==================== -->
+    <div class="row-label" style="left: 60px; top: 670px;">Dashboard (Main Hub)</div>
+
+    <!-- Add DASH screen cards at top: 760px -->
+
+    <!-- ==================== ROW 4: FEATURE ==================== -->
+    <div class="row-label" style="left: 60px; top: 950px;">Core Features</div>
+
+    <!-- Add FEATURE screen cards at top: 1040px -->
+
+    <!-- ==================== ROW 5: SETTING ==================== -->
+    <div class="row-label" style="left: 60px; top: 1230px;">Settings</div>
+
+    <!-- Add SETTING screen cards at top: 1320px -->
+
+  </div>
+
+  <!-- Zoom Controls -->
+  <div class="zoom-controls">
+    <button class="zoom-btn" onclick="zoomIn()">+</button>
+    <button class="zoom-btn" onclick="zoomOut()">-</button>
+    <button class="zoom-btn" onclick="resetZoom()">&#8634;</button>
+  </div>
+
+  <script>
+    // Device detection from URL parameter (default: iphone)
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentDevice = urlParams.get('device') || 'iphone';
+
+    // Update screenshot paths and layout based on device
+    function initDeviceScreenshots() {
+      const screenshotFolder = currentDevice === 'ipad' ? 'ipad' : 'iphone';
+
+      // Apply device class to body for CSS styling
+      document.body.classList.remove('device-ipad', 'device-iphone');
+      document.body.classList.add('device-' + currentDevice);
+
+      // Update screenshot paths
+      document.querySelectorAll('.screen-card img').forEach(img => {
+        const currentSrc = img.getAttribute('src');
+        if (currentSrc) {
+          const newSrc = currentSrc.replace(/\/(ipad|iphone)\//, '/' + screenshotFolder + '/');
+          img.setAttribute('src', newSrc);
+        }
+      });
+
+      // Add device-frame class to ipad-frame for consistency
+      document.querySelectorAll('.ipad-frame').forEach(el => {
+        el.classList.add('device-frame');
+      });
+
+      // Adjust card positions for iPhone (narrower cards = tighter spacing)
+      if (currentDevice === 'iphone') {
+        adjustCardPositionsForIPhone();
+      }
+
+      // Update device badge
+      const badge = document.querySelector('.device-badge');
+      if (badge) {
+        const deviceInfo = currentDevice === 'ipad'
+          ? 'iPad Pro 11" (1194×834)'
+          : 'iPhone 15 Pro (393×852)';
+        badge.innerHTML = `
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            ${currentDevice === 'ipad'
+              ? '<rect x="3" y="2" width="18" height="20" rx="2" stroke-width="1.5"/><line x1="3" y1="18" x2="21" y2="18" stroke-width="1.5"/>'
+              : '<rect x="7" y="2" width="10" height="20" rx="2" stroke-width="1.5"/><line x1="10" y1="18" x2="14" y2="18" stroke-width="1.5"/>'}
+          </svg>
+          {{PROJECT_NAME}} UI Flow - {{TOTAL_SCREENS}} Screens (${deviceInfo})
+        `;
+      }
+    }
+
+    // Adjust card positions for iPhone's narrower and taller cards
+    function adjustCardPositionsForIPhone() {
+      // iPad card width: 200px + 60px gap = 260px spacing
+      // iPhone card width: 120px + 40px gap = 160px spacing
+      const ipadXSpacing = 260;
+      const iphoneXSpacing = 160;
+
+      // iPad card height: 140px + 30px label = 170px total
+      // iPhone card height: 260px + 30px label = 290px total
+      // Extra space needed per row: 290 - 170 = 120px
+      const extraHeightPerRow = 120;
+
+      // Row card Y positions (iPad original) - CUSTOMIZE FOR YOUR PROJECT
+      // Default template positions based on standard row layout
+      const cardRowYPositions = [200, 480, 760, 1040, 1320];
+
+      // Row label Y positions (iPad original) - ~80-90px above card rows
+      const labelRowYPositions = [110, 390, 670, 950, 1230];
+      // Maps to card rows: [0, 1, 2, 3, 4]
+      const labelToCardRowMap = [0, 1, 2, 3, 4];
+
+      // Adjust card positions
+      document.querySelectorAll('.screen-card').forEach(card => {
+        const currentLeft = parseInt(card.style.left) || 0;
+        const currentTop = parseInt(card.style.top) || 0;
+
+        // Adjust X position
+        const colIndex = Math.round((currentLeft - 60) / ipadXSpacing);
+        const newLeft = 60 + (colIndex * iphoneXSpacing);
+        card.style.left = newLeft + 'px';
+
+        // Find card's row index
+        let rowIndex = 0;
+        for (let i = 0; i < cardRowYPositions.length; i++) {
+          if (Math.abs(currentTop - cardRowYPositions[i]) < 50) {
+            rowIndex = i;
+            break;
+          }
+        }
+
+        // Cumulative Y offset
+        const yOffset = rowIndex * extraHeightPerRow;
+        card.style.top = (currentTop + yOffset) + 'px';
+      });
+
+      // Adjust row labels
+      document.querySelectorAll('.row-label').forEach(label => {
+        const currentTop = parseInt(label.style.top) || 0;
+
+        // Find which label row this is
+        let labelIndex = 0;
+        for (let i = 0; i < labelRowYPositions.length; i++) {
+          if (Math.abs(currentTop - labelRowYPositions[i]) < 50) {
+            labelIndex = i;
+            break;
+          }
+        }
+
+        // Get corresponding card row index and apply same offset
+        const cardRowIndex = labelToCardRowMap[labelIndex];
+        const yOffset = cardRowIndex * extraHeightPerRow;
+        label.style.top = (currentTop + yOffset) + 'px';
+      });
+
+      // Adjust SVG arrow paths for iPhone
+      adjustArrowsForIPhone();
+    }
+
+    // Adjust arrow positions for iPhone's narrower and taller cards
+    function adjustArrowsForIPhone() {
+      // iPad: card width 200px, spacing 260px (200 + 60 gap)
+      // iPhone: card width 120px, spacing 160px (120 + 40 gap)
+      const ipadCardWidth = 200;
+      const iphoneCardWidth = 120;
+      const ipadXSpacing = 260;
+      const iphoneXSpacing = 160;
+
+      // Extra height per row for cumulative offset
+      const extraHeightPerRow = 120;
+      // Base Y offset for arrow center (iPhone center is 60px lower: 130 vs 70)
+      const baseYOffset = 60;
+
+      // Card row Y boundaries for arrow detection - CUSTOMIZE FOR YOUR PROJECT
+      function getRowOffset(yNum) {
+        if (yNum <= 310) return 0 * extraHeightPerRow + baseYOffset;
+        if (yNum <= 560) return 1 * extraHeightPerRow + baseYOffset;
+        if (yNum <= 840) return 2 * extraHeightPerRow + baseYOffset;
+        if (yNum <= 1120) return 3 * extraHeightPerRow + baseYOffset;
+        return 4 * extraHeightPerRow + baseYOffset;
+      }
+
+      // Convert iPad X coordinate to iPhone X coordinate
+      function adjustX(xNum) {
+        if (xNum <= 60) return xNum;
+
+        // Determine if this is an arrow start or end based on position within column
+        const relX = xNum - 60;
+        const colIndex = Math.floor(relX / ipadXSpacing);
+        const withinCol = relX % ipadXSpacing;
+
+        // Arrow start: withinCol ≈ 208, Arrow end: withinCol ≈ 252
+        if (withinCol > 230) {
+          // Arrow END (pointing to next card)
+          return 60 + (colIndex + 1) * iphoneXSpacing - 8;
+        } else if (withinCol > 180) {
+          // Arrow START (from card right edge)
+          return 60 + colIndex * iphoneXSpacing + iphoneCardWidth + 8;
+        } else {
+          // Card center or other - scale proportionally
+          return 60 + colIndex * iphoneXSpacing + Math.round(withinCol * iphoneXSpacing / ipadXSpacing);
+        }
+      }
+
+      document.querySelectorAll('.connection-svg path').forEach(path => {
+        const d = path.getAttribute('d');
+        if (!d) return;
+
+        // Parse and adjust coordinates in path
+        let newD = d.replace(/([ML])\s*(\d+)\s+(\d+)/g, (match, cmd, x, y) => {
+          const xNum = parseInt(x);
+          const yNum = parseInt(y);
+
+          const newX = adjustX(xNum);
+          const yOffset = getRowOffset(yNum);
+          return `${cmd} ${newX} ${yNum + yOffset}`;
+        });
+
+        // Handle Q (quadratic curve) commands
+        newD = newD.replace(/Q\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/g, (match, cx, cy, x, y) => {
+          const cxNum = parseInt(cx);
+          const cyNum = parseInt(cy);
+          const xNum = parseInt(x);
+          const yNum = parseInt(y);
+
+          const newCx = adjustX(cxNum);
+          const newX = adjustX(xNum);
+
+          const avgY = (cyNum + yNum) / 2;
+          const yOffset = getRowOffset(avgY);
+          return `Q ${newCx} ${cyNum + yOffset} ${newX} ${yNum + yOffset}`;
+        });
+
+        path.setAttribute('d', newD);
+      });
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', initDeviceScreenshots);
+
+    let currentZoom = 1.0;
+    const flowContainer = document.getElementById('flowContainer');
+
+    function updateZoom() {
+      flowContainer.style.transform = `scale(${currentZoom})`;
+      flowContainer.style.transformOrigin = '0 0';
+    }
+
+    function zoomIn() {
+      currentZoom = Math.min(1.5, currentZoom + 0.1);
+      updateZoom();
+    }
+
+    function zoomOut() {
+      currentZoom = Math.max(0.2, currentZoom - 0.1);
+      updateZoom();
+    }
+
+    function resetZoom() {
+      currentZoom = 1.0;
+      updateZoom();
+    }
+
+    /**
+     * CRITICAL: Opens device-preview.html with screen and device parameters
+     * This is the correct behavior - DO NOT change to direct navigation
+     */
+    function openScreen(screen) {
+      // Pass current device to device-preview
+      const deviceParam = currentDevice === 'iphone' ? '&device=iphone' : '';
+      window.open('../device-preview.html?screen=' + screen + deviceParam, '_blank');
+    }
+
+    // Initialize
+    updateZoom();
+
+    // Drag to pan
+    let isDragging = false;
+    let startX, startY, scrollLeft, scrollTop;
+
+    document.body.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.screen-card') || e.target.closest('.zoom-controls') || e.target.closest('.legend') || e.target.closest('.device-badge')) return;
+      isDragging = true;
+      startX = e.pageX;
+      startY = e.pageY;
+      scrollLeft = window.scrollX;
+      scrollTop = window.scrollY;
+      document.body.style.cursor = 'grabbing';
+    });
+
+    document.body.addEventListener('mouseup', () => {
+      isDragging = false;
+      document.body.style.cursor = 'default';
+    });
+
+    document.body.addEventListener('mouseleave', () => {
+      isDragging = false;
+      document.body.style.cursor = 'default';
+    });
+
+    document.body.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const dx = e.pageX - startX;
+      const dy = e.pageY - startY;
+      window.scrollTo(scrollLeft - dx, scrollTop - dy);
+    });
+
+    // Mouse wheel zoom
+    document.addEventListener('wheel', (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        if (e.deltaY < 0) {
+          zoomIn();
+        } else {
+          zoomOut();
+        }
+      }
+    }, { passive: false });
+  </script>
+</body>
+</html>

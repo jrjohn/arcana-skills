@@ -12,7 +12,12 @@ description: |
   【功能說明】
   第一階段 - 需求收集：專案願景訪談、利害關係人分析、功能/非功能需求收集、驗收標準定義。
   第二階段 - 文件產出：SRS/SDD/SWD/STP/STC/SVV/RTM 文件，SDD 階段整合 UI/UX 設計與 AI 資產產生。
-  第三階段 - UI Flow 回補：SDD 產出後自動產生 HTML UI Flow，回補 SDD 和 SRS。
+  第三階段 - UI Flow 產生：
+    ⚠️ 強制先啟用 app-uiux-designer.skill 詢問 UI 設計偏好（App Theme Style Discovery）
+    → 收集使用者年齡層、APP類型、視覺風格、品牌色彩、語言地區、深色模式偏好
+    → 產生 Design Token + Theme CSS + Style Guide
+    → 依據 Theme Style 產生 HTML UI Flow
+    → 回補 SDD 和 SRS
   第四階段 - DOCX 產生：MD 轉 DOCX，自動編號，圖片嵌入。
 
   【強制規則】
@@ -22,13 +27,29 @@ description: |
   ⚠️ 圖表格式：所有圖表必須使用 Mermaid 語法，禁止使用 ASCII 文字製圖。
   ⚠️ 標題編號：MD 檔案禁止包含手動編號，DOCX 轉換時自動產生階層式編號。
   ⚠️ SRS 回補強制：UI Flow 回補 SDD 後，必須同時回補 SRS (Screen References + Inferred Requirements)。
+  ⚠️ UI 設計偏好收集：產生 UI Flow 前，必須先啟用 app-uiux-designer.skill 詢問使用者 UI 設計偏好。
 
   【🚀 SDD 產出後自動 UI Flow 產生規則 (Critical)】
   當 SDD 文件產出完成後，必須自動執行：
-  1. 啟用 app-uiux-designer.skill
-  2. 產生 HTML UI Flow (互動原型 + 截圖)
-  3. 回補 SDD (UI 原型 + 圖片)
-  4. 回補 SRS (Screen References + Inferred Requirements + User Flows) ⚠️強制
+
+  ⚠️ Step 0: 啟用 app-uiux-designer.skill 並詢問 UI 設計偏好 (強制)
+     在產生任何 UI 之前，必須先使用 app-uiux-designer.skill 的
+     「App Theme Style Designer」功能詢問使用者以下問題：
+     ┌─────────────────────────────────────────────────────────┐
+     │  🎨 App Theme Style Discovery                          │
+     │  1️⃣ 目標使用者年齡層？                                  │
+     │  2️⃣ APP 類型 / 產業？                                   │
+     │  3️⃣ 期望的視覺風格？                                    │
+     │  4️⃣ 品牌色彩偏好？                                      │
+     │  5️⃣ 主要語言 / 地區？                                   │
+     │  6️⃣ 是否需要深色模式？                                  │
+     └─────────────────────────────────────────────────────────┘
+     收集回答後產生：Design Token JSON、{project}-theme.css、
+     Style Guide Documentation、Color Psychology Explanation
+
+  1. 依據 Theme Style 產生 HTML UI Flow (互動原型 + 截圖)
+  2. 回補 SDD (UI 原型 + 圖片)
+  3. 回補 SRS (Screen References + Inferred Requirements + User Flows) ⚠️強制
 
   【🔄 UI Flow 回補接收規則 (Critical)】
   當 app-uiux-designer.skill 完成 UI Flow 產生後：
