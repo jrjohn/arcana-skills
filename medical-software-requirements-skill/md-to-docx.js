@@ -738,6 +738,8 @@ function createLocalImage(imagePath, baseDir) {
   return new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { before: 200, after: 200 },
+    keepLines: true,   // Keep image on same page (don't split)
+    keepNext: false,   // Image doesn't need to keep with next (end of chain)
     children: [
       new ImageRun({
         data: imageBuffer,
@@ -1241,12 +1243,25 @@ function shouldBreakBeforeHeading(lines, currentIndex) {
       continue;
     }
 
+    // Check if this is an image (![...](..)) - high risk of orphan heading
+    if (line.match(/^!\[.*\]\(.*\)/)) {
+      // If heading is followed by image, always add page break to prevent orphan
+      return true;
+    }
+
+    // Check if this is a table start (|...|)
+    if (line.startsWith('|') && line.endsWith('|')) {
+      // If heading is followed by table, always add page break to prevent orphan
+      return true;
+    }
+
     // If it's a requirement item or other content, stop
     break;
   }
 
-  // Only break before first heading when there are multiple consecutive headings (heading group)
-  // This prevents heading groups from being split across pages
+  // Break before first heading when:
+  // 1. Multiple consecutive headings (heading group)
+  // 2. Or heading is followed by large content (image/table) - checked above
   return headingCount > 1;
 }
 
@@ -1361,19 +1376,33 @@ function parseMarkdown(content, outputDir = '.') {
     }
     // Heading 3 (### ) - Subsection
     if (line.startsWith('### ')) {
+      const headingText = line.substring(4);
+      // Module section titles always start on new page (AUTH, ONBOARD, VOCAB, TRAIN, REPORT, SETTING, etc.)
+      const isModuleSection = /^(AUTH|ONBOARD|DASH|VOCAB|TRAIN|REPORT|SETTING|DEVICE|REWARD|COM)\s/.test(headingText);
       // Check if heading is followed by requirement table or only empty lines, if so add page break to avoid orphan heading
-      const shouldPageBreak = shouldBreakBeforeHeading(lines, i);
-      elements.push(createHeading(line.substring(4), HeadingLevel.HEADING_3, shouldPageBreak, true));
+      const shouldPageBreak = isModuleSection || shouldBreakBeforeHeading(lines, i);
+      elements.push(createHeading(headingText, HeadingLevel.HEADING_3, shouldPageBreak, true));
       i++;
       continue;
     }
     // Heading 4 (#### )
     if (line.startsWith('#### ')) {
       const headingText = line.substring(5);
-      // Screen Design sections always start on new page
+      // Screen Design sections - check if immediately following a module section H3
       const isScreenDesign = headingText.includes('Screen Design:') || headingText.includes('SCR-');
-      // Check if heading is followed by requirement table or only empty lines, if so add page break to avoid orphan heading
-      const shouldPageBreak = isScreenDesign || shouldBreakBeforeHeading(lines, i);
+
+      // Check if previous non-empty line is an H3 module section heading
+      // If so, don't add pageBreak to H4 (H3 already has it, and we want them together)
+      let prevIdx = i - 1;
+      while (prevIdx >= 0 && lines[prevIdx].trim() === '') {
+        prevIdx--;
+      }
+      const prevLine = prevIdx >= 0 ? lines[prevIdx] : '';
+      const prevIsModuleH3 = prevLine.startsWith('### ') &&
+        /^### (AUTH|ONBOARD|DASH|VOCAB|TRAIN|REPORT|SETTING|DEVICE|REWARD|COM)\s/.test(prevLine);
+
+      // Only add pageBreak if NOT immediately following a module H3
+      const shouldPageBreak = !prevIsModuleH3 && (isScreenDesign || shouldBreakBeforeHeading(lines, i));
       elements.push(createHeading(headingText, HeadingLevel.HEADING_4, shouldPageBreak, true));
       i++;
       continue;
@@ -1679,11 +1708,32 @@ function tokenizeLine(line, lang, fontSize) {
 }
 
 /**
+ * Detect if content is ASCII art/wireframe
+ * ASCII art typically contains box-drawing characters
+ */
+function isAsciiArt(content) {
+  // Box-drawing characters (Unicode range U+2500 to U+257F)
+  const boxDrawingChars = /[─│┌┐└┘├┤┬┴┼═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬]/;
+  // Also check for common ASCII art patterns
+  const asciiArtPatterns = /[+\-|\\\/\[\]{}()<>*#@█▓▒░▀▄▌▐]/;
+
+  // If more than 10% of lines contain box-drawing or ASCII art characters, it's ASCII art
+  const lines = content.split('\n');
+  const artLineCount = lines.filter(line =>
+    boxDrawingChars.test(line) ||
+    (asciiArtPatterns.test(line) && line.includes('|') && line.includes('-'))
+  ).length;
+
+  return artLineCount > lines.length * 0.1;
+}
+
+/**
  * Create code block
  * Reference: https://bo-sgoldhouse.blogspot.com/2021/07/word-editormd.html
  * - Uses Consolas monospace font (better readability for code)
  * - Fixed line height (compact display)
- * - Line numbers + zebra stripe background (alternating row colors)
+ * - Line numbers + zebra stripe background (for programming code only)
+ * - NO line numbers for ASCII art/wireframes
  * - Syntax highlighting (based on VSCode Light+ colors)
  */
 function createCodeBlock(content, lang = '') {
@@ -1700,18 +1750,50 @@ function createCodeBlock(content, lang = '') {
   // Total page width ~9360 DXA (6.5 inches)
   const LINE_NUM_COL_WIDTH = 720;   // Fixed width ~0.5 inches for line numbers
   const CODE_COL_WIDTH = 8640;      // Remaining width for code
+  const FULL_WIDTH = 9360;          // Full width for ASCII art (no line numbers)
 
   const lines = content.split('\n');
 
-  // Create table row for each line (line number | code)
+  // Check if this is ASCII art/wireframe - skip line numbers
+  const skipLineNumbers = isAsciiArt(content);
+
+  // Create table row for each line
   const codeRows = lines.map((line, index) => {
     const lineNum = index + 1;
     const isEven = lineNum % 2 === 0;
     const bgColor = isEven ? BG_EVEN : BG_ODD;
 
-    // Syntax highlighting parsing
-    const tokenizedRuns = tokenizeLine(line, lang, CODE_FONT_SIZE);
+    // Syntax highlighting parsing (skip for ASCII art)
+    const tokenizedRuns = skipLineNumbers
+      ? [new TextRun({ text: line || ' ', font: FONT_CODE, size: CODE_FONT_SIZE })]
+      : tokenizeLine(line, lang, CODE_FONT_SIZE);
 
+    if (skipLineNumbers) {
+      // ASCII art: single column, no line numbers
+      return new TableRow({
+        tableHeader: false,
+        cantSplit: true,
+        children: [
+          new TableCell({
+            width: { size: FULL_WIDTH, type: WidthType.DXA },
+            shading: { fill: bgColor, type: ShadingType.CLEAR },
+            verticalAlign: VerticalAlign.CENTER,
+            margins: {
+              top: 20, bottom: 20,
+              left: 120, right: 80
+            },
+            textDirection: 'lrTb',
+            children: [new Paragraph({
+              spacing: { after: 0, line: CODE_LINE_HEIGHT, lineRule: 'exact' },
+              keepNext: true,
+              children: tokenizedRuns
+            })]
+          })
+        ]
+      });
+    }
+
+    // Programming code: two columns with line numbers
     return new TableRow({
       tableHeader: false,
       cantSplit: true,  // Prevent row from splitting across pages
@@ -1760,10 +1842,12 @@ function createCodeBlock(content, lang = '') {
     });
   });
 
-  // Create code table with explicit columnWidths and layout settings
+  // Create code table with appropriate column settings
+  const columnWidths = skipLineNumbers ? [FULL_WIDTH] : [LINE_NUM_COL_WIDTH, CODE_COL_WIDTH];
+
   const codeTable = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
-    columnWidths: [LINE_NUM_COL_WIDTH, CODE_COL_WIDTH],  // Explicit column widths
+    columnWidths: columnWidths,
     layout: 'fixed',  // Fixed table layout prevents column resizing
     borders: {
       top: { style: BorderStyle.SINGLE, size: 4, color: 'DDDDDD' },
@@ -1916,8 +2000,10 @@ function createTable(headers, rows) {
   const columnWidths = calculateColumnWidths(headers, rows, 9360, noWrapColumns);
 
   const tableRows = [
+    // Header row - keep with first data row to avoid orphan header
     new TableRow({
       tableHeader: true,
+      cantSplit: true,  // Don't split header row across pages
       children: headers.map((header, i) => new TableCell({
         borders: cellBorders,
         width: { size: columnWidths[i], type: WidthType.DXA },
@@ -1927,11 +2013,13 @@ function createTable(headers, rows) {
         children: [new Paragraph({
           alignment: AlignmentType.CENTER,
           keepLines: noWrapColumns[i],  // ID 欄位不換行
+          keepNext: true,  // Keep header with first data row
           children: [new TextRun({ text: header, bold: true, size: FONT_SIZE.TABLE_HEADER, font: getFont(header) })]
         })]
       }))
     }),
-    ...rows.map(row => new TableRow({
+    ...rows.map((row, rowIndex) => new TableRow({
+      cantSplit: true,  // Don't split data rows across pages
       children: row.map((cell, i) => new TableCell({
         borders: cellBorders,
         width: { size: columnWidths[i], type: WidthType.DXA },
@@ -1939,6 +2027,8 @@ function createTable(headers, rows) {
         children: [new Paragraph({
           spacing: { after: 0 },
           keepLines: noWrapColumns[i],  // ID 欄位不換行
+          // First row keeps with header, others don't need keepNext
+          keepNext: rowIndex === 0,
           children: parseInlineFormatting(cell, FONT_SIZE.TABLE)
         })]
       }))

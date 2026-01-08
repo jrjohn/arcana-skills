@@ -743,6 +743,59 @@ flowchart TB
 
 ## 截圖嵌入規範
 
+### 截圖取代 Wireframe 規則
+
+⚠️ **重要：** 當截圖產生後，必須移除對應的 ASCII Wireframe。
+
+| 規則 | 說明 |
+|------|------|
+| **刪除 Wireframe** | 有截圖後，刪除 `**Wireframe：**` 區塊及其 code block |
+| **保留截圖** | 保留 `![SCR-xxx](./images/...)` 嵌入語法 |
+| **保留表格** | 保留 Button Navigation 和元件說明表格 |
+
+#### 移除前結構
+```markdown
+#### SCR-AUTH-001-account-selection: 帳號選擇畫面
+
+| 欄位 | 內容 |
+|------|------|
+| ID | SCR-AUTH-001 |
+...
+
+![SCR-AUTH-001 帳號選擇](./images/ipad/SCR-AUTH-001-account-selection.png)
+
+**Wireframe：**        ← 需刪除
+
+```                    ← 需刪除
+┌─────────────────┐    ← 需刪除
+│  ASCII 圖形...   │    ← 需刪除
+└─────────────────┘    ← 需刪除
+```                    ← 需刪除
+
+**元件說明：**
+...
+```
+
+#### 移除後結構
+```markdown
+#### SCR-AUTH-001-account-selection: 帳號選擇畫面
+
+| 欄位 | 內容 |
+|------|------|
+| ID | SCR-AUTH-001 |
+...
+
+![SCR-AUTH-001 帳號選擇](./images/ipad/SCR-AUTH-001-account-selection.png)
+
+**元件說明：**
+...
+```
+
+#### 原因
+- ASCII Wireframe 在 DOCX 轉換時會產生行號 bug
+- 截圖比 Wireframe 更準確呈現最終設計
+- 減少文件冗餘，提升可讀性
+
 ### 格式優先順序
 
 1. **SVG** (強制優先) - 向量格式，無限縮放
