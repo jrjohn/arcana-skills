@@ -46,9 +46,15 @@ $Skills = @(
     "python-developer-skill"
     "springboot-developer-skill"
     "windows-developer-skill"
-    "medical-software-requirements-skill"
+    "app-requirements-skill"
     "app-uiux-designer.skill"
 )
+
+# Config paths
+$ClaudeDir = Join-Path $env:USERPROFILE ".claude"
+$UserSettings = Join-Path $ClaudeDir "settings.json"
+$UserClaudeMd = Join-Path $ClaudeDir "CLAUDE.md"
+$HooksDir = Join-Path $ClaudeDir "hooks"
 
 # Colors
 function Write-Color {
@@ -515,6 +521,152 @@ function Select-Skills {
     }
 }
 
+# Generate skill permissions for settings
+function Get-SkillPermissions {
+    $permissions = @()
+    foreach ($skill in $Skills) {
+        $permissions += "Skill($skill)"
+    }
+    return $permissions
+}
+
+# Merge settings.json
+function Merge-Settings {
+    param([string]$SourcePath)
+
+    $templateSettings = Join-Path $SourcePath "config\settings.template.windows.json"
+
+    if (-not (Test-Path $templateSettings)) {
+        Write-Warn "settings.template.windows.json not found, skipping settings merge"
+        return
+    }
+
+    Write-Info "Merging settings.json..."
+
+    # Read template
+    $template = Get-Content $templateSettings -Raw | ConvertFrom-Json
+
+    # Add dynamic skill permissions
+    $skillPerms = Get-SkillPermissions
+    $template.permissions.allow += $skillPerms
+    $template.permissions.allow = $template.permissions.allow | Select-Object -Unique
+
+    # Create or merge user settings
+    if (-not (Test-Path $UserSettings)) {
+        Write-Info "  Creating new settings.json"
+        $template | ConvertTo-Json -Depth 10 | Set-Content $UserSettings -Encoding UTF8
+        Write-Success "Settings configured"
+        return
+    }
+
+    # Backup existing settings
+    $backupPath = "$UserSettings.backup"
+    Copy-Item $UserSettings $backupPath -Force
+    Write-Info "  Backed up existing settings to settings.json.backup"
+
+    # Read existing settings and merge
+    try {
+        $existing = Get-Content $UserSettings -Raw | ConvertFrom-Json
+
+        # Merge permissions (add new ones)
+        if ($existing.permissions -and $existing.permissions.allow) {
+            $merged = $existing.permissions.allow + $template.permissions.allow | Select-Object -Unique
+            $existing.permissions.allow = $merged
+        } else {
+            $existing | Add-Member -NotePropertyName "permissions" -NotePropertyValue $template.permissions -Force
+        }
+
+        # Add other settings if not present
+        if (-not $existing.statusLine) {
+            $existing | Add-Member -NotePropertyName "statusLine" -NotePropertyValue $template.statusLine -Force
+        }
+        if (-not $existing.hooks) {
+            $existing | Add-Member -NotePropertyName "hooks" -NotePropertyValue $template.hooks -Force
+        }
+        if (-not $existing.enabledPlugins) {
+            $existing | Add-Member -NotePropertyName "enabledPlugins" -NotePropertyValue $template.enabledPlugins -Force
+        }
+
+        $existing | ConvertTo-Json -Depth 10 | Set-Content $UserSettings -Encoding UTF8
+        Write-Success "Settings merged successfully"
+    }
+    catch {
+        Write-Warn "Settings merge failed, restoring backup"
+        Copy-Item $backupPath $UserSettings -Force
+    }
+}
+
+# Merge CLAUDE.md
+function Merge-ClaudeMd {
+    param([string]$SourcePath)
+
+    $templateClaudeMd = Join-Path $SourcePath "config\CLAUDE.template.md"
+    $marker = "# Arcana Skills Configuration"
+
+    if (-not (Test-Path $templateClaudeMd)) {
+        Write-Warn "CLAUDE.template.md not found, skipping CLAUDE.md merge"
+        return
+    }
+
+    Write-Info "Configuring CLAUDE.md..."
+
+    # Create if not exists
+    if (-not (Test-Path $UserClaudeMd)) {
+        Write-Info "  Creating new CLAUDE.md"
+        Copy-Item $templateClaudeMd $UserClaudeMd
+        Write-Success "CLAUDE.md configured"
+        return
+    }
+
+    # Check if already contains our config
+    $content = Get-Content $UserClaudeMd -Raw
+    if ($content -match [regex]::Escape($marker)) {
+        Write-Info "  CLAUDE.md already contains Arcana Skills config"
+        Write-Info "  Keeping existing config"
+        return
+    }
+
+    # Append template
+    $templateContent = Get-Content $templateClaudeMd -Raw
+    Add-Content $UserClaudeMd "`n$templateContent"
+    Write-Success "CLAUDE.md updated"
+}
+
+# Install hooks
+function Install-Hooks {
+    param([string]$SourcePath)
+
+    $hooksSource = Join-Path $SourcePath "config\hooks"
+
+    if (-not (Test-Path $hooksSource)) {
+        return
+    }
+
+    Write-Info "Installing hooks..."
+
+    # Create hooks directory
+    if (-not (Test-Path $HooksDir)) {
+        New-Item -ItemType Directory -Path $HooksDir -Force | Out-Null
+    }
+
+    # Copy PowerShell hook scripts
+    Get-ChildItem -Path $hooksSource -Filter "*.ps1" | ForEach-Object {
+        $targetPath = Join-Path $HooksDir $_.Name
+        Copy-Item $_.FullName $targetPath -Force
+        Write-Info "  Installed hook: $($_.Name)"
+    }
+
+    # Copy statusline script
+    $statuslineSource = Join-Path $SourcePath "config\statusline-command.ps1"
+    if (Test-Path $statuslineSource) {
+        $statuslineTarget = Join-Path $ClaudeDir "statusline-command.ps1"
+        Copy-Item $statuslineSource $statuslineTarget -Force
+        Write-Info "  Installed statusline command"
+    }
+
+    Write-Success "Hooks installed"
+}
+
 # Print completion message
 function Show-Completion {
     $skillsDir = Get-SkillsDir
@@ -581,6 +733,13 @@ function Main {
         else {
             Select-Skills -SourcePath $sourcePath -TargetPath $skillsDir
         }
+
+        # Configure settings and hooks
+        Write-Host ""
+        Write-Info "Configuring Claude Code settings..."
+        Merge-Settings -SourcePath $sourcePath
+        Merge-ClaudeMd -SourcePath $sourcePath
+        Install-Hooks -SourcePath $sourcePath
 
         Show-Completion
     }

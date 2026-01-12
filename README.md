@@ -128,11 +128,14 @@ arcana-skills/
 ├── uninstall.sh                        # Uninstallation script
 ├── README.md                           # This file
 ├── config/                             # Auto-configuration templates
-│   ├── settings.template.json          # Claude Code settings
+│   ├── settings.template.json          # Claude Code settings (macOS/Linux)
+│   ├── settings.template.windows.json  # Claude Code settings (Windows)
 │   ├── CLAUDE.template.md              # CLAUDE.md template
-│   ├── statusline-command.sh           # Status line script
+│   ├── statusline-command.sh           # Status line script (macOS/Linux)
+│   ├── statusline-command.ps1          # Status line script (Windows)
 │   └── hooks/                          # Hook scripts
-│       └── validate-ui-flow.sh
+│       ├── validate-ui-flow.sh         # (macOS/Linux)
+│       └── validate-ui-flow.ps1        # (Windows)
 ├── ios-developer-skill/
 ├── android-developer-skill/
 ├── angular-developer-skill/
