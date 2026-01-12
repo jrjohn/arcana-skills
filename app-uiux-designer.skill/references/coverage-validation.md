@@ -1621,3 +1621,615 @@ python validate-clickable-elements.py --module train
 
 ---
 
+## 15. Screen Count and Flow Synchronization Validation (畫面總數與流程同步驗證)
+
+### 15.1 Overview
+
+⚠️ **CRITICAL REQUIREMENT**: When new screens are created, they MUST be synchronized across multiple files to ensure the UI Flow system remains consistent.
+
+### 15.2 Required Synchronization Points
+
+| File | Update Required | Description |
+|------|-----------------|-------------|
+| `device-preview.html` | Sidebar menu | Add screen entry to module section |
+| `device-preview.html` | Module count | Update `MODULE (N)` count |
+| `device-preview.html` | Total count | Update `SCREENS (N)` total |
+| `docs/ui-flow-diagram.html` | Screen cards | Add screen card with iframe |
+| `docs/ui-flow-diagram.html` | Device badge | Update `N Screens` badge |
+| `docs/ui-flow-diagram.html` | Connection arrows | Add navigation arrows if needed |
+
+### 15.3 Post-Screen Creation Checklist
+
+When creating a new screen (e.g., `SCR-SETTING-003a-password.html`):
+
+```markdown
+## New Screen Synchronization Checklist
+
+### Screen Files Created
+- [ ] iPad version: `setting/SCR-SETTING-003a-password.html`
+- [ ] iPhone version: `iphone/SCR-SETTING-003a-password.html`
+
+### device-preview.html Updates
+- [ ] Added to sidebar under correct module (e.g., SETTING)
+- [ ] Module count updated (e.g., SETTING (11) → SETTING (12))
+- [ ] Total screen count updated (e.g., SCREENS (30) → SCREENS (31))
+- [ ] `data-iphone` attribute set correctly
+
+### ui-flow-diagram.html Updates
+- [ ] Device badge count updated (e.g., "30 Screens" → "31 Screens")
+- [ ] Screen card added with correct position
+- [ ] iframe src points to correct HTML file
+- [ ] Connection arrow added from parent screen
+```
+
+### 15.4 Sub-Screen Naming Convention
+
+For child screens (detail pages, sub-settings), use alphabetical suffixes:
+
+| Pattern | Use Case | Example |
+|---------|----------|---------|
+| `SCR-MODULE-NNN` | Main screen | `SCR-SETTING-003-security` |
+| `SCR-MODULE-NNNa` | First sub-screen | `SCR-SETTING-003a-password` |
+| `SCR-MODULE-NNNb` | Second sub-screen | `SCR-SETTING-003b-devices` |
+| `SCR-MODULE-NNNc` | Third sub-screen | `SCR-SETTING-003c-linked-accounts` |
+
+### 15.5 Sidebar Entry Template
+
+```html
+<!-- device-preview.html sidebar entry -->
+<div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer"
+     onclick="loadScreen('setting/SCR-SETTING-003a-password.html', this)"
+     data-iphone="iphone/SCR-SETTING-003a-password.html">
+  <span class="text-sm text-gray-700">SCR-SETTING-003a 變更密碼</span>
+</div>
+```
+
+### 15.6 Screen Card Template
+
+```html
+<!-- ui-flow-diagram.html screen card -->
+<div class="screen-card module-setting"
+     style="left: 1100px; top: 1880px;"
+     onclick="openScreen('setting/SCR-SETTING-003a-password.html')">
+  <div class="ipad-frame">
+    <div class="screen-id">SETTING-003a</div>
+    <iframe class="screen-iframe" src="../setting/SCR-SETTING-003a-password.html"></iframe>
+  </div>
+  <div class="screen-label">SCR-SETTING-003a 變更密碼</div>
+</div>
+```
+
+### 15.7 Connection Arrow Template
+
+```html
+<!-- ui-flow-diagram.html connection arrow -->
+<!-- Parent → Child sub-screen (use dashed line for sub-screens) -->
+<path d="M 420 1740 L 420 1810 L 1150 1810 L 1150 1880"
+      stroke="#64748B" stroke-width="2" fill="none"
+      marker-end="url(#arrow-setting)" stroke-dasharray="6,3"/>
+```
+
+### 15.8 Automated Count Validation Script
+
+Save as `validate-screen-count.js`:
+
+```javascript
+#!/usr/bin/env node
+/**
+ * Screen Count and Flow Synchronization Validator
+ *
+ * Validates that:
+ * 1. All HTML files in modules are in device-preview.html sidebar
+ * 2. Screen counts match actual file counts
+ * 3. All screens in sidebar exist in ui-flow-diagram.html
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+const UI_FLOW_DIR = process.cwd();
+const MODULES = ['auth', 'vocab', 'train', 'report', 'setting', 'dash', 'home'];
+
+function countScreenFiles() {
+  const counts = {};
+  let total = 0;
+
+  for (const module of MODULES) {
+    const moduleDir = path.join(UI_FLOW_DIR, module);
+    if (fs.existsSync(moduleDir)) {
+      const files = fs.readdirSync(moduleDir).filter(f => f.endsWith('.html'));
+      counts[module.toUpperCase()] = files.length;
+      total += files.length;
+    }
+  }
+
+  // Count iPhone screens (should match)
+  const iphoneDir = path.join(UI_FLOW_DIR, 'iphone');
+  if (fs.existsSync(iphoneDir)) {
+    counts['IPHONE'] = fs.readdirSync(iphoneDir).filter(f => f.endsWith('.html')).length;
+  }
+
+  counts['TOTAL'] = total;
+  return counts;
+}
+
+function checkDevicePreviewCounts() {
+  const previewPath = path.join(UI_FLOW_DIR, 'device-preview.html');
+  const content = fs.readFileSync(previewPath, 'utf8');
+
+  const errors = [];
+  const fileCounts = countScreenFiles();
+
+  // Check module counts
+  for (const [module, count] of Object.entries(fileCounts)) {
+    if (module === 'TOTAL' || module === 'IPHONE') continue;
+
+    const regex = new RegExp(`${module}\\s*\\((\\d+)\\)`);
+    const match = content.match(regex);
+
+    if (match) {
+      const declaredCount = parseInt(match[1]);
+      if (declaredCount !== count) {
+        errors.push({
+          type: 'MODULE_COUNT_MISMATCH',
+          module: module,
+          declared: declaredCount,
+          actual: count,
+          fix: `Update "${module} (${declaredCount})" to "${module} (${count})"`
+        });
+      }
+    }
+  }
+
+  // Check total screen count
+  const totalRegex = /SCREENS\s*\((\d+)\)/;
+  const totalMatch = content.match(totalRegex);
+  if (totalMatch) {
+    const declaredTotal = parseInt(totalMatch[1]);
+    if (declaredTotal !== fileCounts.TOTAL) {
+      errors.push({
+        type: 'TOTAL_COUNT_MISMATCH',
+        declared: declaredTotal,
+        actual: fileCounts.TOTAL,
+        fix: `Update "SCREENS (${declaredTotal})" to "SCREENS (${fileCounts.TOTAL})"`
+      });
+    }
+  }
+
+  return errors;
+}
+
+function checkUiFlowDiagramCounts() {
+  const diagramPath = path.join(UI_FLOW_DIR, 'docs', 'ui-flow-diagram.html');
+  if (!fs.existsSync(diagramPath)) return [];
+
+  const content = fs.readFileSync(diagramPath, 'utf8');
+  const errors = [];
+  const fileCounts = countScreenFiles();
+
+  // Check screen count in badge
+  const badgeRegex = /(\d+)\s*Screens/g;
+  let match;
+  while ((match = badgeRegex.exec(content)) !== null) {
+    const declaredCount = parseInt(match[1]);
+    if (declaredCount !== fileCounts.TOTAL) {
+      errors.push({
+        type: 'DIAGRAM_COUNT_MISMATCH',
+        declared: declaredCount,
+        actual: fileCounts.TOTAL,
+        fix: `Update "${declaredCount} Screens" to "${fileCounts.TOTAL} Screens"`
+      });
+    }
+  }
+
+  return errors;
+}
+
+function main() {
+  console.log('======================================================================');
+  console.log('SCREEN COUNT AND FLOW SYNCHRONIZATION VALIDATION');
+  console.log('======================================================================\n');
+
+  const fileCounts = countScreenFiles();
+  console.log('File Counts by Module:');
+  for (const [module, count] of Object.entries(fileCounts)) {
+    console.log(`  ${module}: ${count}`);
+  }
+  console.log('');
+
+  const previewErrors = checkDevicePreviewCounts();
+  const diagramErrors = checkUiFlowDiagramCounts();
+  const allErrors = [...previewErrors, ...diagramErrors];
+
+  if (allErrors.length === 0) {
+    console.log('✅ All screen counts are synchronized!\n');
+    process.exit(0);
+  } else {
+    console.log(`⛔ Found ${allErrors.length} synchronization issues:\n`);
+    for (const error of allErrors) {
+      console.log(`  🔴 ${error.type}`);
+      console.log(`     Declared: ${error.declared}, Actual: ${error.actual}`);
+      console.log(`     Fix: ${error.fix}\n`);
+    }
+    process.exit(1);
+  }
+}
+
+main();
+```
+
+### 15.9 Validation Workflow
+
+```
+Step 1: Create New Screen HTML Files
+        ↓
+Step 2: Run Screen Count Validation
+        node validate-screen-count.js
+        │
+        ├─→ All counts match?
+        │     │
+        │     ├─ YES → Continue to Step 3
+        │     │
+        │     └─ NO  → Fix synchronization issues
+        │              ├─→ Update device-preview.html sidebar
+        │              ├─→ Update module counts
+        │              ├─→ Update total count
+        │              └─→ Re-run validation
+        ↓
+Step 3: Add Screen Card to UI Flow Diagram
+        ↓
+Step 4: Add Connection Arrows (if applicable)
+        ↓
+Step 5: Run Clickable Element Validation
+        node capture-screenshots.js --validate-only
+```
+
+### 15.10 Common Synchronization Errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| Module count mismatch | New screen added but count not updated | Update `MODULE (N)` in sidebar |
+| Total count mismatch | New screen added but total not updated | Update `SCREENS (N)` in header |
+| Missing sidebar entry | Screen file exists but not in sidebar | Add `screen-item` div to sidebar |
+| Missing screen card | Screen in sidebar but not in diagram | Add screen card to ui-flow-diagram |
+| Missing connection | Screen card exists but no arrow | Add SVG path connection |
+
+### 15.11 Verification Commands
+
+```bash
+# Count all screens by module
+find . -name "SCR-*.html" -not -path "./iphone/*" | wc -l
+
+# List all screens in a module
+ls -la setting/SCR-*.html
+
+# Check if screen is in sidebar
+grep "SCR-SETTING-003a" device-preview.html
+
+# Check if screen card exists in diagram
+grep "SCR-SETTING-003a" docs/ui-flow-diagram.html
+```
+
+---
+
+## 16. Index.html Synchronization Validation (首頁同步驗證)
+
+### 16.1 Overview
+
+⚠️ **CRITICAL REQUIREMENT**: The `index.html` file serves as the main overview page for the UI Flow system. When new screens are created, `index.html` MUST be updated to reflect accurate screen counts and screen lists.
+
+### 16.2 Required Synchronization Points
+
+| Element | Location | Update Required |
+|---------|----------|-----------------|
+| Module screen counts | Module header badges | Update `N 畫面` count |
+| Total iPad count | Header badge | Update iPad total |
+| Total iPhone count | Header badge | Update iPhone total |
+| Screen list items | Module screen lists | Add/remove screen entries |
+| Screen links | `onclick` handlers | Verify links work |
+
+### 16.3 Files That Require index.html Updates
+
+When any of these files change, `index.html` MUST be updated:
+
+```markdown
+## Trigger Files
+
+### New Screen Added
+- [ ] auth/SCR-AUTH-*.html → Update AUTH module count and list
+- [ ] home/SCR-HOME-*.html → Update HOME module count and list
+- [ ] vocab/SCR-VOCAB-*.html → Update VOCAB module count and list
+- [ ] train/SCR-TRAIN-*.html → Update TRAIN module count and list
+- [ ] report/SCR-PROG-*.html → Update PROG module count and list
+- [ ] setting/SCR-SETTING-*.html → Update SETTING module count and list
+
+### Synchronization Required
+- [ ] device-preview.html updated → index.html must match
+- [ ] ui-flow-diagram.html updated → index.html must match
+```
+
+### 16.4 index.html Structure
+
+```html
+<!-- Module Card Structure -->
+<div class="module-card module-auth">
+  <div class="module-header">
+    <span class="module-icon">🔐</span>
+    <div>
+      <h3>AUTH 認證模組</h3>
+      <p>登入、註冊、角色選擇</p>
+    </div>
+    <span class="module-count">5 畫面</span>  <!-- ⚠️ Must match actual count -->
+  </div>
+  <div class="screen-list">
+    <div class="screen-item" onclick="openScreen('auth/SCR-AUTH-001-login.html')">
+      <span class="dot"></span>
+      <span>SCR-AUTH-001</span>
+      <span>登入頁面</span>
+    </div>
+    <!-- All screens in module must be listed -->
+  </div>
+</div>
+
+<!-- Header Badge Structure -->
+<div class="badge">
+  iPad <span class="count">33</span>  <!-- ⚠️ Must match total iPad screens -->
+  iPhone <span class="count">33</span>  <!-- ⚠️ Must match total iPhone screens -->
+</div>
+```
+
+### 16.5 Validation Script
+
+Add to `validate-screen-count.js`:
+
+```javascript
+function checkIndexHtml() {
+  const indexPath = path.join(UI_FLOW_DIR, 'index.html');
+  if (!fs.existsSync(indexPath)) return [];
+
+  const content = fs.readFileSync(indexPath, 'utf8');
+  const errors = [];
+  const fileCounts = countScreenFiles();
+
+  // Check each module count
+  const modulePatterns = {
+    'AUTH': /AUTH[^<]*?(\d+)\s*畫面/,
+    'HOME': /HOME[^<]*?(\d+)\s*畫面/,
+    'VOCAB': /VOCAB[^<]*?(\d+)\s*畫面/,
+    'TRAIN': /TRAIN[^<]*?(\d+)\s*畫面/,
+    'PROG': /PROG[^<]*?(\d+)\s*畫面/,
+    'SETTING': /SETTING[^<]*?(\d+)\s*畫面/
+  };
+
+  for (const [module, pattern] of Object.entries(modulePatterns)) {
+    const match = content.match(pattern);
+    if (match) {
+      const declaredCount = parseInt(match[1]);
+      const actualCount = fileCounts[module] || 0;
+      if (declaredCount !== actualCount) {
+        errors.push({
+          type: 'INDEX_MODULE_COUNT_MISMATCH',
+          file: 'index.html',
+          module: module,
+          declared: declaredCount,
+          actual: actualCount,
+          fix: `Update "${module}...${declaredCount} 畫面" to "${module}...${actualCount} 畫面"`
+        });
+      }
+    }
+  }
+
+  // Check total iPad/iPhone counts
+  const iPadMatch = content.match(/iPad\s*.*?(\d+)/);
+  const iPhoneMatch = content.match(/iPhone\s*.*?(\d+)/);
+
+  if (iPadMatch) {
+    const declaredIPad = parseInt(iPadMatch[1]);
+    if (declaredIPad !== fileCounts.TOTAL) {
+      errors.push({
+        type: 'INDEX_IPAD_COUNT_MISMATCH',
+        declared: declaredIPad,
+        actual: fileCounts.TOTAL,
+        fix: `Update iPad count from ${declaredIPad} to ${fileCounts.TOTAL}`
+      });
+    }
+  }
+
+  return errors;
+}
+```
+
+### 16.6 Post-Screen Creation Checklist (Updated)
+
+When creating a new screen, update ALL of these files:
+
+```markdown
+## Complete Synchronization Checklist
+
+### Screen Files Created
+- [ ] iPad version: `{module}/SCR-{MODULE}-{NNN}-{name}.html`
+- [ ] iPhone version: `iphone/SCR-{MODULE}-{NNN}-{name}.html`
+
+### index.html Updates ⚠️ NEW
+- [ ] Module count updated (e.g., "3 畫面" → "5 畫面")
+- [ ] Screen item added to module's screen-list
+- [ ] iPad total count updated in header
+- [ ] iPhone total count updated in header
+
+### device-preview.html Updates
+- [ ] Added to sidebar under correct module
+- [ ] Module count updated
+- [ ] Total screen count updated
+- [ ] `data-iphone` attribute set correctly
+
+### ui-flow-diagram.html Updates
+- [ ] Device badge count updated
+- [ ] Screen card added with correct position
+- [ ] iframe src points to correct HTML file
+- [ ] Connection arrow added from parent screen
+```
+
+### 16.7 Common Synchronization Errors
+
+| Error | File | Fix |
+|-------|------|-----|
+| Module count mismatch | index.html | Update `N 畫面` badge |
+| Missing screen item | index.html | Add `<div class="screen-item">` entry |
+| iPad/iPhone count mismatch | index.html | Update header badge counts |
+| Broken onclick | index.html | Fix screen path in onclick handler |
+| Description mismatch | index.html | Update module description text |
+
+### 16.8 Verification Commands
+
+```bash
+# Count screens per module and compare with index.html
+for module in auth home vocab train report setting; do
+  count=$(ls -1 $module/SCR-*.html 2>/dev/null | wc -l)
+  echo "$module: $count screens"
+done
+
+# Check if all screens are in index.html
+for file in */SCR-*.html; do
+  screen_id=$(basename "$file" .html)
+  if ! grep -q "$screen_id" index.html; then
+    echo "MISSING in index.html: $screen_id"
+  fi
+done
+```
+
+---
+
+## 17. Device-Aware Link Validation (index.html)
+
+### 17.1 Problem Statement
+
+Screen links in `index.html` must navigate to `device-preview.html` with the correct device path:
+- **iPhone selected** → `device-preview.html?screen=iphone/SCR-XXX.html`
+- **iPad selected** → `device-preview.html?screen={module}/SCR-XXX.html`
+
+### 17.2 Mandatory Rule
+
+```
+⚠️ CRITICAL: index.html screen links MUST be device-aware
+   - Links must dynamically change based on selected device toggle
+   - Static hardcoded links are NOT allowed
+   - Use JavaScript onclick handlers with device state variable
+```
+
+### 17.3 Correct Implementation Pattern
+
+```html
+<!-- Device Toggle (stores current device state) -->
+<script>
+  let currentDevice = 'iphone'; // Default device
+
+  function switchDevice(device) {
+    currentDevice = device;
+    // Update toggle button states
+    document.getElementById('btn-iphone').classList.toggle('active', device === 'iphone');
+    document.getElementById('btn-ipad').classList.toggle('active', device === 'ipad');
+    // Update iframe if exists
+    const iframe = document.getElementById('flow-iframe');
+    if (iframe) {
+      iframe.src = 'docs/ui-flow-diagram.html?device=' + device;
+    }
+  }
+
+  // Navigate to device-preview with correct device path
+  function openScreen(ipadPath, iphonePath) {
+    const screenPath = currentDevice === 'iphone' ? iphonePath : ipadPath;
+    window.location.href = 'device-preview.html?screen=' + screenPath;
+  }
+</script>
+
+<!-- Screen Links - CORRECT (device-aware) -->
+<a onclick="openScreen('auth/SCR-AUTH-001-login.html', 'iphone/SCR-AUTH-001-login.html')"
+   class="screen-link cursor-pointer ...">
+  <span>SCR-AUTH-001</span>
+  <span>登入頁面</span>
+</a>
+
+<!-- INCORRECT - hardcoded path (DO NOT USE) -->
+<a href="device-preview.html?screen=auth/SCR-AUTH-001-login.html" ...>
+```
+
+### 17.4 Screen Link Template
+
+```html
+<!-- Module Screen List Item Template -->
+<div onclick="openScreen('{module}/SCR-{MODULE}-{NNN}-{name}.html', 'iphone/SCR-{MODULE}-{NNN}-{name}.html')"
+     class="screen-link flex items-center justify-between p-3 rounded-lg border border-gray-100 cursor-pointer">
+  <div class="flex items-center gap-3">
+    <span class="w-2 h-2 rounded-full status-done"></span>
+    <span class="font-medium text-gray-700">SCR-{MODULE}-{NNN}</span>
+  </div>
+  <span class="text-sm text-gray-500">{Screen Name}</span>
+</div>
+```
+
+### 17.5 Validation Script
+
+```javascript
+// Validate device-aware links in index.html
+function validateDeviceAwareLinks(indexContent) {
+  const errors = [];
+
+  // Check for hardcoded href links to device-preview
+  const hardcodedLinks = indexContent.match(/href="device-preview\.html\?screen=[^"]+"/g);
+  if (hardcodedLinks && hardcodedLinks.length > 0) {
+    errors.push({
+      type: 'HARDCODED_DEVICE_LINKS',
+      count: hardcodedLinks.length,
+      message: 'Found hardcoded device-preview links. Use onclick with openScreen() instead.',
+      examples: hardcodedLinks.slice(0, 3)
+    });
+  }
+
+  // Check for openScreen function definition
+  if (!indexContent.includes('function openScreen(')) {
+    errors.push({
+      type: 'MISSING_OPENSCREEN_FUNCTION',
+      message: 'Missing openScreen() function for device-aware navigation'
+    });
+  }
+
+  // Check for currentDevice variable
+  if (!indexContent.includes('currentDevice')) {
+    errors.push({
+      type: 'MISSING_DEVICE_STATE',
+      message: 'Missing currentDevice state variable'
+    });
+  }
+
+  return errors;
+}
+```
+
+### 17.6 Migration Checklist
+
+When fixing existing hardcoded links:
+
+```markdown
+## Device-Aware Link Migration Checklist
+
+### JavaScript Setup
+- [ ] Add `currentDevice` variable (default: 'iphone')
+- [ ] Add `switchDevice(device)` function
+- [ ] Add `openScreen(ipadPath, iphonePath)` function
+
+### Screen Links Migration
+- [ ] Change all `<a href="device-preview.html?screen=...">` to `<div onclick="openScreen(...)"`
+- [ ] Each openScreen() call must have TWO paths:
+      - First argument: iPad path (e.g., 'auth/SCR-AUTH-001.html')
+      - Second argument: iPhone path (e.g., 'iphone/SCR-AUTH-001.html')
+- [ ] Add `cursor-pointer` class to clickable elements
+- [ ] Remove href attribute (use onclick instead)
+
+### Testing
+- [ ] Toggle to iPhone → Click screen → Verify loads iPhone version
+- [ ] Toggle to iPad → Click screen → Verify loads iPad version
+- [ ] All modules tested (AUTH, VOCAB, TRAIN, HOME, PROG, SETTING)
+```
+
+---
+

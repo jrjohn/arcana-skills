@@ -520,21 +520,41 @@
     }
 
     function updateIframeSrc() {
-      // iPad versions
-      document.getElementById('preview-iframe-ipad').src = currentScreen;
-      document.getElementById('preview-iframe-ipad-mini').src = currentScreen;
+      let ipadUrl = currentScreen;
+      let iphoneUrl = currentScreen;
 
-      // iPhone version - check if iPhone-specific version exists
-      if (currentDevice === 'iphone' && currentElement) {
-        const iphoneUrl = currentElement.getAttribute('data-iphone');
-        if (iphoneUrl) {
-          document.getElementById('preview-iframe-iphone').src = iphoneUrl;
-        } else {
-          // Fallback: convert iPad URL to iPhone URL pattern
-          const iphoneFallback = currentScreen.replace(/^([a-z]+)\//, 'iphone/');
-          document.getElementById('preview-iframe-iphone').src = iphoneFallback;
+      // If currentScreen is already an iPhone path, derive iPad path from it
+      if (currentScreen.startsWith('iphone/')) {
+        // iphone/SCR-AUTH-001-login.html -> need to find iPad path
+        // Use data-iphone to find the matching sidebar item and get iPad path
+        if (currentElement) {
+          const onclick = currentElement.getAttribute('onclick');
+          if (onclick) {
+            const match = onclick.match(/loadScreen\('([^']+)'/);
+            if (match) {
+              ipadUrl = match[1];
+            }
+          }
+        }
+        iphoneUrl = currentScreen;
+      } else {
+        // currentScreen is iPad path, derive iPhone path
+        if (currentElement) {
+          const dataIphone = currentElement.getAttribute('data-iphone');
+          if (dataIphone) {
+            iphoneUrl = dataIphone;
+          } else {
+            iphoneUrl = currentScreen.replace(/^([a-z]+)\//, 'iphone/');
+          }
         }
       }
+
+      // Set iPad iframes to iPad URL
+      document.getElementById('preview-iframe-ipad').src = ipadUrl;
+      document.getElementById('preview-iframe-ipad-mini').src = ipadUrl;
+
+      // Set iPhone iframe to iPhone URL
+      document.getElementById('preview-iframe-iphone').src = iphoneUrl;
     }
 
     // Sync sidebar when iframe navigates
@@ -649,11 +669,17 @@
       const screenParam = urlParams.get('screen');
 
       if (screenParam) {
+        // Auto-detect device from screen path
+        // If path starts with "iphone/", automatically switch to iPhone device
+        if (screenParam.startsWith('iphone/') && currentDevice !== 'iphone') {
+          setDevice('iphone');
+        }
+
         const screenItems = document.querySelectorAll('.screen-item');
         let foundItem = null;
 
-        // Extract screen ID (e.g., "SCR-AUTH-004" from "iphone/SCR-AUTH-004-role.html")
-        const screenIdMatch = screenParam.match(/SCR-[A-Z]+-\d+/);
+        // Extract screen ID (e.g., "SCR-AUTH-004" or "SCR-AUTH-003a" from "iphone/SCR-AUTH-004-role.html")
+        const screenIdMatch = screenParam.match(/SCR-[A-Z]+-\d+[a-z]?/);
         const screenId = screenIdMatch ? screenIdMatch[0] : null;
 
         screenItems.forEach(item => {
@@ -667,20 +693,14 @@
             foundItem = item;
           } else if (screenId && onclick && onclick.includes(screenId)) {
             foundItem = item;
+          } else if (screenId && dataIphone && dataIphone.includes(screenId)) {
+            foundItem = item;
           }
         });
 
         if (foundItem) {
-          // Update currentScreen based on device type
-          let targetScreen = screenParam;
-          if (currentDevice === 'iphone') {
-            const iphoneUrl = foundItem.getAttribute('data-iphone');
-            if (iphoneUrl) {
-              targetScreen = iphoneUrl;
-              currentScreen = iphoneUrl;
-            }
-          }
-          loadScreen(targetScreen, foundItem);
+          // Load the screen using the actual URL parameter (which already contains correct device path)
+          loadScreen(screenParam, foundItem);
 
           // Expand parent module section if collapsed
           const parentSection = foundItem.closest('.module-section');
