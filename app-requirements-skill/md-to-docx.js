@@ -2018,21 +2018,28 @@ function createTable(headers, rows) {
         })]
       }))
     }),
-    ...rows.map((row, rowIndex) => new TableRow({
-      cantSplit: true,  // Don't split data rows across pages
-      children: row.map((cell, i) => new TableCell({
-        borders: cellBorders,
-        width: { size: columnWidths[i], type: WidthType.DXA },
-        margins: { top: 40, bottom: 40, left: 80, right: 80 },
-        children: [new Paragraph({
-          spacing: { after: 0 },
-          keepLines: noWrapColumns[i],  // ID 欄位不換行
-          // First row keeps with header, others don't need keepNext
-          keepNext: rowIndex === 0,
-          children: parseInlineFormatting(cell, FONT_SIZE.TABLE)
-        })]
-      }))
-    }))
+    ...rows.map((row, rowIndex) => {
+      // Ensure row has same number of cells as headers
+      const paddedRow = [...row];
+      while (paddedRow.length < numCols) {
+        paddedRow.push('');
+      }
+      return new TableRow({
+        cantSplit: true,  // Don't split data rows across pages
+        children: paddedRow.slice(0, numCols).map((cell, i) => new TableCell({
+          borders: cellBorders,
+          width: { size: columnWidths[i] || Math.floor(9360 / numCols), type: WidthType.DXA },
+          margins: { top: 40, bottom: 40, left: 80, right: 80 },
+          children: [new Paragraph({
+            spacing: { after: 0 },
+            keepLines: noWrapColumns[i],  // ID 欄位不換行
+            // First row keeps with header, others don't need keepNext
+            keepNext: rowIndex === 0,
+            children: parseInlineFormatting(cell || '', FONT_SIZE.TABLE)
+          })]
+        }))
+      });
+    })
   ];
 
   return new Table({ columnWidths: columnWidths, rows: tableRows });
@@ -2073,6 +2080,9 @@ function parseDocumentStructure(content, outputDir) {
         structure.coverInfo.date = trimmed;
       } else if (trimmed.toLowerCase().includes('table of contents') || trimmed.startsWith('## Table of Contents') || trimmed === '## 目錄') {
         section = 'toc';
+      } else if (trimmed === '## 文件資訊' || trimmed.includes('文件資訊')) {
+        // Chinese document format: skip to revision section
+        section = 'revision';
       }
       i++;
       continue;
@@ -2100,14 +2110,29 @@ function parseDocumentStructure(content, outputDir) {
 
     // Detect revision history
     if (section === 'revision') {
-      if (trimmed.startsWith('## 1') || trimmed === '---' || (trimmed.startsWith('## ') && !trimmed.toLowerCase().includes('revision') && !trimmed.includes('修訂'))) {
-        if (trimmed === '---') {
-          i++;
-          continue;
-        }
+      // Enter main content when encountering:
+      // - ## 1 or ## 1. (English numbered section)
+      // - --- (separator, skip it)
+      // - ## with non-revision/non-document-info content (main chapter)
+      const isMainSectionStart =
+        trimmed.startsWith('## 1') ||
+        (trimmed.startsWith('## ') &&
+         !trimmed.toLowerCase().includes('revision') &&
+         !trimmed.includes('修訂') &&
+         !trimmed.includes('文件資訊') &&
+         !trimmed.includes('參考文件') &&
+         !trimmed.includes('Software Design Description'));
+
+      if (trimmed === '---') {
+        i++;
+        continue;
+      }
+
+      if (isMainSectionStart) {
         section = 'main';
         continue;  // Don't i++, let main section handle this line
       }
+
       if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
         structure.revisionHistory.push(line);
       }

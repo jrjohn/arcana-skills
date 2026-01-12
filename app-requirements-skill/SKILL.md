@@ -54,6 +54,9 @@ description: |
   ⚠️ 需求收集階段 UI 需求：開始需求收集時，必須先啟用 app-uiux-designer.skill 詢問 UI 需求。
   ⚠️ UI Flow 必須產出：SDD 完成後，必須啟用 app-uiux-designer.skill 產生 HTML UI Flow，不可跳過。
   ⚠️ 可點擊元素覆蓋：UI Flow 中每個可點擊元素（按鈕、連結、Tab）必須有對應的目標畫面，確保導航完整。
+  ⚠️ **模板格式強制**：SRS/SDD 必須使用本 Skill 的模板格式，否則 md-to-docx.js 轉換會失敗。禁止使用自訂中文標題結構。
+     初始化專案請執行：`node [SKILL_DIR]/scripts/init-project.js [PROJECT_DIR]`
+     （跨平台相容：Windows/macOS/Linux）
 
   【🚀 需求收集階段 - UI 需求詢問 (Critical - 最先執行)】
   當開始需求收集時，必須立即啟用 app-uiux-designer.skill 詢問以下 UI 需求：
