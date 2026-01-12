@@ -12,6 +12,8 @@ Enterprise-grade development skills collection for Claude Code CLI.
 curl -fsSL https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.sh | bash
 ```
 
+> **Note**: Pipe mode automatically installs all skills and auto-configures settings.
+
 #### Option 2: Clone and Install
 
 ```bash
@@ -32,71 +34,26 @@ cd arcana-skills
 
 ### Windows
 
-#### Option 1: Command Prompt (cmd.exe) One-Line Install
-
-```cmd
-curl -fsSL https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.bat -o install.bat && install.bat
-```
-
-#### Option 2: PowerShell One-Line Install
-
-> **Note**: This command must be run in **PowerShell**, not in Command Prompt (cmd.exe).
+#### Option 1: PowerShell One-Line Install (Recommended)
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.ps1 | iex
 ```
 
-#### Option 3: Clone and Install
+#### Option 2: Clone and Install
 
-**PowerShell:**
 ```powershell
 git clone https://github.com/jrjohn/arcana-skills.git
 cd arcana-skills
 .\install.ps1
 ```
 
-**Command Prompt (cmd.exe):**
-```cmd
-git clone https://github.com/jrjohn/arcana-skills.git
-cd arcana-skills
-install.bat
-```
+#### Installation Options
 
-#### Option 4: Batch File (Double-click)
-
-Download `install.bat` and double-click to run.
-
-#### Windows Installation Options
-
-**PowerShell:**
 ```powershell
 .\install.ps1           # Interactive installation
 .\install.ps1 -All      # Install all skills
-.\install.ps1 -WSL      # Install to WSL2
-.\install.ps1 -WSL -All # Install all skills to WSL2
 ```
-
-**Command Prompt (cmd.exe):**
-```cmd
-install.bat             # Interactive installation
-install.bat -All        # Install all skills
-install.bat -WSL        # Install to WSL2
-install.bat -WSL -All   # Install all skills to WSL2
-```
-
-### WSL2 (Windows Subsystem for Linux)
-
-If you prefer using WSL2, you can either:
-
-1. **From Windows PowerShell** - Use the `-WSL` flag:
-   ```powershell
-   .\install.ps1 -WSL
-   ```
-
-2. **From WSL2 Terminal** - Use the bash installer directly:
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.sh | bash
-   ```
 
 ## Included Skills
 
@@ -119,11 +76,11 @@ If you prefer using WSL2, you can either:
 |-------|-------------|
 | `app-uiux-designer.skill` | Enterprise-grade UI/UX design expert (SRS/SDD → Batch UI Generation, Visual Style Extraction, Motion Design, Dark Mode, i18n Localization, Design Review) |
 
-### Domain-Specific Skills
+### Requirements & Documentation Skills
 
 | Skill | Description |
 |-------|-------------|
-| `medical-software-requirements-skill` | Medical device software requirements gathering and documentation (IEC 62304 compliant) |
+| `app-requirements-skill` | IEC 62304 compliant software requirements gathering and documentation (SRS/SDD/SWD/STP/STC/SVV/RTM with 100% traceability) |
 
 ## Uninstallation
 
@@ -168,18 +125,15 @@ Copy-Item -Recurse ios-developer-skill "$env:USERPROFILE\.claude\skills\"
 arcana-skills/
 ├── install.sh                          # Installation script (macOS/Linux)
 ├── install.ps1                         # Installation script (Windows PowerShell)
-├── install.bat                         # Installation script (Windows Batch)
 ├── uninstall.sh                        # Uninstallation script
 ├── README.md                           # This file
-├── ios-developer-skill/                # iOS Development Skill
-│   ├── SKILL.md                        # Skill definition (required)
-│   ├── README.md                       # Documentation
-│   ├── reference.md                    # API reference
-│   ├── examples.md                     # Examples
-│   ├── patterns.md                     # Design patterns
-│   ├── patterns/                       # Pattern details
-│   ├── checklists/                     # Checklists
-│   └── verification/                   # Verification commands
+├── config/                             # Auto-configuration templates
+│   ├── settings.template.json          # Claude Code settings
+│   ├── CLAUDE.template.md              # CLAUDE.md template
+│   ├── statusline-command.sh           # Status line script
+│   └── hooks/                          # Hook scripts
+│       └── validate-ui-flow.sh
+├── ios-developer-skill/
 ├── android-developer-skill/
 ├── angular-developer-skill/
 ├── react-developer-skill/
@@ -187,17 +141,17 @@ arcana-skills/
 ├── python-developer-skill/
 ├── springboot-developer-skill/
 ├── windows-developer-skill/
-├── medical-software-requirements-skill/
+├── app-requirements-skill/
 └── app-uiux-designer.skill/
 ```
 
 ## System Requirements
 
-- **macOS / Linux**: Bash, Git, curl
-- **Windows**: PowerShell 5.1+ or PowerShell Core, Git, curl (Windows 10+)
-- **Windows (WSL2)**: WSL2 with Ubuntu or other Linux distribution
+- **macOS / Linux**: Bash, Git, curl, rsync
+- **Windows**: PowerShell 5.1+ or PowerShell Core, Git
 - Claude Code CLI (`npm install -g @anthropic-ai/claude-code`)
 - Node.js 18+ (required for some skills)
+- jq (optional, for settings auto-configuration on macOS/Linux)
 
 ## Verify Installation
 
@@ -241,12 +195,6 @@ git pull
 
 #### Option 1: One-Line Update (Recommended)
 
-**Command Prompt (cmd.exe):**
-```cmd
-curl -fsSL https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.bat -o install.bat && install.bat
-```
-
-**PowerShell:**
 ```powershell
 iwr -useb https://raw.githubusercontent.com/jrjohn/arcana-skills/main/install.ps1 | iex
 ```
