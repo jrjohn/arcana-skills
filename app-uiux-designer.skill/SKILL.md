@@ -367,6 +367,56 @@ Enterprise-grade App & Web UI/UX design guide.
     - Windows: `%USERPROFILE%\.claude\skills\app-requirements-skill\`
     - 或在 Claude Code 中直接執行 init-project.js，它會自動定位
 
+16. **⚠️ SDD 畫面覆蓋率驗證 (MANDATORY SDD Screen Coverage Verification)**
+
+    > **回補完成後，必須執行畫面覆蓋率驗證，確保 UI Flow 所有畫面都已回補到 SDD！**
+
+    **驗證腳本：**
+    ```bash
+    node ~/.claude/skills/app-requirements-skill/scripts/verify-sdd-screens.js [PROJECT_DIR]
+    ```
+
+    **驗證項目：**
+    | 檢查項目 | 說明 | 要求 |
+    |----------|------|------|
+    | UI Flow → SDD 覆蓋 | UI Flow 的每個 SCR-* 必須在 SDD 有對應章節 | 100% |
+    | 截圖存在性 | 每個畫面必須有對應的 .png 截圖 | 100% |
+    | Button Navigation | 每個畫面應有按鈕導航表格 | 建議 |
+
+    **輸出範例：**
+    ```
+    === SDD Screen Coverage Verification ===
+
+    Module Summary:
+    | Module | UI Flow | SDD | Coverage |
+    |--------|---------|-----|----------|
+    | AUTH   | 5       | 5   | ✅ 100% |
+    | SETTING | 12      | 12  | ✅ 100% |
+    ...
+
+    --- Verification Result ---
+    ✅ PASSED: All screens documented with screenshots
+    ```
+
+    **執行時機：**
+    | 事件 | 動作 |
+    |------|------|
+    | SRS/SDD 回補完成後 | **強制執行 verify-sdd-screens.js** |
+    | DOCX 重新產生前 | 確認覆蓋率 = 100% |
+    | 新增/刪除 UI Flow 畫面後 | 重新執行驗證 |
+
+    **驗證失敗處理：**
+    - 若覆蓋率 < 100%，腳本會列出缺少的畫面
+    - **必須**補齊缺少的畫面到 SDD 後才能繼續
+    - **禁止**在驗證未通過時產生 DOCX
+
+    **腳本功能：**
+    - 自動掃描 `04-ui-flow/` 目錄下所有 SCR-*.html 檔案
+    - 比對 `02-design/SDD-*.md` 中的 `### SCR-*` 章節
+    - 檢查 `02-design/images/` 目錄下的截圖
+    - 依模組分類顯示覆蓋率
+    - 列出所有缺少的畫面清單
+
 ---
 
 ## Template Location
@@ -476,6 +526,7 @@ AUTH, ONBOARD, DASH, VOCAB, TRAIN, REPORT, SETTING, DEVICE, REWARD
 | `scripts/generate-mermaid-flow.js` | Generate Mermaid flowcharts |
 | `templates/ui-flow/capture-screenshots.js` | Puppeteer screenshot capture |
 | `templates/ui-flow/validate-navigation.js` | **Navigation auto-scan validation (無需 puppeteer)** |
+| `app-requirements-skill/scripts/verify-sdd-screens.js` | **⚠️ SDD 畫面覆蓋率驗證 (必須 100%)** |
 
 ### Claude Code Hook (自動驗證)
 
@@ -586,7 +637,13 @@ Step 6: SRS/SDD 回補 (Feedback) ⚠️ 阻斷步驟
 │   └── 補充 SRS → SCR 對應 (必須)
 └── See: sdd-feedback.md
 
-Step 7: 重新產生 DOCX (Regenerate DOCX)
+Step 7: SDD 畫面覆蓋率驗證 (Screen Coverage Verification) ⚠️ 阻斷步驟
+├── 執行: node ~/.claude/skills/app-requirements-skill/scripts/verify-sdd-screens.js [PROJECT_DIR]
+├── 覆蓋率必須 = 100%
+├── 若有缺少畫面，必須補齊到 SDD 後重新驗證
+└── ⛔ 驗證失敗時禁止產生 DOCX
+
+Step 8: 重新產生 DOCX (Regenerate DOCX)
 ├── 移除 MD 手動編號
 ├── 轉換 SRS.md → SRS.docx
 └── 轉換 SDD.md → SDD.docx
@@ -656,7 +713,13 @@ See: `references/ui-flow-generation-workflow.md`, `references/screen-content-req
    - RTM: SRS → SCR 對應
    - See: Rule 14 and sdd-feedback.md
    ↓
-9. Regenerate DOCX (重新產生 DOCX)
+9. SDD Screen Coverage Verification (畫面覆蓋率驗證) ⚠️ 阻斷步驟
+   - Run: node ~/.claude/skills/app-requirements-skill/scripts/verify-sdd-screens.js [PROJECT_DIR]
+   - Must achieve 100% coverage
+   - ⛔ BLOCKED if verification fails
+   - See: Rule 16
+   ↓
+10. Regenerate DOCX (重新產生 DOCX)
    - 移除 MD 手動編號
    - SRS.md → SRS.docx
    - SDD.md → SDD.docx
