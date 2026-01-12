@@ -539,47 +539,61 @@
 
     // Sync sidebar when iframe navigates
     function syncSidebarFromIframe(iframeSrc) {
-      // Extract filename from URL (e.g., "DASH-001-home.html")
       const urlParts = iframeSrc.split('/');
       const filename = urlParts[urlParts.length - 1].split('?')[0].split('#')[0];
 
-      // Extract screen ID (e.g., "DASH-001" from "DASH-001-home.html" or "SCR-DASH-001" from "SCR-DASH-001-home.html")
-      const match = filename.match(/^(?:SCR-)?([A-Z]+-\d+)/);
-      if (!match) return;
+      // Extract screen ID (e.g., "SCR-AUTH-004" from "SCR-AUTH-004-role.html")
+      const screenIdMatch = filename.match(/SCR-[A-Z]+-\d+/);
+      if (!screenIdMatch) return;
 
-      const screenId = match[1];
+      const screenId = screenIdMatch[0];
 
-      // Find the matching screen item by searching for the screen ID in the text
+      // Also extract the relative path for data-iphone matching
+      const pathMatch = iframeSrc.match(/(?:iphone|auth|home|vocab|train|report|setting)\/[^?#]+/);
+      const relativePath = pathMatch ? pathMatch[0] : null;
+
       const screenItems = document.querySelectorAll('.screen-item');
       let foundItem = null;
 
       screenItems.forEach(item => {
+        const onclick = item.getAttribute('onclick');
+        const dataIphone = item.getAttribute('data-iphone');
         const text = item.textContent || item.innerText;
-        if (text.includes(screenId)) {
+
+        // Match by: data-iphone path, onclick path, or screen ID in text
+        if (relativePath && dataIphone && dataIphone.includes(relativePath)) {
+          foundItem = item;
+        } else if (relativePath && onclick && onclick.includes(relativePath)) {
+          foundItem = item;
+        } else if (text.includes(screenId)) {
           foundItem = item;
         }
       });
 
       if (foundItem && foundItem !== currentElement) {
-        // Remove active class from all screen items
         screenItems.forEach(item => {
           item.classList.remove('active');
         });
 
-        // Add active class to found item
         foundItem.classList.add('active');
         currentElement = foundItem;
 
-        // Update currentScreen from the onclick attribute
-        const onclick = foundItem.getAttribute('onclick');
-        if (onclick) {
-          const urlMatch = onclick.match(/loadScreen\('([^']+)'/);
-          if (urlMatch) {
-            currentScreen = urlMatch[1];
+        // Update currentScreen based on current device
+        if (currentDevice === 'iphone') {
+          const iphoneUrl = foundItem.getAttribute('data-iphone');
+          if (iphoneUrl) {
+            currentScreen = iphoneUrl;
+          }
+        } else {
+          const onclick = foundItem.getAttribute('onclick');
+          if (onclick) {
+            const urlMatch = onclick.match(/loadScreen\('([^']+)'/);
+            if (urlMatch) {
+              currentScreen = urlMatch[1];
+            }
           }
         }
 
-        // Scroll the active item into view
         foundItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }
@@ -635,20 +649,38 @@
       const screenParam = urlParams.get('screen');
 
       if (screenParam) {
-        // Find and click the matching screen item
         const screenItems = document.querySelectorAll('.screen-item');
         let foundItem = null;
 
+        // Extract screen ID (e.g., "SCR-AUTH-004" from "iphone/SCR-AUTH-004-role.html")
+        const screenIdMatch = screenParam.match(/SCR-[A-Z]+-\d+/);
+        const screenId = screenIdMatch ? screenIdMatch[0] : null;
+
         screenItems.forEach(item => {
           const onclick = item.getAttribute('onclick');
+          const dataIphone = item.getAttribute('data-iphone');
+
+          // Check onclick, data-iphone, or screen ID match
           if (onclick && onclick.includes(screenParam)) {
+            foundItem = item;
+          } else if (dataIphone && dataIphone.includes(screenParam)) {
+            foundItem = item;
+          } else if (screenId && onclick && onclick.includes(screenId)) {
             foundItem = item;
           }
         });
 
         if (foundItem) {
-          // Simulate click to load the screen
-          loadScreen(screenParam, foundItem);
+          // Update currentScreen based on device type
+          let targetScreen = screenParam;
+          if (currentDevice === 'iphone') {
+            const iphoneUrl = foundItem.getAttribute('data-iphone');
+            if (iphoneUrl) {
+              targetScreen = iphoneUrl;
+              currentScreen = iphoneUrl;
+            }
+          }
+          loadScreen(targetScreen, foundItem);
 
           // Expand parent module section if collapsed
           const parentSection = foundItem.closest('.module-section');
@@ -664,7 +696,7 @@
       }
     });
 
-    // Listen for postMessage from iframe
+    // Listen for postMessage from iframe (for navigation sync)
     window.addEventListener('message', function(event) {
       if (event.data && event.data.type === 'pageLoaded') {
         syncSidebarFromIframe(event.data.url || event.data.pathname);

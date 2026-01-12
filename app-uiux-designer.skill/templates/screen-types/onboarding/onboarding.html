@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{SCREEN_ID}} Onboarding</title>
+  <link rel="stylesheet" href="../shared/{{PROJECT_ID}}-theme.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white min-h-screen">
+  <!--
+  @screen-id: {{SCREEN_ID}}
+  @screen-name: Onboarding
+  @requirements: REQ-ONBOARD-001, REQ-ONBOARD-002, REQ-ONBOARD-003
+  @acceptance-criteria: AC-ONBOARD-001
+  -->
+
+  <!-- Onboarding Container -->
+  <div class="min-h-screen flex flex-col">
+    <!-- Skip Button -->
+    <header class="flex justify-end p-4">
+      <button onclick="location.href='../auth/SCR-AUTH-001-login.html'" class="text-gray-500 text-sm font-medium">
+        跳過
+      </button>
+    </header>
+
+    <!-- Slides Container -->
+    <main id="slides-container" class="flex-1 relative overflow-hidden">
+      <!-- Slide 1: Welcome -->
+      <div class="slide absolute inset-0 flex flex-col items-center px-8 transition-transform duration-300" data-slide="0">
+        <div class="flex-1 flex items-center justify-center">
+          <div class="w-64 h-64 bg-gradient-to-br from-blue-400 to-blue-600 rounded-3xl flex items-center justify-center shadow-lg">
+            <svg class="w-32 h-32 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+            </svg>
+          </div>
+        </div>
+        <div class="text-center pb-8">
+          <h2 class="text-2xl font-bold text-gray-900 mb-3">歡迎使用 {{PROJECT_NAME}}</h2>
+          <p class="text-gray-600 max-w-xs mx-auto">
+            讓您的生活更加便利，立即開始體驗全新功能。
+          </p>
+        </div>
+      </div>
+
+      <!-- Slide 2: Feature A -->
+      <div class="slide absolute inset-0 flex flex-col items-center px-8 transition-transform duration-300 translate-x-full" data-slide="1">
+        <div class="flex-1 flex items-center justify-center">
+          <div class="w-64 h-64 bg-gradient-to-br from-green-400 to-green-600 rounded-3xl flex items-center justify-center shadow-lg">
+            <svg class="w-32 h-32 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+        </div>
+        <div class="text-center pb-8">
+          <h2 class="text-2xl font-bold text-gray-900 mb-3">簡單易用</h2>
+          <p class="text-gray-600 max-w-xs mx-auto">
+            直覺的操作介面，讓您快速上手，無需學習。
+          </p>
+        </div>
+      </div>
+
+      <!-- Slide 3: Feature B -->
+      <div class="slide absolute inset-0 flex flex-col items-center px-8 transition-transform duration-300 translate-x-full" data-slide="2">
+        <div class="flex-1 flex items-center justify-center">
+          <div class="w-64 h-64 bg-gradient-to-br from-purple-400 to-purple-600 rounded-3xl flex items-center justify-center shadow-lg">
+            <svg class="w-32 h-32 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+          </div>
+        </div>
+        <div class="text-center pb-8">
+          <h2 class="text-2xl font-bold text-gray-900 mb-3">安全可靠</h2>
+          <p class="text-gray-600 max-w-xs mx-auto">
+            採用最高等級的安全機制，保護您的資料安全。
+          </p>
+        </div>
+      </div>
+
+      <!-- Slide 4: Get Started -->
+      <div class="slide absolute inset-0 flex flex-col items-center px-8 transition-transform duration-300 translate-x-full" data-slide="3">
+        <div class="flex-1 flex items-center justify-center">
+          <div class="w-64 h-64 bg-gradient-to-br from-orange-400 to-orange-600 rounded-3xl flex items-center justify-center shadow-lg">
+            <svg class="w-32 h-32 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+          </div>
+        </div>
+        <div class="text-center pb-8">
+          <h2 class="text-2xl font-bold text-gray-900 mb-3">準備開始</h2>
+          <p class="text-gray-600 max-w-xs mx-auto">
+            立即註冊或登入，開啟您的專屬體驗。
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <footer class="px-8 pb-8">
+      <!-- Page Indicators -->
+      <div class="flex justify-center space-x-2 mb-6">
+        <span class="indicator w-2 h-2 rounded-full bg-blue-600 transition-colors" data-index="0"></span>
+        <span class="indicator w-2 h-2 rounded-full bg-gray-300 transition-colors" data-index="1"></span>
+        <span class="indicator w-2 h-2 rounded-full bg-gray-300 transition-colors" data-index="2"></span>
+        <span class="indicator w-2 h-2 rounded-full bg-gray-300 transition-colors" data-index="3"></span>
+      </div>
+
+      <!-- Navigation Buttons -->
+      <div id="nav-buttons">
+        <button id="next-btn" onclick="nextSlide()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:bg-blue-700 transition-colors">
+          下一步
+        </button>
+      </div>
+
+      <!-- Final Buttons (hidden initially) -->
+      <div id="final-buttons" class="hidden space-y-3">
+        <button onclick="location.href='../auth/SCR-AUTH-002-register.html'" class="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:bg-blue-700 transition-colors">
+          立即註冊
+        </button>
+        <button onclick="location.href='../auth/SCR-AUTH-001-login.html'" class="w-full bg-white text-blue-600 py-4 rounded-xl font-semibold text-lg border-2 border-blue-600 hover:bg-blue-50 transition-colors">
+          已有帳號？登入
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    let currentSlide = 0;
+    const totalSlides = 4;
+    const slides = document.querySelectorAll('.slide');
+    const indicators = document.querySelectorAll('.indicator');
+    const navButtons = document.getElementById('nav-buttons');
+    const finalButtons = document.getElementById('final-buttons');
+    const nextBtn = document.getElementById('next-btn');
+
+    // Touch handling
+    let startX = 0;
+    let endX = 0;
+    const container = document.getElementById('slides-container');
+
+    container.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX;
+    });
+
+    container.addEventListener('touchend', (e) => {
+      endX = e.changedTouches[0].clientX;
+      handleSwipe();
+    });
+
+    function handleSwipe() {
+      const diff = startX - endX;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0 && currentSlide < totalSlides - 1) {
+          nextSlide();
+        } else if (diff < 0 && currentSlide > 0) {
+          prevSlide();
+        }
+      }
+    }
+
+    function updateSlides() {
+      slides.forEach((slide, index) => {
+        slide.classList.remove('translate-x-full', '-translate-x-full');
+        if (index < currentSlide) {
+          slide.classList.add('-translate-x-full');
+        } else if (index > currentSlide) {
+          slide.classList.add('translate-x-full');
+        }
+      });
+
+      indicators.forEach((ind, index) => {
+        ind.classList.toggle('bg-blue-600', index === currentSlide);
+        ind.classList.toggle('bg-gray-300', index !== currentSlide);
+      });
+
+      // Show final buttons on last slide
+      if (currentSlide === totalSlides - 1) {
+        navButtons.classList.add('hidden');
+        finalButtons.classList.remove('hidden');
+      } else {
+        navButtons.classList.remove('hidden');
+        finalButtons.classList.add('hidden');
+      }
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides - 1) {
+        currentSlide++;
+        updateSlides();
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 0) {
+        currentSlide--;
+        updateSlides();
+      }
+    }
+
+    function goToSlide(index) {
+      currentSlide = index;
+      updateSlides();
+    }
+
+    // Click on indicators
+    indicators.forEach(ind => {
+      ind.addEventListener('click', () => {
+        goToSlide(parseInt(ind.dataset.index));
+      });
+    });
+  </script>
+  <script src="../shared/notify-parent.js"></script>
+</body>
+</html>

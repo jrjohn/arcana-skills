@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{SCREEN_ID}} Loading</title>
+  <link rel="stylesheet" href="../shared/{{PROJECT_ID}}-theme.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    .animate-spin {
+      animation: spin 1s linear infinite;
+    }
+    .animate-pulse {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    .animate-bounce-1 {
+      animation: bounce 0.6s ease-in-out infinite;
+    }
+    .animate-bounce-2 {
+      animation: bounce 0.6s ease-in-out infinite 0.1s;
+    }
+    .animate-bounce-3 {
+      animation: bounce 0.6s ease-in-out infinite 0.2s;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!--
+  @screen-id: {{SCREEN_ID}}
+  @screen-name: Loading
+  @requirements: REQ-STATE-002
+  @acceptance-criteria: AC-STATE-002
+  -->
+
+  <!-- Main Content -->
+  <main class="flex flex-col items-center justify-center min-h-screen px-6">
+    <!-- Spinner Option -->
+    <div class="mb-8">
+      <div class="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+    </div>
+
+    <!-- Loading Text -->
+    <h2 class="text-lg font-semibold text-gray-900 mb-2">載入中</h2>
+    <p class="text-gray-500 text-center">請稍候...</p>
+
+    <!-- Bouncing Dots (Alternative) -->
+    <div class="flex items-center gap-2 mt-8">
+      <div class="w-3 h-3 bg-indigo-600 rounded-full animate-bounce-1"></div>
+      <div class="w-3 h-3 bg-indigo-600 rounded-full animate-bounce-2"></div>
+      <div class="w-3 h-3 bg-indigo-600 rounded-full animate-bounce-3"></div>
+    </div>
+  </main>
+
+  <!-- Auto-redirect script (for demo purposes) -->
+  <script>
+    // Simulate loading completion and redirect
+    // In production, this would be triggered by actual data loading
+    // setTimeout(() => {
+    //   location.href = '{{TARGET_LOADED}}';
+    // }, 2000);
+  </script>
+  <script src="../shared/notify-parent.js"></script>
+</body>
+</html>

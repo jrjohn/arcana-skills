@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{SCREEN_ID}} Settings</title>
+  <link rel="stylesheet" href="../shared/{{PROJECT_ID}}-theme.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!--
+  @screen-id: {{SCREEN_ID}}
+  @screen-name: Settings
+  @requirements: REQ-SETTING-001
+  @acceptance-criteria: AC-SETTING-001
+  -->
+
+  <!-- Navigation Bar -->
+  <header class="fixed top-0 left-0 right-0 h-14 bg-white border-b flex items-center px-4 z-50">
+    <button onclick="history.back()" class="p-2 -ml-2">
+      <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </button>
+    <h1 class="flex-1 text-center font-semibold text-gray-900">設定</h1>
+    <div class="w-10"></div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="pt-14 pb-24 px-4">
+    <!-- Profile Section -->
+    <div onclick="location.href='{{TARGET_PROFILE}}'" class="bg-white rounded-2xl p-4 mt-4 flex items-center gap-4 shadow-sm hover:shadow-md transition cursor-pointer">
+      <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center">
+        <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+      </div>
+      <div class="flex-1">
+        <h2 class="font-semibold text-gray-900">{{USER_NAME}}</h2>
+        <p class="text-sm text-gray-500">{{USER_EMAIL}}</p>
+      </div>
+      <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+    </div>
+
+    <!-- Account Settings -->
+    <div class="mt-6">
+      <h3 class="text-sm font-medium text-gray-500 mb-2 px-1">帳號設定</h3>
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <button onclick="location.href='{{TARGET_EDIT_PROFILE}}'" class="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50 border-b border-gray-100">
+          <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+            </svg>
+          </div>
+          <span class="flex-1 text-left text-gray-700">編輯個人資料</span>
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <button onclick="location.href='{{TARGET_CHANGE_PASSWORD}}'" class="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50 border-b border-gray-100">
+          <div class="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+            </svg>
+          </div>
+          <span class="flex-1 text-left text-gray-700">變更密碼</span>
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <button onclick="location.href='{{TARGET_LINKED_ACCOUNTS}}'" class="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50">
+          <div class="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+          </div>
+          <span class="flex-1 text-left text-gray-700">連結帳號</span>
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Preferences -->
+    <div class="mt-6">
+      <h3 class="text-sm font-medium text-gray-500 mb-2 px-1">偏好設定</h3>
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <button onclick="location.href='{{TARGET_NOTIFICATIONS_SETTINGS}}'" class="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50 border-b border-gray-100">
+          <div class="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+            </svg>
+          </div>
+          <span class="flex-1 text-left text-gray-700">通知設定</span>
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <button onclick="location.href='{{TARGET_APPEARANCE}}'" class="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50 border-b border-gray-100">
+          <div class="w-10 h-10 bg-pink-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+            </svg>
+          </div>
+          <span class="flex-1 text-left text-gray-700">外觀</span>
+          <span class="text-sm text-gray-400">淺色模式</span>
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <button onclick="location.href='{{TARGET_LANGUAGE}}'" class="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50">
+          <div class="w-10 h-10 bg-cyan-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+            </svg>
+          </div>
+          <span class="flex-1 text-left text-gray-700">語言</span>
+          <span class="text-sm text-gray-400">繁體中文</span>
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Support -->
+    <div class="mt-6">
+      <h3 class="text-sm font-medium text-gray-500 mb-2 px-1">支援</h3>
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <button onclick="location.href='{{TARGET_HELP}}'" class="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50 border-b border-gray-100">
+          <div class="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <span class="flex-1 text-left text-gray-700">幫助中心</span>
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <button onclick="location.href='{{TARGET_FEEDBACK}}'" class="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50 border-b border-gray-100">
+          <div class="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+            </svg>
+          </div>
+          <span class="flex-1 text-left text-gray-700">意見回饋</span>
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <button onclick="location.href='{{TARGET_ABOUT}}'" class="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50">
+          <div class="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <span class="flex-1 text-left text-gray-700">關於</span>
+          <span class="text-sm text-gray-400">v1.0.0</span>
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Logout -->
+    <div class="mt-6">
+      <button
+        onclick="location.href='{{TARGET_LOGOUT}}'"
+        class="w-full py-3.5 bg-white text-red-600 font-semibold rounded-2xl shadow-sm hover:bg-red-50 transition"
+      >
+        登出
+      </button>
+    </div>
+
+    <!-- Version Info -->
+    <p class="text-center text-xs text-gray-400 mt-6">
+      {{PROJECT_NAME}} v1.0.0
+    </p>
+  </main>
+
+  <!-- Tab Bar -->
+  <nav class="fixed bottom-0 left-0 right-0 h-16 bg-white border-t flex z-50">
+    <a href="{{TARGET_TAB_HOME}}" class="flex-1 flex flex-col items-center justify-center text-gray-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+      </svg>
+      <span class="text-xs mt-1">首頁</span>
+    </a>
+    <a href="{{TARGET_TAB_EXPLORE}}" class="flex-1 flex flex-col items-center justify-center text-gray-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <span class="text-xs mt-1">探索</span>
+    </a>
+    <a href="{{TARGET_TAB_LEARN}}" class="flex-1 flex flex-col items-center justify-center text-gray-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+      </svg>
+      <span class="text-xs mt-1">學習</span>
+    </a>
+    <a href="#" class="flex-1 flex flex-col items-center justify-center text-indigo-600">
+      <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+      <span class="text-xs mt-1 font-medium">設定</span>
+    </a>
+  </nav>
+
+  <script src="../shared/notify-parent.js"></script>
+</body>
+</html>

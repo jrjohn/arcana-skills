@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{SCREEN_ID}} {{SCREEN_NAME}}</title>
+  <link rel="stylesheet" href="../shared/{{PROJECT_ID}}-theme.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!--
+  @screen-id: {{SCREEN_ID}}
+  @screen-name: {{SCREEN_NAME}}
+  @requirements: REQ-{{MODULE}}-001
+  @acceptance-criteria: AC-{{MODULE}}-001
+  -->
+
+  <!-- Navigation Bar -->
+  <header class="fixed top-0 left-0 right-0 h-14 bg-white border-b flex items-center px-4 z-50">
+    <h1 class="flex-1 text-lg font-semibold text-gray-900">{{SCREEN_NAME}}</h1>
+    <button onclick="location.href='{{TARGET_ADD}}'" class="p-2 text-indigo-600">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- Search Bar -->
+  <div class="fixed top-14 left-0 right-0 bg-white px-4 py-3 border-b z-40">
+    <div class="relative">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <input
+        type="search"
+        placeholder="搜尋..."
+        class="w-full pl-10 pr-4 py-2.5 bg-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white border-transparent"
+      >
+    </div>
+  </div>
+
+  <!-- Filter Chips -->
+  <div class="fixed top-[7.5rem] left-0 right-0 bg-white px-4 py-2 border-b z-30 overflow-x-auto">
+    <div class="flex gap-2">
+      <button class="px-4 py-1.5 bg-indigo-600 text-white rounded-full text-sm font-medium whitespace-nowrap">
+        全部
+      </button>
+      <button class="px-4 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-200">
+        分類一
+      </button>
+      <button class="px-4 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-200">
+        分類二
+      </button>
+      <button class="px-4 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-200">
+        分類三
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <main class="pt-44 pb-20 px-4">
+    <!-- List Items -->
+    <div class="space-y-3">
+      <!-- Item 1 -->
+      <div
+        onclick="location.href='{{TARGET_DETAIL_1}}'"
+        class="bg-white rounded-xl p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition cursor-pointer"
+      >
+        <div class="w-14 h-14 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-7 h-7 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-semibold text-gray-900 truncate">項目標題一</h3>
+          <p class="text-sm text-gray-500 truncate">這是項目的簡短描述文字</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </div>
+
+      <!-- Item 2 -->
+      <div
+        onclick="location.href='{{TARGET_DETAIL_2}}'"
+        class="bg-white rounded-xl p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition cursor-pointer"
+      >
+        <div class="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-semibold text-gray-900 truncate">項目標題二</h3>
+          <p class="text-sm text-gray-500 truncate">另一個項目的描述內容</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </div>
+
+      <!-- Item 3 -->
+      <div
+        onclick="location.href='{{TARGET_DETAIL_3}}'"
+        class="bg-white rounded-xl p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition cursor-pointer"
+      >
+        <div class="w-14 h-14 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-7 h-7 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-semibold text-gray-900 truncate">項目標題三</h3>
+          <p class="text-sm text-gray-500 truncate">第三個項目的相關描述</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </div>
+
+      <!-- Item 4 -->
+      <div
+        onclick="location.href='{{TARGET_DETAIL_4}}'"
+        class="bg-white rounded-xl p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition cursor-pointer"
+      >
+        <div class="w-14 h-14 bg-pink-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-7 h-7 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-semibold text-gray-900 truncate">項目標題四</h3>
+          <p class="text-sm text-gray-500 truncate">最後一個示例項目</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </div>
+    </div>
+  </main>
+
+  <!-- Tab Bar -->
+  <nav class="fixed bottom-0 left-0 right-0 h-16 bg-white border-t flex z-50">
+    <a href="{{TARGET_TAB_HOME}}" class="flex-1 flex flex-col items-center justify-center text-gray-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+      </svg>
+      <span class="text-xs mt-1">首頁</span>
+    </a>
+    <a href="#" class="flex-1 flex flex-col items-center justify-center text-indigo-600">
+      <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+      </svg>
+      <span class="text-xs mt-1 font-medium">列表</span>
+    </a>
+    <a href="{{TARGET_TAB_SETTINGS}}" class="flex-1 flex flex-col items-center justify-center text-gray-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+      </svg>
+      <span class="text-xs mt-1">設定</span>
+    </a>
+  </nav>
+
+  <script src="../shared/notify-parent.js"></script>
+</body>
+</html>

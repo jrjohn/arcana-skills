@@ -48,7 +48,35 @@
       border: 1px solid rgba(0,0,0,0.05);
     }
 
-    /* Use IMG with screenshots (NOT scaled iframe) for better performance */
+    /* Use IFRAME for live preview (recommended for real-time updates) */
+    .screen-card .device-frame,
+    .screen-card .ipad-frame {
+      overflow: hidden;
+    }
+
+    /* iPad iframe: 1194×834 scaled to 200×140 = scale(0.168) */
+    body.device-ipad .screen-card .device-frame iframe,
+    body.device-ipad .screen-card .ipad-frame iframe {
+      width: 1194px;
+      height: 834px;
+      border: none;
+      transform: scale(0.168);
+      transform-origin: top left;
+      pointer-events: none; /* Prevent click interference */
+    }
+
+    /* iPhone iframe: 393×852 scaled to 120×260 = scale(0.305) */
+    body.device-iphone .screen-card .device-frame iframe,
+    body.device-iphone .screen-card .ipad-frame iframe {
+      width: 393px;
+      height: 852px;
+      border: none;
+      transform: scale(0.305);
+      transform-origin: top left;
+      pointer-events: none;
+    }
+
+    /* Fallback for IMG (screenshots) if iframe not available */
     .screen-card .device-frame img,
     .screen-card .ipad-frame img {
       width: 100%;
@@ -332,7 +360,16 @@
     IMPORTANT: Screen cards use onclick to open device-preview.html
     DO NOT use <a href="..."> which causes direct navigation
 
-    Pattern:
+    Pattern (IFRAME - Recommended for live preview):
+    <div class="screen-card module-{module}" style="left: Xpx; top: Ypx;" onclick="openScreen('{module}/SCR-{MODULE}-{NNN}-{name}.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">{MODULE}-{NNN}</div>
+        <iframe src="../{module}/SCR-{MODULE}-{NNN}-{name}.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-{MODULE}-{NNN} {Screen Name}</div>
+    </div>
+
+    Pattern (IMG - Fallback with screenshots):
     <div class="screen-card module-{module}" style="left: Xpx; top: Ypx;" onclick="openScreen('{module}/SCR-{MODULE}-{NNN}-{name}.html')">
       <div class="ipad-frame">
         <div class="screen-id">{MODULE}-{NNN}</div>
@@ -342,20 +379,20 @@
     </div>
     -->
 
-    <!-- AUTH-001 Login -->
+    <!-- AUTH-001 Login (using iframe live preview) -->
     <div class="screen-card module-auth" style="left: 60px; top: 200px;" onclick="openScreen('auth/SCR-AUTH-001-login.html')">
       <div class="ipad-frame">
         <div class="screen-id">AUTH-001</div>
-        <img src="../screenshots/auth/SCR-AUTH-001-login.png" alt="Login">
+        <iframe src="../auth/SCR-AUTH-001-login.html" loading="lazy"></iframe>
       </div>
       <div class="screen-label">SCR-AUTH-001 Login</div>
     </div>
 
-    <!-- AUTH-002 Register -->
+    <!-- AUTH-002 Register (using iframe live preview) -->
     <div class="screen-card module-auth" style="left: 320px; top: 200px;" onclick="openScreen('auth/SCR-AUTH-002-register.html')">
       <div class="ipad-frame">
         <div class="screen-id">AUTH-002</div>
-        <img src="../screenshots/auth/SCR-AUTH-002-register.png" alt="Register">
+        <iframe src="../auth/SCR-AUTH-002-register.html" loading="lazy"></iframe>
       </div>
       <div class="screen-label">SCR-AUTH-002 Register</div>
     </div>
@@ -396,19 +433,39 @@
     const urlParams = new URLSearchParams(window.location.search);
     const currentDevice = urlParams.get('device') || 'iphone';
 
-    // Update screenshot paths and layout based on device
+    // Update iframe paths and layout based on device
     function initDeviceScreenshots() {
-      const screenshotFolder = currentDevice === 'ipad' ? 'ipad' : 'iphone';
+      const screenshotFolder = currentDevice === 'ipad' ? '' : 'iphone/';
 
       // Apply device class to body for CSS styling
       document.body.classList.remove('device-ipad', 'device-iphone');
       document.body.classList.add('device-' + currentDevice);
 
-      // Update screenshot paths
+      // Update iframe src paths for device-specific screens
+      document.querySelectorAll('.screen-card iframe').forEach(iframe => {
+        const currentSrc = iframe.getAttribute('src');
+        if (currentSrc) {
+          // Convert path to device-specific version
+          // e.g., ../auth/SCR-AUTH-001.html → ../iphone/auth/SCR-AUTH-001.html
+          let newSrc = currentSrc;
+          if (currentDevice === 'iphone') {
+            // Add iphone/ prefix if not already present
+            if (!currentSrc.includes('/iphone/')) {
+              newSrc = currentSrc.replace('../', '../iphone/');
+            }
+          } else {
+            // Remove iphone/ prefix for iPad
+            newSrc = currentSrc.replace('/iphone/', '/');
+          }
+          iframe.setAttribute('src', newSrc);
+        }
+      });
+
+      // Fallback: Update screenshot IMG paths (if any)
       document.querySelectorAll('.screen-card img').forEach(img => {
         const currentSrc = img.getAttribute('src');
         if (currentSrc) {
-          const newSrc = currentSrc.replace(/\/(ipad|iphone)\//, '/' + screenshotFolder + '/');
+          const newSrc = currentSrc.replace(/\/(ipad|iphone)\//, '/' + (currentDevice === 'iphone' ? 'iphone' : '') + '/');
           img.setAttribute('src', newSrc);
         }
       });

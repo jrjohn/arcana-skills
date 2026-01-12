@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{SCREEN_ID}} Success</title>
+  <link rel="stylesheet" href="../shared/{{PROJECT_ID}}-theme.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes checkmark {
+      0% { stroke-dashoffset: 100; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes scale-in {
+      0% { transform: scale(0); opacity: 0; }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-checkmark {
+      stroke-dasharray: 100;
+      animation: checkmark 0.6s ease-out forwards;
+    }
+    .animate-scale-in {
+      animation: scale-in 0.4s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-b from-emerald-50 to-white min-h-screen">
+  <!--
+  @screen-id: {{SCREEN_ID}}
+  @screen-name: Success
+  @requirements: REQ-STATE-004
+  @acceptance-criteria: AC-STATE-004
+  -->
+
+  <!-- Main Content -->
+  <main class="flex flex-col items-center justify-center min-h-screen px-6 py-12">
+    <!-- Success Icon -->
+    <div class="w-32 h-32 mb-8 relative animate-scale-in">
+      <div class="absolute inset-0 bg-emerald-100 rounded-full"></div>
+      <svg class="absolute inset-0 w-full h-full p-8" viewBox="0 0 24 24" fill="none">
+        <path
+          class="animate-checkmark"
+          d="M5 13l4 4L19 7"
+          stroke="#10b981"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </div>
+
+    <!-- Success Message -->
+    <h2 class="text-2xl font-bold text-gray-900 mb-2 text-center">操作成功</h2>
+    <p class="text-gray-500 text-center mb-8 max-w-xs">
+      您的資料已成功儲存
+    </p>
+
+    <!-- Summary Card (Optional) -->
+    <div class="w-full max-w-sm bg-white rounded-2xl p-4 mb-8 shadow-sm">
+      <h3 class="text-sm font-medium text-gray-500 mb-3">摘要</h3>
+      <div class="space-y-2">
+        <div class="flex justify-between">
+          <span class="text-gray-600">項目</span>
+          <span class="font-medium text-gray-900">{{ITEM_NAME}}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-600">時間</span>
+          <span class="font-medium text-gray-900">剛剛</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-600">狀態</span>
+          <span class="font-medium text-emerald-600">已完成</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="w-full max-w-sm space-y-3">
+      <button
+        onclick="location.href='{{TARGET_VIEW_DETAIL}}'"
+        class="w-full py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition"
+      >
+        查看詳情
+      </button>
+
+      <button
+        onclick="location.href='{{TARGET_HOME}}'"
+        class="w-full py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition"
+      >
+        返回首頁
+      </button>
+
+      <button
+        onclick="location.href='{{TARGET_CREATE_ANOTHER}}'"
+        class="w-full py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition flex items-center justify-center gap-2"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        再建立一筆
+      </button>
+    </div>
+  </main>
+
+  <script src="../shared/notify-parent.js"></script>
+</body>
+</html>
