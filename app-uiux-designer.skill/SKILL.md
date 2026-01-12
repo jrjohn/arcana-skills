@@ -210,6 +210,36 @@ Enterprise-grade App & Web UI/UX design guide.
     <button onclick="location.href='SCR-SETTING-002-profile.html'">個人資料</button>
     ```
 
+13. **⚠️ index.html Device-Aware Links (裝置感知連結)**
+    - **禁止** 在 index.html 使用硬編碼的 `<a href="device-preview.html?screen=...">` 連結
+    - **必須** 使用 `onclick="openScreen(ipadPath, iphonePath)"` 函數
+    - 連結會根據當前選擇的裝置 (iPad/iPhone) 動態導向正確的畫面路徑
+    - See: `references/ui-gen-html.md#index-html-device-aware-screen-links-強制規則`
+    - See: `references/coverage-validation.md#17-device-aware-link-validation`
+
+    ```html
+    <!-- ❌ 禁止 - 硬編碼連結 -->
+    <a href="device-preview.html?screen=auth/SCR-AUTH-001-login.html">登入頁</a>
+
+    <!-- ✅ 正確 - Device-aware 連結 -->
+    <div onclick="openScreen('auth/SCR-AUTH-001-login.html', 'iphone/SCR-AUTH-001-login.html')"
+         class="screen-link cursor-pointer">登入頁</div>
+    ```
+
+    **必要的 JavaScript 函數 (index.html):**
+    ```javascript
+    function openScreen(ipadPath, iphonePath) {
+      const screenPath = currentDevice === 'iphone' ? iphonePath : ipadPath;
+      window.location.href = 'device-preview.html?screen=' + screenPath;
+    }
+    ```
+
+    **驗證命令：**
+    ```bash
+    # 應回傳 0 (無硬編碼連結)
+    grep -c 'href="device-preview.html?screen=' index.html
+    ```
+
 ---
 
 ## Template Location

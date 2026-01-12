@@ -333,3 +333,75 @@ document.addEventListener('DOMContentLoaded', function() {
 </body>
 </html>
 ```
+
+---
+
+## index.html Device-Aware Screen Links (強制規則)
+
+### ⚠️ 重要：禁止使用硬編碼連結
+
+在 `index.html` 中的畫面連結**必須**是 device-aware，根據選擇的裝置 (iPad/iPhone) 導向對應的畫面。
+
+### 錯誤寫法 (禁止)
+
+```html
+<!-- ❌ WRONG - 硬編碼連結，無法根據裝置切換 -->
+<a href="device-preview.html?screen=auth/SCR-AUTH-001-login.html" class="screen-link">
+  SCR-AUTH-001 登入頁
+</a>
+```
+
+### 正確寫法 (必須)
+
+```html
+<!-- ✅ CORRECT - Device-aware 連結 -->
+<div onclick="openScreen('auth/SCR-AUTH-001-login.html', 'iphone/SCR-AUTH-001-login.html')"
+     class="screen-link cursor-pointer">
+  SCR-AUTH-001 登入頁
+</div>
+```
+
+### 必要的 JavaScript 函數
+
+```javascript
+// 必須在 index.html 中包含此函數
+let currentDevice = 'iphone'; // 預設裝置
+
+function switchDevice(device) {
+  currentDevice = device;
+  // Update toggle button states...
+}
+
+/**
+ * Device-aware screen navigation
+ * @param {string} ipadPath - iPad screen path (e.g., 'auth/SCR-AUTH-001.html')
+ * @param {string} iphonePath - iPhone screen path (e.g., 'iphone/SCR-AUTH-001.html')
+ */
+function openScreen(ipadPath, iphonePath) {
+  const screenPath = currentDevice === 'iphone' ? iphonePath : ipadPath;
+  window.location.href = 'device-preview.html?screen=' + screenPath;
+}
+```
+
+### 連結格式對照表
+
+| 模組 | iPad Path | iPhone Path |
+|------|-----------|-------------|
+| AUTH | `auth/SCR-AUTH-{NNN}-{name}.html` | `iphone/SCR-AUTH-{NNN}-{name}.html` |
+| VOCAB | `vocab/SCR-VOCAB-{NNN}-{name}.html` | `iphone/SCR-VOCAB-{NNN}-{name}.html` |
+| TRAIN | `train/SCR-TRAIN-{NNN}-{name}.html` | `iphone/SCR-TRAIN-{NNN}-{name}.html` |
+| HOME | `home/SCR-HOME-{NNN}-{name}.html` | `iphone/SCR-HOME-{NNN}-{name}.html` |
+| PROG | `report/SCR-PROG-{NNN}-{name}.html` | `iphone/SCR-PROG-{NNN}-{name}.html` |
+| SETTING | `setting/SCR-SETTING-{NNN}-{name}.html` | `iphone/SCR-SETTING-{NNN}-{name}.html` |
+
+### 驗證檢查
+
+產出 index.html 後，執行以下驗證：
+
+```bash
+# 檢查是否有硬編碼連結 (應該回傳 0)
+grep -c 'href="device-preview.html?screen=' index.html
+
+# 檢查 openScreen 函數是否存在 (應該回傳 1+)
+grep -c 'function openScreen' index.html
+```

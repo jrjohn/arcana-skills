@@ -213,18 +213,35 @@
           </div>
         </div>
         <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
-          <!-- Screen Links - Template -->
-          <a href="device-preview.html?screen=auth/SCR-AUTH-001-login.html" class="screen-link flex items-center gap-3 p-3 rounded-lg">
+          <!--
+            ⚠️ IMPORTANT: Device-Aware Screen Links
+            - Use onclick="openScreen(ipadPath, iphonePath)" instead of href
+            - First argument: iPad path (e.g., 'auth/SCR-AUTH-001-login.html')
+            - Second argument: iPhone path (e.g., 'iphone/SCR-AUTH-001-login.html')
+            - Add cursor-pointer class for visual feedback
+            - DO NOT use <a href="device-preview.html?screen=..."> (hardcoded links)
+          -->
+          <div onclick="openScreen('auth/SCR-AUTH-001-login.html', 'iphone/SCR-AUTH-001-login.html')" class="screen-link flex items-center gap-3 p-3 rounded-lg cursor-pointer">
             <span class="w-2 h-2 rounded-full status-done"></span>
             <span class="flex-1 text-gray-700">SCR-AUTH-001 登入頁</span>
             <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          </a>
-          <a href="device-preview.html?screen=auth/SCR-AUTH-002-register.html" class="screen-link flex items-center gap-3 p-3 rounded-lg">
+          </div>
+          <div onclick="openScreen('auth/SCR-AUTH-002-register.html', 'iphone/SCR-AUTH-002-register.html')" class="screen-link flex items-center gap-3 p-3 rounded-lg cursor-pointer">
             <span class="w-2 h-2 rounded-full status-done"></span>
             <span class="flex-1 text-gray-700">SCR-AUTH-002 註冊頁</span>
             <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          </a>
-          <!-- Add more screen links as needed -->
+          </div>
+          <div onclick="openScreen('auth/SCR-AUTH-003-forgot-password.html', 'iphone/SCR-AUTH-003-forgot-password.html')" class="screen-link flex items-center gap-3 p-3 rounded-lg cursor-pointer">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="flex-1 text-gray-700">SCR-AUTH-003 忘記密碼</span>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </div>
+          <div onclick="openScreen('auth/SCR-AUTH-003a-forgot-sent.html', 'iphone/SCR-AUTH-003a-forgot-sent.html')" class="screen-link flex items-center gap-3 p-3 rounded-lg cursor-pointer">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="flex-1 text-gray-700">SCR-AUTH-003a 重設郵件已發送</span>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </div>
+          <!-- Add more screen links using the same pattern -->
         </div>
       </div>
 
@@ -372,6 +389,23 @@
       // Update button states
       document.getElementById('btn-iphone').classList.toggle('active', device === 'iphone');
       document.getElementById('btn-ipad').classList.toggle('active', device === 'ipad');
+    }
+
+    /**
+     * Navigate to device-preview with correct device path
+     * ⚠️ IMPORTANT: All screen links must use this function for device-aware navigation
+     *
+     * @param {string} ipadPath - iPad screen path (e.g., 'auth/SCR-AUTH-001-login.html')
+     * @param {string} iphonePath - iPhone screen path (e.g., 'iphone/SCR-AUTH-001-login.html')
+     *
+     * Usage in HTML:
+     *   <div onclick="openScreen('auth/SCR-AUTH-001.html', 'iphone/SCR-AUTH-001.html')" class="screen-link cursor-pointer">
+     *
+     * DO NOT use: <a href="device-preview.html?screen=auth/SCR-AUTH-001.html">
+     */
+    function openScreen(ipadPath, iphonePath) {
+      const screenPath = currentDevice === 'iphone' ? iphonePath : ipadPath;
+      window.location.href = 'device-preview.html?screen=' + screenPath;
     }
   </script>
 

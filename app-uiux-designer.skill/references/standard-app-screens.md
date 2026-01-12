@@ -30,6 +30,25 @@
 | 標準消費 App | 30-50 | 電商、內容瀏覽、社群 |
 | 企業級 App | 50-100+ | 複雜流程、多角色、報表 |
 
+### P0 必要認證畫面 (MANDATORY AUTH Screens)
+
+⚠️ **強制要求**: 以下 AUTH 畫面為所有 App 必備項目：
+
+| 畫面 ID | 畫面名稱 | 必要性 | 說明 |
+|---------|----------|--------|------|
+| SCR-AUTH-001 | 登入畫面 | ★★★ 強制 | 用戶登入入口 |
+| SCR-AUTH-002 | 註冊畫面 | ★★★ 強制 | 新用戶註冊 |
+| SCR-AUTH-003 | 忘記密碼 | ★★★ 強制 | 密碼重設請求 |
+| SCR-AUTH-003a | 重設郵件已發送 | ★★★ 強制 | 確認重設郵件已發送 |
+| SCR-AUTH-004 | 角色選擇 | ★★☆ 視需求 | 多角色 App 必要 |
+| SCR-AUTH-005 | Email 驗證 | ★★☆ 視需求 | 需要郵件驗證時 |
+| SCR-AUTH-006 | MFA 驗證 | ★☆☆ 可選 | 多因素認證 |
+
+**驗證規則:**
+- 登入畫面的「忘記密碼」連結 **必須** 導向 SCR-AUTH-003
+- 禁止使用 `alert()` 替代實際畫面
+- 忘記密碼流程必須包含確認畫面 (SCR-AUTH-003a)
+
 ---
 
 ## 1. 啟動模組 (LAUNCH)
@@ -187,19 +206,122 @@
 
 ---
 
-### 2.3 忘記密碼 (SCR-AUTH-003-forgot-password)
+### 2.3 忘記密碼 (SCR-AUTH-003-forgot-password) ⚠️ MANDATORY
 
 **用途:** 請求密碼重設
 
-**必要元件:**
-| 元件 | 說明 |
-|------|------|
-| 說明文字 | "請輸入您的 Email，我們將發送重設連結" |
-| Email 輸入框 | 已註冊的 Email |
-| Submit 按鈕 | 發送重設連結 |
-| Back to Login | 返回登入畫面 |
+**⚠️ 強制要求:** 此畫面為 App 必備項目，禁止使用 `alert()` 替代。
 
-**成功畫面 (SCR-AUTH-003a):**
+**必要元件:**
+| 元件 | 必要性 | 說明 |
+|------|--------|------|
+| 返回按鈕 | ★★★ | 返回登入畫面 |
+| 標題 | ★★★ | "忘記密碼" 或 "重設密碼" |
+| 說明文字 | ★★★ | "請輸入您的 Email，我們將發送重設連結" |
+| Email 輸入框 | ★★★ | 已註冊的 Email |
+| Submit 按鈕 | ★★★ | "發送重設連結" |
+| Logo/插圖 | ★★☆ | 品牌識別或情境插圖 |
+
+**畫面結構:**
+```
+┌─────────────────────┐
+│ ← 返回              │
+│                     │
+│      [🔐 Icon]      │
+│                     │
+│    忘記密碼？       │
+│                     │
+│  請輸入您註冊時的   │
+│  Email 地址，我們   │
+│  會寄送密碼重設連結 │
+│                     │
+│  ┌───────────────┐  │
+│  │ 📧 請輸入Email │  │
+│  └───────────────┘  │
+│                     │
+│  [   發送重設連結  ]│
+│                     │
+│  記起密碼了？登入   │
+│                     │
+└─────────────────────┘
+```
+
+**iPad HTML 模板:**
+```html
+<!-- SCR-AUTH-003-forgot-password.html -->
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1194, height=834">
+  <title>忘記密碼</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/project-theme.css">
+</head>
+<body class="bg-gradient-to-br from-cyan-50 via-white to-teal-50">
+  <div class="w-[1194px] h-[834px] mx-auto flex">
+    <!-- Left Panel - Branding -->
+    <div class="w-1/2 flex flex-col items-center justify-center p-12">
+      <img src="../shared/mascot.png" alt="Mascot" class="w-64 h-64 mb-8">
+      <h1 class="text-4xl font-bold text-gray-800">AppName</h1>
+      <p class="text-gray-600 mt-2">品牌標語</p>
+    </div>
+
+    <!-- Right Panel - Form -->
+    <div class="w-1/2 flex flex-col items-center justify-center p-12">
+      <div class="w-full max-w-md">
+        <!-- Back Button -->
+        <button onclick="location.href='SCR-AUTH-001-login.html'"
+                class="mb-8 flex items-center gap-2 text-gray-600 hover:text-gray-800">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+          返回登入
+        </button>
+
+        <!-- Icon -->
+        <div class="w-20 h-20 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-6">
+          <svg class="w-10 h-10 text-cyan-600" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM12 17c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+          </svg>
+        </div>
+
+        <!-- Title -->
+        <h2 class="text-2xl font-bold text-center text-gray-800 mb-2">忘記密碼？</h2>
+        <p class="text-center text-gray-500 mb-8">請輸入您註冊時的 Email 地址，<br>我們會寄送密碼重設連結給您</p>
+
+        <!-- Email Input -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">電子郵件</label>
+          <div class="relative">
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+            </span>
+            <input type="email" placeholder="請輸入電子郵件"
+                   class="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent">
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <button onclick="location.href='SCR-AUTH-003a-forgot-sent.html'"
+                class="w-full py-4 bg-cyan-500 text-white font-semibold rounded-xl hover:bg-cyan-600 transition">
+          發送重設連結
+        </button>
+
+        <!-- Back to Login Link -->
+        <p class="text-center text-gray-500 mt-6">
+          記起密碼了？<button onclick="location.href='SCR-AUTH-001-login.html'" class="text-cyan-600 font-medium">登入</button>
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+```
+
+**成功畫面 (SCR-AUTH-003a-forgot-sent) ⚠️ MANDATORY:**
 ```
 ┌─────────────────────┐
 │                     │
@@ -214,8 +336,38 @@
 │                     │
 │  沒收到？重新發送   │
 │                     │
+│  [返回登入]         │
+│                     │
 └─────────────────────┘
 ```
+
+**成功畫面 HTML 模板:**
+```html
+<!-- SCR-AUTH-003a-forgot-sent.html -->
+<!-- 必要元件: 成功圖示、確認訊息、Email 顯示、重送按鈕、返回登入 -->
+<div class="text-center">
+  <div class="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+    <svg class="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+    </svg>
+  </div>
+  <h2 class="text-2xl font-bold text-gray-800 mb-2">Email 已發送！</h2>
+  <p class="text-gray-500 mb-4">請檢查您的信箱</p>
+  <p class="text-cyan-600 font-medium mb-8">user@example.com</p>
+  <button class="text-gray-500">沒收到？<span class="text-cyan-600 font-medium">重新發送</span></button>
+  <button onclick="location.href='SCR-AUTH-001-login.html'" class="block mx-auto mt-6 text-cyan-600 font-medium">
+    返回登入
+  </button>
+</div>
+```
+
+**錯誤狀態設計:**
+| 錯誤類型 | 提示訊息 |
+|----------|----------|
+| Email 格式錯誤 | "請輸入有效的 Email 地址" |
+| 帳號不存在 | "此 Email 尚未註冊" |
+| 發送過於頻繁 | "請稍後再試，{N} 秒後可重新發送" |
+| 網路錯誤 | "網路連線失敗，請檢查網路設定" |
 
 ---
 
