@@ -36,9 +36,15 @@ SKILLS=(
     "python-developer-skill"
     "springboot-developer-skill"
     "windows-developer-skill"
-    "medical-software-requirements-skill"
+    "app-requirements-skill"
     "app-uiux-designer.skill"
 )
+
+# Config paths
+CLAUDE_DIR="$HOME/.claude"
+USER_SETTINGS="$CLAUDE_DIR/settings.json"
+USER_CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
+HOOKS_DIR="$CLAUDE_DIR/hooks"
 
 # Print banner
 print_banner() {
@@ -161,8 +167,13 @@ check_prerequisites() {
     # Check if Node.js is installed (required)
     if ! command -v node &> /dev/null; then
         warn "Node.js is not installed."
-        read -p "  Install Node.js automatically? (Y/n) " -n 1 -r
-        echo
+        if [ -t 0 ]; then
+            read -p "  Install Node.js automatically? (Y/n) " -n 1 -r
+            echo
+        else
+            info "  Auto-installing Node.js (pipe mode)..."
+            REPLY="y"
+        fi
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             install_nodejs
         else
@@ -175,8 +186,13 @@ check_prerequisites() {
     # Check if Claude Code is installed (required)
     if ! command -v claude &> /dev/null; then
         warn "Claude Code CLI not found."
-        read -p "  Install Claude Code CLI automatically? (Y/n) " -n 1 -r
-        echo
+        if [ -t 0 ]; then
+            read -p "  Install Claude Code CLI automatically? (Y/n) " -n 1 -r
+            echo
+        else
+            info "  Auto-installing Claude Code CLI (pipe mode)..."
+            REPLY="y"
+        fi
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             install_claude_cli
         else
@@ -187,6 +203,215 @@ check_prerequisites() {
     fi
 
     success "Prerequisites check passed"
+}
+
+# Check and install jq if needed (for JSON merging)
+ensure_jq() {
+    if command -v jq &> /dev/null; then
+        return 0
+    fi
+
+    warn "jq is not installed (needed for settings merge)."
+    if [ -t 0 ]; then
+        read -p "  Install jq automatically? (Y/n) " -n 1 -r
+        echo
+    else
+        info "  Auto-installing jq (pipe mode)..."
+        REPLY="y"
+    fi
+
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        warn "Skipping settings.json merge (jq not available)"
+        return 1
+    fi
+
+    info "Installing jq..."
+    case "$(uname -s)" in
+        Darwin*)
+            if command -v brew &> /dev/null; then
+                brew install jq
+            else
+                error "Homebrew not found. Please install jq manually: brew install jq"
+                return 1
+            fi
+            ;;
+        Linux*)
+            if command -v apt-get &> /dev/null; then
+                sudo apt-get install -y jq
+            elif command -v yum &> /dev/null; then
+                sudo yum install -y jq
+            elif command -v pacman &> /dev/null; then
+                sudo pacman -S jq
+            else
+                error "Package manager not found. Please install jq manually."
+                return 1
+            fi
+            ;;
+        *)
+            error "Unsupported OS. Please install jq manually."
+            return 1
+            ;;
+    esac
+
+    if command -v jq &> /dev/null; then
+        success "jq installed successfully"
+        return 0
+    else
+        error "jq installation failed"
+        return 1
+    fi
+}
+
+# Generate skill permissions JSON array from SKILLS array
+generate_skill_permissions() {
+    local permissions=""
+    for skill in "${SKILLS[@]}"; do
+        if [ -n "$permissions" ]; then
+            permissions="$permissions,"
+        fi
+        permissions="$permissions\"Skill($skill)\""
+    done
+    echo "[$permissions]"
+}
+
+# Merge settings.json
+merge_settings() {
+    local template_settings="$SCRIPT_DIR/config/settings.template.json"
+
+    if [ ! -f "$template_settings" ]; then
+        warn "settings.template.json not found, skipping settings merge"
+        return 0
+    fi
+
+    # Ensure jq is available
+    if ! ensure_jq; then
+        return 0
+    fi
+
+    info "Merging settings.json..."
+
+    # Generate dynamic skill permissions from SKILLS array
+    local skill_perms
+    skill_perms=$(generate_skill_permissions)
+
+    # Create enriched template with dynamic skill permissions
+    local enriched_template
+    enriched_template=$(jq --argjson skills "$skill_perms" '
+        .permissions.allow = (.permissions.allow + $skills | unique)
+    ' "$template_settings")
+
+    # Create user settings if not exists
+    if [ ! -f "$USER_SETTINGS" ]; then
+        info "  Creating new settings.json"
+        echo "$enriched_template" > "$USER_SETTINGS"
+        success "Settings configured"
+        return 0
+    fi
+
+    # Backup existing settings
+    cp "$USER_SETTINGS" "$USER_SETTINGS.backup"
+    info "  Backed up existing settings to settings.json.backup"
+
+    # Deep merge using jq (preserves user's existing settings while adding new ones)
+    echo "$enriched_template" | jq -s '
+        def deep_merge(a; b):
+            a as $a | b as $b |
+            if ($a | type) == "object" and ($b | type) == "object" then
+                ($a | keys) + ($b | keys) | unique |
+                map({(.): deep_merge($a[.]; $b[.])}) | add
+            elif $b == null then $a
+            else $b
+            end;
+        deep_merge(.[0]; .[1])
+    ' "$USER_SETTINGS.backup" - > "$USER_SETTINGS.tmp"
+
+    if [ -s "$USER_SETTINGS.tmp" ]; then
+        mv "$USER_SETTINGS.tmp" "$USER_SETTINGS"
+        success "Settings merged successfully"
+    else
+        error "Settings merge failed, restoring backup"
+        mv "$USER_SETTINGS.backup" "$USER_SETTINGS"
+        rm -f "$USER_SETTINGS.tmp"
+    fi
+}
+
+# Merge CLAUDE.md
+merge_claude_md() {
+    local template_claude_md="$SCRIPT_DIR/config/CLAUDE.template.md"
+    local marker="# Arcana Skills Configuration"
+
+    if [ ! -f "$template_claude_md" ]; then
+        warn "CLAUDE.template.md not found, skipping CLAUDE.md merge"
+        return 0
+    fi
+
+    info "Configuring CLAUDE.md..."
+
+    # Create user CLAUDE.md if not exists
+    if [ ! -f "$USER_CLAUDE_MD" ]; then
+        info "  Creating new CLAUDE.md"
+        cp "$template_claude_md" "$USER_CLAUDE_MD"
+        success "CLAUDE.md configured"
+        return 0
+    fi
+
+    # Check if already contains our config
+    if grep -q "$marker" "$USER_CLAUDE_MD" 2>/dev/null; then
+        info "  CLAUDE.md already contains Arcana Skills config"
+
+        # In pipe mode, auto-update; otherwise ask
+        if [ -t 0 ]; then
+            read -p "  Update existing Arcana Skills config? (y/N) " -n 1 -r
+            echo
+        else
+            info "  Auto-updating config (pipe mode)..."
+            REPLY="y"
+        fi
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            info "  Keeping existing config"
+            return 0
+        fi
+
+        # Remove old config and add new
+        info "  Updating Arcana Skills config..."
+        sed -i.backup "/$marker/,/# End Arcana Skills/d" "$USER_CLAUDE_MD"
+    fi
+
+    # Append template to user's CLAUDE.md
+    echo "" >> "$USER_CLAUDE_MD"
+    cat "$template_claude_md" >> "$USER_CLAUDE_MD"
+    success "CLAUDE.md updated"
+}
+
+# Install hooks
+install_hooks() {
+    local hooks_source="$SCRIPT_DIR/config/hooks"
+
+    if [ ! -d "$hooks_source" ]; then
+        return 0
+    fi
+
+    info "Installing hooks..."
+    mkdir -p "$HOOKS_DIR"
+
+    # Copy all hook scripts
+    for hook_file in "$hooks_source"/*.sh; do
+        if [ -f "$hook_file" ]; then
+            local filename=$(basename "$hook_file")
+            cp "$hook_file" "$HOOKS_DIR/$filename"
+            chmod +x "$HOOKS_DIR/$filename"
+            info "  Installed hook: $filename"
+        fi
+    done
+
+    # Also install statusline command if exists
+    if [ -f "$SCRIPT_DIR/config/statusline-command.sh" ]; then
+        cp "$SCRIPT_DIR/config/statusline-command.sh" "$CLAUDE_DIR/statusline-command.sh"
+        chmod +x "$CLAUDE_DIR/statusline-command.sh"
+        info "  Installed statusline command"
+    fi
+
+    success "Hooks installed"
 }
 
 # Create skills directory if not exists
@@ -350,6 +575,12 @@ main() {
         esac
     done
 
+    # Auto-detect pipe mode (curl | bash) - stdin is not a terminal
+    if [ "$install_mode" = "interactive" ] && [ ! -t 0 ]; then
+        info "Detected pipe mode (curl | bash), installing all skills..."
+        install_mode="all"
+    fi
+
     check_prerequisites
     ensure_skills_dir
 
@@ -365,6 +596,13 @@ main() {
     else
         select_skills
     fi
+
+    # Configure settings and hooks
+    echo ""
+    info "Configuring Claude Code settings..."
+    merge_settings
+    merge_claude_md
+    install_hooks
 
     cleanup
     print_completion
