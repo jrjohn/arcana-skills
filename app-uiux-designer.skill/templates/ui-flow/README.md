@@ -2,6 +2,113 @@
 
 Enterprise-grade UI Flow 產出模板，提供完整的互動式原型導覽系統。
 
+---
+
+## Pre-Generation Checklist (生成前必檢清單)
+
+### 1. 畫面清單確認
+
+在生成 UI Flow 之前，必須先確認所有畫面已規劃完成：
+
+| 檢查項目 | 必須 | 說明 |
+|----------|------|------|
+| 所有 SDD 中的 SCR-* 已列出 | ★★★ | 確保每個需求都有對應畫面 |
+| Tab Bar 的每個 Tab 有對應畫面 | ★★★ | 例：首頁、搜尋、通知、我的 |
+| 表單 submit 有 success/error 畫面 | ★★★ | 表單提交需有回饋畫面 |
+| 列表項目 click 有 detail 畫面 | ★★★ | 列表項目需有詳情頁 |
+| Modal/Popup 有對應 trigger 按鈕 | ★★☆ | 彈窗需有觸發機制 |
+
+### 2. 導航流程確認
+
+```
+✅ 必須確認的導航流向：
+
+Login ──→ Dashboard (成功)
+     ──→ Error State (失敗)
+     ──→ Forgot Password
+     ──→ Register
+
+Register ──→ Verification
+        ──→ Error State
+
+Dashboard ──→ Feature Pages (via Tab Bar)
+         ──→ Profile
+         ──→ Settings
+         ──→ Notifications
+
+Settings ──→ Sub-settings (每個選項)
+        ──→ Logout → Login
+
+Every Screen ──→ Back (除 Login/Dashboard)
+```
+
+### 3. 可點擊元素映射表 (Critical)
+
+**生成任何畫面前，必須填寫此映射表：**
+
+| 來源畫面 | 可點擊元素 | 目標畫面 | 驗證狀態 |
+|----------|-----------|----------|----------|
+| SCR-AUTH-001 | 登入按鈕 | SCR-DASH-001 | ☐ |
+| SCR-AUTH-001 | 忘記密碼連結 | SCR-AUTH-003 | ☐ |
+| SCR-AUTH-001 | 註冊連結 | SCR-AUTH-002 | ☐ |
+| SCR-DASH-001 | Tab: 首頁 | SCR-DASH-001 | ☐ |
+| SCR-DASH-001 | Tab: 搜尋 | SCR-SEARCH-001 | ☐ |
+| SCR-DASH-001 | Tab: 通知 | SCR-NOTIFY-001 | ☐ |
+| SCR-DASH-001 | Tab: 我的 | SCR-PROFILE-001 | ☐ |
+| ... | ... | ... | ☐ |
+
+### 4. 模板使用確認
+
+從 `templates/screen-types/` 複製對應模板：
+
+| 畫面類型 | 模板路徑 | 必要導航 |
+|----------|----------|----------|
+| 登入頁 | `auth/login.html` | → Dashboard, → Register, → Forgot Password |
+| 註冊頁 | `auth/register.html` | → Verification, ← Login |
+| 列表頁 | `common/list-page.html` | → Detail, Tab Bar |
+| 詳情頁 | `common/detail-page.html` | ← Back, → Edit |
+| 表單頁 | `common/form-page.html` | → Success/Error, ← Cancel |
+| 設定頁 | `common/settings.html` | → Sub-settings, → Logout |
+| Dashboard | `common/dashboard.html` | Tab Bar, → Features |
+| Profile | `common/profile.html` | Tab Bar, → Settings, → Edit |
+| 搜尋頁 | `common/search.html` | Tab Bar, → Results |
+| Onboarding | `onboarding/onboarding.html` | → Login/Register |
+| 空狀態 | `states/empty-state.html` | → Create Action |
+| 載入中 | `states/loading-state.html` | 自動跳轉 |
+| 錯誤狀態 | `states/error-state.html` | → Retry, ← Back |
+| 成功狀態 | `states/success-state.html` | → Home, → Next Action |
+
+### 5. 禁止事項 (生成前確認)
+
+| 禁止項目 | 原因 | 檢查方式 |
+|----------|------|----------|
+| `onclick=""` 空字串 | 無效互動 | grep 'onclick=""' |
+| `href="#"` 懸空連結 | 無效導航 | grep 'href="#"' |
+| `onclick="javascript:void(0)"` | Placeholder | grep 'void(0)' |
+| Tab 無對應畫面 | 斷開流程 | 檢查 Tab Bar 所有 href |
+| 按鈕文字「...」或「TODO」 | Placeholder | 視覺檢查 |
+
+### 6. 生成後驗證
+
+```bash
+# 執行可點擊元素驗證
+node capture-screenshots.js --validate-only
+
+# 預期輸出
+# ✅ Coverage: 100%
+# ✅ All clickable elements have valid targets
+# ✅ No orphan screens detected
+
+# 若驗證失敗，顯示：
+# ❌ Coverage: 85%
+# ❌ Missing targets for:
+#    - SCR-AUTH-001: forgot-password-link → ???
+#    - SCR-DASH-001: tab-notifications → ???
+# ❌ Validation FAILED - fix issues before proceeding
+```
+
+---
+
 ## 目錄結構
 
 ```

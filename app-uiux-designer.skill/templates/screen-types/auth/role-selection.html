@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{SCREEN_ID}} Role Selection</title>
+  <link rel="stylesheet" href="../shared/{{PROJECT_ID}}-theme.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-b from-indigo-50 to-white min-h-screen">
+  <!--
+  @screen-id: {{SCREEN_ID}}
+  @screen-name: Role Selection
+  @requirements: REQ-AUTH-006
+  @acceptance-criteria: AC-AUTH-004
+  -->
+
+  <main class="flex flex-col items-center justify-center min-h-screen px-6 py-12">
+    <!-- Back Button -->
+    <div class="w-full max-w-md mb-6">
+      <button onclick="history.back()" class="flex items-center text-gray-600">
+        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        返回
+      </button>
+    </div>
+
+    <!-- Header -->
+    <h1 class="text-2xl font-bold text-gray-900 mb-2">選擇您的身分</h1>
+    <p class="text-gray-500 text-center mb-8">請選擇最符合您的使用情境</p>
+
+    <!-- Role Options -->
+    <div class="w-full max-w-md space-y-4">
+      <!-- Role 1: Student/Learner -->
+      <button
+        onclick="location.href='{{TARGET_DASH_STUDENT}}'"
+        class="w-full p-6 bg-white border-2 border-gray-200 rounded-2xl flex items-center gap-4 hover:border-indigo-500 hover:shadow-lg transition text-left"
+      >
+        <div class="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <h3 class="font-semibold text-gray-900 text-lg">學生/學習者</h3>
+          <p class="text-sm text-gray-500">我想學習新知識、完成課程</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </button>
+
+      <!-- Role 2: Teacher/Instructor -->
+      <button
+        onclick="location.href='{{TARGET_DASH_TEACHER}}'"
+        class="w-full p-6 bg-white border-2 border-gray-200 rounded-2xl flex items-center gap-4 hover:border-indigo-500 hover:shadow-lg transition text-left"
+      >
+        <div class="w-16 h-16 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <h3 class="font-semibold text-gray-900 text-lg">教師/講師</h3>
+          <p class="text-sm text-gray-500">我想建立課程、管理學生</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </button>
+
+      <!-- Role 3: Parent -->
+      <button
+        onclick="location.href='{{TARGET_DASH_PARENT}}'"
+        class="w-full p-6 bg-white border-2 border-gray-200 rounded-2xl flex items-center gap-4 hover:border-indigo-500 hover:shadow-lg transition text-left"
+      >
+        <div class="w-16 h-16 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <h3 class="font-semibold text-gray-900 text-lg">家長</h3>
+          <p class="text-sm text-gray-500">我想追蹤孩子的學習進度</p>
+        </div>
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Skip Option -->
+    <button
+      onclick="location.href='{{TARGET_DASH_HOME}}'"
+      class="mt-8 text-gray-500 hover:text-indigo-600 transition"
+    >
+      稍後再說
+    </button>
+  </main>
+
+  <script src="../shared/notify-parent.js"></script>
+</body>
+</html>

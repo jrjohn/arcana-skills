@@ -1,13 +1,34 @@
 ---
-name: medical-software-requirements-skill
+name: app-requirements-skill
 description: |
-  醫療器材軟體 IEC 62304 開發文件工具。當用戶提到以下任一關鍵字時，應主動啟用此 Skill：
+  IEC 62304 軟體開發文件工具。所有 App 開發皆遵循 IEC 62304 標準流程，產出完整文件套件。
+  當用戶提到以下任一關鍵字時，應主動啟用此 Skill：
 
-  【自動觸發關鍵字】SRS、SDD、SWD、STP、STC、SVV、RTM、軟體需求、軟體設計、需求規格、設計規格、
-  測試計畫、測試案例、追溯矩陣、IEC 62304、醫療軟體、DOCX 產出、文件產出、check compliance、
-  compliance check、需求收集、需求分析、架構設計、詳細設計、UI/UX 設計、SCR 畫面、
-  設計心理學、Design Psychology、認知負荷、Cognitive Load、漸進式揭露、Progressive Disclosure、
+  【通用 App 開發觸發詞】產生一個 App、開發 App、建立 App、製作 App、設計 App、
+  開發一套 App、我要開發、我想開發、幫我開發、開發需求、App 需求、
+  iOS App、Android App、跨平台 App、行動應用、手機應用、
+  需求規格書、設計規格書、軟體規格、UI Flow、互動原型、使用者流程、
+  學習 App、教育 App、電商 App、社群 App、工具 App、
+  SRS 軟體需求規格書、SDD 軟體設計規格書。
+
+  【IEC 62304 文件觸發詞】SRS、SDD、SWD、STP、STC、SVV、RTM、IEC 62304、
+  check compliance、compliance check、追溯矩陣、軟體需求、軟體設計、
+  測試計畫、測試案例、DOCX 產出、文件產出、需求收集、需求分析、架構設計、詳細設計。
+
+  【設計相關觸發詞】UI/UX 設計、SCR 畫面、設計心理學、Design Psychology、
+  認知負荷、Cognitive Load、漸進式揭露、Progressive Disclosure、
   Fitts' Law、Hick's Law、Dashboard、使用者流程、UX Flow、回補、feedback to docs。
+
+  【App 類型自動識別】（所有類型皆遵循 IEC 62304 流程）
+  偵測關鍵字自動載入對應需求模組：
+  • 學習/教育/單字/測驗/課程 → education-requirements.md
+  • 購物/電商/商品/購物車 → ecommerce-requirements.md
+  • 社群/好友/貼文/聊天 → social-requirements.md
+  • 醫療/健康/患者/處方 → healthcare-requirements.md
+  • 筆記/待辦/生產力 → productivity-requirements.md
+  • 其他 → standard-app-requirements.md
+
+  所有類型統一產出：SRS → SDD → SWD → STP → STC → SVV → RTM（100% 追溯）
 
   【功能說明】
   第一階段 - 需求收集：
@@ -31,6 +52,8 @@ description: |
   ⚠️ 標題編號：MD 檔案禁止包含手動編號，DOCX 轉換時自動產生階層式編號。
   ⚠️ SRS 回補強制：UI Flow 回補 SDD 後，必須同時回補 SRS (Screen References + Inferred Requirements)。
   ⚠️ 需求收集階段 UI 需求：開始需求收集時，必須先啟用 app-uiux-designer.skill 詢問 UI 需求。
+  ⚠️ UI Flow 必須產出：SDD 完成後，必須啟用 app-uiux-designer.skill 產生 HTML UI Flow，不可跳過。
+  ⚠️ 可點擊元素覆蓋：UI Flow 中每個可點擊元素（按鈕、連結、Tab）必須有對應的目標畫面，確保導航完整。
 
   【🚀 需求收集階段 - UI 需求詢問 (Critical - 最先執行)】
   當開始需求收集時，必須立即啟用 app-uiux-designer.skill 詢問以下 UI 需求：
@@ -108,9 +131,9 @@ description: |
      - 輸出: 02-design/SDD/images/iphone/*.png, images/ipad/*.png
 
   📌 Step 5: 重新產生 DOCX
-     - 前置: cd ~/.claude/skills/medical-software-requirements-skill && npm install docx
-     - SDD: node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SDD-*.md
-     - SRS: node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SRS-*.md
+     - 前置: cd ~/.claude/skills/app-requirements-skill && npm install docx
+     - SDD: node ~/.claude/skills/app-requirements-skill/md-to-docx.js SDD-*.md
+     - SRS: node ~/.claude/skills/app-requirements-skill/md-to-docx.js SRS-*.md
 
   📌 回補完成驗證清單
      - [ ] SDD.md 所有 SCR-* 區塊已更新
@@ -134,9 +157,10 @@ description: |
   • Node.js Backend → nodejs-developer-skill
 ---
 
-# 醫療器材軟體需求收集與文件產出 Skill
+# App 需求收集與文件產出 Skill (IEC 62304)
 
-本 Skill 提供完整的醫療軟體開發支援：從需求收集、IEC 62304 文件產出、到設計資產管理。
+本 Skill 提供完整的 App 開發支援：從需求收集、IEC 62304 文件產出、到設計資產管理。
+支援各類型 App：教育學習、電商、社群、生產力工具、醫療健康等。
 
 > **📖 詳細說明請參考 references/ 目錄下的文件**
 
@@ -162,6 +186,9 @@ description: |
 | VOCAB | 字庫 | TRAIN | 訓練 |
 | REPORT | 報告 | SETTING | 設定 |
 | DEVICE | 設備 | COM | 共用元件 |
+| EDU | 教育學習 | ECOM | 電商 |
+| SOCIAL | 社群 | PROD | 生產力 |
+| HEALTH | 醫療健康 | SYNC | 同步 |
 
 ---
 
@@ -169,21 +196,21 @@ description: |
 
 ```bash
 # 安裝依賴 (首次)
-cd ~/.claude/skills/medical-software-requirements-skill
+cd ~/.claude/skills/app-requirements-skill
 npm install docx
 
 # 轉換文件
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js <input.md>
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js <input.md>
 
 # 範例
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SRS-VocabKids-1.0.md
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SDD-VocabKids-1.0.md
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js SRS-VocabKids-1.0.md
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js SDD-VocabKids-1.0.md
 ```
 
 ### 移除 MD 手動編號
 
 ```bash
-bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh <file.md>
+bash ~/.claude/skills/app-requirements-skill/remove-heading-numbers.sh <file.md>
 ```
 
 ---
@@ -240,6 +267,16 @@ bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers
 ### 需求參考
 - `standard-app-requirements.md` - 標準 App 功能需求清單 (60+ 需求)
 
+### App 類型需求
+- `education-requirements.md` - 教育學習類 App 需求 (50+ 需求)
+- `ecommerce-requirements.md` - 電商類 App 需求 (43+ 需求)
+- `social-requirements.md` - 社群類 App 需求 (45+ 需求)
+- `productivity-requirements.md` - 生產力工具類 App 需求 (43+ 需求)
+- `healthcare-requirements.md` - 醫療健康類 App 需求 (41+ 需求)
+
+### Skill 整合
+- `skill-integration-guide.md` - 與 app-uiux-designer.skill 整合指南
+
 ---
 
 ## 專案目錄結構
@@ -255,6 +292,70 @@ bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers
 ├── 📁 07-verification/     # SVV
 └── 📁 08-traceability/     # RTM
 ```
+
+---
+
+## 驗證工具
+
+### 追溯驗證
+
+```bash
+# 驗證追溯覆蓋率
+node ~/.claude/skills/app-requirements-skill/scripts/verify-traceability.js [project-dir]
+
+# 輸出：traceability-report.json
+# Exit code: 0 = 通過, 1 = 失敗
+```
+
+### 合規檢查
+
+```bash
+# 執行完整合規檢查
+node ~/.claude/skills/app-requirements-skill/scripts/compliance-checker.js [project-dir]
+
+# 檢查項目：
+# - TRACE-100: 追溯覆蓋率 100%
+# - DOC-SYNC: 文件同步 (MD/DOCX)
+# - UI-IMAGES: SDD 嵌入 UI 圖片
+# - MERMAID: 圖表使用 Mermaid
+# - NO-MANUAL-NUM: 禁止手動編號
+# - SRS-FEEDBACK: SRS 回補完成
+# - UI-FLOW: UI Flow 已產出
+# - CLICK-COVER: 可點擊元素覆蓋
+
+# 輸出：compliance-report.json
+# Exit code: 0 = 合規, 1 = 不合規
+```
+
+### UI Flow 驗證
+
+```bash
+# 截圖 + 驗證
+cd 04-ui-flow
+node capture-screenshots.js
+
+# 僅驗證
+node capture-screenshots.js --validate-only
+
+# 強制截圖 (跳過驗證)
+node capture-screenshots.js --skip-validation
+```
+
+---
+
+## Skill 整合
+
+本 Skill 與 `app-uiux-designer.skill` 協作：
+
+| 階段 | 主導 Skill | 協作 Skill | 動作 |
+|------|-----------|-----------|------|
+| 需求收集 | app-requirements-skill | app-uiux-designer.skill | 詢問 UI 需求 |
+| SRS/SDD 產出 | app-requirements-skill | - | 文件產出 |
+| UI Flow 產生 | app-uiux-designer.skill | - | HTML 產生 |
+| 文件回補 | app-requirements-skill | app-uiux-designer.skill | SDD/SRS 更新 |
+| 驗證 | app-requirements-skill | - | 追溯/合規檢查 |
+
+> 詳細整合流程請參考：`references/skill-integration-guide.md`
 
 ---
 

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{SCREEN_ID}} Search</title>
+  <link rel="stylesheet" href="../shared/{{PROJECT_ID}}-theme.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!--
+  @screen-id: {{SCREEN_ID}}
+  @screen-name: Search
+  @requirements: REQ-SEARCH-001, REQ-SEARCH-002
+  @acceptance-criteria: AC-SEARCH-001
+  -->
+
+  <!-- Search Header -->
+  <header class="sticky top-0 bg-white border-b z-50">
+    <div class="flex items-center px-4 py-3">
+      <!-- Search Input -->
+      <div class="flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2">
+        <svg class="w-5 h-5 text-gray-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input
+          type="text"
+          id="search-input"
+          placeholder="搜尋..."
+          class="flex-1 bg-transparent outline-none text-gray-700"
+          oninput="handleSearchInput(this.value)"
+        >
+        <button id="clear-btn" onclick="clearSearch()" class="hidden">
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Cancel Button -->
+      <button onclick="history.back()" class="ml-3 text-blue-600 font-medium flex-shrink-0">
+        取消
+      </button>
+    </div>
+  </header>
+
+  <main class="pb-20">
+    <!-- Initial State: Search History & Trending -->
+    <div id="initial-state">
+      <!-- Search History -->
+      <section class="bg-white">
+        <div class="flex items-center justify-between px-4 py-3">
+          <h3 class="font-semibold text-gray-900">搜尋歷史</h3>
+          <button onclick="clearHistory()" class="text-sm text-gray-500">清除</button>
+        </div>
+        <div id="history-list" class="px-4 pb-4">
+          <div class="flex flex-wrap gap-2">
+            <button onclick="selectKeyword('iPhone 15')" class="flex items-center px-3 py-2 bg-gray-100 rounded-full text-sm text-gray-700 hover:bg-gray-200">
+              <span>iPhone 15</span>
+              <svg class="w-4 h-4 ml-1 text-gray-400" onclick="removeHistory(event, 'iPhone 15')" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+            <button onclick="selectKeyword('AirPods')" class="flex items-center px-3 py-2 bg-gray-100 rounded-full text-sm text-gray-700 hover:bg-gray-200">
+              <span>AirPods</span>
+              <svg class="w-4 h-4 ml-1 text-gray-400" onclick="removeHistory(event, 'AirPods')" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+            <button onclick="selectKeyword('無線充電')" class="flex items-center px-3 py-2 bg-gray-100 rounded-full text-sm text-gray-700 hover:bg-gray-200">
+              <span>無線充電</span>
+              <svg class="w-4 h-4 ml-1 text-gray-400" onclick="removeHistory(event, '無線充電')" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Trending Searches -->
+      <section class="bg-white mt-2">
+        <h3 class="px-4 py-3 font-semibold text-gray-900">熱門搜尋</h3>
+        <div class="px-4 pb-4">
+          <div class="flex flex-wrap gap-2">
+            <button onclick="selectKeyword('熱門商品')" class="px-4 py-2 bg-red-50 text-red-600 rounded-full text-sm font-medium hover:bg-red-100">
+              🔥 熱門商品
+            </button>
+            <button onclick="selectKeyword('新品上架')" class="px-4 py-2 bg-orange-50 text-orange-600 rounded-full text-sm font-medium hover:bg-orange-100">
+              ✨ 新品上架
+            </button>
+            <button onclick="selectKeyword('限時特價')" class="px-4 py-2 bg-yellow-50 text-yellow-600 rounded-full text-sm font-medium hover:bg-yellow-100">
+              💰 限時特價
+            </button>
+            <button onclick="selectKeyword('3C配件')" class="px-4 py-2 bg-blue-50 text-blue-600 rounded-full text-sm font-medium hover:bg-blue-100">
+              📱 3C配件
+            </button>
+            <button onclick="selectKeyword('生活用品')" class="px-4 py-2 bg-green-50 text-green-600 rounded-full text-sm font-medium hover:bg-green-100">
+              🏠 生活用品
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Recommended Categories -->
+      <section class="bg-white mt-2">
+        <h3 class="px-4 py-3 font-semibold text-gray-900">推薦分類</h3>
+        <div class="grid grid-cols-4 gap-4 px-4 pb-4">
+          <button onclick="location.href='../category/SCR-CATEGORY-001.html'" class="flex flex-col items-center">
+            <div class="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mb-2">
+              <svg class="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+              </svg>
+            </div>
+            <span class="text-xs text-gray-600">手機</span>
+          </button>
+          <button onclick="location.href='../category/SCR-CATEGORY-002.html'" class="flex flex-col items-center">
+            <div class="w-14 h-14 bg-purple-100 rounded-full flex items-center justify-center mb-2">
+              <svg class="w-7 h-7 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+            </div>
+            <span class="text-xs text-gray-600">電腦</span>
+          </button>
+          <button onclick="location.href='../category/SCR-CATEGORY-003.html'" class="flex flex-col items-center">
+            <div class="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mb-2">
+              <svg class="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+              </svg>
+            </div>
+            <span class="text-xs text-gray-600">耳機</span>
+          </button>
+          <button onclick="location.href='../category/SCR-CATEGORY-004.html'" class="flex flex-col items-center">
+            <div class="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center mb-2">
+              <svg class="w-7 h-7 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+            </div>
+            <span class="text-xs text-gray-600">配件</span>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Autocomplete Suggestions (hidden by default) -->
+    <div id="suggestions-state" class="hidden bg-white">
+      <div id="suggestions-list">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+
+    <!-- Search Results (hidden by default) -->
+    <div id="results-state" class="hidden">
+      <!-- Results Header -->
+      <div class="bg-white px-4 py-3 flex items-center justify-between border-b">
+        <span class="text-sm text-gray-500">找到 <span id="results-count">0</span> 個結果</span>
+        <div class="flex items-center space-x-2">
+          <button onclick="showFilterSheet()" class="flex items-center text-sm text-gray-700">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+            </svg>
+            篩選
+          </button>
+          <button onclick="toggleSortSheet()" class="flex items-center text-sm text-gray-700">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+            </svg>
+            排序
+          </button>
+        </div>
+      </div>
+
+      <!-- Results List -->
+      <div id="results-list" class="p-4 space-y-4">
+        <!-- Result Item Template -->
+        <button onclick="location.href='../product/SCR-PRODUCT-001-detail.html'" class="w-full bg-white rounded-xl shadow-sm overflow-hidden flex">
+          <div class="w-28 h-28 bg-gray-100 flex-shrink-0">
+            <div class="w-full h-full flex items-center justify-center text-gray-400">
+              <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="flex-1 p-3 text-left">
+            <h4 class="font-medium text-gray-900 line-clamp-2">搜尋結果商品名稱</h4>
+            <p class="text-sm text-gray-500 mt-1">商品描述...</p>
+            <div class="flex items-center justify-between mt-2">
+              <span class="text-lg font-bold text-red-600">$999</span>
+              <span class="text-xs text-gray-400">銷量 1.2K</span>
+            </div>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- No Results State (hidden by default) -->
+    <div id="no-results-state" class="hidden">
+      <div class="flex flex-col items-center justify-center py-20 px-8">
+        <svg class="w-20 h-20 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <h3 class="text-lg font-semibold text-gray-700 mb-2">找不到結果</h3>
+        <p class="text-gray-500 text-center mb-6">試試其他關鍵字或調整篩選條件</p>
+        <button onclick="clearSearch()" class="px-6 py-2 bg-blue-600 text-white rounded-full font-medium">
+          清除搜尋
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Tab Bar -->
+  <nav class="fixed bottom-0 left-0 right-0 h-16 bg-white border-t flex">
+    <a href="../dash/SCR-DASH-001-home.html" class="flex-1 flex flex-col items-center justify-center text-gray-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+      </svg>
+      <span class="text-xs mt-1">首頁</span>
+    </a>
+    <a href="#" class="flex-1 flex flex-col items-center justify-center text-blue-600">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <span class="text-xs mt-1">搜尋</span>
+    </a>
+    <a href="../notify/SCR-NOTIFY-001-list.html" class="flex-1 flex flex-col items-center justify-center text-gray-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+      </svg>
+      <span class="text-xs mt-1">通知</span>
+    </a>
+    <a href="../profile/SCR-PROFILE-001-view.html" class="flex-1 flex flex-col items-center justify-center text-gray-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+      </svg>
+      <span class="text-xs mt-1">我的</span>
+    </a>
+  </nav>
+
+  <script>
+    const searchInput = document.getElementById('search-input');
+    const clearBtn = document.getElementById('clear-btn');
+    const initialState = document.getElementById('initial-state');
+    const suggestionsState = document.getElementById('suggestions-state');
+    const resultsState = document.getElementById('results-state');
+    const noResultsState = document.getElementById('no-results-state');
+
+    function handleSearchInput(value) {
+      clearBtn.classList.toggle('hidden', !value);
+
+      if (!value) {
+        showState('initial');
+        return;
+      }
+
+      // Show suggestions while typing
+      showState('suggestions');
+      updateSuggestions(value);
+    }
+
+    function updateSuggestions(query) {
+      const suggestions = [
+        query + ' Pro',
+        query + ' 配件',
+        query + ' 保護殼',
+        query + ' 充電器',
+      ];
+
+      const list = document.getElementById('suggestions-list');
+      list.innerHTML = suggestions.map(s => `
+        <button onclick="performSearch('${s}')" class="w-full flex items-center px-4 py-3 hover:bg-gray-50 border-b">
+          <svg class="w-5 h-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <span class="text-gray-700">${s}</span>
+        </button>
+      `).join('');
+    }
+
+    function selectKeyword(keyword) {
+      searchInput.value = keyword;
+      performSearch(keyword);
+    }
+
+    function performSearch(query) {
+      searchInput.value = query;
+      clearBtn.classList.remove('hidden');
+
+      // Simulate search results
+      const hasResults = Math.random() > 0.2; // 80% chance of results
+
+      if (hasResults) {
+        showState('results');
+        document.getElementById('results-count').textContent = Math.floor(Math.random() * 100) + 1;
+      } else {
+        showState('no-results');
+      }
+    }
+
+    function clearSearch() {
+      searchInput.value = '';
+      clearBtn.classList.add('hidden');
+      showState('initial');
+      searchInput.focus();
+    }
+
+    function clearHistory() {
+      document.getElementById('history-list').innerHTML = '<p class="text-gray-500 text-sm">沒有搜尋歷史</p>';
+    }
+
+    function removeHistory(event, keyword) {
+      event.stopPropagation();
+      event.target.closest('button').remove();
+    }
+
+    function showState(state) {
+      initialState.classList.add('hidden');
+      suggestionsState.classList.add('hidden');
+      resultsState.classList.add('hidden');
+      noResultsState.classList.add('hidden');
+
+      switch(state) {
+        case 'initial':
+          initialState.classList.remove('hidden');
+          break;
+        case 'suggestions':
+          suggestionsState.classList.remove('hidden');
+          break;
+        case 'results':
+          resultsState.classList.remove('hidden');
+          break;
+        case 'no-results':
+          noResultsState.classList.remove('hidden');
+          break;
+      }
+    }
+
+    function showFilterSheet() {
+      // Navigate to filter screen
+      location.href = '../search/SCR-SEARCH-003-filters.html';
+    }
+
+    function toggleSortSheet() {
+      alert('顯示排序選項');
+    }
+  </script>
+  <script src="../shared/notify-parent.js"></script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{SCREEN_ID}} {{SCREEN_NAME}}</title>
+  <link rel="stylesheet" href="../shared/{{PROJECT_ID}}-theme.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!--
+  @screen-id: {{SCREEN_ID}}
+  @screen-name: {{SCREEN_NAME}}
+  @requirements: REQ-{{MODULE}}-001
+  @acceptance-criteria: AC-{{MODULE}}-001
+  -->
+
+  <!-- Navigation Bar -->
+  <header class="fixed top-0 left-0 right-0 h-14 bg-white border-b flex items-center px-4 z-50">
+    <button onclick="history.back()" class="p-2 -ml-2">
+      <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </button>
+    <h1 class="flex-1 text-center font-semibold text-gray-900">詳情</h1>
+    <button onclick="showModal('action-menu')" class="p-2 -mr-2">
+      <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- Main Content -->
+  <main class="pt-14 pb-24">
+    <!-- Hero Image -->
+    <div class="w-full h-64 bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
+      <svg class="w-24 h-24 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+      </svg>
+    </div>
+
+    <!-- Content Section -->
+    <div class="px-4 py-6">
+      <!-- Title & Meta -->
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">項目標題</h2>
+        <div class="flex items-center gap-4 text-sm text-gray-500">
+          <span class="flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            2024-01-15
+          </span>
+          <span class="flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+            1,234 次瀏覽
+          </span>
+        </div>
+      </div>
+
+      <!-- Tags -->
+      <div class="flex flex-wrap gap-2 mb-6">
+        <span class="px-3 py-1 bg-indigo-100 text-indigo-700 text-sm rounded-full">標籤一</span>
+        <span class="px-3 py-1 bg-emerald-100 text-emerald-700 text-sm rounded-full">標籤二</span>
+        <span class="px-3 py-1 bg-amber-100 text-amber-700 text-sm rounded-full">標籤三</span>
+      </div>
+
+      <!-- Description -->
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-3">描述</h3>
+        <p class="text-gray-600 leading-relaxed">
+          這是項目的詳細描述內容。這裡可以包含更多關於此項目的資訊，例如功能特點、使用方法、注意事項等。
+          描述文字應該清晰且有組織，讓使用者能夠快速了解這個項目的重點。
+        </p>
+      </div>
+
+      <!-- Stats/Info Cards -->
+      <div class="grid grid-cols-3 gap-3 mb-6">
+        <div class="bg-white rounded-xl p-4 text-center shadow-sm">
+          <div class="text-2xl font-bold text-indigo-600">128</div>
+          <div class="text-xs text-gray-500">完成次數</div>
+        </div>
+        <div class="bg-white rounded-xl p-4 text-center shadow-sm">
+          <div class="text-2xl font-bold text-emerald-600">4.8</div>
+          <div class="text-xs text-gray-500">評分</div>
+        </div>
+        <div class="bg-white rounded-xl p-4 text-center shadow-sm">
+          <div class="text-2xl font-bold text-amber-600">15</div>
+          <div class="text-xs text-gray-500">分鐘</div>
+        </div>
+      </div>
+
+      <!-- Related Section -->
+      <div>
+        <h3 class="text-lg font-semibold text-gray-900 mb-3">相關項目</h3>
+        <div class="space-y-3">
+          <div
+            onclick="location.href='{{TARGET_RELATED_1}}'"
+            class="bg-white rounded-xl p-4 flex items-center gap-3 shadow-sm hover:shadow-md transition cursor-pointer"
+          >
+            <div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+              <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h4 class="font-medium text-gray-900">相關項目一</h4>
+              <p class="text-sm text-gray-500">簡短描述</p>
+            </div>
+            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </div>
+          <div
+            onclick="location.href='{{TARGET_RELATED_2}}'"
+            class="bg-white rounded-xl p-4 flex items-center gap-3 shadow-sm hover:shadow-md transition cursor-pointer"
+          >
+            <div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+              <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h4 class="font-medium text-gray-900">相關項目二</h4>
+              <p class="text-sm text-gray-500">簡短描述</p>
+            </div>
+            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom Action Bar -->
+  <div class="fixed bottom-0 left-0 right-0 bg-white border-t px-4 py-3 flex gap-3 z-50">
+    <button
+      onclick="location.href='{{TARGET_EDIT}}'"
+      class="flex-1 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition"
+    >
+      編輯
+    </button>
+    <button
+      onclick="location.href='{{TARGET_START}}'"
+      class="flex-1 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition"
+    >
+      開始
+    </button>
+  </div>
+
+  <!-- Action Menu Modal -->
+  <div id="action-menu" class="fixed inset-0 z-[100] hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeModal()"></div>
+    <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4 pb-8">
+      <div class="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div>
+      <div class="space-y-2">
+        <button onclick="location.href='{{TARGET_SHARE}}'" class="w-full py-3 flex items-center gap-3 text-gray-700 hover:bg-gray-50 rounded-xl px-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+          </svg>
+          分享
+        </button>
+        <button onclick="location.href='{{TARGET_FAVORITE}}'" class="w-full py-3 flex items-center gap-3 text-gray-700 hover:bg-gray-50 rounded-xl px-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+          </svg>
+          加入收藏
+        </button>
+        <button onclick="showDeleteConfirm()" class="w-full py-3 flex items-center gap-3 text-red-600 hover:bg-red-50 rounded-xl px-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+          刪除
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+    function closeModal() {
+      document.querySelectorAll('[id]').forEach(el => {
+        if (el.classList.contains('fixed') && !el.classList.contains('hidden')) {
+          el.classList.add('hidden');
+        }
+      });
+      document.getElementById('action-menu').classList.add('hidden');
+    }
+    function showDeleteConfirm() {
+      if (confirm('確定要刪除此項目嗎？')) {
+        location.href = '{{TARGET_DELETE_SUCCESS}}';
+      }
+    }
+  </script>
+  <script src="../shared/notify-parent.js"></script>
+</body>
+</html>
