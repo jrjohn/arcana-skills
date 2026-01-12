@@ -240,6 +240,133 @@ Enterprise-grade App & Web UI/UX design guide.
     grep -c 'href="device-preview.html?screen=' index.html
     ```
 
+14. **⚠️ 強制 SRS/SDD 回補 (MANDATORY SRS/SDD Feedback) - BLOCKING STEP**
+
+    > **這是阻斷步驟！UI Flow 完成後必須執行回補，否則視為未完成。**
+
+    UI Flow 生成完成後，**必須**執行以下回補項目：
+
+    **SDD 回補項目 (必須):**
+    | 項目 | 說明 | 驗證方式 |
+    |------|------|----------|
+    | **截圖嵌入** | 每個 SCR-* 必須有對應截圖 | `ls 02-design/SDD/images/*.png` |
+    | **Button Navigation** | 每個畫面的按鈕導航表格 | 檢查 SDD.md 各畫面章節 |
+    | **Wireframe 移除** | 有截圖後刪除 ASCII Wireframe | 搜尋 `**Wireframe：**` |
+    | **Mermaid 流程圖** | UI Flow 的畫面關係圖 | 檢查 SDD.md 流程圖章節 |
+
+    **SRS 回補項目 (必須):**
+    | 項目 | 說明 | 驗證方式 |
+    |------|------|----------|
+    | **Screen References** | 每個 REQ 對應的 SCR 畫面 | 檢查 SRS.md Screen References 章節 |
+    | **Inferred Requirements** | 從導航推斷的新需求 (REQ-NAV-*) | 檢查 SRS.md Inferred Requirements 章節 |
+    | **User Flows** | Mermaid 使用者流程圖 | 檢查 SRS.md User Flows 章節 |
+
+    **RTM 回補項目 (必須):**
+    | 項目 | 說明 | 驗證方式 |
+    |------|------|----------|
+    | **SRS ↔ SCR 對應** | 所有 REQ 必須對應到 SCR | RTM 覆蓋率 = 100% |
+
+    **執行步驟：**
+    ```bash
+    # Step 1: 生成截圖
+    cd 04-ui-flow && node capture-screenshots.js
+
+    # Step 2: 複製截圖到 SDD 目錄
+    mkdir -p ../02-design/SDD/images
+    cp screenshots/**/*.png ../02-design/SDD/images/
+
+    # Step 3: 更新 SDD.md (手動或腳本)
+    # - 嵌入截圖: ![SCR-xxx](./images/SCR-xxx.png)
+    # - 刪除 **Wireframe：** 區塊
+    # - 新增 Button Navigation 表格
+
+    # Step 4: 更新 SRS.md (手動或腳本)
+    # - 新增 Screen References 章節
+    # - 新增 Inferred Requirements 章節
+    # - 新增 User Flows 章節
+
+    # Step 5: 更新 RTM.md
+    # - 補充 SCR 欄位
+
+    # Step 6: 重新產生 DOCX
+    bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh ../01-requirements/SRS-*.md
+    bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh ../02-design/SDD-*.md
+    node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js ../01-requirements/SRS-*.md
+    node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js ../02-design/SDD-*.md
+    ```
+
+    **回補驗證清單：**
+    - [ ] SDD 所有 SCR-* 畫面有截圖嵌入
+    - [ ] SDD 無殘留的 `**Wireframe：**` 區塊
+    - [ ] SDD 每個畫面有 Button Navigation 表格
+    - [ ] SRS 有 Screen References 章節
+    - [ ] SRS 有 Inferred Requirements 章節
+    - [ ] SRS 有 User Flows 章節
+    - [ ] RTM SRS→SCR 覆蓋率 = 100%
+    - [ ] DOCX 已重新產生
+
+    **See:** `references/sdd-feedback.md` (完整回補規則)
+
+15. **⚠️ 強制使用 app-requirements-skill 的 SRS/SDD 模板格式 (MANDATORY Template Format)**
+
+    > **SRS/SDD 文件必須符合 app-requirements-skill 的模板格式，否則 md-to-docx.js 轉換會失敗！**
+
+    **模板格式要求：**
+    ```markdown
+    # Software Design Description
+    ## For {{project name}}
+
+    Version 0.1
+    Prepared by {{author}}
+    {{organization}}
+    {{date}}
+
+    ## Table of Contents
+    <!-- TOC content -->
+
+    ## Revision History
+    | Name | Date | Reason For Changes | Version |
+    |------|------|--------------------|---------|
+
+    ## 1. Introduction
+    <!-- Main content with numbered sections -->
+    ```
+
+    **禁止的格式：**
+    ```markdown
+    # SDD 軟體設計規格書
+    ## 文件資訊
+    ### 版本歷史          <!-- ❌ 三級標題 -->
+    ## 使用案例設計        <!-- ❌ 非編號章節 -->
+    ```
+
+    **為什麼重要：**
+    - md-to-docx.js 依賴特定的文件結構來分離封面、目錄、修訂歷史和主內容
+    - 中文標題（如 `## 文件資訊`）會導致轉換器無法正確解析文件結構
+    - 結果是 DOCX 只有封面頁和目錄，主要內容全部遺失
+
+    **正確做法：**
+    1. 使用 app-requirements-skill 的模板創建 SRS/SDD
+    2. 初始化專案（跨平台）：
+       ```bash
+       node [SKILL_DIR]/scripts/init-project.js [PROJECT_DIR]
+       ```
+       其中 `[SKILL_DIR]` 是 app-requirements-skill 的安裝位置
+    3. 回補 UI Flow 時，保持模板的章節結構不變
+
+    **驗證命令：**
+    ```bash
+    # 檢查 SDD 是否有正確的標題結構
+    grep -n "^## Table of Contents\|^## Revision History\|^## 1\." SDD-*.md
+
+    # 預期輸出應包含這些標題，若無則格式錯誤
+    ```
+
+    **Skill 路徑查詢（跨平台）：**
+    - macOS/Linux: `~/.claude/skills/app-requirements-skill/`
+    - Windows: `%USERPROFILE%\.claude\skills\app-requirements-skill\`
+    - 或在 Claude Code 中直接執行 init-project.js，它會自動定位
+
 ---
 
 ## Template Location
@@ -439,8 +566,30 @@ Step 4: UI Flow Diagram 生成 (Flow Diagram Generation)
 ├── 確認所有畫面卡片都顯示實際內容
 └── 驗證導航箭頭正確
 
-Step 5: SRS/SDD 回補 (Feedback)
-└── 按照 sdd-feedback.md 執行
+Step 5: 截圖生成 (Screenshot Generation) ⚠️ 必須
+├── 執行 node capture-screenshots.js
+├── 複製截圖到 02-design/SDD/images/
+└── 驗證所有 SCR-* 都有對應截圖
+
+Step 6: SRS/SDD 回補 (Feedback) ⚠️ 阻斷步驟
+├── ⛔ 未完成回補視為 UI Flow 未完成！
+├── SDD 更新：
+│   ├── 嵌入截圖 (必須)
+│   ├── 刪除 Wireframe (必須)
+│   ├── 新增 Button Navigation 表格 (必須)
+│   └── 新增 Mermaid 流程圖 (必須)
+├── SRS 更新：
+│   ├── 新增 Screen References 章節 (必須)
+│   ├── 新增 Inferred Requirements 章節 (必須)
+│   └── 新增 User Flows 章節 (必須)
+├── RTM 更新：
+│   └── 補充 SRS → SCR 對應 (必須)
+└── See: sdd-feedback.md
+
+Step 7: 重新產生 DOCX (Regenerate DOCX)
+├── 移除 MD 手動編號
+├── 轉換 SRS.md → SRS.docx
+└── 轉換 SDD.md → SDD.docx
 ```
 
 ### 禁止行為
@@ -456,6 +605,10 @@ Step 5: SRS/SDD 回補 (Feedback)
 | ❌ 社群登入按鈕無 onclick | 點擊無反應 |
 | ❌ UI Flow Diagram iPhone 模式載入 iPad 畫面 | 必須動態切換 iframe src |
 | ❌ 設定列使用 `alert()` 作為點擊動作 | 必須導航到實際子畫面 |
+| ❌ 跳過 SRS/SDD 回補步驟 | UI Flow 未完成前不能進行其他任務 |
+| ❌ 不嵌入截圖到 SDD | IEC 62304 要求 UI 設計可追溯 |
+| ❌ 不更新 SRS Screen References | 需求無法追溯到畫面 |
+| ❌ 不重新產生 DOCX | MD 與 DOCX 不同步 |
 
 ### UI Flow 預覽方式
 
@@ -492,11 +645,21 @@ See: `references/ui-flow-generation-workflow.md`, `references/screen-content-req
 6. Generate UI Flow Diagram (UI Flow 生成)
    - ui-flow-diagram.html with iframe preview
    ↓
-7. SRS/SDD Feedback (MANDATORY)
-   - Update SDD with UI references
-   - Update SRS with Screen References
+7. Generate Screenshots (截圖生成) ⚠️ 必須
+   - Run: node capture-screenshots.js
+   - Copy to 02-design/SDD/images/
    ↓
-8. Regenerate DOCX
+8. SRS/SDD Feedback (回補) ⚠️ 阻斷步驟
+   ⛔ 未完成回補視為 UI Flow 未完成！
+   - SDD: 嵌入截圖、刪除 Wireframe、Button Navigation、Mermaid
+   - SRS: Screen References、Inferred Requirements、User Flows
+   - RTM: SRS → SCR 對應
+   - See: Rule 14 and sdd-feedback.md
+   ↓
+9. Regenerate DOCX (重新產生 DOCX)
+   - 移除 MD 手動編號
+   - SRS.md → SRS.docx
+   - SDD.md → SDD.docx
 ```
 
 > **Detailed workflows in reference documents**
