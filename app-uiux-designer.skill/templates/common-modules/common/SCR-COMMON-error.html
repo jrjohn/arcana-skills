@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - 錯誤</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/project-theme.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          screens: { 'phone': {'max': '500px'}, 'tablet': {'min': '501px'} },
+          colors: { primary: '{{PRIMARY_COLOR}}' }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { --ipad-width: 1194px; --ipad-height: 834px; --iphone-width: 393px; --iphone-height: 852px; }
+    body { width: var(--ipad-width); height: var(--ipad-height); overflow: hidden; margin: 0; }
+    @media (max-width: 500px) { body { width: var(--iphone-width); height: var(--iphone-height); } }
+  </style>
+</head>
+<body class="bg-gradient-to-b from-slate-50 to-slate-100">
+  <div class="w-full h-full flex flex-col items-center justify-center px-6">
+    <!-- Error illustration -->
+    <div class="mb-8">
+      <div class="w-32 h-32 tablet:w-40 tablet:h-40 bg-red-50 rounded-full flex items-center justify-center">
+        <span class="text-6xl tablet:text-7xl">😵</span>
+      </div>
+    </div>
+
+    <!-- Title -->
+    <h2 class="text-xl tablet:text-2xl font-bold text-gray-800 mb-2">發生了一些問題</h2>
+
+    <!-- Description -->
+    <p class="text-gray-500 text-center text-base tablet:text-lg mb-8">請稍後再試或聯繫客服</p>
+
+    <!-- Buttons -->
+    <div class="flex flex-col tablet:flex-row gap-3 tablet:gap-4">
+      <button onclick="location.reload()"
+              class="h-12 tablet:h-14 px-8 bg-primary hover:bg-teal-600 text-white text-base tablet:text-lg font-semibold rounded-full shadow-lg transition-all">
+        重試
+      </button>
+      <button onclick="history.back()"
+              class="h-12 tablet:h-14 px-8 bg-gray-200 hover:bg-gray-300 text-gray-700 text-base tablet:text-lg font-semibold rounded-full transition-all">
+        返回
+      </button>
+    </div>
+
+    <!-- Report link -->
+    <button onclick="location.href='SCR-SETTING-{{NUM_FEEDBACK}}-feedback.html'"
+            class="mt-6 text-primary hover:underline text-sm tablet:text-base">
+      回報問題
+    </button>
+  </div>
+<script src="../shared/notify-parent.js"></script>
+</body>
+</html>
+
+<!--
+@template-type: common-module
+@module: COMMON
+@screen-type: error
+@required: true
+@variables: PROJECT_NAME, PRIMARY_COLOR, NUM_FEEDBACK
+-->

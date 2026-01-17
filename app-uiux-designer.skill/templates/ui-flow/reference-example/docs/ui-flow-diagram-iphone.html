@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>單字小達人 - Screen Flow Diagram (iPhone)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #E0F7FA 0%, #B2EBF2 100%);
+      font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+    }
+
+    .flow-container {
+      min-width: 3000px;
+      min-height: 5000px;
+      position: relative;
+      padding: 40px;
+    }
+
+    .screen-card {
+      position: absolute;
+      width: 120px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      z-index: 5;
+    }
+
+    .screen-card:hover {
+      transform: scale(1.08);
+      z-index: 100;
+    }
+
+    .screen-card:hover .device-frame {
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+
+    .screen-card .device-frame {
+      width: 120px;
+      height: 260px;
+      background: white;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      overflow: hidden;
+      position: relative;
+      border: 3px solid #1a1a1a;
+      border-radius: 16px;
+    }
+
+    /* iPhone notch (top center bar) */
+    .screen-card .device-frame::before {
+      content: '';
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 40px;
+      height: 6px;
+      background: #1a1a1a;
+      border-radius: 3px;
+      z-index: 20;
+    }
+
+    /* iPhone iframe: 393x852 scaled to 120x260 = scale(0.305) */
+    .screen-card .device-frame iframe {
+      width: 393px;
+      height: 852px;
+      border: none;
+      transform: scale(0.305);
+      transform-origin: top left;
+      pointer-events: none;
+    }
+
+    .screen-card .screen-label {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 10px;
+      color: #475569;
+      font-weight: 500;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 120px;
+    }
+
+    .screen-card .screen-id {
+      position: absolute;
+      top: 18px;
+      left: 6px;
+      min-width: 24px;
+      height: 18px;
+      padding: 0 4px;
+      background: var(--module-color, #6366F1);
+      color: white;
+      border-radius: 4px;
+      font-size: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      z-index: 10;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      white-space: nowrap;
+    }
+
+    /* Connection Lines */
+    .connection-svg {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      overflow: visible;
+    }
+
+    /* Row Labels */
+    .row-label {
+      position: absolute;
+      font-size: 18px;
+      font-weight: 700;
+      color: #1E293B;
+      padding: 8px 16px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    /* Zoom Controls */
+    .zoom-controls {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    .zoom-btn {
+      width: 44px;
+      height: 44px;
+      background: white;
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      cursor: pointer;
+      font-size: 18px;
+      color: #475569;
+      transition: all 0.2s;
+    }
+
+    .zoom-btn:hover {
+      background: #F1F5F9;
+      transform: scale(1.05);
+    }
+
+    /* Module colors */
+    .module-auth .screen-id { background: #6366F1; }
+    .module-onboard .screen-id { background: #8B5CF6; }
+    .module-home .screen-id { background: #F59E0B; }
+    .module-vocab .screen-id { background: #10B981; }
+    .module-train .screen-id { background: #3B82F6; }
+    .module-report .screen-id { background: #EC4899; }
+    .module-setting .screen-id { background: #64748B; }
+    .module-parent .screen-id { background: #14B8A6; }
+    .module-common .screen-id { background: #78716C; }
+
+    /* Device Badge */
+    .device-badge {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      background: linear-gradient(135deg, #00BCD4 0%, #0097A7 100%);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 4px 15px rgba(0,188,212,0.3);
+    }
+
+    .device-badge svg { width: 20px; height: 20px; }
+  </style>
+</head>
+<body>
+  <!-- Device Badge -->
+  <div class="device-badge">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <rect x="7" y="2" width="10" height="20" rx="2" stroke-width="1.5"/>
+      <line x1="10" y1="18" x2="14" y2="18" stroke-width="1.5"/>
+    </svg>
+    iPhone 15 Pro - 393 x 852
+  </div>
+
+  <!-- Flow Container -->
+  <div class="flow-container" id="flowContainer">
+
+    <!-- Connection Lines SVG -->
+    <svg class="connection-svg">
+      <defs>
+        <marker id="arrow-auth" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#6366F1"/>
+        </marker>
+        <marker id="arrow-onboard" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#8B5CF6"/>
+        </marker>
+        <marker id="arrow-home" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#F59E0B"/>
+        </marker>
+        <marker id="arrow-vocab" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#10B981"/>
+        </marker>
+        <marker id="arrow-train" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#3B82F6"/>
+        </marker>
+        <marker id="arrow-report" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#EC4899"/>
+        </marker>
+        <marker id="arrow-setting" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#64748B"/>
+        </marker>
+        <marker id="arrow-parent" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#14B8A6"/>
+        </marker>
+      </defs>
+
+      <!-- AUTH FLOW (Y=230 center) -->
+      <path d="M 188 230 L 212 230" stroke="#6366F1" stroke-width="2.5" fill="none" marker-end="url(#arrow-auth)"/>
+      <path d="M 348 230 L 372 230" stroke="#6366F1" stroke-width="2.5" fill="none" marker-end="url(#arrow-auth)"/>
+      <path d="M 508 230 L 532 230" stroke="#6366F1" stroke-width="2.5" fill="none" marker-end="url(#arrow-auth)"/>
+
+      <!-- ONBOARD FLOW (Y=630 center) -->
+      <path d="M 188 630 L 212 630" stroke="#8B5CF6" stroke-width="2.5" fill="none" marker-end="url(#arrow-onboard)"/>
+      <path d="M 348 630 L 372 630" stroke="#8B5CF6" stroke-width="2.5" fill="none" marker-end="url(#arrow-onboard)"/>
+
+      <!-- VOCAB FLOW (Y=1430 center) -->
+      <path d="M 188 1430 L 212 1430" stroke="#10B981" stroke-width="2.5" fill="none" marker-end="url(#arrow-vocab)"/>
+      <path d="M 348 1430 L 372 1430" stroke="#10B981" stroke-width="2.5" fill="none" marker-end="url(#arrow-vocab)"/>
+      <path d="M 508 1430 L 532 1430" stroke="#10B981" stroke-width="2.5" fill="none" marker-end="url(#arrow-vocab)"/>
+      <path d="M 668 1430 L 692 1430" stroke="#10B981" stroke-width="2.5" fill="none" marker-end="url(#arrow-vocab)"/>
+      <path d="M 828 1430 L 852 1430" stroke="#10B981" stroke-width="2.5" fill="none" marker-end="url(#arrow-vocab)"/>
+      <path d="M 988 1430 L 1012 1430" stroke="#10B981" stroke-width="2.5" fill="none" marker-end="url(#arrow-vocab)"/>
+      <path d="M 1148 1430 L 1172 1430" stroke="#10B981" stroke-width="2.5" fill="none" marker-end="url(#arrow-vocab)"/>
+
+      <!-- TRAIN FLOW Row 1 (Y=1830 center) -->
+      <path d="M 188 1830 L 212 1830" stroke="#3B82F6" stroke-width="2.5" fill="none" marker-end="url(#arrow-train)"/>
+      <path d="M 348 1830 L 372 1830" stroke="#3B82F6" stroke-width="2.5" fill="none" marker-end="url(#arrow-train)"/>
+      <path d="M 508 1830 L 532 1830" stroke="#3B82F6" stroke-width="2.5" fill="none" marker-end="url(#arrow-train)"/>
+      <path d="M 668 1830 L 692 1830" stroke="#3B82F6" stroke-width="2.5" fill="none" marker-end="url(#arrow-train)"/>
+
+      <!-- TRAIN FLOW Row 2 (Y=2230 center) -->
+      <path d="M 188 2230 L 212 2230" stroke="#3B82F6" stroke-width="2.5" fill="none" marker-end="url(#arrow-train)"/>
+      <path d="M 348 2230 L 372 2230" stroke="#3B82F6" stroke-width="2.5" fill="none" marker-end="url(#arrow-train)"/>
+      <path d="M 508 2230 L 532 2230" stroke="#3B82F6" stroke-width="2.5" fill="none" marker-end="url(#arrow-train)"/>
+      <path d="M 668 2230 L 692 2230" stroke="#3B82F6" stroke-width="2.5" fill="none" marker-end="url(#arrow-train)"/>
+
+      <!-- REPORT FLOW (Y=2630 center) -->
+      <path d="M 188 2630 L 212 2630" stroke="#EC4899" stroke-width="2.5" fill="none" marker-end="url(#arrow-report)"/>
+      <path d="M 348 2630 L 372 2630" stroke="#EC4899" stroke-width="2.5" fill="none" marker-end="url(#arrow-report)"/>
+      <path d="M 508 2630 L 532 2630" stroke="#EC4899" stroke-width="2.5" fill="none" marker-end="url(#arrow-report)"/>
+
+      <!-- SETTING FLOW (Y=3030 center) -->
+      <path d="M 188 3030 L 212 3030" stroke="#64748B" stroke-width="2.5" fill="none" marker-end="url(#arrow-setting)"/>
+      <path d="M 348 3030 L 372 3030" stroke="#64748B" stroke-width="2.5" fill="none" marker-end="url(#arrow-setting)"/>
+      <path d="M 508 3030 L 532 3030" stroke="#64748B" stroke-width="2.5" fill="none" marker-end="url(#arrow-setting)"/>
+      <path d="M 668 3030 L 692 3030" stroke="#64748B" stroke-width="2.5" fill="none" marker-end="url(#arrow-setting)"/>
+
+      <!-- PARENT FLOW (Y=3430 center) -->
+      <path d="M 188 3430 L 212 3430" stroke="#14B8A6" stroke-width="2.5" fill="none" marker-end="url(#arrow-parent)"/>
+      <path d="M 348 3430 L 372 3430" stroke="#14B8A6" stroke-width="2.5" fill="none" marker-end="url(#arrow-parent)"/>
+      <path d="M 508 3430 L 532 3430" stroke="#14B8A6" stroke-width="2.5" fill="none" marker-end="url(#arrow-parent)"/>
+    </svg>
+
+    <!-- ==================== ROW 1: AUTH (4 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 60px;">🔐 Authentication Flow</div>
+
+    <div class="screen-card module-auth" style="left: 60px; top: 100px;" onclick="openScreen('auth/SCR-AUTH-001-splash.html')">
+      <div class="device-frame">
+        <div class="screen-id">AUTH-001</div>
+        <iframe src="../auth/SCR-AUTH-001-splash.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">啟動畫面</div>
+    </div>
+
+    <div class="screen-card module-auth" style="left: 220px; top: 100px;" onclick="openScreen('auth/SCR-AUTH-002-login.html')">
+      <div class="device-frame">
+        <div class="screen-id">AUTH-002</div>
+        <iframe src="../auth/SCR-AUTH-002-login.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">登入</div>
+    </div>
+
+    <div class="screen-card module-auth" style="left: 380px; top: 100px;" onclick="openScreen('auth/SCR-AUTH-003-register.html')">
+      <div class="device-frame">
+        <div class="screen-id">AUTH-003</div>
+        <iframe src="../auth/SCR-AUTH-003-register.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">註冊</div>
+    </div>
+
+    <div class="screen-card module-auth" style="left: 540px; top: 100px;" onclick="openScreen('auth/SCR-AUTH-004-forgot-password.html')">
+      <div class="device-frame">
+        <div class="screen-id">AUTH-004</div>
+        <iframe src="../auth/SCR-AUTH-004-forgot-password.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">忘記密碼</div>
+    </div>
+
+    <!-- ==================== ROW 2: ONBOARD (3 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 460px;">👋 Onboarding Flow</div>
+
+    <div class="screen-card module-onboard" style="left: 60px; top: 500px;" onclick="openScreen('onboard/SCR-ONBOARD-001-welcome.html')">
+      <div class="device-frame">
+        <div class="screen-id">ONBOARD-001</div>
+        <iframe src="../onboard/SCR-ONBOARD-001-welcome.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">歡迎</div>
+    </div>
+
+    <div class="screen-card module-onboard" style="left: 220px; top: 500px;" onclick="openScreen('onboard/SCR-ONBOARD-002-role-select.html')">
+      <div class="device-frame">
+        <div class="screen-id">ONBOARD-002</div>
+        <iframe src="../onboard/SCR-ONBOARD-002-role-select.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">角色選擇</div>
+    </div>
+
+    <div class="screen-card module-onboard" style="left: 380px; top: 500px;" onclick="openScreen('onboard/SCR-ONBOARD-003-setup-complete.html')">
+      <div class="device-frame">
+        <div class="screen-id">ONBOARD-003</div>
+        <iframe src="../onboard/SCR-ONBOARD-003-setup-complete.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">設定完成</div>
+    </div>
+
+    <!-- ==================== ROW 3: HOME (2 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 860px;">🏠 Home Dashboard</div>
+
+    <div class="screen-card module-home" style="left: 60px; top: 900px;" onclick="openScreen('home/SCR-HOME-001-student-home.html')">
+      <div class="device-frame">
+        <div class="screen-id">HOME-001</div>
+        <iframe src="../home/SCR-HOME-001-student-home.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">學生首頁</div>
+    </div>
+
+    <div class="screen-card module-home" style="left: 220px; top: 900px;" onclick="openScreen('home/SCR-HOME-002-parent-home.html')">
+      <div class="device-frame">
+        <div class="screen-id">HOME-002</div>
+        <iframe src="../home/SCR-HOME-002-parent-home.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">家長首頁</div>
+    </div>
+
+    <!-- ==================== ROW 4: VOCAB (8 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 1260px;">📖 Vocabulary Management</div>
+
+    <div class="screen-card module-vocab" style="left: 60px; top: 1300px;" onclick="openScreen('vocab/SCR-VOCAB-001-bank-list.html')">
+      <div class="device-frame">
+        <div class="screen-id">VOCAB-001</div>
+        <iframe src="../vocab/SCR-VOCAB-001-bank-list.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">單字庫列表</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 220px; top: 1300px;" onclick="openScreen('vocab/SCR-VOCAB-002-bank-detail.html')">
+      <div class="device-frame">
+        <div class="screen-id">VOCAB-002</div>
+        <iframe src="../vocab/SCR-VOCAB-002-bank-detail.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">單字庫詳情</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 380px; top: 1300px;" onclick="openScreen('vocab/SCR-VOCAB-003-word-detail.html')">
+      <div class="device-frame">
+        <div class="screen-id">VOCAB-003</div>
+        <iframe src="../vocab/SCR-VOCAB-003-word-detail.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">單字詳情</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 540px; top: 1300px;" onclick="openScreen('vocab/SCR-VOCAB-004-add-word.html')">
+      <div class="device-frame">
+        <div class="screen-id">VOCAB-004</div>
+        <iframe src="../vocab/SCR-VOCAB-004-add-word.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">新增單字</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 700px; top: 1300px;" onclick="openScreen('vocab/SCR-VOCAB-005-import.html')">
+      <div class="device-frame">
+        <div class="screen-id">VOCAB-005</div>
+        <iframe src="../vocab/SCR-VOCAB-005-import.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">匯入單字</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 860px; top: 1300px;" onclick="openScreen('vocab/SCR-VOCAB-006-export.html')">
+      <div class="device-frame">
+        <div class="screen-id">VOCAB-006</div>
+        <iframe src="../vocab/SCR-VOCAB-006-export.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">匯出單字</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 1020px; top: 1300px;" onclick="openScreen('vocab/SCR-VOCAB-007-ocr-scan.html')">
+      <div class="device-frame">
+        <div class="screen-id">VOCAB-007</div>
+        <iframe src="../vocab/SCR-VOCAB-007-ocr-scan.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">OCR掃描</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 1180px; top: 1300px;" onclick="openScreen('vocab/SCR-VOCAB-008-community.html')">
+      <div class="device-frame">
+        <div class="screen-id">VOCAB-008</div>
+        <iframe src="../vocab/SCR-VOCAB-008-community.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">社群單字庫</div>
+    </div>
+
+    <!-- ==================== ROW 5: TRAIN Row 1 (5 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 1660px;">🎯 Training Mode (1-5)</div>
+
+    <div class="screen-card module-train" style="left: 60px; top: 1700px;" onclick="openScreen('train/SCR-TRAIN-001-mode-select.html')">
+      <div class="device-frame">
+        <div class="screen-id">TRAIN-001</div>
+        <iframe src="../train/SCR-TRAIN-001-mode-select.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">模式選擇</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 220px; top: 1700px;" onclick="openScreen('train/SCR-TRAIN-002-listening.html')">
+      <div class="device-frame">
+        <div class="screen-id">TRAIN-002</div>
+        <iframe src="../train/SCR-TRAIN-002-listening.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">聽力訓練</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 380px; top: 1700px;" onclick="openScreen('train/SCR-TRAIN-003-listening-result.html')">
+      <div class="device-frame">
+        <div class="screen-id">TRAIN-003</div>
+        <iframe src="../train/SCR-TRAIN-003-listening-result.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">聽力結果</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 540px; top: 1700px;" onclick="openScreen('train/SCR-TRAIN-004-pronunciation.html')">
+      <div class="device-frame">
+        <div class="screen-id">TRAIN-004</div>
+        <iframe src="../train/SCR-TRAIN-004-pronunciation.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">發音練習</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 700px; top: 1700px;" onclick="openScreen('train/SCR-TRAIN-005-pronunciation-result.html')">
+      <div class="device-frame">
+        <div class="screen-id">TRAIN-005</div>
+        <iframe src="../train/SCR-TRAIN-005-pronunciation-result.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">發音結果</div>
+    </div>
+
+    <!-- ==================== ROW 6: TRAIN Row 2 (5 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 2060px;">🎯 Training Mode (6-10)</div>
+
+    <div class="screen-card module-train" style="left: 60px; top: 2100px;" onclick="openScreen('train/SCR-TRAIN-006-spelling.html')">
+      <div class="device-frame">
+        <div class="screen-id">TRAIN-006</div>
+        <iframe src="../train/SCR-TRAIN-006-spelling.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">拼音練習</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 220px; top: 2100px;" onclick="openScreen('train/SCR-TRAIN-007-spelling-result.html')">
+      <div class="device-frame">
+        <div class="screen-id">TRAIN-007</div>
+        <iframe src="../train/SCR-TRAIN-007-spelling-result.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">拼音結果</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 380px; top: 2100px;" onclick="openScreen('train/SCR-TRAIN-008-sentence-fill.html')">
+      <div class="device-frame">
+        <div class="screen-id">TRAIN-008</div>
+        <iframe src="../train/SCR-TRAIN-008-sentence-fill.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">句子填空</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 540px; top: 2100px;" onclick="openScreen('train/SCR-TRAIN-009-matching.html')">
+      <div class="device-frame">
+        <div class="screen-id">TRAIN-009</div>
+        <iframe src="../train/SCR-TRAIN-009-matching.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">點選配對</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 700px; top: 2100px;" onclick="openScreen('train/SCR-TRAIN-010-session-complete.html')">
+      <div class="device-frame">
+        <div class="screen-id">TRAIN-010</div>
+        <iframe src="../train/SCR-TRAIN-010-session-complete.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">練習完成</div>
+    </div>
+
+    <!-- ==================== ROW 7: REPORT (4 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 2460px;">📊 Report & Analytics</div>
+
+    <div class="screen-card module-report" style="left: 60px; top: 2500px;" onclick="openScreen('report/SCR-REPORT-001-overview.html')">
+      <div class="device-frame">
+        <div class="screen-id">REPORT-001</div>
+        <iframe src="../report/SCR-REPORT-001-overview.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">統計總覽</div>
+    </div>
+
+    <div class="screen-card module-report" style="left: 220px; top: 2500px;" onclick="openScreen('report/SCR-REPORT-002-daily.html')">
+      <div class="device-frame">
+        <div class="screen-id">REPORT-002</div>
+        <iframe src="../report/SCR-REPORT-002-daily.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">每日報表</div>
+    </div>
+
+    <div class="screen-card module-report" style="left: 380px; top: 2500px;" onclick="openScreen('report/SCR-REPORT-003-weekly.html')">
+      <div class="device-frame">
+        <div class="screen-id">REPORT-003</div>
+        <iframe src="../report/SCR-REPORT-003-weekly.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">每週報表</div>
+    </div>
+
+    <div class="screen-card module-report" style="left: 540px; top: 2500px;" onclick="openScreen('report/SCR-REPORT-004-word-analysis.html')">
+      <div class="device-frame">
+        <div class="screen-id">REPORT-004</div>
+        <iframe src="../report/SCR-REPORT-004-word-analysis.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">單字分析</div>
+    </div>
+
+    <!-- ==================== ROW 8: SETTING (5 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 2860px;">⚙️ Settings</div>
+
+    <div class="screen-card module-setting" style="left: 60px; top: 2900px;" onclick="openScreen('setting/SCR-SETTING-001-main.html')">
+      <div class="device-frame">
+        <div class="screen-id">SETTING-001</div>
+        <iframe src="../setting/SCR-SETTING-001-main.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">設定主頁</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 220px; top: 2900px;" onclick="openScreen('setting/SCR-SETTING-002-tts.html')">
+      <div class="device-frame">
+        <div class="screen-id">SETTING-002</div>
+        <iframe src="../setting/SCR-SETTING-002-tts.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">語音設定</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 380px; top: 2900px;" onclick="openScreen('setting/SCR-SETTING-003-pronunciation.html')">
+      <div class="device-frame">
+        <div class="screen-id">SETTING-003</div>
+        <iframe src="../setting/SCR-SETTING-003-pronunciation.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">發音設定</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 540px; top: 2900px;" onclick="openScreen('setting/SCR-SETTING-004-notification.html')">
+      <div class="device-frame">
+        <div class="screen-id">SETTING-004</div>
+        <iframe src="../setting/SCR-SETTING-004-notification.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">通知設定</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 700px; top: 2900px;" onclick="openScreen('setting/SCR-SETTING-005-account.html')">
+      <div class="device-frame">
+        <div class="screen-id">SETTING-005</div>
+        <iframe src="../setting/SCR-SETTING-005-account.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">帳號管理</div>
+    </div>
+
+    <!-- ==================== ROW 9: PARENT (4 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 3260px;">👨‍👩‍👧 Parent Dashboard</div>
+
+    <div class="screen-card module-parent" style="left: 60px; top: 3300px;" onclick="openScreen('parent/SCR-PARENT-001-dashboard.html')">
+      <div class="device-frame">
+        <div class="screen-id">PARENT-001</div>
+        <iframe src="../parent/SCR-PARENT-001-dashboard.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">家長儀表板</div>
+    </div>
+
+    <div class="screen-card module-parent" style="left: 220px; top: 3300px;" onclick="openScreen('parent/SCR-PARENT-002-assign-vocab.html')">
+      <div class="device-frame">
+        <div class="screen-id">PARENT-002</div>
+        <iframe src="../parent/SCR-PARENT-002-assign-vocab.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">指派單字庫</div>
+    </div>
+
+    <div class="screen-card module-parent" style="left: 380px; top: 3300px;" onclick="openScreen('parent/SCR-PARENT-003-child-progress.html')">
+      <div class="device-frame">
+        <div class="screen-id">PARENT-003</div>
+        <iframe src="../parent/SCR-PARENT-003-child-progress.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">孩子進度</div>
+    </div>
+
+    <div class="screen-card module-parent" style="left: 540px; top: 3300px;" onclick="openScreen('parent/SCR-PARENT-004-sentence-manage.html')">
+      <div class="device-frame">
+        <div class="screen-id">PARENT-004</div>
+        <iframe src="../parent/SCR-PARENT-004-sentence-manage.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">例句管理</div>
+    </div>
+
+    <!-- ==================== ROW 10: COMMON (2 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 3660px;">🔧 Common Components</div>
+
+    <div class="screen-card module-common" style="left: 60px; top: 3700px;" onclick="openScreen('common/SCR-COMMON-001-loading.html')">
+      <div class="device-frame">
+        <div class="screen-id">COMMON-001</div>
+        <iframe src="../common/SCR-COMMON-001-loading.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">載入中</div>
+    </div>
+
+    <div class="screen-card module-common" style="left: 220px; top: 3700px;" onclick="openScreen('common/SCR-COMMON-002-error.html')">
+      <div class="device-frame">
+        <div class="screen-id">COMMON-002</div>
+        <iframe src="../common/SCR-COMMON-002-error.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">錯誤頁面</div>
+    </div>
+
+  </div>
+
+  <!-- Zoom Controls -->
+  <div class="zoom-controls">
+    <button class="zoom-btn" onclick="zoomIn()">+</button>
+    <button class="zoom-btn" onclick="zoomOut()">−</button>
+    <button class="zoom-btn" onclick="resetZoom()">⟲</button>
+  </div>
+
+  <script>
+    let currentZoom = 1;
+    const container = document.getElementById('flowContainer');
+
+    function openScreen(path) {
+      // Open device preview with the screen parameter and iPhone device
+      window.open('../device-preview.html?device=iphone&screen=' + path, '_blank');
+    }
+
+    function zoomIn() {
+      currentZoom = Math.min(currentZoom + 0.1, 2);
+      container.style.transform = `scale(${currentZoom})`;
+      container.style.transformOrigin = 'top left';
+    }
+
+    function zoomOut() {
+      currentZoom = Math.max(currentZoom - 0.1, 0.3);
+      container.style.transform = `scale(${currentZoom})`;
+      container.style.transformOrigin = 'top left';
+    }
+
+    function resetZoom() {
+      currentZoom = 1;
+      container.style.transform = 'scale(1)';
+    }
+
+    // Enable drag to scroll
+    let isDragging = false;
+    let startX, startY, scrollLeft, scrollTop;
+
+    document.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.screen-card') || e.target.closest('.zoom-controls')) return;
+      isDragging = true;
+      startX = e.pageX - document.body.scrollLeft;
+      startY = e.pageY - document.body.scrollTop;
+      scrollLeft = window.scrollX;
+      scrollTop = window.scrollY;
+      document.body.style.cursor = 'grabbing';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const x = e.pageX - document.body.scrollLeft;
+      const y = e.pageY - document.body.scrollTop;
+      const walkX = (x - startX) * 1.5;
+      const walkY = (y - startY) * 1.5;
+      window.scrollTo(scrollLeft - walkX, scrollTop - walkY);
+    });
+
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+      document.body.style.cursor = 'default';
+    });
+  </script>
+</body>
+</html>

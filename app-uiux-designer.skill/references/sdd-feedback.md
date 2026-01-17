@@ -709,16 +709,29 @@ def update_rtm(rtm_path, screen_mappings):
 
 ## Mermaid 流程圖產生
 
+> ⚠️ **重要：必須使用直式 (TB)，禁止使用橫式 (LR)**
+>
+> DOCX 輸出時，橫式圖表會被縮小導致文字難以閱讀。
+
+### 圖表方向規則
+
+| 情境 | 方向 | 說明 |
+|------|------|------|
+| 流程圖 | `flowchart TB` | ✅ 直式，必須使用 |
+| 子圖內 | `direction TB` | ✅ 子圖也要直式 |
+| 橫式 | `flowchart LR` | ❌ 禁止，會導致文字過小 |
+
 ### 自適應分行原則
 
-依照 `medical-software-requirements-skill` 的 Mermaid 規範：
+依照 IEC 62304 文件規範：
 
 ```
-1. 垂直優先 (flowchart TB)
+1. 垂直優先 (flowchart TB) - 強制
 2. 單行最多 3-4 個節點
 3. 使用 subgraph 分組
-4. 推斷連線使用虛線 (-.->)
-5. 確認連線使用實線 (-->)
+4. subgraph 內也要使用 direction TB
+5. 推斷連線使用虛線 (-.->)
+6. 確認連線使用實線 (-->)
 ```
 
 ### 模組分組規則

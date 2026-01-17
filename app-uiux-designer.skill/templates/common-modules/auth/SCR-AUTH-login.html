@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - 登入</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/project-theme.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          screens: { 'phone': {'max': '500px'}, 'tablet': {'min': '501px'} },
+          colors: { primary: '{{PRIMARY_COLOR}}', secondary: '{{SECONDARY_COLOR}}', accent: '{{ACCENT_COLOR}}' }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { --ipad-width: 1194px; --ipad-height: 834px; --iphone-width: 393px; --iphone-height: 852px; }
+    body { width: var(--ipad-width); height: var(--ipad-height); overflow: hidden; margin: 0; }
+    @media (max-width: 500px) { body { width: var(--iphone-width); height: var(--iphone-height); } }
+  </style>
+</head>
+<body class="bg-gradient-to-b from-slate-50 to-slate-100">
+  <div class="w-full h-full flex flex-col">
+
+    <!-- Header -->
+    <header class="px-4 py-4 tablet:px-8 tablet:py-6 flex items-center">
+      <button onclick="location.href='SCR-AUTH-{{NUM_WELCOME}}-welcome.html'"
+              class="w-10 h-10 tablet:w-12 tablet:h-12 rounded-full bg-white shadow flex items-center justify-center hover:bg-gray-50">
+        <svg class="w-5 h-5 tablet:w-6 tablet:h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Content -->
+    <main class="flex-1 flex items-center justify-center px-6 tablet:px-12">
+      <div class="w-full max-w-sm tablet:max-w-md">
+        <!-- Title -->
+        <div class="text-center mb-8 tablet:mb-10">
+          <span class="text-5xl tablet:text-6xl mb-4 block">{{LOGIN_EMOJI}}</span>
+          <h1 class="text-2xl tablet:text-3xl font-bold text-gray-800">歡迎回來！</h1>
+        </div>
+
+        <!-- Form -->
+        <div class="space-y-4 tablet:space-y-5">
+          <div>
+            <label class="block text-sm tablet:text-base text-gray-600 mb-2">電子郵件</label>
+            <input type="email" placeholder="name@example.com"
+                   class="w-full h-12 tablet:h-14 px-4 rounded-xl border-2 border-gray-200 focus:border-primary focus:outline-none text-base tablet:text-lg">
+          </div>
+
+          <div>
+            <label class="block text-sm tablet:text-base text-gray-600 mb-2">密碼</label>
+            <input type="password" placeholder="••••••••"
+                   class="w-full h-12 tablet:h-14 px-4 rounded-xl border-2 border-gray-200 focus:border-primary focus:outline-none text-base tablet:text-lg">
+          </div>
+
+          <div class="flex items-center justify-between">
+            <label class="flex items-center gap-2 text-sm tablet:text-base text-gray-600">
+              <input type="checkbox" class="w-5 h-5 rounded accent-primary">
+              記住我
+            </label>
+            <button onclick="location.href='SCR-AUTH-{{NUM_FORGOT}}-forgot.html'" class="text-sm tablet:text-base text-primary hover:underline">
+              忘記密碼?
+            </button>
+          </div>
+
+          <button onclick="location.href='{{LOGIN_SUCCESS_TARGET}}'"
+                  class="w-full h-14 tablet:h-16 bg-primary hover:bg-teal-600 text-white text-lg tablet:text-xl font-bold rounded-full shadow-lg transition-all mt-4">
+            登入
+          </button>
+        </div>
+
+        <!-- Divider -->
+        <div class="flex items-center my-6 tablet:my-8">
+          <div class="flex-1 h-px bg-gray-300"></div>
+          <span class="px-4 text-gray-500 text-sm tablet:text-base">或</span>
+          <div class="flex-1 h-px bg-gray-300"></div>
+        </div>
+
+        <!-- Apple Sign In -->
+        <button onclick="location.href='{{LOGIN_SUCCESS_TARGET}}'"
+                class="w-full h-14 tablet:h-16 bg-black hover:bg-gray-800 text-white text-base tablet:text-lg font-semibold rounded-full flex items-center justify-center gap-3 transition-all">
+          <svg class="w-5 h-5 tablet:w-6 tablet:h-6" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+          </svg>
+          使用 Apple 登入
+        </button>
+
+        <!-- Register Link -->
+        <p class="text-center mt-6 tablet:mt-8 text-sm tablet:text-base text-gray-600">
+          沒有帳號？
+          <button onclick="location.href='SCR-AUTH-{{NUM_REGISTER}}-register.html'" class="text-primary font-semibold hover:underline">
+            立即註冊
+          </button>
+        </p>
+      </div>
+    </main>
+  </div>
+
+<script src="../shared/notify-parent.js"></script>
+</body>
+</html>
+
+<!--
+@template-type: common-module
+@module: AUTH
+@screen-type: login
+@required: true
+@variables: PROJECT_NAME, PRIMARY_COLOR, SECONDARY_COLOR, ACCENT_COLOR, LOGIN_EMOJI, NUM_WELCOME, NUM_FORGOT, NUM_REGISTER, LOGIN_SUCCESS_TARGET
+-->

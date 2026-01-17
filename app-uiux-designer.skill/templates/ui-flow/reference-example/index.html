@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>單字小達人 UI/UX - 畫面總覽</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="shared/project-theme.css">
+  <style>
+    .module-card {
+      transition: all 0.3s ease;
+    }
+    .module-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    }
+    .screen-link {
+      transition: all 0.2s ease;
+    }
+    .screen-link:hover {
+      background-color: var(--primary-50, #E0F7FA);
+      transform: translateX(4px);
+    }
+    .status-done { background-color: #4CAF50; }
+    .status-pending { background-color: #FFC107; }
+    .status-wip { background-color: #2196F3; }
+
+    .device-toggle-btn {
+      color: #64748B;
+      background: transparent;
+    }
+    .device-toggle-btn:hover {
+      color: #475569;
+      background: rgba(0,0,0,0.05);
+    }
+    .device-toggle-btn.active {
+      color: white;
+      background: var(--primary-500, #00BCD4);
+      box-shadow: 0 2px 4px rgba(0, 188, 212, 0.3);
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white/90 backdrop-blur-lg shadow-sm sticky top-0 z-50 border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-6 py-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-400 to-teal-500 flex items-center justify-center shadow-lg">
+            <span class="text-2xl">📚</span>
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-gray-800">單字小達人 UI/UX</h1>
+            <p class="text-sm text-gray-500">互動式原型畫面總覽 | 國小英語單字學習APP</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <a href="device-preview.html" class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-500 text-white rounded-full font-medium hover:from-cyan-600 hover:to-teal-600 transition-all shadow-lg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="5" y="2" width="14" height="20" rx="3" stroke-width="2"/>
+              <rect x="8" y="4" width="8" height="1" rx="0.5" fill="currentColor"/>
+            </svg>
+            裝置預覽
+          </a>
+          <div class="text-right">
+            <p class="text-sm text-gray-500">UI/UX 覆蓋率</p>
+            <p class="text-xl font-bold text-green-600">100%</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="text-right">
+              <p class="text-xs text-gray-400">iPad</p>
+              <p class="text-sm font-bold text-cyan-600">42</p>
+            </div>
+            <div class="text-right">
+              <p class="text-xs text-gray-400">iPhone</p>
+              <p class="text-sm font-bold text-cyan-600">42</p>
+            </div>
+          </div>
+          <div class="w-14 h-14 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-6 py-8">
+
+    <!-- Status Legend -->
+    <div class="flex items-center gap-6 mb-8 p-4 bg-white/60 backdrop-blur-sm rounded-xl border border-gray-100">
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full status-done"></span>
+        <span class="text-sm text-gray-600">完成</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full status-wip"></span>
+        <span class="text-sm text-gray-600">進行中</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full status-pending"></span>
+        <span class="text-sm text-gray-600">待處理</span>
+      </div>
+      <div class="ml-auto flex items-center gap-4">
+        <span class="text-sm text-gray-500">總畫面數：<strong class="text-cyan-600">42</strong></span>
+        <span class="text-sm text-gray-500">模組數：<strong class="text-cyan-600">9</strong></span>
+        <span class="text-sm text-gray-500">點擊畫面名稱可直接預覽</span>
+      </div>
+    </div>
+
+    <!-- UI Flow Diagram - Interactive Screen Map -->
+    <div class="mb-10 bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-100" id="flow-diagram">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-gray-800">📱 UI Flow Diagram (42 畫面)</h2>
+        <div class="flex items-center gap-4">
+          <!-- Device Toggle -->
+          <div class="flex items-center bg-gray-100 rounded-lg p-1">
+            <button id="btn-iphone" onclick="switchDevice('iphone')"
+                    class="device-toggle-btn active px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="7" y="2" width="10" height="20" rx="2" stroke-width="1.5"/>
+                <line x1="10" y1="18" x2="14" y2="18" stroke-width="1.5"/>
+              </svg>
+              iPhone
+            </button>
+            <button id="btn-ipad" onclick="switchDevice('ipad')"
+                    class="device-toggle-btn px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="3" y="2" width="18" height="20" rx="2" stroke-width="1.5"/>
+                <line x1="3" y1="18" x2="21" y2="18" stroke-width="1.5"/>
+              </svg>
+              iPad
+            </button>
+          </div>
+          <span class="text-sm text-gray-500">可拖曳、縮放瀏覽全部畫面流程</span>
+          <a href="docs/ui-flow-diagram.html" target="_blank" id="fullscreen-link"
+             class="px-4 py-2 bg-cyan-500 text-white text-sm rounded-lg hover:bg-cyan-600 transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+            </svg>
+            開新視窗
+          </a>
+        </div>
+      </div>
+
+      <!-- Flow Diagram with Sidebar Legend -->
+      <div class="flex gap-4">
+        <!-- Embedded Flow Diagram -->
+        <div class="flex-1 relative rounded-xl overflow-hidden border border-gray-200" style="height: 600px;">
+          <iframe id="flow-iframe" src="docs/ui-flow-diagram.html"
+                  class="w-full h-full border-0"
+                  title="UI Flow Diagram"></iframe>
+        </div>
+
+        <!-- Modules Legend Sidebar -->
+        <div class="w-48 flex-shrink-0 bg-white rounded-xl border border-gray-200 p-4 h-fit shadow-sm">
+          <h3 class="text-sm font-bold text-gray-700 mb-3">模組圖例</h3>
+          <div class="space-y-2" id="module-legend">
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 bg-[#6366F1] rounded"></div>
+              <span class="text-sm text-gray-600">AUTH (4)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 bg-[#8B5CF6] rounded"></div>
+              <span class="text-sm text-gray-600">ONBOARD (3)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 bg-[#F59E0B] rounded"></div>
+              <span class="text-sm text-gray-600">HOME (2)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 bg-[#10B981] rounded"></div>
+              <span class="text-sm text-gray-600">VOCAB (8)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 bg-[#3B82F6] rounded"></div>
+              <span class="text-sm text-gray-600">TRAIN (10)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 bg-[#EC4899] rounded"></div>
+              <span class="text-sm text-gray-600">REPORT (4)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 bg-[#64748B] rounded"></div>
+              <span class="text-sm text-gray-600">SETTING (5)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 bg-[#14B8A6] rounded"></div>
+              <span class="text-sm text-gray-600">PARENT (4)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 bg-[#78716C] rounded"></div>
+              <span class="text-sm text-gray-600">COMMON (2)</span>
+            </div>
+          </div>
+          <div class="mt-4 pt-3 border-t border-gray-100">
+            <p class="text-xs text-gray-500 font-medium">總計: 42 畫面</p>
+            <p class="text-xs text-green-600 font-bold">100% 覆蓋率</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Module Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="module-cards">
+
+      <!-- AUTH Module -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">🔐</span>
+              <div>
+                <h3 class="font-bold text-lg">AUTH 認證模組</h3>
+                <p class="text-indigo-100 text-sm">登入、註冊、忘記密碼</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-bold">4</p>
+              <p class="text-xs text-indigo-200">畫面</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
+          <a href="auth/SCR-AUTH-001-splash.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-AUTH-001 啟動畫面</span>
+          </a>
+          <a href="auth/SCR-AUTH-002-login.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-AUTH-002 登入</span>
+          </a>
+          <a href="auth/SCR-AUTH-003-register.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-AUTH-003 註冊</span>
+          </a>
+          <a href="auth/SCR-AUTH-004-forgot-password.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-AUTH-004 忘記密碼</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- ONBOARD Module -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-violet-500 to-violet-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">👋</span>
+              <div>
+                <h3 class="font-bold text-lg">ONBOARD 引導模組</h3>
+                <p class="text-violet-100 text-sm">歡迎、角色選擇</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-bold">3</p>
+              <p class="text-xs text-violet-200">畫面</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
+          <a href="onboard/SCR-ONBOARD-001-welcome.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-ONBOARD-001 歡迎</span>
+          </a>
+          <a href="onboard/SCR-ONBOARD-002-role-select.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-ONBOARD-002 角色選擇</span>
+          </a>
+          <a href="onboard/SCR-ONBOARD-003-setup-complete.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-ONBOARD-003 設定完成</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- HOME Module -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">🏠</span>
+              <div>
+                <h3 class="font-bold text-lg">HOME 首頁模組</h3>
+                <p class="text-amber-100 text-sm">學生/家長首頁</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-bold">2</p>
+              <p class="text-xs text-amber-200">畫面</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
+          <a href="home/SCR-HOME-001-student-home.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-HOME-001 學生首頁</span>
+          </a>
+          <a href="home/SCR-HOME-002-parent-home.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-HOME-002 家長首頁</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- VOCAB Module -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">📖</span>
+              <div>
+                <h3 class="font-bold text-lg">VOCAB 單字庫模組</h3>
+                <p class="text-emerald-100 text-sm">單字管理、匯入匯出</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-bold">8</p>
+              <p class="text-xs text-emerald-200">畫面</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
+          <a href="vocab/SCR-VOCAB-001-bank-list.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-VOCAB-001 單字庫列表</span>
+          </a>
+          <a href="vocab/SCR-VOCAB-002-bank-detail.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-VOCAB-002 單字庫詳情</span>
+          </a>
+          <a href="vocab/SCR-VOCAB-003-word-detail.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-VOCAB-003 單字詳情</span>
+          </a>
+          <a href="vocab/SCR-VOCAB-004-add-word.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-VOCAB-004 新增單字</span>
+          </a>
+          <a href="vocab/SCR-VOCAB-005-import.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-VOCAB-005 匯入單字</span>
+          </a>
+          <a href="vocab/SCR-VOCAB-006-export.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-VOCAB-006 匯出單字</span>
+          </a>
+          <a href="vocab/SCR-VOCAB-007-ocr-scan.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-VOCAB-007 OCR掃描</span>
+          </a>
+          <a href="vocab/SCR-VOCAB-008-community.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-VOCAB-008 社群單字庫</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- TRAIN Module -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">🎯</span>
+              <div>
+                <h3 class="font-bold text-lg">TRAIN 訓練模組</h3>
+                <p class="text-blue-100 text-sm">聽力、發音、拼音練習</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-bold">10</p>
+              <p class="text-xs text-blue-200">畫面</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
+          <a href="train/SCR-TRAIN-001-mode-select.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-TRAIN-001 模式選擇</span>
+          </a>
+          <a href="train/SCR-TRAIN-002-listening.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-TRAIN-002 聽力訓練</span>
+          </a>
+          <a href="train/SCR-TRAIN-003-listening-result.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-TRAIN-003 聽力結果</span>
+          </a>
+          <a href="train/SCR-TRAIN-004-pronunciation.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-TRAIN-004 發音練習</span>
+          </a>
+          <a href="train/SCR-TRAIN-005-pronunciation-result.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-TRAIN-005 發音結果</span>
+          </a>
+          <a href="train/SCR-TRAIN-006-spelling.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-TRAIN-006 拼音練習</span>
+          </a>
+          <a href="train/SCR-TRAIN-007-spelling-result.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-TRAIN-007 拼音結果</span>
+          </a>
+          <a href="train/SCR-TRAIN-008-sentence-fill.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-TRAIN-008 句子填空</span>
+          </a>
+          <a href="train/SCR-TRAIN-009-matching.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-TRAIN-009 點選配對</span>
+          </a>
+          <a href="train/SCR-TRAIN-010-session-complete.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-TRAIN-010 練習完成</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- REPORT Module -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-pink-500 to-pink-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">📊</span>
+              <div>
+                <h3 class="font-bold text-lg">REPORT 報表模組</h3>
+                <p class="text-pink-100 text-sm">學習統計、進度報告</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-bold">4</p>
+              <p class="text-xs text-pink-200">畫面</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
+          <a href="report/SCR-REPORT-001-overview.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-REPORT-001 統計總覽</span>
+          </a>
+          <a href="report/SCR-REPORT-002-daily.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-REPORT-002 每日報表</span>
+          </a>
+          <a href="report/SCR-REPORT-003-weekly.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-REPORT-003 每週報表</span>
+          </a>
+          <a href="report/SCR-REPORT-004-word-analysis.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-REPORT-004 單字分析</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- SETTING Module -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-slate-500 to-slate-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">⚙️</span>
+              <div>
+                <h3 class="font-bold text-lg">SETTING 設定模組</h3>
+                <p class="text-slate-100 text-sm">系統設定、帳號管理</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-bold">5</p>
+              <p class="text-xs text-slate-200">畫面</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
+          <a href="setting/SCR-SETTING-001-main.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-SETTING-001 設定主頁</span>
+          </a>
+          <a href="setting/SCR-SETTING-002-tts.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-SETTING-002 語音設定</span>
+          </a>
+          <a href="setting/SCR-SETTING-003-pronunciation.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-SETTING-003 發音設定</span>
+          </a>
+          <a href="setting/SCR-SETTING-004-notification.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-SETTING-004 通知設定</span>
+          </a>
+          <a href="setting/SCR-SETTING-005-account.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-SETTING-005 帳號管理</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- PARENT Module -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-teal-500 to-teal-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">👨‍👩‍👧</span>
+              <div>
+                <h3 class="font-bold text-lg">PARENT 家長模組</h3>
+                <p class="text-teal-100 text-sm">家長儀表板、進度追蹤</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-bold">4</p>
+              <p class="text-xs text-teal-200">畫面</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
+          <a href="parent/SCR-PARENT-001-dashboard.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-PARENT-001 家長儀表板</span>
+          </a>
+          <a href="parent/SCR-PARENT-002-assign-vocab.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-PARENT-002 指派單字庫</span>
+          </a>
+          <a href="parent/SCR-PARENT-003-child-progress.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-PARENT-003 孩子進度</span>
+          </a>
+          <a href="parent/SCR-PARENT-004-sentence-manage.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-PARENT-004 例句管理</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- COMMON Module -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-stone-500 to-stone-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">🔧</span>
+              <div>
+                <h3 class="font-bold text-lg">COMMON 共用模組</h3>
+                <p class="text-stone-100 text-sm">載入、錯誤頁面</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-bold">2</p>
+              <p class="text-xs text-stone-200">畫面</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
+          <a href="common/SCR-COMMON-001-loading.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-COMMON-001 載入中</span>
+          </a>
+          <a href="common/SCR-COMMON-002-error.html" target="_blank" class="screen-link flex items-center gap-3 p-2 rounded-lg">
+            <span class="w-2 h-2 rounded-full status-done"></span>
+            <span class="text-sm text-gray-700">SCR-COMMON-002 錯誤頁面</span>
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-12 text-center text-gray-500 text-sm">
+      <p>單字小達人 UI Flow | Generated: 2026-01-15 | IEC 62304 Compliant</p>
+      <p class="mt-1">Template: app-uiux-designer.skill/templates/ui-flow</p>
+    </footer>
+  </main>
+
+  <script>
+    function switchDevice(device) {
+      const iframe = document.getElementById('flow-iframe');
+      const btnIphone = document.getElementById('btn-iphone');
+      const btnIpad = document.getElementById('btn-ipad');
+      const fullscreenLink = document.getElementById('fullscreen-link');
+
+      if (device === 'iphone') {
+        iframe.src = 'docs/ui-flow-diagram.html';
+        fullscreenLink.href = 'docs/ui-flow-diagram.html';
+        btnIphone.classList.add('active');
+        btnIpad.classList.remove('active');
+      } else {
+        iframe.src = 'docs/ui-flow-diagram-ipad.html';
+        fullscreenLink.href = 'docs/ui-flow-diagram-ipad.html';
+        btnIpad.classList.add('active');
+        btnIphone.classList.remove('active');
+      }
+    }
+  </script>
+
+</body>
+</html>

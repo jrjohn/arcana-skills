@@ -19,11 +19,26 @@ const path = require('path');
 // Configuration
 const config = {
   // 掃描目錄（相對於腳本位置）
-  scanDirs: ['./', './auth', './home', './vocab', './train', './report', './setting', './iphone'],
+  scanDirs: [
+    './',
+    './auth',
+    './home',
+    './vocab',
+    './train',
+    './report',
+    './setting',
+    './engage',      // 互動獎勵模組
+    './progress',    // 進度統計模組
+    './social',      // 社群模組
+    './common',      // 共用狀態畫面
+    './profile',     // 個人資料模組
+    './parent',      // 家長控制模組
+    './iphone',
+  ],
   // 排除的檔案/目錄
   excludePatterns: ['node_modules', 'shared', 'docs', 'screenshots', 'device-preview.html', 'screen-template'],
   // 有效的外部導航
-  validExternalPatterns: ['http://', 'https://', 'mailto:', 'tel:'],
+  validExternalPatterns: ['http://', 'https://', 'mailto:', 'tel:', 'javascript:'],
 };
 
 // Results storage
@@ -173,7 +188,8 @@ function extractClickableElements(htmlContent, filePath) {
   }
 
   // 3d. 檢測獨立的關閉圖標 (div/span 包含 X SVG 但無 onclick)
-  const closeIconRegex = /<(?:div|span)[^>]*>[\s\S]*?(?:M6 18L18 6|M6 6l12 12|×|✕|✖)[\s\S]*?<\/(?:div|span)>/gi;
+  // 修正: 只匹配小範圍的 div/span (< 500 字元), 避免匹配整個容器 div
+  const closeIconRegex = /<(?:div|span)[^>]*>[\s\S]{0,400}?(?:M6 18L18 6|M6 6l12 12|×|✕|✖)[\s\S]{0,100}?<\/(?:div|span)>/gi;
   while ((match = closeIconRegex.exec(htmlContent)) !== null) {
     const element = match[0];
     const openTag = element.match(/<(?:div|span)[^>]*>/i)?.[0] || '';
@@ -181,9 +197,19 @@ function extractClickableElements(htmlContent, filePath) {
     // 跳過已有 onclick 的元素
     if (openTag.includes('onclick=')) continue;
 
+    // 跳過容器 div (通常有 flex, w-full, h-full 等 class)
+    if (openTag.includes('flex-col') || openTag.includes('w-full') || openTag.includes('h-full')) continue;
+
+    // 跳過如果 X 圖標在 button 內 (button 已在 3c 處理)
+    // 檢查這段 HTML 中是否有包含 onclick 的 button
+    if (element.includes('<button') && element.includes('onclick=')) continue;
+
     // 檢查是否真的是關閉圖標
-    if (element.includes('M6 18L18 6') || element.includes('M6 6l12 12') ||
-        element.includes('×') || element.includes('✕') || element.includes('✖')) {
+    // 排除 ×1, ×2, ×3 等乘法符號
+    const hasXIcon = element.includes('M6 18L18 6') || element.includes('M6 6l12 12') ||
+        element.includes('✕') || element.includes('✖');
+    const hasMultiplySign = element.includes('×') && !element.match(/×\d/);
+    if (hasXIcon || (element.includes('×') && hasMultiplySign)) {
       elements.push({
         type: 'close-icon-no-onclick',
         target: null,
@@ -198,6 +224,7 @@ function extractClickableElements(htmlContent, filePath) {
 
   // 3e. 檢測可點擊列表行 (有 active:bg-* 或 hover:bg-* 但無 onclick)
   // 注意: 跳過 <button> 因為已在 3c 處理
+  // 注意: 跳過 group-hover 和 group-active (子元素樣式，不是獨立可點擊)
   const clickableRowRegex = /<(?:div|a)[^>]*(?:active:|hover:)[^>]*>/gi;
   while ((match = clickableRowRegex.exec(htmlContent)) !== null) {
     const tag = match[0];
@@ -205,6 +232,9 @@ function extractClickableElements(htmlContent, filePath) {
     // 跳過已有 onclick 或 href (非 #) 的元素
     if (tag.includes('onclick=')) continue;
     if (tag.includes('href=') && !tag.includes('href="#"')) continue;
+
+    // 跳過 group-hover 和 group-active (子元素樣式，由父元素控制)
+    if (tag.includes('group-hover:') || tag.includes('group-active:')) continue;
 
     // 檢查是否有 active:bg- 或 hover:bg- (表示可點擊樣式)
     if (tag.match(/(?:active:|hover:)bg-/)) {

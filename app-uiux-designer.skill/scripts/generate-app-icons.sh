@@ -12,15 +12,9 @@
 #   source_image - PNG (1024x1024) 或 SVG 來源檔案
 #   output_dir   - 輸出目錄 (預設: ./platform-assets)
 #
-# 支援平台:
-#   - macOS (使用 sips 或 ImageMagick)
-#   - Linux (使用 ImageMagick)
-#   - WSL   (使用 ImageMagick)
-#
-# 需求 (任一):
-#   - sips (macOS 內建)
-#   - ImageMagick: brew install imagemagick (macOS)
-#                  sudo apt install imagemagick (Linux)
+# 需求:
+#   - macOS (使用 sips)
+#   - rsvg-convert 或 ImageMagick (SVG 轉換，可選)
 #
 # 範例:
 #   ./generate-app-icons.sh app-icon.svg ./output
@@ -68,59 +62,22 @@ show_usage() {
 # 函數: 檢查工具
 # ============================================
 check_tools() {
-    # 檢查圖片處理工具 (優先 sips，備選 ImageMagick)
-    RESIZE_TOOL=""
-
-    if command -v sips &> /dev/null; then
-        RESIZE_TOOL="sips"
-        echo -e "${GREEN}✓${NC} sips 可用 (macOS 原生)"
-    elif command -v magick &> /dev/null; then
-        RESIZE_TOOL="magick"
-        echo -e "${GREEN}✓${NC} ImageMagick (magick) 可用"
-    elif command -v convert &> /dev/null; then
-        RESIZE_TOOL="convert"
-        echo -e "${GREEN}✓${NC} ImageMagick (convert) 可用"
-    else
-        echo -e "${RED}✗ 錯誤: 找不到圖片處理工具${NC}"
-        echo -e "  請安裝以下任一工具:"
-        echo -e "    macOS:  sips (內建) 或 brew install imagemagick"
-        echo -e "    Linux:  sudo apt install imagemagick"
-        echo -e "    所有平台: https://imagemagick.org/script/download.php"
+    if ! command -v sips &> /dev/null; then
+        echo -e "${RED}✗ 錯誤: 找不到 sips (需要 macOS)${NC}"
         exit 1
     fi
+    echo -e "${GREEN}✓${NC} sips 可用"
 
-    # 檢查 SVG 轉換工具
     if command -v rsvg-convert &> /dev/null; then
         SVG_TOOL="rsvg-convert"
         echo -e "${GREEN}✓${NC} rsvg-convert 可用 (SVG 轉換)"
-    elif [ "$RESIZE_TOOL" = "magick" ] || [ "$RESIZE_TOOL" = "convert" ]; then
-        SVG_TOOL="$RESIZE_TOOL"
-        echo -e "${GREEN}✓${NC} ImageMagick 可用 (SVG 轉換)"
+    elif command -v convert &> /dev/null; then
+        SVG_TOOL="convert"
+        echo -e "${GREEN}✓${NC} ImageMagick convert 可用 (SVG 轉換)"
     else
         SVG_TOOL=""
         echo -e "${YELLOW}!${NC} 無 SVG 轉換工具 (僅支援 PNG 輸入)"
     fi
-}
-
-# ============================================
-# 函數: 調整圖片大小 (跨平台)
-# ============================================
-resize_image() {
-    local source="$1"
-    local output="$2"
-    local size="$3"
-
-    case "$RESIZE_TOOL" in
-        sips)
-            sips -z "$size" "$size" "$source" --out "$output" > /dev/null 2>&1
-            ;;
-        magick)
-            magick "$source" -resize "${size}x${size}" -gravity center -extent "${size}x${size}" "$output" 2>/dev/null
-            ;;
-        convert)
-            convert "$source" -resize "${size}x${size}" -gravity center -extent "${size}x${size}" "$output" 2>/dev/null
-            ;;
-    esac
 }
 
 # ============================================
@@ -179,7 +136,7 @@ generate_ios_icons() {
     for icon_spec in "${IOS_ICONS[@]}"; do
         IFS=':' read -r filename size <<< "$icon_spec"
         output_path="$ios_dir/$filename"
-        resize_image "$source" "$output_path" "$size"
+        sips -z "$size" "$size" "$source" --out "$output_path" > /dev/null 2>&1
         echo -e "  ${GREEN}✓${NC} $filename (${size}x${size})"
     done
 
@@ -240,9 +197,9 @@ generate_android_icons() {
         mkdir -p "$output_dir"
 
         # ic_launcher.png
-        resize_image "$source" "$output_dir/ic_launcher.png" "$size"
+        sips -z "$size" "$size" "$source" --out "$output_dir/ic_launcher.png" > /dev/null 2>&1
         # ic_launcher_round.png
-        resize_image "$source" "$output_dir/ic_launcher_round.png" "$size"
+        sips -z "$size" "$size" "$source" --out "$output_dir/ic_launcher_round.png" > /dev/null 2>&1
 
         echo -e "  ${GREEN}✓${NC} $folder/ic_launcher.png (${size}x${size})"
     done
@@ -256,13 +213,13 @@ generate_android_icons() {
         IFS=':' read -r folder base_size <<< "$mipmap_spec"
         output_dir="$android_dir/$folder"
         adaptive_size=$(echo "$base_size * 108 / 48" | bc)
-        resize_image "$source" "$output_dir/ic_launcher_foreground.png" "$adaptive_size"
+        sips -z "$adaptive_size" "$adaptive_size" "$source" --out "$output_dir/ic_launcher_foreground.png" > /dev/null 2>&1
         echo -e "  ${GREEN}✓${NC} $folder/ic_launcher_foreground.png (${adaptive_size}x${adaptive_size})"
     done
 
     # Play Store icon (512x512)
     mkdir -p "$android_dir/playstore"
-    resize_image "$source" "$android_dir/playstore/ic_launcher-playstore.png" 512
+    sips -z 512 512 "$source" --out "$android_dir/playstore/ic_launcher-playstore.png" > /dev/null 2>&1
     echo -e "  ${GREEN}✓${NC} playstore/ic_launcher-playstore.png (512x512)"
 
     # Adaptive Icon XML

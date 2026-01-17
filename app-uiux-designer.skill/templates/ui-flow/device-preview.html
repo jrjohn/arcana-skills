@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{PROJECT_NAME}} - Device Preview</title>
+  <title>單字小達人 - Device Preview</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root {
@@ -52,17 +52,6 @@
       box-shadow: inset 0 0 3px rgba(0,0,0,0.5);
     }
 
-    .ipad-frame .camera::after {
-      content: '';
-      position: absolute;
-      top: 3px;
-      left: 3px;
-      width: 6px;
-      height: 6px;
-      background: radial-gradient(circle at 30% 30%, #2a4a6a, #1a2a3a);
-      border-radius: 50%;
-    }
-
     .ipad-screen {
       width: 1024px;
       height: 768px;
@@ -93,18 +82,6 @@
       position: relative;
     }
 
-    .ipad-mini-frame::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 8px;
-      transform: translateY(-50%);
-      width: 3px;
-      height: 60px;
-      background: linear-gradient(to bottom, #3a3a3c, #2a2a2c);
-      border-radius: 2px;
-    }
-
     .ipad-mini-frame .camera {
       position: absolute;
       top: 50%;
@@ -122,7 +99,7 @@
       background: #000;
       border-radius: 6px;
       overflow: hidden;
-      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.3);
+      position: relative;
     }
 
     .ipad-mini-screen iframe {
@@ -133,22 +110,21 @@
       border: none;
     }
 
-    /* iPhone 16 Pro Frame */
+    /* iPhone Frame */
     .iphone-frame {
-      background: linear-gradient(145deg, #3a3a3c, #1a1a1c);
+      background: linear-gradient(145deg, #2d2d2f, #1a1a1c);
       border-radius: 55px;
-      padding: 14px;
+      padding: 12px;
       box-shadow:
         0 0 0 1px rgba(255,255,255,0.1),
-        0 0 0 3px #1a1a1c,
-        0 0 0 4px rgba(255,255,255,0.05),
-        0 50px 100px rgba(0,0,0,0.5);
+        0 40px 80px rgba(0,0,0,0.5),
+        inset 0 1px 0 rgba(255,255,255,0.1);
       position: relative;
     }
 
     .iphone-frame .dynamic-island {
       position: absolute;
-      top: 22px;
+      top: 24px;
       left: 50%;
       transform: translateX(-50%);
       width: 126px;
@@ -163,7 +139,7 @@
       right: -3px;
       top: 140px;
       width: 4px;
-      height: 95px;
+      height: 80px;
       background: linear-gradient(to right, #3a3a3c, #2a2a2c);
       border-radius: 0 2px 2px 0;
     }
@@ -173,7 +149,7 @@
       left: -3px;
       top: 100px;
       width: 4px;
-      height: 35px;
+      height: 32px;
       background: linear-gradient(to left, #3a3a3c, #2a2a2c);
       border-radius: 2px 0 0 2px;
     }
@@ -181,9 +157,9 @@
     .iphone-frame .volume-down {
       position: absolute;
       left: -3px;
-      top: 145px;
+      top: 140px;
       width: 4px;
-      height: 55px;
+      height: 50px;
       background: linear-gradient(to left, #3a3a3c, #2a2a2c);
       border-radius: 2px 0 0 2px;
     }
@@ -213,18 +189,18 @@
       border: none;
     }
 
-    /* Hide scrollbars in all device screens */
+    /* Hide scrollbars */
     .ipad-screen iframe,
     .ipad-mini-screen iframe,
     .iphone-screen iframe {
-      scrollbar-width: none; /* Firefox */
-      -ms-overflow-style: none; /* IE/Edge */
+      scrollbar-width: none;
+      -ms-overflow-style: none;
     }
 
     .ipad-screen iframe::-webkit-scrollbar,
     .ipad-mini-screen iframe::-webkit-scrollbar,
     .iphone-screen iframe::-webkit-scrollbar {
-      display: none; /* Chrome/Safari/Opera */
+      display: none;
     }
 
     /* Device Selector */
@@ -240,9 +216,9 @@
 
     .device-btn.active {
       background: white;
-      color: #4f46e5;
-      border-color: #4f46e5;
-      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+      color: #4F46E5;
+      border-color: #6366F1;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
     }
 
     /* Screen List */
@@ -257,17 +233,19 @@
 
     .screen-item.active {
       background: rgba(99, 102, 241, 0.15);
-      border-left-color: #4f46e5;
+      border-left-color: #6366F1;
     }
 
     /* Module Badge Colors */
     .badge-auth { background: #6366F1; }
     .badge-onboard { background: #8B5CF6; }
-    .badge-dash { background: #F59E0B; }
-    .badge-feature { background: #10B981; }
-    .badge-profile { background: #EC4899; }
-    .badge-report { background: #3B82F6; }
+    .badge-home { background: #F59E0B; }
+    .badge-vocab { background: #10B981; }
+    .badge-train { background: #3B82F6; }
+    .badge-report { background: #EC4899; }
     .badge-setting { background: #64748B; }
+    .badge-parent { background: #14B8A6; }
+    .badge-common { background: #78716C; }
 
     /* Scrollbar */
     .screen-list::-webkit-scrollbar {
@@ -282,10 +260,6 @@
     .screen-list::-webkit-scrollbar-thumb {
       background: rgba(0,0,0,0.2);
       border-radius: 3px;
-    }
-
-    .screen-list::-webkit-scrollbar-thumb:hover {
-      background: rgba(0,0,0,0.3);
     }
 
     /* Preview container */
@@ -322,14 +296,11 @@
       <!-- Logo -->
       <div class="p-5 border-b border-gray-100">
         <div class="flex items-center gap-3">
-          <!-- App Icon (SVG placeholder - replace with project icon) -->
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z"/>
-            </svg>
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
+            <span class="text-xl">📚</span>
           </div>
           <div>
-            <h1 class="font-bold text-gray-800 text-lg">{{PROJECT_NAME}}</h1>
+            <h1 class="font-bold text-gray-800 text-lg">單字小達人</h1>
             <p class="text-xs text-gray-500">Device Preview</p>
           </div>
         </div>
@@ -366,23 +337,42 @@
       <!-- Screen List -->
       <div class="flex-1 overflow-y-auto screen-list">
         <div class="p-4">
-          <p class="text-xs font-semibold text-gray-400 mb-3 tracking-wider">SCREENS ({{TOTAL_SCREENS}})</p>
+          <p class="text-xs font-semibold text-gray-400 mb-3 tracking-wider">SCREENS (42)</p>
+
+          <!-- {{MODULE_SECTIONS}} -->
+          <!-- Each module section should follow this format:
+          <div class="mb-5">
+            <p class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full badge-{module}"></span>
+              {MODULE} ({COUNT})
+            </p>
+            <div class="space-y-1">
+              <div class="screen-item active px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('{module}/SCR-{MODULE}-001-{name}.html', this)" data-iphone="iphone/SCR-{MODULE}-001-{name}.html">
+                <span class="text-sm text-gray-700">SCR-{MODULE}-001 {Screen Name}</span>
+              </div>
+            </div>
+          </div>
+          -->
 
           <!-- AUTH Module -->
           <div class="mb-5">
             <p class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2">
               <span class="w-2 h-2 rounded-full badge-auth"></span>
-              AUTH ({{AUTH_COUNT}})
+              AUTH (4)
             </p>
             <div class="space-y-1">
-              <!-- Screen items - Template -->
-              <div class="screen-item active px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('auth/SCR-AUTH-001-login.html', this)" data-iphone="iphone/SCR-AUTH-001-login.html">
-                <span class="text-sm text-gray-700">SCR-AUTH-001 登入頁</span>
+              <div class="screen-item active px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('auth/SCR-AUTH-001-splash.html', this)">
+                <span class="text-sm text-gray-700">SCR-AUTH-001 啟動畫面</span>
               </div>
-              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('auth/SCR-AUTH-002-register.html', this)" data-iphone="iphone/SCR-AUTH-002-register.html">
-                <span class="text-sm text-gray-700">SCR-AUTH-002 註冊頁</span>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('auth/SCR-AUTH-002-login.html', this)">
+                <span class="text-sm text-gray-700">SCR-AUTH-002 登入</span>
               </div>
-              <!-- Add more screen items as needed -->
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('auth/SCR-AUTH-003-register.html', this)">
+                <span class="text-sm text-gray-700">SCR-AUTH-003 註冊</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('auth/SCR-AUTH-004-forgot-password.html', this)">
+                <span class="text-sm text-gray-700">SCR-AUTH-004 忘記密碼</span>
+              </div>
             </div>
           </div>
 
@@ -390,21 +380,130 @@
           <div class="mb-5">
             <p class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2">
               <span class="w-2 h-2 rounded-full badge-onboard"></span>
-              ONBOARD ({{ONBOARD_COUNT}})
+              ONBOARD (3)
             </p>
             <div class="space-y-1">
-              <!-- Screen items for ONBOARD module -->
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('onboard/SCR-ONBOARD-001-welcome.html', this)">
+                <span class="text-sm text-gray-700">SCR-ONBOARD-001 歡迎</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('onboard/SCR-ONBOARD-002-role-select.html', this)">
+                <span class="text-sm text-gray-700">SCR-ONBOARD-002 角色選擇</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('onboard/SCR-ONBOARD-003-setup-complete.html', this)">
+                <span class="text-sm text-gray-700">SCR-ONBOARD-003 設定完成</span>
+              </div>
             </div>
           </div>
 
-          <!-- DASH Module -->
+          <!-- HOME Module -->
           <div class="mb-5">
             <p class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full badge-dash"></span>
-              DASH ({{DASH_COUNT}})
+              <span class="w-2 h-2 rounded-full badge-home"></span>
+              HOME (2)
             </p>
             <div class="space-y-1">
-              <!-- Screen items for DASH module -->
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('home/SCR-HOME-001-student-home.html', this)">
+                <span class="text-sm text-gray-700">SCR-HOME-001 學生首頁</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('home/SCR-HOME-002-parent-home.html', this)">
+                <span class="text-sm text-gray-700">SCR-HOME-002 家長首頁</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- VOCAB Module -->
+          <div class="mb-5">
+            <p class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full badge-vocab"></span>
+              VOCAB (8)
+            </p>
+            <div class="space-y-1">
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('vocab/SCR-VOCAB-001-bank-list.html', this)">
+                <span class="text-sm text-gray-700">SCR-VOCAB-001 單字庫列表</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('vocab/SCR-VOCAB-002-bank-detail.html', this)">
+                <span class="text-sm text-gray-700">SCR-VOCAB-002 單字庫詳情</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('vocab/SCR-VOCAB-003-word-detail.html', this)">
+                <span class="text-sm text-gray-700">SCR-VOCAB-003 單字詳情</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('vocab/SCR-VOCAB-004-add-word.html', this)">
+                <span class="text-sm text-gray-700">SCR-VOCAB-004 新增單字</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('vocab/SCR-VOCAB-005-import.html', this)">
+                <span class="text-sm text-gray-700">SCR-VOCAB-005 匯入單字</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('vocab/SCR-VOCAB-006-export.html', this)">
+                <span class="text-sm text-gray-700">SCR-VOCAB-006 匯出單字</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('vocab/SCR-VOCAB-007-ocr-scan.html', this)">
+                <span class="text-sm text-gray-700">SCR-VOCAB-007 OCR掃描</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('vocab/SCR-VOCAB-008-community.html', this)">
+                <span class="text-sm text-gray-700">SCR-VOCAB-008 社群單字庫</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- TRAIN Module -->
+          <div class="mb-5">
+            <p class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full badge-train"></span>
+              TRAIN (10)
+            </p>
+            <div class="space-y-1">
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('train/SCR-TRAIN-001-mode-select.html', this)">
+                <span class="text-sm text-gray-700">SCR-TRAIN-001 模式選擇</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('train/SCR-TRAIN-002-listening.html', this)">
+                <span class="text-sm text-gray-700">SCR-TRAIN-002 聽力訓練</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('train/SCR-TRAIN-003-listening-result.html', this)">
+                <span class="text-sm text-gray-700">SCR-TRAIN-003 聽力結果</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('train/SCR-TRAIN-004-pronunciation.html', this)">
+                <span class="text-sm text-gray-700">SCR-TRAIN-004 發音練習</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('train/SCR-TRAIN-005-pronunciation-result.html', this)">
+                <span class="text-sm text-gray-700">SCR-TRAIN-005 發音結果</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('train/SCR-TRAIN-006-spelling.html', this)">
+                <span class="text-sm text-gray-700">SCR-TRAIN-006 拼音練習</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('train/SCR-TRAIN-007-spelling-result.html', this)">
+                <span class="text-sm text-gray-700">SCR-TRAIN-007 拼音結果</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('train/SCR-TRAIN-008-sentence-fill.html', this)">
+                <span class="text-sm text-gray-700">SCR-TRAIN-008 句子填空</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('train/SCR-TRAIN-009-matching.html', this)">
+                <span class="text-sm text-gray-700">SCR-TRAIN-009 點選配對</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('train/SCR-TRAIN-010-session-complete.html', this)">
+                <span class="text-sm text-gray-700">SCR-TRAIN-010 練習完成</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- REPORT Module -->
+          <div class="mb-5">
+            <p class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full badge-report"></span>
+              REPORT (4)
+            </p>
+            <div class="space-y-1">
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('report/SCR-REPORT-001-overview.html', this)">
+                <span class="text-sm text-gray-700">SCR-REPORT-001 統計總覽</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('report/SCR-REPORT-002-daily.html', this)">
+                <span class="text-sm text-gray-700">SCR-REPORT-002 每日報表</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('report/SCR-REPORT-003-weekly.html', this)">
+                <span class="text-sm text-gray-700">SCR-REPORT-003 每週報表</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('report/SCR-REPORT-004-word-analysis.html', this)">
+                <span class="text-sm text-gray-700">SCR-REPORT-004 單字分析</span>
+              </div>
             </div>
           </div>
 
@@ -412,21 +511,71 @@
           <div class="mb-5">
             <p class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2">
               <span class="w-2 h-2 rounded-full badge-setting"></span>
-              SETTING ({{SETTING_COUNT}})
+              SETTING (5)
             </p>
             <div class="space-y-1">
-              <!-- Screen items for SETTING module -->
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('setting/SCR-SETTING-001-main.html', this)">
+                <span class="text-sm text-gray-700">SCR-SETTING-001 設定主頁</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('setting/SCR-SETTING-002-tts.html', this)">
+                <span class="text-sm text-gray-700">SCR-SETTING-002 語音設定</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('setting/SCR-SETTING-003-pronunciation.html', this)">
+                <span class="text-sm text-gray-700">SCR-SETTING-003 發音設定</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('setting/SCR-SETTING-004-notification.html', this)">
+                <span class="text-sm text-gray-700">SCR-SETTING-004 通知設定</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('setting/SCR-SETTING-005-account.html', this)">
+                <span class="text-sm text-gray-700">SCR-SETTING-005 帳號管理</span>
+              </div>
             </div>
           </div>
 
-          <!-- Add more module sections as needed -->
+          <!-- PARENT Module -->
+          <div class="mb-5">
+            <p class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full badge-parent"></span>
+              PARENT (4)
+            </p>
+            <div class="space-y-1">
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('parent/SCR-PARENT-001-dashboard.html', this)">
+                <span class="text-sm text-gray-700">SCR-PARENT-001 家長儀表板</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('parent/SCR-PARENT-002-assign-vocab.html', this)">
+                <span class="text-sm text-gray-700">SCR-PARENT-002 指派單字庫</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('parent/SCR-PARENT-003-child-progress.html', this)">
+                <span class="text-sm text-gray-700">SCR-PARENT-003 孩子進度</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('parent/SCR-PARENT-004-sentence-manage.html', this)">
+                <span class="text-sm text-gray-700">SCR-PARENT-004 例句管理</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- COMMON Module -->
+          <div class="mb-5">
+            <p class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full badge-common"></span>
+              COMMON (2)
+            </p>
+            <div class="space-y-1">
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('common/SCR-COMMON-001-loading.html', this)">
+                <span class="text-sm text-gray-700">SCR-COMMON-001 載入中</span>
+              </div>
+              <div class="screen-item px-3 py-2.5 rounded-lg cursor-pointer" onclick="loadScreen('common/SCR-COMMON-002-error.html', this)">
+                <span class="text-sm text-gray-700">SCR-COMMON-002 錯誤頁面</span>
+              </div>
+            </div>
+          </div>
 
         </div>
       </div>
 
       <!-- Footer -->
-      <div class="p-4 border-t border-gray-100">
-        <a href="index.html" class="flex items-center justify-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium">
+      <div class="p-4 border-t border-gray-100 bg-gray-50">
+        <a href="index.html" class="flex items-center justify-center gap-2 text-sm text-gray-600 hover:text-indigo-600 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
           </svg>
@@ -436,28 +585,29 @@
     </div>
 
     <!-- Preview Area -->
-    <div class="flex-1 overflow-auto bg-gradient-to-br from-slate-100 to-slate-200">
+    <div class="flex-1 bg-gradient-to-br from-slate-100 via-slate-150 to-slate-200 overflow-auto">
       <div class="preview-container">
 
-        <!-- iPad Frame -->
+        <!-- iPad Pro Frame -->
         <div id="device-ipad" class="ipad-frame relative">
           <div class="camera"></div>
           <div class="ipad-screen">
-            <iframe id="preview-iframe-ipad" src="auth/SCR-AUTH-001-login.html"></iframe>
+            <iframe id="preview-iframe-ipad" src="auth/SCR-AUTH-001-splash.html"></iframe>
           </div>
-          <div class="device-label">iPad Pro 11" - 1024 x 768</div>
+          <div class="device-label">iPad Pro - 1024 x 768 (scaled from 1194 x 834)</div>
         </div>
 
         <!-- iPad Mini Frame -->
         <div id="device-ipad-mini" class="ipad-mini-frame hidden relative">
           <div class="camera"></div>
           <div class="ipad-mini-screen">
-            <iframe id="preview-iframe-ipad-mini" src="auth/SCR-AUTH-001-login.html"></iframe>
+            <iframe id="preview-iframe-ipad-mini" src="auth/SCR-AUTH-001-splash.html"></iframe>
           </div>
           <div class="device-label">iPad Mini - 597 x 417</div>
         </div>
 
         <!-- iPhone Frame -->
+        <!-- Note: Uses iPad version by default. If iPhone-specific screens exist in iphone/, update src accordingly -->
         <div id="device-iphone" class="iphone-frame hidden relative">
           <div class="dynamic-island"></div>
           <div class="side-button"></div>
@@ -465,7 +615,7 @@
           <div class="volume-down"></div>
           <div class="mute-switch"></div>
           <div class="iphone-screen">
-            <iframe id="preview-iframe-iphone" src="iphone/SCR-AUTH-001-login.html"></iframe>
+            <iframe id="preview-iframe-iphone" src="auth/SCR-AUTH-001-splash.html"></iframe>
           </div>
           <div class="device-label">iPhone 16 Pro - 393 x 852</div>
         </div>
@@ -476,27 +626,25 @@
 
   <script>
     let currentDevice = 'ipad';
-    let currentScreen = 'auth/SCR-AUTH-001-login.html';
+    // Initialize to the first screen in the sidebar (must match the first .screen-item's loadScreen path)
+    let currentScreen = '{{FIRST_SCREEN_PATH}}'; // e.g., 'auth/SCR-AUTH-001-login.html'
     let currentElement = document.querySelector('.screen-item.active');
 
     function setDevice(device) {
-      // Hide all devices
       document.getElementById('device-ipad').classList.add('hidden');
       document.getElementById('device-ipad-mini').classList.add('hidden');
       document.getElementById('device-iphone').classList.add('hidden');
 
-      // Remove active class from all buttons
       document.getElementById('btn-ipad').classList.remove('active');
       document.getElementById('btn-ipad-mini').classList.remove('active');
       document.getElementById('btn-iphone').classList.remove('active');
 
-      // Show selected device
       document.getElementById('device-' + device).classList.remove('hidden');
       document.getElementById('btn-' + device).classList.add('active');
 
       currentDevice = device;
 
-      // Update iframe src for the new device
+      // Update iframe sources for the new device
       updateIframeSrc();
     }
 
@@ -504,29 +652,24 @@
       currentScreen = url;
       currentElement = element;
 
-      // Remove active class from all screen items
       document.querySelectorAll('.screen-item').forEach(item => {
         item.classList.remove('active');
       });
 
-      // Add active class to clicked item
       element.classList.add('active');
-
-      // Scroll the active item into view
       element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-      // Update iframe src
       updateIframeSrc();
     }
 
     function updateIframeSrc() {
       let ipadUrl = currentScreen;
-      let iphoneUrl = currentScreen;
 
-      // If currentScreen is already an iPhone path, derive iPad path from it
+      // If currentScreen starts with 'iphone/', convert back to iPad path
       if (currentScreen.startsWith('iphone/')) {
-        // iphone/SCR-AUTH-001-login.html -> need to find iPad path
-        // Use data-iphone to find the matching sidebar item and get iPad path
+        // Extract filename from iPhone path and find in current module
+        const filename = currentScreen.replace('iphone/', '');
+        // Try to find the matching iPad screen from sidebar
         if (currentElement) {
           const onclick = currentElement.getAttribute('onclick');
           if (onclick) {
@@ -536,15 +679,12 @@
             }
           }
         }
-        iphoneUrl = currentScreen;
-      } else {
-        // currentScreen is iPad path, derive iPhone path
-        if (currentElement) {
-          const dataIphone = currentElement.getAttribute('data-iphone');
-          if (dataIphone) {
-            iphoneUrl = dataIphone;
-          } else {
-            iphoneUrl = currentScreen.replace(/^([a-z]+)\//, 'iphone/');
+        // Fallback: derive from filename
+        if (ipadUrl.startsWith('iphone/')) {
+          const parts = filename.match(/SCR-([A-Z]+)-/);
+          if (parts) {
+            const module = parts[1].toLowerCase();
+            ipadUrl = module + '/' + filename;
           }
         }
       }
@@ -553,23 +693,24 @@
       document.getElementById('preview-iframe-ipad').src = ipadUrl;
       document.getElementById('preview-iframe-ipad-mini').src = ipadUrl;
 
-      // Set iPhone iframe to iPhone URL
+      // Set iPhone iframe - derive iPhone path from iPad path
+      // Convert module/SCR-xxx.html to iphone/SCR-xxx.html
+      const iphoneUrl = 'iphone/' + ipadUrl.replace(/^[a-z]+\//, '');
       document.getElementById('preview-iframe-iphone').src = iphoneUrl;
     }
 
-    // Sync sidebar when iframe navigates
     function syncSidebarFromIframe(iframeSrc) {
       const urlParts = iframeSrc.split('/');
       const filename = urlParts[urlParts.length - 1].split('?')[0].split('#')[0];
 
       // Extract screen ID (e.g., "SCR-AUTH-004" from "SCR-AUTH-004-role.html")
-      const screenIdMatch = filename.match(/SCR-[A-Z]+-\d+/);
+      const screenIdMatch = filename.match(/SCR-[A-Z]+-\d+[a-z]?/);
       if (!screenIdMatch) return;
 
       const screenId = screenIdMatch[0];
 
       // Also extract the relative path for data-iphone matching
-      const pathMatch = iframeSrc.match(/(?:iphone|auth|home|vocab|train|report|setting)\/[^?#]+/);
+      const pathMatch = iframeSrc.match(/(?:iphone|auth|home|vocab|train|report|setting|onboard|parent|common)\/[^?#]+/);
       const relativePath = pathMatch ? pathMatch[0] : null;
 
       const screenItems = document.querySelectorAll('.screen-item');
@@ -618,7 +759,6 @@
       }
     }
 
-    // Get the currently visible iframe
     function getActiveIframe() {
       if (!document.getElementById('device-ipad').classList.contains('hidden')) {
         return document.getElementById('preview-iframe-ipad');
@@ -629,7 +769,6 @@
       }
     }
 
-    // Listen for iframe load events
     function setupIframeListeners() {
       const iframes = [
         document.getElementById('preview-iframe-ipad'),
@@ -639,7 +778,6 @@
 
       iframes.forEach(iframe => {
         iframe.addEventListener('load', function() {
-          // Only sync if this is the currently visible iframe
           if (iframe === getActiveIframe()) {
             try {
               const iframeSrc = iframe.contentWindow.location.href;
@@ -652,25 +790,20 @@
       });
     }
 
-    // Initialize listeners when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
       setupIframeListeners();
 
-      // Check for URL parameters
       const urlParams = new URLSearchParams(window.location.search);
 
-      // Read device parameter and set device (default: ipad)
       const deviceParam = urlParams.get('device');
       if (deviceParam && ['ipad', 'ipad-mini', 'iphone'].includes(deviceParam)) {
         setDevice(deviceParam);
       }
 
-      // Check for screen parameter in URL
       const screenParam = urlParams.get('screen');
 
       if (screenParam) {
         // Auto-detect device from screen path
-        // If path starts with "iphone/", automatically switch to iPhone device
         if (screenParam.startsWith('iphone/') && currentDevice !== 'iphone') {
           setDevice('iphone');
         }
@@ -678,7 +811,7 @@
         const screenItems = document.querySelectorAll('.screen-item');
         let foundItem = null;
 
-        // Extract screen ID (e.g., "SCR-AUTH-004" or "SCR-AUTH-003a" from "iphone/SCR-AUTH-004-role.html")
+        // Extract screen ID
         const screenIdMatch = screenParam.match(/SCR-[A-Z]+-\d+[a-z]?/);
         const screenId = screenIdMatch ? screenIdMatch[0] : null;
 
@@ -686,7 +819,6 @@
           const onclick = item.getAttribute('onclick');
           const dataIphone = item.getAttribute('data-iphone');
 
-          // Check onclick, data-iphone, or screen ID match
           if (onclick && onclick.includes(screenParam)) {
             foundItem = item;
           } else if (dataIphone && dataIphone.includes(screenParam)) {
@@ -699,19 +831,7 @@
         });
 
         if (foundItem) {
-          // Load the screen using the actual URL parameter (which already contains correct device path)
           loadScreen(screenParam, foundItem);
-
-          // Expand parent module section if collapsed
-          const parentSection = foundItem.closest('.module-section');
-          if (parentSection) {
-            const content = parentSection.querySelector('.module-content');
-            const toggle = parentSection.querySelector('.module-toggle');
-            if (content && toggle) {
-              content.style.display = 'block';
-              toggle.textContent = '-';
-            }
-          }
         }
       }
     });

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - 註冊</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/project-theme.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          screens: { 'phone': {'max': '500px'}, 'tablet': {'min': '501px'} },
+          colors: { primary: '{{PRIMARY_COLOR}}', secondary: '{{SECONDARY_COLOR}}', accent: '{{ACCENT_COLOR}}' }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { --ipad-width: 1194px; --ipad-height: 834px; --iphone-width: 393px; --iphone-height: 852px; }
+    body { width: var(--ipad-width); height: var(--ipad-height); overflow: hidden; margin: 0; }
+    @media (max-width: 500px) { body { width: var(--iphone-width); height: var(--iphone-height); } }
+  </style>
+</head>
+<body class="bg-gradient-to-b from-slate-50 to-slate-100">
+  <div class="w-full h-full flex flex-col">
+
+    <!-- Header -->
+    <header class="px-4 py-4 tablet:px-8 tablet:py-6 flex items-center">
+      <button onclick="location.href='SCR-AUTH-{{NUM_LOGIN}}-login.html'"
+              class="w-10 h-10 tablet:w-12 tablet:h-12 rounded-full bg-white shadow flex items-center justify-center hover:bg-gray-50">
+        <svg class="w-5 h-5 tablet:w-6 tablet:h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Content -->
+    <main class="flex-1 flex items-center justify-center px-6 tablet:px-12 overflow-auto py-4">
+      <div class="w-full max-w-sm tablet:max-w-md">
+        <!-- Title -->
+        <div class="text-center mb-6 tablet:mb-8">
+          <span class="text-5xl tablet:text-6xl mb-4 block">{{REGISTER_EMOJI}}</span>
+          <h1 class="text-2xl tablet:text-3xl font-bold text-gray-800">建立帳號</h1>
+          <p class="text-gray-500 mt-2">開始您的旅程</p>
+        </div>
+
+        <!-- Form -->
+        <div class="space-y-4 tablet:space-y-5">
+          <div>
+            <label class="block text-sm tablet:text-base text-gray-600 mb-2">名稱</label>
+            <input type="text" placeholder="您的名稱"
+                   class="w-full h-12 tablet:h-14 px-4 rounded-xl border-2 border-gray-200 focus:border-primary focus:outline-none text-base tablet:text-lg">
+          </div>
+
+          <div>
+            <label class="block text-sm tablet:text-base text-gray-600 mb-2">電子郵件</label>
+            <input type="email" placeholder="name@example.com"
+                   class="w-full h-12 tablet:h-14 px-4 rounded-xl border-2 border-gray-200 focus:border-primary focus:outline-none text-base tablet:text-lg">
+          </div>
+
+          <div>
+            <label class="block text-sm tablet:text-base text-gray-600 mb-2">密碼</label>
+            <input type="password" placeholder="至少 8 個字元"
+                   class="w-full h-12 tablet:h-14 px-4 rounded-xl border-2 border-gray-200 focus:border-primary focus:outline-none text-base tablet:text-lg">
+          </div>
+
+          <div>
+            <label class="block text-sm tablet:text-base text-gray-600 mb-2">確認密碼</label>
+            <input type="password" placeholder="再次輸入密碼"
+                   class="w-full h-12 tablet:h-14 px-4 rounded-xl border-2 border-gray-200 focus:border-primary focus:outline-none text-base tablet:text-lg">
+          </div>
+
+          <label class="flex items-start gap-3 text-sm tablet:text-base text-gray-600">
+            <input type="checkbox" class="w-5 h-5 rounded accent-primary mt-0.5">
+            <span>我同意 <a href="SCR-SETTING-{{NUM_TERMS}}-terms.html" class="text-primary hover:underline">使用條款</a> 和 <a href="SCR-SETTING-{{NUM_PRIVACY}}-privacy-policy.html" class="text-primary hover:underline">隱私政策</a></span>
+          </label>
+
+          <button onclick="location.href='{{REGISTER_SUCCESS_TARGET}}'"
+                  class="w-full h-14 tablet:h-16 bg-primary hover:bg-teal-600 text-white text-lg tablet:text-xl font-bold rounded-full shadow-lg transition-all mt-4">
+            註冊
+          </button>
+        </div>
+
+        <!-- Login Link -->
+        <p class="text-center mt-6 tablet:mt-8 text-sm tablet:text-base text-gray-600">
+          已有帳號？
+          <button onclick="location.href='SCR-AUTH-{{NUM_LOGIN}}-login.html'" class="text-primary font-semibold hover:underline">
+            立即登入
+          </button>
+        </p>
+      </div>
+    </main>
+  </div>
+
+<script src="../shared/notify-parent.js"></script>
+</body>
+</html>
+
+<!--
+@template-type: common-module
+@module: AUTH
+@screen-type: register
+@required: true
+@variables: PROJECT_NAME, PRIMARY_COLOR, SECONDARY_COLOR, ACCENT_COLOR, REGISTER_EMOJI, NUM_LOGIN, NUM_TERMS, NUM_PRIVACY, REGISTER_SUCCESS_TARGET
+-->

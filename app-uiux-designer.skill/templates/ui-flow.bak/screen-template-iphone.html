@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=393, height=852, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - {{SCREEN_NAME}} (iPhone)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/project-theme.css">
+  <style>
+    /* iPhone-specific styles */
+    body {
+      width: 393px;
+      height: 852px;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-b from-slate-50 to-slate-100 min-h-screen">
+
+  <!-- iPhone Container (393x852) -->
+  <div class="w-[393px] h-[852px] mx-auto relative overflow-hidden">
+
+    <!-- Status Bar Area (for Dynamic Island) -->
+    <div class="h-12"></div>
+
+    <!-- Header -->
+    <header class="bg-white/80 backdrop-blur-lg border-b border-gray-200 px-4 py-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <!-- Back Button -->
+          <button class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition">
+            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+          </button>
+          <h1 class="text-lg font-bold text-gray-800">{{SCREEN_TITLE}}</h1>
+        </div>
+        <div class="flex items-center gap-2">
+          <!-- Action buttons -->
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="p-4 pb-24">
+      <!-- Your screen content goes here -->
+      <div class="bg-white rounded-2xl shadow-lg p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-3">{{SCREEN_NAME}}</h2>
+        <p class="text-gray-600 text-sm">Screen content placeholder. Replace with actual UI components.</p>
+      </div>
+    </main>
+
+    <!-- Bottom Navigation (Fixed) -->
+    <!--
+    <nav class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-200 pb-safe">
+      <div class="flex justify-around items-center h-16 w-[393px] mx-auto px-4">
+        <a href="#" class="flex flex-col items-center gap-0.5 text-indigo-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+          </svg>
+          <span class="text-[10px] font-medium">Home</span>
+        </a>
+        <a href="#" class="flex flex-col items-center gap-0.5 text-gray-400 hover:text-gray-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span class="text-[10px] font-medium">Settings</span>
+        </a>
+      </div>
+    </nav>
+    -->
+
+    <!-- Home Indicator -->
+    <div class="fixed bottom-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-gray-800/20 rounded-full"></div>
+
+  </div>
+
+<!-- IMPORTANT: Include notify-parent.js for device-preview.html sidebar sync -->
+<script src="../shared/notify-parent.js"></script>
+</body>
+</html>
+
+<!--
+@requirements: {{REQ_ID}}
+@screen-id: {{SCREEN_ID}}
+@screen-name: {{SCREEN_NAME}} (iPhone)
+@description: {{SCREEN_DESCRIPTION}}
+@acceptance-criteria:
+  - AC1: {{AC1}}
+  - AC2: {{AC2}}
+-->

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - 關於</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/project-theme.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          screens: { 'phone': {'max': '500px'}, 'tablet': {'min': '501px'} },
+          colors: { primary: '{{PRIMARY_COLOR}}' }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { --ipad-width: 1194px; --ipad-height: 834px; --iphone-width: 393px; --iphone-height: 852px; }
+    body { width: var(--ipad-width); height: var(--ipad-height); overflow: hidden; margin: 0; }
+    @media (max-width: 500px) { body { width: var(--iphone-width); height: var(--iphone-height); } }
+  </style>
+</head>
+<body class="bg-slate-100">
+  <div class="w-full h-full flex flex-col">
+
+    <!-- Header -->
+    <header class="px-4 py-4 tablet:px-8 tablet:py-6 flex items-center border-b border-gray-200 bg-white">
+      <button onclick="location.href='SCR-SETTING-{{NUM_MAIN}}-main.html'"
+              class="w-10 h-10 tablet:w-12 tablet:h-12 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200">
+        <svg class="w-5 h-5 tablet:w-6 tablet:h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <h1 class="ml-4 text-xl tablet:text-2xl font-bold text-gray-800">關於</h1>
+    </header>
+
+    <!-- Content -->
+    <main class="flex-1 overflow-auto">
+      <div class="max-w-2xl mx-auto px-4 tablet:px-6">
+
+        <!-- App Info Section -->
+        <div class="mt-8 flex flex-col items-center">
+          <div class="w-24 h-24 tablet:w-28 tablet:h-28 rounded-3xl bg-gradient-to-br from-primary to-teal-500 flex items-center justify-center shadow-lg">
+            <span class="text-4xl tablet:text-5xl">{{APP_EMOJI}}</span>
+          </div>
+          <h2 class="mt-4 text-2xl tablet:text-3xl font-bold text-gray-800">{{PROJECT_NAME}}</h2>
+          <p class="text-gray-500 text-base tablet:text-lg mt-1">版本 {{APP_VERSION}}</p>
+        </div>
+
+        <!-- Description -->
+        <div class="mt-8 text-center">
+          <p class="text-gray-600 text-base tablet:text-lg leading-relaxed">
+            {{APP_DESCRIPTION}}
+          </p>
+        </div>
+
+        <!-- Links Section -->
+        <div class="mt-8">
+          <div class="bg-white rounded-2xl overflow-hidden shadow-sm divide-y divide-gray-100">
+            <button onclick="location.href='SCR-SETTING-{{NUM_TERMS}}-terms.html'"
+                    class="w-full p-4 tablet:p-5 flex items-center justify-between hover:bg-gray-50">
+              <span class="text-base tablet:text-lg text-gray-800">使用條款</span>
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <button onclick="location.href='SCR-SETTING-{{NUM_PRIVACY_POLICY}}-privacy-policy.html'"
+                    class="w-full p-4 tablet:p-5 flex items-center justify-between hover:bg-gray-50">
+              <span class="text-base tablet:text-lg text-gray-800">隱私政策</span>
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <button onclick="location.href='SCR-SETTING-{{NUM_LICENSES}}-licenses.html'"
+                    class="w-full p-4 tablet:p-5 flex items-center justify-between hover:bg-gray-50">
+              <span class="text-base tablet:text-lg text-gray-800">開源授權</span>
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <button onclick="location.href='SCR-SETTING-{{NUM_CHANGELOG}}-changelog.html'"
+                    class="w-full p-4 tablet:p-5 flex items-center justify-between hover:bg-gray-50">
+              <span class="text-base tablet:text-lg text-gray-800">更新日誌</span>
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Copyright -->
+        <div class="mt-8 mb-8 text-center">
+          <p class="text-gray-400 text-sm">
+            © {{COPYRIGHT_YEAR}} {{COMPANY_NAME}}<br>
+            All Rights Reserved
+          </p>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+<script src="../shared/notify-parent.js"></script>
+</body>
+</html>
+
+<!--
+@template-type: common-module
+@module: SETTING
+@screen-type: about
+@required: true
+@variables: PROJECT_NAME, PRIMARY_COLOR, APP_EMOJI, APP_VERSION, APP_DESCRIPTION, NUM_MAIN, NUM_TERMS, NUM_PRIVACY_POLICY, NUM_LICENSES, NUM_CHANGELOG, COPYRIGHT_YEAR, COMPANY_NAME
+-->

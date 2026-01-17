@@ -1,0 +1,69 @@
+{
+  "version": "1.0.0",
+  "description": "UI Flow reference standards for consistency validation",
+  "devices": {
+    "iphone": {
+      "frame": { "width": 120, "height": 260 },
+      "viewport": { "width": 393, "height": 852 },
+      "scale": 0.305,
+      "notch": { "width": 40, "height": 6, "borderRadius": "3px" }
+    },
+    "ipad": {
+      "frame": { "width": 200, "height": 140 },
+      "viewport": { "width": 1194, "height": 834 },
+      "scale": 0.168,
+      "camera": { "width": 6, "height": 6, "borderRadius": "50%" }
+    }
+  },
+  "requiredFiles": {
+    "root": ["index.html", "device-preview.html"],
+    "docs": ["ui-flow-diagram.html", "ui-flow-diagram-ipad.html"],
+    "shared": ["project-theme.css", "notify-parent.js"]
+  },
+  "requiredElements": {
+    "uiFlowDiagram": {
+      "containers": ["flow-container"],
+      "components": ["screen-card", "device-frame"],
+      "controls": ["device-switcher", "zoom-controls"]
+    },
+    "devicePreview": {
+      "controls": ["device-btn"],
+      "sidebar": ["screen-item"],
+      "iframes": ["preview-iframe-ipad", "preview-iframe-iphone"]
+    }
+  },
+  "moduleColors": {
+    "AUTH": "#6366F1",
+    "ONBOARD": "#8B5CF6",
+    "HOME": "#F59E0B",
+    "VOCAB": "#10B981",
+    "TRAIN": "#3B82F6",
+    "REPORT": "#EC4899",
+    "SETTING": "#64748B",
+    "PARENT": "#14B8A6",
+    "COMMON": "#78716C"
+  },
+  "functions": {
+    "openScreen": {
+      "pattern": "window.open\\(['\"]\\.\\.?\\/device-preview\\.html\\?device=(iphone|ipad)&screen=",
+      "iphone": "device-preview.html?device=iphone&screen=",
+      "ipad": "device-preview.html?device=ipad&screen="
+    },
+    "deviceSwitcher": {
+      "iphoneToIpad": "ui-flow-diagram-ipad.html",
+      "ipadToIphone": "ui-flow-diagram.html"
+    }
+  },
+  "cssPatterns": {
+    "iphoneFrame": {
+      "width": "120px",
+      "height": "260px"
+    },
+    "ipadFrame": {
+      "width": "200px",
+      "height": "140px"
+    },
+    "iphoneScale": "scale(0.305)",
+    "ipadScale": "scale(0.168)"
+  }
+}

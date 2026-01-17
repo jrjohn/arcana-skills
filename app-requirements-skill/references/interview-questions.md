@@ -1,4 +1,181 @@
-# 醫療軟體需求訪談問題庫
+# 需求訪談問題庫
+
+本文件提供 **Step 0: 需求訪談** 所需的問題模板。
+
+---
+
+## ⚠️ Step 0 快速訪談（強制首要步驟）
+
+> **重要**：在撰寫任何文件（SRS/SDD）之前，必須先完成需求訪談。
+> 使用 `AskUserQuestion` 工具進行互動式訪談。
+
+### 快速訪談問題模板（使用 AskUserQuestion）
+
+以下問題應使用 AskUserQuestion 工具，每次提問 2-4 個問題，提供選項讓用戶選擇。
+
+---
+
+#### 第一輪：基礎架構確認
+
+**Q1: 目標平台**
+```json
+{
+  "question": "App 的主要目標平台是？（將影響技術架構與 UI 設計）",
+  "header": "目標平台",
+  "options": [
+    {"label": "iPhone + iPad (Recommended)", "description": "同時支援兩種裝置，最大化覆蓋率"},
+    {"label": "僅 iPad", "description": "專注於大螢幕學習體驗"},
+    {"label": "iPhone + iPad + Mac (Catalyst)", "description": "完整 Apple 生態系支援"}
+  ]
+}
+```
+
+**Q2: 帳號架構**
+```json
+{
+  "question": "用戶的帳號關係如何設計？",
+  "header": "帳號架構",
+  "options": [
+    {"label": "家庭群組 (1 家長 + 多學生)", "description": "家長管理多個孩子帳號，適合多子女家庭"},
+    {"label": "獨立帳號 + 連結", "description": "學生獨立帳號，家長透過邀請碼連結監督"},
+    {"label": "單一帳號切換角色", "description": "同一帳號內切換家長/學生模式"}
+  ]
+}
+```
+
+---
+
+#### 第二輪：技術選型
+
+**Q3: AI 服務選擇**（如需 AI 功能）
+```json
+{
+  "question": "AI 例句生成的服務偏好？",
+  "header": "AI 服務",
+  "options": [
+    {"label": "Claude API (Recommended)", "description": "Anthropic 的 Claude，繁中表現優秀"},
+    {"label": "OpenAI API", "description": "GPT 系列，市場成熟度高"},
+    {"label": "兩者皆可（設定可選）", "description": "提供彈性，但增加維護複雜度"}
+  ]
+}
+```
+
+**Q4: 語音技術選擇**（如需語音功能）
+```json
+{
+  "question": "語音功能的技術選擇？",
+  "header": "語音技術",
+  "options": [
+    {"label": "iOS 原生 (AVSpeechSynthesizer)", "description": "免費、離線可用，但語音自然度較低"},
+    {"label": "雲端服務 (Amazon Polly / Azure)", "description": "自然人聲品質高，但需付費且需網路"},
+    {"label": "混合模式 (Recommended)", "description": "預設原生，可選購高品質語音"}
+  ]
+}
+```
+
+---
+
+#### 第三輪：功能優先級
+
+**Q5: MVP 核心功能**
+```json
+{
+  "question": "第一版 (MVP) 必備的核心功能有哪些？",
+  "header": "MVP 功能",
+  "options": [
+    {"label": "聽力 + 拼寫測驗", "description": "基礎學習功能"},
+    {"label": "聽力 + 拼寫 + 發音測驗", "description": "完整語言學習"},
+    {"label": "全部功能 (聽力/發音/拼寫/配對/填空)", "description": "完整版本"}
+  ],
+  "multiSelect": true
+}
+```
+
+**Q6: 資料同步需求**
+```json
+{
+  "question": "是否需要跨裝置資料同步？",
+  "header": "資料同步",
+  "options": [
+    {"label": "iCloud 同步 (Recommended)", "description": "Apple 原生方案，用戶無感同步"},
+    {"label": "自建後端同步", "description": "完全控制，但需維護伺服器"},
+    {"label": "僅本機儲存", "description": "簡單實作，但不支援跨裝置"}
+  ]
+}
+```
+
+---
+
+#### 第四輪：特殊需求確認
+
+**Q7: 視覺風格**
+```json
+{
+  "question": "App 的視覺風格偏好？",
+  "header": "視覺風格",
+  "options": [
+    {"label": "活潑童趣 (Recommended)", "description": "鮮豔色彩、圓角、可愛插圖，適合兒童"},
+    {"label": "簡約現代", "description": "乾淨介面、中性色調，適合專注學習"},
+    {"label": "遊戲化介面", "description": "豐富動畫、徽章獎勵、排行榜"}
+  ]
+}
+```
+
+**Q8: 離線功能**
+```json
+{
+  "question": "離線功能的支援程度？",
+  "header": "離線支援",
+  "options": [
+    {"label": "完整離線 (Recommended)", "description": "字庫/進度本機快取，離線可完整學習"},
+    {"label": "部分離線", "description": "已下載內容可離線，新內容需網路"},
+    {"label": "需要網路", "description": "所有功能都需要網路連線"}
+  ]
+}
+```
+
+---
+
+### 訪談結果記錄模板
+
+訪談完成後，將結果整理成以下格式，作為 SRS 撰寫依據：
+
+```markdown
+## 訪談結果摘要
+
+**訪談日期：** YYYY-MM-DD
+**專案名稱：** {Project Name}
+
+### 基礎架構
+- **目標平台：** iPhone + iPad
+- **帳號架構：** 家庭群組 (1 家長 + 多學生)
+- **資料同步：** iCloud 同步
+
+### 技術選型
+- **AI 服務：** Claude API
+- **語音技術：** 混合模式 (原生 + 可選雲端)
+- **離線支援：** 完整離線
+
+### 功能優先級
+- **MVP 功能：** 聽力 + 拼寫 + 發音測驗
+- **Phase 2：** 配對 + 填空
+- **延後功能：** 遊戲化排行榜
+
+### 視覺與體驗
+- **視覺風格：** 活潑童趣
+- **目標年齡：** 國小中年級 (8-10 歲)
+
+### 特殊需求
+- {用戶特別提出的需求}
+```
+
+---
+
+## 詳細訪談問題庫
+
+以下為更詳細的訪談問題，可依專案複雜度選用。
+
+---
 
 ## 目錄
 1. [專案願景問題](#1-專案願景問題)

@@ -665,6 +665,102 @@ function getImageDimensions(buffer, ext) {
 }
 
 /**
+ * Create image run for table cells (smaller size)
+ * Returns ImageRun or null if image not found
+ */
+function createTableCellImageRun(imagePath, baseDir) {
+  const fullPath = path.resolve(baseDir, imagePath);
+
+  if (!fs.existsSync(fullPath)) {
+    console.warn(`Table image not found: ${fullPath}`);
+    return null;
+  }
+
+  const imageBuffer = fs.readFileSync(fullPath);
+  const ext = path.extname(fullPath).toLowerCase();
+
+  let imageType;
+  if (ext === '.png') {
+    imageType = 'png';
+  } else if (ext === '.jpg' || ext === '.jpeg') {
+    imageType = 'jpg';
+  } else {
+    return null;
+  }
+
+  const dimensions = getImageDimensions(imageBuffer, ext);
+
+  // Table cell images should be smaller
+  const maxWidth = 180;  // Max width for table cell images
+  const maxHeight = 120;
+
+  let displayWidth = maxWidth;
+  let displayHeight = maxHeight;
+
+  if (dimensions) {
+    const { width, height } = dimensions;
+    const aspectRatio = width / height;
+
+    if (width > height) {
+      displayWidth = maxWidth;
+      displayHeight = Math.round(maxWidth / aspectRatio);
+      if (displayHeight > maxHeight) {
+        displayHeight = maxHeight;
+        displayWidth = Math.round(maxHeight * aspectRatio);
+      }
+    } else {
+      displayHeight = maxHeight;
+      displayWidth = Math.round(maxHeight * aspectRatio);
+      if (displayWidth > maxWidth) {
+        displayWidth = maxWidth;
+        displayHeight = Math.round(maxWidth / aspectRatio);
+      }
+    }
+  }
+
+  console.log(`Embedding table image: ${imagePath} (${displayWidth}x${displayHeight})`);
+
+  return new ImageRun({
+    data: imageBuffer,
+    transformation: {
+      width: displayWidth,
+      height: displayHeight
+    },
+    type: imageType
+  });
+}
+
+/**
+ * Parse table cell content - handles images and text
+ */
+function parseTableCellContent(cell, baseDir, fontSize = FONT_SIZE.TABLE) {
+  if (!cell) return [new TextRun({ text: '', size: fontSize })];
+
+  // Check for image markdown: ![alt](path)
+  const imageMatch = cell.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+  if (imageMatch) {
+    const imagePath = imageMatch[2];
+    const imageRun = createTableCellImageRun(imagePath, baseDir);
+    if (imageRun) {
+      return [imageRun];
+    }
+    // Fallback to text if image not found
+    return [new TextRun({ text: `[Image: ${imagePath}]`, italics: true, size: fontSize })];
+  }
+
+  // Check for link markdown: [text](url)
+  const linkMatch = cell.match(/\[([^\]]+)\]\(([^)]+)\)/);
+  if (linkMatch) {
+    const linkText = linkMatch[1];
+    // Just show the link text (DOCX hyperlinks are complex)
+    return [new TextRun({ text: linkText, color: '0066CC', size: fontSize })];
+  }
+
+  // Regular text with inline formatting
+  return parseInlineFormatting(cell, fontSize);
+}
+
+/**
  * Create local image paragraph from file path
  * Supports PNG and JPEG formats
  */
@@ -801,8 +897,8 @@ function createMermaidImageWithSvg(svgPath, pngPath) {
   }
 
   let displayWidth, displayHeight;
-  const maxWidth = 550;  // Max width limit, A4 page width (with margins) ~6 inches
-  const maxHeight = 600; // Max height limit, avoid exceeding single page
+  const maxWidth = 400;  // Reduced to fit with headings on same page
+  const maxHeight = 300; // Reduced to avoid orphan headings (must fit with 2-3 headings)
 
   if (dimensions) {
     const { width, height } = dimensions;
@@ -867,8 +963,8 @@ function createMermaidImage(imagePath) {
   const dimensions = getPngDimensions(imageBuffer);
 
   let displayWidth, displayHeight;
-  const maxWidth = 550;  // Max width limit, A4 page width (with margins) ~6 inches
-  const maxHeight = 600; // Max height limit, avoid exceeding single page
+  const maxWidth = 400;  // Reduced to fit with headings on same page
+  const maxHeight = 300; // Reduced to avoid orphan headings (must fit with 2-3 headings)
 
   if (dimensions) {
     const { width, height } = dimensions;
@@ -897,8 +993,8 @@ function createMermaidImage(imagePath) {
     }
   } else {
     // Use default values when dimensions cannot be read
-    displayWidth = 450;
-    displayHeight = 350;
+    displayWidth = 380;
+    displayHeight = 300;
   }
 
   return new Paragraph({
@@ -999,12 +1095,36 @@ function parseRequirementBlock(lines, startIndex) {
       break;
     }
 
-    // Parse **Field:** value or **Field:** value format
+    // Skip table header and separator lines
+    if (line.match(/^\|\s*屬性\s*\|\s*內容\s*\|/) || line.match(/^\|\s*-+\s*\|\s*-+\s*\|/)) {
+      i++;
+      continue;
+    }
+
+    // Parse table row format: | **Field** | Value | (used in SRS)
+    const tableRowMatch = line.match(/^\|\s*\*\*(.+?)\*\*\s*\|\s*(.+?)\s*\|$/);
+
+    // Parse **Field:** value or **Field:** value format (legacy)
     const fieldMatch = line.match(/^\*\*(.+?)[:：]\*\*\s*(.*)$/);
 
-    if (fieldMatch) {
-      const fieldName = fieldMatch[1].trim();
-      const fieldValue = fieldMatch[2].trim();
+    let fieldName = null;
+    let fieldValue = null;
+
+    if (tableRowMatch) {
+      fieldName = tableRowMatch[1].trim();
+      fieldValue = tableRowMatch[2].trim();
+    } else if (fieldMatch) {
+      fieldName = fieldMatch[1].trim();
+      fieldValue = fieldMatch[2].trim();
+    }
+
+    if (fieldName) {
+
+      // Skip ID and name fields (already extracted from heading)
+      if (fieldName === 'ID' || fieldName === '名稱') {
+        i++;
+        continue;
+      }
 
       // Chinese fields
       if (fieldName === '描述') {
@@ -1019,7 +1139,11 @@ function parseRequirementBlock(lines, startIndex) {
         requirement.safetyClass = fieldValue;
         currentField = 'safetyClass';
         inAcceptanceCriteria = false;
-      } else if (fieldName === '驗收標準') {
+      } else if (fieldName === '驗證方法') {
+        requirement.verificationMethod = fieldValue;
+        currentField = 'verificationMethod';
+        inAcceptanceCriteria = false;
+      } else if (fieldName === '驗收標準' || fieldName === '接受標準') {
         inAcceptanceCriteria = true;
         currentField = 'acceptanceCriteria';
       }
@@ -1044,9 +1168,16 @@ function parseRequirementBlock(lines, startIndex) {
         currentField = fieldName;
         inAcceptanceCriteria = false;
       }
+    } else if (line.match(/^\*\*(接受標準|驗收標準)\*\*[:：]/)) {
+      // Standalone acceptance criteria header: **接受標準**：
+      inAcceptanceCriteria = true;
+      currentField = 'acceptanceCriteria';
     } else if (inAcceptanceCriteria && line.startsWith('- ')) {
-      // Acceptance criteria item
+      // Acceptance criteria item (dash format)
       requirement.acceptanceCriteria.push(line.substring(2));
+    } else if (inAcceptanceCriteria && line.match(/^\d+\.\s+/)) {
+      // Acceptance criteria item (numbered format: "1. xxx")
+      requirement.acceptanceCriteria.push(line.replace(/^\d+\.\s+/, ''));
     } else if (line && currentField) {
       // Continue previous field content
       if (currentField === 'description') {
@@ -1163,9 +1294,11 @@ function createRequirementTable(req) {
     }));
   }
 
-  // Verification Method (new format)
+  // Verification Method
   if (req.verificationMethod) {
-    rows.push(createFieldRow('Verification', req.verificationMethod, labelWidth, valueWidth, cellBorders));
+    // Use Chinese label if document uses Chinese (description present), otherwise English
+    const vmLabel = req.description ? '驗證方法' : 'Verification';
+    rows.push(createFieldRow(vmLabel, req.verificationMethod, labelWidth, valueWidth, cellBorders));
   }
 
   return new Table({
@@ -1334,7 +1467,7 @@ function parseMarkdown(content, outputDir = '.') {
       continue;
     } else if (inTable) {
       if (tableHeaders.length > 0) {
-        elements.push(createTable(tableHeaders, tableRows));
+        elements.push(createTable(tableHeaders, tableRows, outputDir));
       }
       tableHeaders = [];
       tableRows = [];
@@ -1377,10 +1510,12 @@ function parseMarkdown(content, outputDir = '.') {
     // Heading 3 (### ) - Subsection
     if (line.startsWith('### ')) {
       const headingText = line.substring(4);
-      // Module section titles always start on new page (AUTH, ONBOARD, VOCAB, TRAIN, REPORT, SETTING, etc.)
-      const isModuleSection = /^(AUTH|ONBOARD|DASH|VOCAB|TRAIN|REPORT|SETTING|DEVICE|REWARD|COM)\s/.test(headingText);
-      // Check if heading is followed by requirement table or only empty lines, if so add page break to avoid orphan heading
-      const shouldPageBreak = isModuleSection || shouldBreakBeforeHeading(lines, i);
+      // Module section titles - page break is now handled by preceding --- separator
+      // Match module code at beginning OR in parentheses: "AUTH 模組" or "3.11 家長控制模組 (PARENT)"
+      const isModuleSection = /\b(AUTH|ONBOARD|DASH|HOME|VOCAB|TRAIN|PROGRESS|REPORT|SETTING|PARENT|PROFILE|ENGAGE|SOCIAL|COMMON|DEVICE|REWARD|COM)\b/.test(headingText);
+      // For module sections, DON'T add pageBreakBefore (handled by ---), but keep with next content
+      // For non-module sections, check if followed by table/image to avoid orphan heading
+      const shouldPageBreak = !isModuleSection && shouldBreakBeforeHeading(lines, i);
       elements.push(createHeading(headingText, HeadingLevel.HEADING_3, shouldPageBreak, true));
       i++;
       continue;
@@ -1399,7 +1534,7 @@ function parseMarkdown(content, outputDir = '.') {
       }
       const prevLine = prevIdx >= 0 ? lines[prevIdx] : '';
       const prevIsModuleH3 = prevLine.startsWith('### ') &&
-        /^### (AUTH|ONBOARD|DASH|VOCAB|TRAIN|REPORT|SETTING|DEVICE|REWARD|COM)\s/.test(prevLine);
+        /\b(AUTH|ONBOARD|DASH|HOME|VOCAB|TRAIN|PROGRESS|REPORT|SETTING|PARENT|PROFILE|ENGAGE|SOCIAL|COMMON|DEVICE|REWARD|COM)\b/.test(prevLine);
 
       // Only add pageBreak if NOT immediately following a module H3
       const shouldPageBreak = !prevIsModuleH3 && (isScreenDesign || shouldBreakBeforeHeading(lines, i));
@@ -1424,8 +1559,21 @@ function parseMarkdown(content, outputDir = '.') {
       continue;
     }
 
-    // Horizontal rule
+    // Horizontal rule - check if followed by module H3, if so add page break
     if (line.match(/^-{3,}$/) || line.match(/^\*{3,}$/)) {
+      // Look ahead to see if next non-empty line is a module section H3
+      let nextIdx = i + 1;
+      while (nextIdx < lines.length && lines[nextIdx].trim() === '') {
+        nextIdx++;
+      }
+      const nextLine = nextIdx < lines.length ? lines[nextIdx] : '';
+      const nextIsModuleH3 = nextLine.startsWith('### ') &&
+        /\b(AUTH|ONBOARD|DASH|HOME|VOCAB|TRAIN|PROGRESS|REPORT|SETTING|PARENT|PROFILE|ENGAGE|SOCIAL|COMMON|DEVICE|REWARD|COM)\b/.test(nextLine);
+
+      if (nextIsModuleH3) {
+        // Add a page break paragraph before the module section
+        elements.push(new Paragraph({ pageBreakBefore: true, children: [] }));
+      }
       i++;
       continue;
     }
@@ -1443,7 +1591,7 @@ function parseMarkdown(content, outputDir = '.') {
 
   // Close unclosed table
   if (inTable && tableHeaders.length > 0) {
-    elements.push(createTable(tableHeaders, tableRows));
+    elements.push(createTable(tableHeaders, tableRows, outputDir));
   }
 
   return elements;
@@ -1475,7 +1623,14 @@ function getHeadingSize(level) {
  * @param {boolean} useNumbering - Whether to use auto numbering (default true)
  */
 function createHeading(text, level, pageBreakBefore = false, useNumbering = true) {
-  const trimmedText = text.trim();
+  let trimmedText = text.trim();
+
+  // Strip manual numbering prefix if auto-numbering is enabled
+  // Matches patterns like "1.", "1.1", "3.9", "1.1.1" followed by space
+  if (useNumbering) {
+    trimmedText = trimmedText.replace(/^\d+(\.\d+)*\.?\s+/, '');
+  }
+
   const fontSize = getHeadingSize(level);
 
   // Convert HeadingLevel to numbering level (0-based)
@@ -1984,7 +2139,7 @@ function isIdColumn(headerText, cellText) {
   return false;
 }
 
-function createTable(headers, rows) {
+function createTable(headers, rows, baseDir = null) {
   const tableBorder = { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' };
   const cellBorders = { top: tableBorder, bottom: tableBorder, left: tableBorder, right: tableBorder };
   const numCols = headers.length;
@@ -2035,7 +2190,7 @@ function createTable(headers, rows) {
             keepLines: noWrapColumns[i],  // ID 欄位不換行
             // First row keeps with header, others don't need keepNext
             keepNext: rowIndex === 0,
-            children: parseInlineFormatting(cell || '', FONT_SIZE.TABLE)
+            children: baseDir ? parseTableCellContent(cell || '', baseDir, FONT_SIZE.TABLE) : parseInlineFormatting(cell || '', FONT_SIZE.TABLE)
           })]
         }))
       });
@@ -2051,7 +2206,11 @@ function createTable(headers, rows) {
 function parseDocumentStructure(content, outputDir) {
   const lines = content.split('\n');
   const structure = {
-    coverInfo: { title: '', subtitle: '', version: '', author: '', organization: '', date: '' },
+    coverInfo: {
+      title: '', subtitle: '', docType: '', projectName: '',
+      docNumber: '', version: '', createDate: '', updateDate: '',
+      status: '', author: '', organization: '', date: ''
+    },
     tocLines: [],
     revisionHistory: [],
     mainContent: []
@@ -2060,28 +2219,77 @@ function parseDocumentStructure(content, outputDir) {
   let section = 'cover';  // cover, toc, revision, main
   let i = 0;
 
+  // Helper to extract value from **label：** value or **label:** value format
+  const extractValue = (line, patterns) => {
+    for (const pattern of patterns) {
+      const regex = new RegExp(`\\*\\*${pattern}[：:]\\*\\*\\s*(.+)`, 'i');
+      const match = line.match(regex);
+      if (match) return match[1].trim();
+    }
+    return null;
+  };
+
   while (i < lines.length) {
     const line = lines[i];
     const trimmed = line.trim();
 
     // Detect cover info (from document start to before Table of Contents)
     if (section === 'cover') {
-      if (trimmed.startsWith('# ')) {
+      // Title (# Document-Name)
+      if (trimmed.startsWith('# ') && !trimmed.startsWith('## ')) {
         structure.coverInfo.title = trimmed.substring(2).trim();
-      } else if (trimmed.startsWith('## For ') || trimmed.startsWith('**For ')) {
+      }
+      // Document type (## 軟體設計規格書 or ## Software Requirements Specification)
+      else if (trimmed.startsWith('## ') && (trimmed.includes('規格書') || trimmed.toLowerCase().includes('specification') || trimmed.toLowerCase().includes('description'))) {
+        structure.coverInfo.docType = trimmed.substring(3).trim();
+      }
+      // Chinese format metadata: **label：** value
+      else if (trimmed.startsWith('**')) {
+        const docNum = extractValue(trimmed, ['文件編號', 'Document No', 'Doc No']);
+        if (docNum) structure.coverInfo.docNumber = docNum;
+
+        const ver = extractValue(trimmed, ['版本', 'Version']);
+        if (ver) structure.coverInfo.version = ver;
+
+        const createDate = extractValue(trimmed, ['建立日期', 'Created', 'Create Date']);
+        if (createDate) structure.coverInfo.createDate = createDate;
+
+        const updateDate = extractValue(trimmed, ['最後更新', 'Updated', 'Last Updated']);
+        if (updateDate) structure.coverInfo.updateDate = updateDate;
+
+        const projectName = extractValue(trimmed, ['專案名稱', 'Project Name', 'Project']);
+        if (projectName) structure.coverInfo.projectName = projectName;
+
+        const status = extractValue(trimmed, ['文件狀態', 'Status', 'Document Status']);
+        if (status) structure.coverInfo.status = status;
+
+        const author = extractValue(trimmed, ['作者', 'Author', 'Prepared by']);
+        if (author) structure.coverInfo.author = author;
+      }
+      // English format: For ProjectName
+      else if (trimmed.startsWith('## For ') || trimmed.startsWith('**For ')) {
         structure.coverInfo.subtitle = trimmed.replace(/^##\s*For\s*|^\*\*For\s*|\*\*$/g, '').trim();
-      } else if (trimmed.toLowerCase().includes('version') || trimmed.includes('版本')) {
-        structure.coverInfo.version = trimmed.replace(/^Version\s*/i, '').replace(/版本\s*/, '').trim();
-      } else if (trimmed.toLowerCase().includes('prepared by') || trimmed.includes('作者')) {
-        structure.coverInfo.author = trimmed.replace(/^Prepared by\s*/i, '').replace(/作者\s*/, '').trim();
-      } else if (trimmed.match(/^[A-Z].*\s+(Inc\.|Corp\.|Ltd\.|Co\.)$/i) || trimmed.match(/^SOMNICS/i)) {
+      }
+      // Version line (standalone)
+      else if (trimmed.toLowerCase().match(/^version\s+[\d.]+$/i)) {
+        structure.coverInfo.version = trimmed.replace(/^Version\s*/i, '').trim();
+      }
+      // Organization
+      else if (trimmed.match(/^[A-Z].*\s+(Inc\.|Corp\.|Ltd\.|Co\.)$/i) || trimmed.match(/^SOMNICS/i)) {
         structure.coverInfo.organization = trimmed;
-      } else if (trimmed.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      }
+      // Date (standalone YYYY-MM-DD)
+      else if (trimmed.match(/^\d{4}-\d{2}-\d{2}$/)) {
         structure.coverInfo.date = trimmed;
-      } else if (trimmed.toLowerCase().includes('table of contents') || trimmed.startsWith('## Table of Contents') || trimmed === '## 目錄') {
+      }
+      // TOC section start
+      else if (trimmed.toLowerCase().includes('table of contents') || trimmed.startsWith('## Table of Contents') || trimmed === '## 目錄') {
         section = 'toc';
-      } else if (trimmed === '## 文件資訊' || trimmed.includes('文件資訊')) {
-        // Chinese document format: skip to revision section
+      }
+      // Revision section start
+      else if (trimmed === '## 文件資訊' || trimmed.includes('文件資訊') ||
+                 trimmed.includes('文件修訂紀錄') || trimmed.includes('修訂歷史') ||
+                 trimmed.toLowerCase().includes('revision history')) {
         section = 'revision';
       }
       i++;
@@ -2110,6 +2318,13 @@ function parseDocumentStructure(content, outputDir) {
 
     // Detect revision history
     if (section === 'revision') {
+      // Check if entering TOC section (revision before TOC)
+      if (trimmed.toLowerCase().includes('table of contents') || trimmed === '## 目錄') {
+        section = 'toc';
+        i++;
+        continue;
+      }
+
       // Enter main content when encountering:
       // - ## 1 or ## 1. (English numbered section)
       // - --- (separator, skip it)
@@ -2121,6 +2336,7 @@ function parseDocumentStructure(content, outputDir) {
          !trimmed.includes('修訂') &&
          !trimmed.includes('文件資訊') &&
          !trimmed.includes('參考文件') &&
+         !trimmed.includes('目錄') &&
          !trimmed.includes('Software Design Description'));
 
       if (trimmed === '---') {
@@ -2151,81 +2367,162 @@ function parseDocumentStructure(content, outputDir) {
 }
 
 /**
- * Create cover page elements
+ * Create cover page elements - IEC 62304 compliant format
  */
 function createCoverPage(coverInfo) {
   const elements = [];
 
-  // Blank spacing
-  for (let i = 0; i < 6; i++) {
+  // Top spacing
+  for (let i = 0; i < 3; i++) {
     elements.push(new Paragraph({ children: [] }));
   }
 
-  // Main title
+  // Document type title (e.g., "Software Design Description")
+  const docTypeTitle = coverInfo.docType || coverInfo.subtitle || 'Document';
   elements.push(new Paragraph({
     alignment: AlignmentType.CENTER,
-    spacing: { after: 400 },
+    spacing: { after: 200 },
     children: [new TextRun({
-      text: coverInfo.title || 'Document Title',
+      text: docTypeTitle,
       bold: true,
-      size: 56,
-      font: getFont(coverInfo.title)
+      size: 48,
+      font: getFont(docTypeTitle)
     })]
   }));
 
-  // Subtitle
-  if (coverInfo.subtitle) {
+  // Project name
+  if (coverInfo.projectName) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 600 },
+      spacing: { after: 400 },
       children: [new TextRun({
-        text: `For ${coverInfo.subtitle}`,
+        text: coverInfo.projectName,
         size: 36,
-        font: getFont(coverInfo.subtitle)
+        font: getFont(coverInfo.projectName)
       })]
     }));
   }
 
-  // Blank spacing
+  // Spacing before info table
+  for (let i = 0; i < 2; i++) {
+    elements.push(new Paragraph({ children: [] }));
+  }
+
+  // Document info table
+  const infoRows = [];
+  if (coverInfo.docNumber) infoRows.push(['文件編號 Document No.', coverInfo.docNumber]);
+  if (coverInfo.version) infoRows.push(['版本 Version', coverInfo.version]);
+  if (coverInfo.createDate) infoRows.push(['建立日期 Created', coverInfo.createDate]);
+  if (coverInfo.updateDate) infoRows.push(['最後更新 Updated', coverInfo.updateDate]);
+  if (coverInfo.status) infoRows.push(['文件狀態 Status', coverInfo.status]);
+
+  if (infoRows.length > 0) {
+    const tableRows = infoRows.map(([label, value]) => new TableRow({
+      children: [
+        new TableCell({
+          width: { size: 4000, type: WidthType.DXA },
+          shading: { fill: 'F0F0F0' },
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+          children: [new Paragraph({
+            children: [new TextRun({ text: label, bold: true, size: 22, font: getFont(label) })]
+          })]
+        }),
+        new TableCell({
+          width: { size: 5000, type: WidthType.DXA },
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+          children: [new Paragraph({
+            children: [new TextRun({ text: value, size: 22, font: getFont(value) })]
+          })]
+        })
+      ]
+    }));
+
+    elements.push(new Table({
+      alignment: AlignmentType.CENTER,
+      width: { size: 70, type: WidthType.PERCENTAGE },
+      rows: tableRows
+    }));
+  }
+
+  // Spacing before approval section
   for (let i = 0; i < 4; i++) {
     elements.push(new Paragraph({ children: [] }));
   }
 
-  // Version
-  if (coverInfo.version) {
-    elements.push(new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
-      children: [new TextRun({ text: `Version ${coverInfo.version}`, size: 28, font: FONT_EN })]
-    }));
-  }
+  // Approval/Signature section
+  elements.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 200 },
+    children: [new TextRun({ text: '文件簽核 Document Approval', bold: true, size: 24, font: FONT_CN })]
+  }));
 
-  // Author
-  if (coverInfo.author) {
-    elements.push(new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
-      children: [new TextRun({ text: `Prepared by ${coverInfo.author}`, size: 28, font: FONT_EN })]
-    }));
-  }
+  const approvalRows = [
+    ['撰寫 Prepared by', '', ''],
+    ['審核 Reviewed by', '', ''],
+    ['核准 Approved by', '', '']
+  ];
 
-  // Organization
-  if (coverInfo.organization) {
-    elements.push(new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
-      children: [new TextRun({ text: coverInfo.organization, size: 28, font: FONT_EN })]
-    }));
-  }
+  const approvalTableRows = [
+    // Header row
+    new TableRow({
+      children: [
+        new TableCell({
+          width: { size: 2500, type: WidthType.DXA },
+          shading: { fill: 'E8E8E8' },
+          margins: { top: 60, bottom: 60, left: 100, right: 100 },
+          children: [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: '角色 Role', bold: true, size: 20, font: FONT_CN })]
+          })]
+        }),
+        new TableCell({
+          width: { size: 3000, type: WidthType.DXA },
+          shading: { fill: 'E8E8E8' },
+          margins: { top: 60, bottom: 60, left: 100, right: 100 },
+          children: [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: '簽名 Signature', bold: true, size: 20, font: FONT_CN })]
+          })]
+        }),
+        new TableCell({
+          width: { size: 2500, type: WidthType.DXA },
+          shading: { fill: 'E8E8E8' },
+          margins: { top: 60, bottom: 60, left: 100, right: 100 },
+          children: [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: '日期 Date', bold: true, size: 20, font: FONT_CN })]
+          })]
+        })
+      ]
+    }),
+    // Data rows
+    ...approvalRows.map(([role, sig, date]) => new TableRow({
+      height: { value: 600, rule: 'atLeast' },
+      children: [
+        new TableCell({
+          margins: { top: 60, bottom: 60, left: 100, right: 100 },
+          verticalAlign: 'center',
+          children: [new Paragraph({
+            children: [new TextRun({ text: role, size: 20, font: getFont(role) })]
+          })]
+        }),
+        new TableCell({
+          margins: { top: 60, bottom: 60, left: 100, right: 100 },
+          children: [new Paragraph({ children: [] })]
+        }),
+        new TableCell({
+          margins: { top: 60, bottom: 60, left: 100, right: 100 },
+          children: [new Paragraph({ children: [] })]
+        })
+      ]
+    }))
+  ];
 
-  // Date
-  if (coverInfo.date) {
-    elements.push(new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
-      children: [new TextRun({ text: coverInfo.date, size: 28, font: FONT_EN })]
-    }));
-  }
+  elements.push(new Table({
+    alignment: AlignmentType.CENTER,
+    width: { size: 70, type: WidthType.PERCENTAGE },
+    rows: approvalTableRows
+  }));
 
   return elements;
 }
@@ -2283,10 +2580,13 @@ function createRevisionHistoryPage(revisionLines) {
     children: [new TextRun({ text: 'Revision History', bold: true, size: FONT_SIZE.H1, font: FONT_EN })]
   }));
 
+  // Default headers for revision history table
+  const defaultHeaders = ['Version', 'Date', 'Author', 'Changes'];
+  let headers = [];
+  const rows = [];
+
   if (revisionLines.length > 0) {
     // 解析修訂歷史表格
-    const headers = [];
-    const rows = [];
     let isHeader = true;
 
     for (const line of revisionLines) {
@@ -2302,11 +2602,13 @@ function createRevisionHistoryPage(revisionLines) {
         rows.push(cells);
       }
     }
-
-    if (headers.length > 0) {
-      elements.push(createTable(headers, rows));
-    }
   }
+
+  // Always show table, use default headers if none found
+  if (headers.length === 0) {
+    headers = defaultHeaders;
+  }
+  elements.push(createTable(headers, rows));
 
   return elements;
 }
