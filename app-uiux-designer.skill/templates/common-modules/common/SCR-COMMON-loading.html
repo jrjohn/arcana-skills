@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - 載入中</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/project-theme.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          screens: { 'phone': {'max': '500px'}, 'tablet': {'min': '501px'} },
+          colors: { primary: '{{PRIMARY_COLOR}}' }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { --ipad-width: 1194px; --ipad-height: 834px; --iphone-width: 393px; --iphone-height: 852px; }
+    body { width: var(--ipad-width); height: var(--ipad-height); overflow: hidden; margin: 0; }
+    @media (max-width: 500px) { body { width: var(--iphone-width); height: var(--iphone-height); } }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .bounce { animation: bounce 1s infinite; }
+    @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  </style>
+</head>
+<body class="bg-gradient-to-b from-primary/10 to-teal-50">
+  <div class="w-full h-full flex flex-col items-center justify-center">
+    <!-- App Icon with bounce animation -->
+    <div class="bounce mb-8">
+      <div class="w-24 h-24 bg-gradient-to-br from-primary to-teal-500 rounded-3xl flex items-center justify-center shadow-lg">
+        <span class="text-5xl">{{APP_EMOJI}}</span>
+      </div>
+    </div>
+
+    <!-- Spinner -->
+    <div class="spin w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full mb-4"></div>
+
+    <!-- Loading text -->
+    <p class="text-gray-600 font-medium">載入中...</p>
+    <p class="text-sm text-gray-400 mt-2">{{LOADING_MESSAGE}}</p>
+  </div>
+<script src="../shared/notify-parent.js"></script>
+</body>
+</html>
+
+<!--
+@template-type: common-module
+@module: COMMON
+@screen-type: loading
+@required: true
+@variables: PROJECT_NAME, PRIMARY_COLOR, APP_EMOJI, LOADING_MESSAGE
+-->

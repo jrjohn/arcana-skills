@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{PROJECT_NAME}} UI/UX - 畫面總覽</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="shared/{{PROJECT_ID}}-theme.css">
+  <link rel="stylesheet" href="shared/project-theme.css">
   <style>
     .module-card {
       transition: all 0.3s ease;
@@ -18,14 +18,13 @@
       transition: all 0.2s ease;
     }
     .screen-link:hover {
-      background-color: #EBF5FF;
+      background-color: var(--primary-50, #E0F7FA);
       transform: translateX(4px);
     }
     .status-done { background-color: #4CAF50; }
     .status-pending { background-color: #FFC107; }
     .status-wip { background-color: #2196F3; }
 
-    /* Device Toggle Buttons */
     .device-toggle-btn {
       color: #64748B;
       background: transparent;
@@ -36,8 +35,8 @@
     }
     .device-toggle-btn.active {
       color: white;
-      background: #6366F1;
-      box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+      background: var(--primary-500, #00BCD4);
+      box-shadow: 0 2px 4px rgba(0, 188, 212, 0.3);
     }
   </style>
 </head>
@@ -48,19 +47,16 @@
     <div class="max-w-7xl mx-auto px-6 py-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
-          <!-- App Icon (SVG placeholder - replace with project icon) -->
-          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
-            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
-            </svg>
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-400 to-teal-500 flex items-center justify-center shadow-lg">
+            <span class="text-2xl">{{PROJECT_ICON}}</span>
           </div>
           <div>
             <h1 class="text-2xl font-bold text-gray-800">{{PROJECT_NAME}} UI/UX</h1>
-            <p class="text-sm text-gray-500">互動式原型畫面總覽</p>
+            <p class="text-sm text-gray-500">互動式原型畫面總覽 | {{PROJECT_DESCRIPTION}}</p>
           </div>
         </div>
         <div class="flex items-center gap-4">
-          <a href="device-preview.html" class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full font-medium hover:from-indigo-600 hover:to-purple-700 transition-all shadow-lg">
+          <a href="device-preview.html" class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-500 text-white rounded-full font-medium hover:from-cyan-600 hover:to-teal-600 transition-all shadow-lg">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <rect x="5" y="2" width="14" height="20" rx="3" stroke-width="2"/>
               <rect x="8" y="4" width="8" height="1" rx="0.5" fill="currentColor"/>
@@ -69,16 +65,16 @@
           </a>
           <div class="text-right">
             <p class="text-sm text-gray-500">UI/UX 覆蓋率</p>
-            <p class="text-xl font-bold text-green-600">{{COVERAGE}}%</p>
+            <p class="text-xl font-bold text-green-600">{{COVERAGE}}</p>
           </div>
           <div class="flex items-center gap-2">
             <div class="text-right">
               <p class="text-xs text-gray-400">iPad</p>
-              <p class="text-sm font-bold text-blue-600">{{IPAD_SCREENS}}</p>
+              <p class="text-sm font-bold text-cyan-600">{{IPAD_COUNT}}</p>
             </div>
             <div class="text-right">
               <p class="text-xs text-gray-400">iPhone</p>
-              <p class="text-sm font-bold text-blue-600">{{IPHONE_SCREENS}}</p>
+              <p class="text-sm font-bold text-cyan-600">{{IPHONE_COUNT}}</p>
             </div>
           </div>
           <div class="w-14 h-14 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
@@ -98,7 +94,7 @@
     <div class="flex items-center gap-6 mb-8 p-4 bg-white/60 backdrop-blur-sm rounded-xl border border-gray-100">
       <div class="flex items-center gap-2">
         <span class="w-3 h-3 rounded-full status-done"></span>
-        <span class="text-sm text-gray-600">已完成</span>
+        <span class="text-sm text-gray-600">完成</span>
       </div>
       <div class="flex items-center gap-2">
         <span class="w-3 h-3 rounded-full status-wip"></span>
@@ -108,11 +104,10 @@
         <span class="w-3 h-3 rounded-full status-pending"></span>
         <span class="text-sm text-gray-600">待處理</span>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-medium text-green-600">{{MODULE_COUNT}} 模組 | {{TOTAL_SCREENS}} 畫面 | iPad + iPhone 雙平台</span>
-      </div>
-      <div class="ml-auto text-sm text-gray-500">
-        點擊畫面名稱可直接預覽
+      <div class="ml-auto flex items-center gap-4">
+        <span class="text-sm text-gray-500">總畫面數：<strong class="text-cyan-600">{{TOTAL_SCREENS}}</strong></span>
+        <span class="text-sm text-gray-500">模組數：<strong class="text-cyan-600">{{MODULE_COUNT}}</strong></span>
+        <span class="text-sm text-gray-500">點擊畫面名稱可直接預覽</span>
       </div>
     </div>
 
@@ -142,7 +137,7 @@
           </div>
           <span class="text-sm text-gray-500">可拖曳、縮放瀏覽全部畫面流程</span>
           <a href="docs/ui-flow-diagram.html?device=iphone" target="_blank" id="fullscreen-link"
-             class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2">
+             class="px-4 py-2 bg-cyan-500 text-white text-sm rounded-lg hover:bg-cyan-600 transition-colors flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
             </svg>
@@ -162,214 +157,151 @@
 
         <!-- Modules Legend Sidebar -->
         <div class="w-44 flex-shrink-0 bg-white rounded-xl border border-gray-200 p-4 h-fit shadow-sm">
-          <h3 class="text-sm font-bold text-gray-700 mb-3">Modules</h3>
-          <div class="space-y-2">
-            <!-- {{MODULE_LEGEND_ITEMS}} - Customize for your project -->
-            <div class="flex items-center gap-2">
-              <div class="w-4 h-4 bg-[#8B5CF6] rounded"></div>
-              <span class="text-sm text-gray-600">ONBOARD ({{ONBOARD_COUNT}})</span>
-            </div>
+          <h3 class="text-sm font-bold text-gray-700 mb-3">模組圖例</h3>
+          <div class="space-y-2" id="module-legend">
+            <!-- MODULE_LEGEND_START -->
+            <!-- 由 03-generation 流程自動填入模組圖例 -->
             <div class="flex items-center gap-2">
               <div class="w-4 h-4 bg-[#6366F1] rounded"></div>
-              <span class="text-sm text-gray-600">AUTH ({{AUTH_COUNT}})</span>
+              <span class="text-sm text-gray-600">AUTH (0)</span>
             </div>
             <div class="flex items-center gap-2">
               <div class="w-4 h-4 bg-[#F59E0B] rounded"></div>
-              <span class="text-sm text-gray-600">DASH ({{DASH_COUNT}})</span>
+              <span class="text-sm text-gray-600">DASH (0)</span>
             </div>
             <div class="flex items-center gap-2">
               <div class="w-4 h-4 bg-[#10B981] rounded"></div>
-              <span class="text-sm text-gray-600">FEATURE ({{FEATURE_COUNT}})</span>
+              <span class="text-sm text-gray-600">FEATURE (0)</span>
             </div>
             <div class="flex items-center gap-2">
               <div class="w-4 h-4 bg-[#64748B] rounded"></div>
-              <span class="text-sm text-gray-600">SETTING ({{SETTING_COUNT}})</span>
+              <span class="text-sm text-gray-600">SETTING (0)</span>
             </div>
+            <!-- MODULE_LEGEND_END -->
           </div>
           <div class="mt-4 pt-3 border-t border-gray-100">
             <p class="text-xs text-gray-500 font-medium">總計: {{TOTAL_SCREENS}} 畫面</p>
-            <p class="text-xs text-gray-400">{{COVERAGE}}% 覆蓋率</p>
+            <p class="text-xs text-gray-400">{{COVERAGE}} 覆蓋率</p>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Module Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <!-- Module Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="module-cards">
 
-      <!-- Template: AUTH Module Example -->
-      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-        <div class="bg-gradient-to-r from-indigo-500 to-indigo-600 px-6 py-4">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-              </svg>
+      <!-- MODULE_CARDS_START -->
+      <!-- =====================================================
+           MODULE CARD TEMPLATE - 由 03-generation 流程自動填入
+           ===================================================== -->
+
+      <!-- AUTH Module Template (範例) -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">🔐</span>
+              <div>
+                <h3 class="font-bold text-lg">AUTH 認證模組</h3>
+                <p class="text-indigo-100 text-sm">登入、註冊、忘記密碼</p>
+              </div>
             </div>
-            <div>
-              <h2 class="text-xl font-bold text-white">AUTH 認證模組</h2>
-              <p class="text-indigo-100 text-sm">{{AUTH_DONE}}/{{AUTH_TOTAL}} 畫面 | {{AUTH_PERCENT}}%</p>
+            <div class="text-right">
+              <p class="text-2xl font-bold">0</p>
+              <p class="text-xs text-indigo-200">畫面</p>
             </div>
           </div>
         </div>
         <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
-          <!--
-            ⚠️ IMPORTANT: Device-Aware Screen Links
-            - Use onclick="openScreen(ipadPath, iphonePath)" instead of href
-            - First argument: iPad path (e.g., 'auth/SCR-AUTH-001-login.html')
-            - Second argument: iPhone path (e.g., 'iphone/SCR-AUTH-001-login.html')
-            - Add cursor-pointer class for visual feedback
-            - DO NOT use <a href="device-preview.html?screen=..."> (hardcoded links)
-          -->
-          <div onclick="openScreen('auth/SCR-AUTH-001-login.html', 'iphone/SCR-AUTH-001-login.html')" class="screen-link flex items-center gap-3 p-3 rounded-lg cursor-pointer">
-            <span class="w-2 h-2 rounded-full status-done"></span>
-            <span class="flex-1 text-gray-700">SCR-AUTH-001 登入頁</span>
-            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          </div>
-          <div onclick="openScreen('auth/SCR-AUTH-002-register.html', 'iphone/SCR-AUTH-002-register.html')" class="screen-link flex items-center gap-3 p-3 rounded-lg cursor-pointer">
-            <span class="w-2 h-2 rounded-full status-done"></span>
-            <span class="flex-1 text-gray-700">SCR-AUTH-002 註冊頁</span>
-            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          </div>
-          <div onclick="openScreen('auth/SCR-AUTH-003-forgot-password.html', 'iphone/SCR-AUTH-003-forgot-password.html')" class="screen-link flex items-center gap-3 p-3 rounded-lg cursor-pointer">
-            <span class="w-2 h-2 rounded-full status-done"></span>
-            <span class="flex-1 text-gray-700">SCR-AUTH-003 忘記密碼</span>
-            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          </div>
-          <div onclick="openScreen('auth/SCR-AUTH-003a-forgot-sent.html', 'iphone/SCR-AUTH-003a-forgot-sent.html')" class="screen-link flex items-center gap-3 p-3 rounded-lg cursor-pointer">
-            <span class="w-2 h-2 rounded-full status-done"></span>
-            <span class="flex-1 text-gray-700">SCR-AUTH-003a 重設郵件已發送</span>
-            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          </div>
-          <!-- Add more screen links using the same pattern -->
+          <!-- SCREEN_LIST_START: AUTH -->
+          <!-- 由 03-generation 自動填入畫面列表 -->
+          <p class="text-sm text-gray-400 text-center py-4">尚未產生畫面</p>
+          <!-- SCREEN_LIST_END: AUTH -->
         </div>
       </div>
 
-      <!-- Template: ONBOARD Module Example -->
-      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-        <div class="bg-gradient-to-r from-purple-500 to-purple-600 px-6 py-4">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-              </svg>
+      <!-- DASH Module Template (範例) -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">🏠</span>
+              <div>
+                <h3 class="font-bold text-lg">DASH Dashboard</h3>
+                <p class="text-amber-100 text-sm">首頁、儀表板</p>
+              </div>
             </div>
-            <div>
-              <h2 class="text-xl font-bold text-white">ONBOARD 引導模組</h2>
-              <p class="text-purple-100 text-sm">{{ONBOARD_DONE}}/{{ONBOARD_TOTAL}} 畫面 | {{ONBOARD_PERCENT}}%</p>
+            <div class="text-right">
+              <p class="text-2xl font-bold">0</p>
+              <p class="text-xs text-amber-200">畫面</p>
             </div>
           </div>
         </div>
         <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
-          <!-- Screen links for ONBOARD module -->
+          <!-- SCREEN_LIST_START: DASH -->
+          <p class="text-sm text-gray-400 text-center py-4">尚未產生畫面</p>
+          <!-- SCREEN_LIST_END: DASH -->
         </div>
       </div>
 
-      <!-- Template: DASH Module Example -->
-      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-        <div class="bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-              </svg>
+      <!-- FEATURE Module Template (範例) -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">⭐</span>
+              <div>
+                <h3 class="font-bold text-lg">FEATURE 功能模組</h3>
+                <p class="text-emerald-100 text-sm">核心功能畫面</p>
+              </div>
             </div>
-            <div>
-              <h2 class="text-xl font-bold text-white">DASH Dashboard</h2>
-              <p class="text-amber-100 text-sm">{{DASH_DONE}}/{{DASH_TOTAL}} 畫面 | {{DASH_PERCENT}}%</p>
+            <div class="text-right">
+              <p class="text-2xl font-bold">0</p>
+              <p class="text-xs text-emerald-200">畫面</p>
             </div>
           </div>
         </div>
         <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
-          <!-- Screen links for DASH module -->
+          <!-- SCREEN_LIST_START: FEATURE -->
+          <p class="text-sm text-gray-400 text-center py-4">尚未產生畫面</p>
+          <!-- SCREEN_LIST_END: FEATURE -->
         </div>
       </div>
 
-      <!-- Template: SETTING Module Example -->
-      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-        <div class="bg-gradient-to-r from-slate-500 to-slate-600 px-6 py-4">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-              </svg>
+      <!-- SETTING Module Template (範例) -->
+      <div class="module-card bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-gradient-to-r from-slate-500 to-slate-600 text-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">⚙️</span>
+              <div>
+                <h3 class="font-bold text-lg">SETTING 設定模組</h3>
+                <p class="text-slate-100 text-sm">系統設定、個人資料</p>
+              </div>
             </div>
-            <div>
-              <h2 class="text-xl font-bold text-white">SETTING 設定模組</h2>
-              <p class="text-slate-100 text-sm">{{SETTING_DONE}}/{{SETTING_TOTAL}} 畫面 | {{SETTING_PERCENT}}%</p>
+            <div class="text-right">
+              <p class="text-2xl font-bold">0</p>
+              <p class="text-xs text-slate-200">畫面</p>
             </div>
           </div>
         </div>
         <div class="p-4 space-y-2 max-h-80 overflow-y-auto">
-          <!-- Screen links for SETTING module -->
+          <!-- SCREEN_LIST_START: SETTING -->
+          <p class="text-sm text-gray-400 text-center py-4">尚未產生畫面</p>
+          <!-- SCREEN_LIST_END: SETTING -->
         </div>
       </div>
-
-      <!-- Add more module cards as needed -->
+      <!-- MODULE_CARDS_END -->
 
     </div>
 
-    <!-- Summary Stats -->
-    <div class="mt-12 bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg border border-gray-100">
-      <h2 class="text-2xl font-bold text-gray-800 mb-6">畫面覆蓋率統計</h2>
-      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <!-- Per module stats - Template -->
-        <div class="text-center p-4 bg-indigo-50 rounded-xl">
-          <p class="text-3xl font-bold text-indigo-600">{{AUTH_COUNT}}</p>
-          <p class="text-sm text-gray-500">AUTH</p>
-          <p class="text-xs text-green-600">{{AUTH_PERCENT}}%</p>
-        </div>
-        <div class="text-center p-4 bg-purple-50 rounded-xl">
-          <p class="text-3xl font-bold text-purple-600">{{ONBOARD_COUNT}}</p>
-          <p class="text-sm text-gray-500">ONBOARD</p>
-          <p class="text-xs text-green-600">{{ONBOARD_PERCENT}}%</p>
-        </div>
-        <div class="text-center p-4 bg-amber-50 rounded-xl">
-          <p class="text-3xl font-bold text-amber-600">{{DASH_COUNT}}</p>
-          <p class="text-sm text-gray-500">DASH</p>
-          <p class="text-xs text-green-600">{{DASH_PERCENT}}%</p>
-        </div>
-        <div class="text-center p-4 bg-emerald-50 rounded-xl">
-          <p class="text-3xl font-bold text-emerald-600">{{FEATURE_COUNT}}</p>
-          <p class="text-sm text-gray-500">FEATURE</p>
-          <p class="text-xs text-green-600">{{FEATURE_PERCENT}}%</p>
-        </div>
-        <div class="text-center p-4 bg-slate-50 rounded-xl">
-          <p class="text-3xl font-bold text-slate-600">{{SETTING_COUNT}}</p>
-          <p class="text-sm text-gray-500">SETTING</p>
-          <p class="text-xs text-green-600">{{SETTING_PERCENT}}%</p>
-        </div>
-      </div>
-      <div class="mt-6 text-center">
-        <div class="inline-flex items-center gap-6 p-6 bg-green-50 rounded-2xl border-2 border-green-300">
-          <div>
-            <p class="text-4xl font-bold text-green-600">{{COVERAGE}}%</p>
-            <p class="text-sm text-gray-500">UI/UX 覆蓋率</p>
-          </div>
-          <div class="h-12 w-px bg-green-300"></div>
-          <div class="text-left">
-            <p class="text-lg font-semibold text-gray-700">{{TOTAL_SCREENS}} 個畫面 × 2 平台 = {{TOTAL_UI}} 個 UI</p>
-            <p class="text-gray-500">iPad ({{IPAD_SCREENS}}) + iPhone ({{IPHONE_SCREENS}}) 全部完成</p>
-          </div>
-          <div class="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
-            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Footer -->
+    <footer class="mt-12 text-center text-gray-500 text-sm">
+      <p>{{PROJECT_NAME}} UI Flow | Generated: {{GENERATED_DATE}} | IEC 62304 Compliant</p>
+      <p class="mt-1">Template: app-uiux-designer.skill/templates/ui-flow</p>
+    </footer>
 
   </main>
-
-  <!-- Footer -->
-  <footer class="bg-white/60 backdrop-blur-sm mt-12 py-6 border-t border-gray-200">
-    <div class="max-w-7xl mx-auto px-6 text-center text-gray-500 text-sm">
-      <p>{{PROJECT_NAME}} UI/UX Design System v1.0</p>
-      <p>Based on SRS-{{PROJECT_ID}}-1.0 | Generated: {{GENERATED_DATE}}</p>
-    </div>
-  </footer>
 
   <script>
     // Device Toggle for UI Flow Diagram

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=393, height=852, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - {{SCREEN_TITLE}} (iPhone)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../shared/{{PROJECT_ID}}-theme.css">
+  <style>
+    body {
+      width: 393px;
+      height: 852px;
+      overflow: hidden;
+    }
+    .scroll-container::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'module-setting': '#64748B',
+            'module-setting-light': '#94A3B8',
+            'module-setting-dark': '#475569',
+            'primary': {
+              50: '{{PRIMARY_50}}', 100: '{{PRIMARY_100}}', 200: '{{PRIMARY_200}}', 300: '{{PRIMARY_300}}',
+              400: '{{PRIMARY_400}}', 500: '{{PRIMARY_500}}', 600: '{{PRIMARY_600}}', 700: '{{PRIMARY_700}}',
+              800: '{{PRIMARY_800}}', 900: '{{PRIMARY_900}}'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
+
+  <!-- iPhone Container (393x852) -->
+  <div class="w-[393px] h-[852px] mx-auto relative overflow-hidden flex flex-col">
+
+    <!-- Status Bar Area -->
+    <div class="h-12 flex-shrink-0"></div>
+
+    <!-- Header -->
+    <header class="bg-white/90 backdrop-blur-lg px-4 py-3 flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <button onclick="location.href='{{TARGET_BACK}}'" class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center">
+          <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <h1 class="text-lg font-bold text-gray-800">{{SCREEN_TITLE}}</h1>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-auto px-4 py-3 scroll-container">
+
+      <!-- Profile Card -->
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-xl shadow-md flex-shrink-0">
+            {{USER_AVATAR}}
+          </div>
+          <div class="flex-1 min-w-0">
+            <h2 class="text-base font-bold text-gray-800 truncate">{{USER_NAME}}</h2>
+            <p class="text-xs text-gray-500 truncate">{{USER_EMAIL}}</p>
+          </div>
+          <button onclick="location.href='{{TARGET_PROFILE}}'" class="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-xs flex-shrink-0">
+            {{BUTTON_EDIT}}
+          </button>
+        </div>
+      </div>
+
+      <!-- Account Section -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+        <div class="px-4 py-3 border-b border-gray-100">
+          <h3 class="font-bold text-gray-800 text-sm flex items-center gap-2">
+            <svg class="w-4 h-4 text-slate-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+            {{SECTION_ACCOUNT}}
+          </h3>
+        </div>
+        <div class="divide-y divide-gray-100">
+          <button onclick="location.href='{{TARGET_PROFILE}}'" class="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+              </div>
+              <span class="text-gray-700 font-medium text-sm">{{ITEM_PROFILE}}</span>
+            </div>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+          <button onclick="location.href='{{TARGET_SECURITY}}'" class="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM12 17c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+                </svg>
+              </div>
+              <span class="text-gray-700 font-medium text-sm">{{ITEM_SECURITY}}</span>
+            </div>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Preferences Section -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+        <div class="px-4 py-3 border-b border-gray-100">
+          <h3 class="font-bold text-gray-800 text-sm flex items-center gap-2">
+            <svg class="w-4 h-4 text-slate-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54z"/>
+            </svg>
+            {{SECTION_PREFERENCES}}
+          </h3>
+        </div>
+        <div class="divide-y divide-gray-100">
+          <button onclick="location.href='{{TARGET_NOTIFICATION}}'" class="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-amber-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+                </svg>
+              </div>
+              <div class="text-left">
+                <span class="text-gray-700 font-medium text-sm block">{{ITEM_NOTIFICATION}}</span>
+                <span class="text-[10px] text-gray-400">{{ITEM_NOTIFICATION_DESC}}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="text-xs text-cyan-600">{{STATUS_ON}}</span>
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </div>
+          </button>
+          <button onclick="location.href='{{TARGET_APPEARANCE}}'" class="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8z"/>
+                </svg>
+              </div>
+              <div class="text-left">
+                <span class="text-gray-700 font-medium text-sm block">{{ITEM_APPEARANCE}}</span>
+                <span class="text-[10px] text-gray-400">{{ITEM_APPEARANCE_DESC}}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="text-xs text-gray-500">{{STATUS_SYSTEM}}</span>
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Privacy Section -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+        <div class="px-4 py-3 border-b border-gray-100">
+          <h3 class="font-bold text-gray-800 text-sm flex items-center gap-2">
+            <svg class="w-4 h-4 text-slate-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+            </svg>
+            {{SECTION_PRIVACY}}
+          </h3>
+        </div>
+        <div class="divide-y divide-gray-100">
+          <button onclick="location.href='{{TARGET_PRIVACY}}'" class="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-indigo-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+                </svg>
+              </div>
+              <span class="text-gray-700 font-medium text-sm">{{ITEM_PRIVACY}}</span>
+            </div>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+          <button onclick="location.href='{{TARGET_DATA}}'" class="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-rose-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-rose-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+              </div>
+              <span class="text-gray-700 font-medium text-sm">{{ITEM_DATA}}</span>
+            </div>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- About Section -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+        <div class="px-4 py-3 border-b border-gray-100">
+          <h3 class="font-bold text-gray-800 text-sm flex items-center gap-2">
+            <svg class="w-4 h-4 text-slate-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+            </svg>
+            {{SECTION_ABOUT}}
+          </h3>
+        </div>
+        <div class="divide-y divide-gray-100">
+          <button onclick="location.href='{{TARGET_TERMS}}'" class="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-slate-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6z"/>
+                </svg>
+              </div>
+              <span class="text-gray-700 font-medium text-sm">{{ITEM_TERMS}}</span>
+            </div>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+          <button onclick="location.href='{{TARGET_ABOUT}}'" class="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-cyan-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-cyan-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                </svg>
+              </div>
+              <div class="text-left">
+                <span class="text-gray-700 font-medium text-sm block">{{ITEM_VERSION}}</span>
+                <span class="text-[10px] text-gray-400">{{VERSION_NUMBER}}</span>
+              </div>
+            </div>
+            <span class="text-xs text-green-600">{{STATUS_LATEST}}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Logout Button -->
+      <button onclick="location.href='{{TARGET_LOGOUT}}'" class="w-full py-3 bg-red-50 border border-red-200 rounded-xl text-red-600 font-semibold text-sm active:bg-red-100 transition flex items-center justify-center gap-2 mb-4">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+        </svg>
+        {{BUTTON_LOGOUT}}
+      </button>
+
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bg-white/95 backdrop-blur-lg border-t border-gray-200 flex-shrink-0 pb-6">
+      <div class="flex justify-around items-center h-14 px-4">
+        <a href="{{TARGET_HOME}}" class="flex flex-col items-center gap-0.5 text-gray-400">
+          <div class="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+            </svg>
+          </div>
+          <span class="text-[10px] font-medium">{{TAB_HOME}}</span>
+        </a>
+        <!-- Add more tabs as needed -->
+        <a href="{{TARGET_SETTINGS}}" class="flex flex-col items-center gap-0.5 text-slate-600">
+          <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+            </svg>
+          </div>
+          <span class="text-[10px] font-semibold">{{TAB_SETTINGS}}</span>
+        </a>
+      </div>
+    </nav>
+
+    <!-- Home Indicator -->
+    <div class="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-gray-800/20 rounded-full"></div>
+
+  </div>
+
+<script src="../shared/notify-parent.js"></script>
+</body>
+</html>
+
+<!--
+@requirements: {{REQUIREMENTS}}
+@screen-id: {{SCREEN_ID}}
+@screen-name: {{SCREEN_NAME}} (iPhone)
+@description: {{SCREEN_DESCRIPTION}}
+@acceptance-criteria:
+  - AC1: {{AC1}}
+  - AC2: {{AC2}}
+  - AC3: {{AC3}}
+  - AC4: {{AC4}}
+  - AC5: {{AC5}}
+-->

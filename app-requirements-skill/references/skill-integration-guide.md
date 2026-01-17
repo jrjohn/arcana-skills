@@ -4,6 +4,38 @@
 
 ---
 
+## ⚠️ MANDATORY: UI Flow 必須透過 app-uiux-designer.skill 產生
+
+> **這是阻斷規則！禁止手動建立 UI Flow HTML，必須使用 skill 產生！**
+
+### 強制呼叫方式
+
+當 SDD 完成後，**必須**使用 Skill tool 呼叫 app-uiux-designer.skill：
+
+```
+工具：Skill
+參數：
+  skill: "app-uiux-designer.skill"
+  args: "請根據 SDD 文件 ({SDD_PATH}) 產生 HTML UI Flow 互動式原型。
+         專案資訊：
+         - 專案名稱：{PROJECT_NAME}
+         - 目標裝置：{DEVICE}
+         - 視覺風格：{STYLE}
+         - 品牌主色：{COLOR}
+         - 目標使用者：{TARGET_USER}
+         輸出目錄：{OUTPUT_DIR}"
+```
+
+### 禁止行為
+
+| 禁止項目 | 原因 |
+|----------|------|
+| ❌ 手動建立 UI Flow HTML | 必須透過 skill 確保模板合規 |
+| ❌ 跳過 app-uiux-designer.skill | 無法確保 100% 導航覆蓋 |
+| ❌ 無 Button Navigation 就產生 UI Flow | 導航目標不明確 |
+
+---
+
 ## 整合架構
 
 ```
@@ -52,6 +84,10 @@
 
 ### SDD → UI Flow（app-requirements-skill 產出）
 
+**⚠️ 關鍵：Button Navigation 表格（MANDATORY）**
+
+每個 SCR-* 區塊**必須**包含 Button Navigation 表格，這是 UI Flow 導航的唯一資料來源。
+
 ```markdown
 ## SCR-AUTH-001-login: 登入畫面
 
@@ -62,15 +98,57 @@
 ### 畫面說明
 使用者登入畫面，支援 Email/密碼登入與社群登入。
 
-### UI 元素
-| 元素 | 類型 | 動作 | 目標畫面 |
-|------|------|------|----------|
-| Email 輸入框 | TextField | - | - |
-| 密碼輸入框 | SecureField | - | - |
-| 登入按鈕 | Button | Submit | SCR-DASH-001 |
-| 註冊連結 | Link | Navigate | SCR-AUTH-002 |
-| 忘記密碼 | Link | Navigate | SCR-AUTH-003 |
+### UI 元件規格
+| 元件 ID | 元件類型 | 規格 | 對應需求 |
+|---------|---------|------|----------|
+| txt_email | TextField | Email 輸入框 | REQ-AUTH-001 |
+| txt_password | PasswordField | 密碼輸入框 | REQ-AUTH-001 |
+| btn_login | Button | 登入按鈕 | REQ-AUTH-001 |
+| btn_register | Link | 註冊連結 | REQ-AUTH-002 |
+| btn_forgot | Link | 忘記密碼連結 | REQ-AUTH-003 |
+
+### Button Navigation ⚠️ MANDATORY
+| Element ID | Element Text | Type | Target Screen | Condition |
+|------------|--------------|------|---------------|-----------|
+| btn_login | 登入 | Button | SCR-DASH-001 | 驗證成功 |
+| btn_register | 立即註冊 | Link | SCR-AUTH-002-register | - |
+| btn_forgot | 忘記密碼 | Link | SCR-AUTH-003-forgot | - |
+| btn_apple | Apple 登入 | Button | SCR-DASH-001 | Apple 驗證成功 |
+| btn_google | Google 登入 | Button | SCR-DASH-001 | Google 驗證成功 |
 ```
+
+### Button Navigation → 模板變數對應
+
+app-uiux-designer.skill 使用 Button Navigation 表格自動填入模板變數：
+
+| SDD Target Screen | 模板變數 | 說明 |
+|-------------------|----------|------|
+| `SCR-AUTH-002-register` | `{{TARGET_REGISTER}}` | 註冊頁面 |
+| `SCR-AUTH-003-forgot` | `{{TARGET_FORGOT_PASSWORD}}` | 忘記密碼頁 |
+| `SCR-DASH-001` | `{{TARGET_AFTER_LOGIN}}` | 登入後首頁 |
+| `(current)` | `#` | 留在當前頁面 |
+| `(back)` | `{{TARGET_BACK}}` | 返回上一頁 |
+| `(modal)` | `showModal('...')` | 彈出對話框 |
+
+### 導航解析優先順序
+
+app-uiux-designer.skill 解析導航目標時，依照以下優先順序：
+
+```
+1️⃣ SDD Button Navigation 表格 (優先)
+   ↓ 如果有 Target Screen 欄位，直接使用
+
+2️⃣ 智慧預測 (備用)
+   ↓ 如果 SDD 沒有提供，根據命名約定預測
+
+3️⃣ 預設值 (最後)
+   ↓ 無法判斷時使用 # 或 (current)
+```
+
+**好處：**
+- SDD 完整時 → 零預測，100% 準確
+- SDD 不完整時 → 預測機制確保 UI Flow 仍可產出
+- 向後相容 → 舊專案不需重寫 SDD
 
 ### UI Flow → SDD 回補（app-uiux-designer.skill 產出）
 

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - 無網路</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/project-theme.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          screens: { 'phone': {'max': '500px'}, 'tablet': {'min': '501px'} },
+          colors: { primary: '{{PRIMARY_COLOR}}' }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { --ipad-width: 1194px; --ipad-height: 834px; --iphone-width: 393px; --iphone-height: 852px; }
+    body { width: var(--ipad-width); height: var(--ipad-height); overflow: hidden; margin: 0; }
+    @media (max-width: 500px) { body { width: var(--iphone-width); height: var(--iphone-height); } }
+  </style>
+</head>
+<body class="bg-gradient-to-b from-slate-50 to-slate-100">
+  <div class="w-full h-full flex flex-col items-center justify-center px-6">
+    <!-- Offline illustration -->
+    <div class="mb-8 relative">
+      <div class="w-32 h-32 tablet:w-40 tablet:h-40 bg-gray-100 rounded-full flex items-center justify-center">
+        <svg class="w-16 h-16 tablet:w-20 tablet:h-20 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3"/>
+        </svg>
+      </div>
+      <!-- X mark overlay -->
+      <div class="absolute -bottom-1 -right-1 w-10 h-10 bg-red-500 rounded-full flex items-center justify-center">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Title -->
+    <h2 class="text-xl tablet:text-2xl font-bold text-gray-800 mb-2">網路連線中斷</h2>
+
+    <!-- Description -->
+    <p class="text-gray-500 text-center text-base tablet:text-lg mb-3">請檢查您的網路設定</p>
+    <p class="text-gray-400 text-center text-sm tablet:text-base mb-8">{{OFFLINE_HINT}}</p>
+
+    <!-- Retry Button -->
+    <button onclick="location.reload()"
+            class="h-12 tablet:h-14 px-8 bg-primary hover:bg-teal-600 text-white text-base tablet:text-lg font-semibold rounded-full shadow-lg transition-all">
+      重試連線
+    </button>
+
+    <!-- Offline mode (optional) -->
+    <button onclick="location.href='{{OFFLINE_HOME_TARGET}}'"
+            class="mt-4 text-primary hover:underline text-sm tablet:text-base">
+      使用離線模式
+    </button>
+  </div>
+<script src="../shared/notify-parent.js"></script>
+</body>
+</html>
+
+<!--
+@template-type: common-module
+@module: COMMON
+@screen-type: no-network
+@required: true
+@variables: PROJECT_NAME, PRIMARY_COLOR, OFFLINE_HINT, OFFLINE_HOME_TARGET
+-->

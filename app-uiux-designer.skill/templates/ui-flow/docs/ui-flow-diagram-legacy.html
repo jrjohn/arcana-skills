@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - Screen Flow Diagram</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #E0F7FA 0%, #B2EBF2 100%);
+      font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+    }
+
+    .flow-container {
+      min-width: 4000px;
+      min-height: 3000px;
+      position: relative;
+      padding: 40px;
+    }
+
+    /* Screen Card - Base styles (IMPORTANT: Use onclick, NOT href) */
+    .screen-card {
+      position: absolute;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      z-index: 5; /* IMPORTANT: Above connection lines (z-index: 1) so arrows don't overlap cards */
+    }
+
+    .screen-card:hover {
+      transform: scale(1.08);
+      z-index: 100;
+    }
+
+    .screen-card:hover .device-frame,
+    .screen-card:hover .ipad-frame {
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+
+    .screen-card .device-frame,
+    .screen-card .ipad-frame {
+      background: white;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    /* Use IFRAME for live preview (recommended for real-time updates) */
+    .screen-card .device-frame,
+    .screen-card .ipad-frame {
+      overflow: hidden;
+    }
+
+    /* iPad iframe: 1194×834 scaled to 200×140 = scale(0.168) */
+    body.device-ipad .screen-card .device-frame iframe,
+    body.device-ipad .screen-card .ipad-frame iframe {
+      width: 1194px;
+      height: 834px;
+      border: none;
+      transform: scale(0.168);
+      transform-origin: top left;
+      pointer-events: none; /* Prevent click interference */
+    }
+
+    /* iPhone iframe: 393×852 scaled to 120×260 = scale(0.305) */
+    body.device-iphone .screen-card .device-frame iframe,
+    body.device-iphone .screen-card .ipad-frame iframe {
+      width: 393px;
+      height: 852px;
+      border: none;
+      transform: scale(0.305);
+      transform-origin: top left;
+      pointer-events: none;
+    }
+
+    /* Fallback for IMG (screenshots) if iframe not available */
+    .screen-card .device-frame img,
+    .screen-card .ipad-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+    }
+
+    .screen-card .screen-label {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 11px;
+      color: #475569;
+      font-weight: 500;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .screen-card .screen-id {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      min-width: 28px;
+      height: 22px;
+      padding: 0 6px;
+      background: var(--module-color, #6366F1);
+      color: white;
+      border-radius: 4px;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      z-index: 10;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      white-space: nowrap;
+    }
+
+    /* iPad Mode - Landscape cards (default) */
+    body.device-ipad .screen-card {
+      width: 200px;
+    }
+    body.device-ipad .screen-card .device-frame,
+    body.device-ipad .screen-card .ipad-frame {
+      width: 200px;
+      height: 140px;
+      border-radius: 14px;
+      border: 3px solid #1a1a1a;
+      position: relative;
+    }
+    /* iPad camera notch (top center) */
+    body.device-ipad .screen-card .device-frame::before,
+    body.device-ipad .screen-card .ipad-frame::before {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 6px;
+      height: 6px;
+      background: #333;
+      border-radius: 50%;
+      z-index: 20;
+    }
+    body.device-ipad .screen-card .screen-label {
+      max-width: 200px;
+    }
+
+    /* iPhone Mode - Portrait cards */
+    body.device-iphone .screen-card {
+      width: 120px;
+    }
+    body.device-iphone .screen-card .device-frame,
+    body.device-iphone .screen-card .ipad-frame {
+      width: 120px;
+      height: 260px;
+      border-radius: 16px;
+      border: 3px solid #1a1a1a;
+    }
+    body.device-iphone .screen-card .device-frame::before,
+    body.device-iphone .screen-card .ipad-frame::before {
+      content: '';
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 40px;
+      height: 6px;
+      background: #1a1a1a;
+      border-radius: 3px;
+      z-index: 20;
+    }
+    body.device-iphone .screen-card .screen-label {
+      max-width: 120px;
+      font-size: 10px;
+    }
+    body.device-iphone .screen-card .screen-id {
+      top: 18px;
+      font-size: 9px;
+      min-width: 24px;
+      height: 18px;
+    }
+
+    /* Connection Lines */
+    .connection-svg {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      overflow: visible; /* IMPORTANT: Allow arrow markers to render outside paths */
+    }
+
+    /* Row Labels */
+    .row-label {
+      position: absolute;
+      font-size: 18px;
+      font-weight: 700;
+      color: #1E293B;
+      padding: 8px 16px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    /* Zoom Controls */
+    .zoom-controls {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    .zoom-btn {
+      width: 44px;
+      height: 44px;
+      background: white;
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      cursor: pointer;
+      font-size: 18px;
+      color: #475569;
+      transition: all 0.2s;
+    }
+
+    .zoom-btn:hover {
+      background: #F1F5F9;
+      transform: scale(1.05);
+    }
+
+    /* Module colors - Customize these for your project */
+    .module-auth .screen-id { background: #6366F1; }
+    .module-onboard .screen-id { background: #8B5CF6; }
+    .module-dash .screen-id { background: #F59E0B; }
+    .module-train .screen-id { background: #10B981; }
+    .module-vocab .screen-id { background: #10B981; }
+    .module-device .screen-id { background: #E57373; }
+    .module-report .screen-id { background: #3B82F6; }
+    .module-reward .screen-id { background: #FFB74D; }
+    .module-setting .screen-id { background: #64748B; }
+    .module-profile .screen-id { background: #EC4899; }
+
+    /* Device Badge */
+    .device-badge {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      background: linear-gradient(135deg, #00BCD4 0%, #0097A7 100%);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 4px 15px rgba(0,188,212,0.3);
+    }
+
+    .device-badge svg {
+      width: 20px;
+      height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Device Badge -->
+  <div class="device-badge">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <rect x="3" y="2" width="18" height="20" rx="2" stroke-width="1.5"/>
+      <line x1="3" y1="18" x2="21" y2="18" stroke-width="1.5"/>
+    </svg>
+    iPad Pro 11" - 1194 x 834
+  </div>
+
+  <!-- Flow Container -->
+  <div class="flow-container" id="flowContainer">
+
+    <!-- Connection Lines SVG -->
+    <svg class="connection-svg">
+      <defs>
+        <marker id="arrow-auth" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#6366F1"/>
+        </marker>
+        <marker id="arrow-onboard" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#8B5CF6"/>
+        </marker>
+        <marker id="arrow-dash" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#F59E0B"/>
+        </marker>
+        <marker id="arrow-feature" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#10B981"/>
+        </marker>
+        <marker id="arrow-setting" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#64748B"/>
+        </marker>
+      </defs>
+
+      <!--
+      ============================================================
+      ARROW POSITIONING GUIDE
+      ============================================================
+      Card width: 200px, Gap between cards: 60px
+      Arrow should go through the gap, not through the card!
+
+      Card X positions: 60, 320, 580, 840, 1100, 1360, 1620
+      Card right edges: 260, 520, 780, 1040, 1300, 1560, 1820
+
+      Arrow from card A to card B:
+      - Start X: card_A_right + 8 = card_A_left + 208
+      - End X: card_B_left - 8
+
+      Example: Card at X=60 → Card at X=320
+      - Arrow: M 268 Y L 312 Y (from 60+208=268 to 320-8=312)
+
+      Vertical arrows (card center to next row):
+      - Card center X = card_left + 100
+      - Start Y: card_bottom + 8 = card_top + 148
+      - End Y: next_card_top - 8
+      ============================================================
+      -->
+
+      <!-- ARROWS_START -->
+      <!-- =====================================================
+           FLOW ARROWS - 由 05-diagram 流程自動產生
+
+           箭頭格式範例:
+           <path d="M 268 270 L 312 270"
+                 stroke="#6366F1" stroke-width="2.5" fill="none"
+                 marker-end="url(#arrow-auth)"/>
+
+           座標計算:
+           - 起點 X = 卡片左邊 + 208 (卡片右邊 + 8px)
+           - 終點 X = 下一卡片左邊 - 8
+           - Y = 卡片 Y + 70 (卡片垂直中心)
+           ===================================================== -->
+      <!-- ARROWS_END -->
+
+    </svg>
+
+    <!--
+    ============================================================
+    LAYOUT SPACING GUIDE
+    ============================================================
+    Card dimensions: width 200px, height 140px (frame) + 30px (label) = 170px total
+
+    Row spacing formula:
+    - Row label: Y position
+    - Cards: Y + 90px (to avoid overlap with label)
+    - Next row label: Y + 280px (card height 170 + gap 110)
+
+    Example layout:
+    - Row 1: label=110, cards=200
+    - Row 2: label=390, cards=480
+    - Row 3: label=670, cards=760
+    - Row 4: label=950, cards=1040
+    ============================================================
+    -->
+
+    <!-- ==================== ROW 1: AUTH (6 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 110px;">Authentication Flow</div>
+
+    <div class="screen-card module-auth" style="left: 60px; top: 200px;" onclick="openScreen('auth/SCR-AUTH-001-splash.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">AUTH-001</div>
+        <iframe src="../auth/SCR-AUTH-001-splash.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-AUTH-001 啟動畫面</div>
+    </div>
+
+    <div class="screen-card module-auth" style="left: 320px; top: 200px;" onclick="openScreen('auth/SCR-AUTH-002-login.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">AUTH-002</div>
+        <iframe src="../auth/SCR-AUTH-002-login.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-AUTH-002 登入</div>
+    </div>
+
+    <div class="screen-card module-auth" style="left: 580px; top: 200px;" onclick="openScreen('auth/SCR-AUTH-003-register.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">AUTH-003</div>
+        <iframe src="../auth/SCR-AUTH-003-register.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-AUTH-003 註冊</div>
+    </div>
+
+    <div class="screen-card module-auth" style="left: 840px; top: 200px;" onclick="openScreen('auth/SCR-AUTH-004-role-select.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">AUTH-004</div>
+        <iframe src="../auth/SCR-AUTH-004-role-select.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-AUTH-004 角色選擇</div>
+    </div>
+
+    <div class="screen-card module-auth" style="left: 1100px; top: 200px;" onclick="openScreen('auth/SCR-AUTH-005-forgot-password.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">AUTH-005</div>
+        <iframe src="../auth/SCR-AUTH-005-forgot-password.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-AUTH-005 忘記密碼</div>
+    </div>
+
+    <div class="screen-card module-auth" style="left: 1360px; top: 200px;" onclick="openScreen('auth/SCR-AUTH-006-reset-sent.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">AUTH-006</div>
+        <iframe src="../auth/SCR-AUTH-006-reset-sent.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-AUTH-006 重設連結</div>
+    </div>
+
+    <!-- ==================== ROW 2: DASH (1 screen) ==================== -->
+    <div class="row-label" style="left: 60px; top: 390px;">Dashboard</div>
+
+    <div class="screen-card module-dash" style="left: 60px; top: 480px;" onclick="openScreen('dash/SCR-DASH-001-student-home.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">DASH-001</div>
+        <iframe src="../dash/SCR-DASH-001-student-home.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-DASH-001 學生首頁</div>
+    </div>
+
+    <!-- ==================== ROW 3: VOCAB (9 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 670px;">Vocabulary Management</div>
+
+    <div class="screen-card module-vocab" style="left: 60px; top: 760px;" onclick="openScreen('vocab/SCR-VOCAB-001-set-list.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">VOCAB-001</div>
+        <iframe src="../vocab/SCR-VOCAB-001-set-list.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-VOCAB-001 字庫列表</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 320px; top: 760px;" onclick="openScreen('vocab/SCR-VOCAB-002-create-set.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">VOCAB-002</div>
+        <iframe src="../vocab/SCR-VOCAB-002-create-set.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-VOCAB-002 建立字庫</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 580px; top: 760px;" onclick="openScreen('vocab/SCR-VOCAB-003-word-list.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">VOCAB-003</div>
+        <iframe src="../vocab/SCR-VOCAB-003-word-list.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-VOCAB-003 單字列表</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 840px; top: 760px;" onclick="openScreen('vocab/SCR-VOCAB-004-import.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">VOCAB-004</div>
+        <iframe src="../vocab/SCR-VOCAB-004-import.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-VOCAB-004 匯入字庫</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 1100px; top: 760px;" onclick="openScreen('vocab/SCR-VOCAB-005-add-word.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">VOCAB-005</div>
+        <iframe src="../vocab/SCR-VOCAB-005-add-word.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-VOCAB-005 新增單字</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 1360px; top: 760px;" onclick="openScreen('vocab/SCR-VOCAB-006-word-detail.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">VOCAB-006</div>
+        <iframe src="../vocab/SCR-VOCAB-006-word-detail.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-VOCAB-006 單字詳情</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 1620px; top: 760px;" onclick="openScreen('vocab/SCR-VOCAB-007-export.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">VOCAB-007</div>
+        <iframe src="../vocab/SCR-VOCAB-007-export.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-VOCAB-007 匯出字庫</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 1880px; top: 760px;" onclick="openScreen('vocab/SCR-VOCAB-008-public-sets.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">VOCAB-008</div>
+        <iframe src="../vocab/SCR-VOCAB-008-public-sets.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-VOCAB-008 公開字庫</div>
+    </div>
+
+    <div class="screen-card module-vocab" style="left: 2140px; top: 760px;" onclick="openScreen('vocab/SCR-VOCAB-009-ocr.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">VOCAB-009</div>
+        <iframe src="../vocab/SCR-VOCAB-009-ocr.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-VOCAB-009 照片識別</div>
+    </div>
+
+    <!-- ==================== ROW 4: TRAIN (7 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 950px;">Training & Practice</div>
+
+    <div class="screen-card module-train" style="left: 60px; top: 1040px;" onclick="openScreen('train/SCR-TRAIN-001-mode-select.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">TRAIN-001</div>
+        <iframe src="../train/SCR-TRAIN-001-mode-select.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-TRAIN-001 練習模式</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 320px; top: 1040px;" onclick="openScreen('train/SCR-TRAIN-002-listening.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">TRAIN-002</div>
+        <iframe src="../train/SCR-TRAIN-002-listening.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-TRAIN-002 聽力測驗</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 580px; top: 1040px;" onclick="openScreen('train/SCR-TRAIN-003-pronunciation.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">TRAIN-003</div>
+        <iframe src="../train/SCR-TRAIN-003-pronunciation.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-TRAIN-003 發音測驗</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 840px; top: 1040px;" onclick="openScreen('train/SCR-TRAIN-004-spelling.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">TRAIN-004</div>
+        <iframe src="../train/SCR-TRAIN-004-spelling.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-TRAIN-004 拼音測驗</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 1100px; top: 1040px;" onclick="openScreen('train/SCR-TRAIN-005-matching.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">TRAIN-005</div>
+        <iframe src="../train/SCR-TRAIN-005-matching.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-TRAIN-005 配對測驗</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 1360px; top: 1040px;" onclick="openScreen('train/SCR-TRAIN-006-result.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">TRAIN-006</div>
+        <iframe src="../train/SCR-TRAIN-006-result.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-TRAIN-006 練習結果</div>
+    </div>
+
+    <div class="screen-card module-train" style="left: 1620px; top: 1040px;" onclick="openScreen('train/SCR-TRAIN-007-review.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">TRAIN-007</div>
+        <iframe src="../train/SCR-TRAIN-007-review.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-TRAIN-007 錯題回顧</div>
+    </div>
+
+    <!-- ==================== ROW 5: PROGRESS (2 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 1230px;">Learning Progress</div>
+
+    <div class="screen-card module-report" style="left: 60px; top: 1320px;" onclick="openScreen('progress/SCR-PROGRESS-001-overview.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">PROG-001</div>
+        <iframe src="../progress/SCR-PROGRESS-001-overview.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-PROGRESS-001 進度總覽</div>
+    </div>
+
+    <div class="screen-card module-report" style="left: 320px; top: 1320px;" onclick="openScreen('progress/SCR-PROGRESS-002-detail.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">PROG-002</div>
+        <iframe src="../progress/SCR-PROGRESS-002-detail.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-PROGRESS-002 詳細報表</div>
+    </div>
+
+    <!-- ==================== ROW 6: PARENT (5 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 1510px;">Parent Dashboard</div>
+
+    <div class="screen-card module-profile" style="left: 60px; top: 1600px;" onclick="openScreen('parent/SCR-PARENT-001-dashboard.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">PARENT-001</div>
+        <iframe src="../parent/SCR-PARENT-001-dashboard.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-PARENT-001 家長儀表板</div>
+    </div>
+
+    <div class="screen-card module-profile" style="left: 320px; top: 1600px;" onclick="openScreen('parent/SCR-PARENT-002-child-detail.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">PARENT-002</div>
+        <iframe src="../parent/SCR-PARENT-002-child-detail.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-PARENT-002 孩子詳情</div>
+    </div>
+
+    <div class="screen-card module-profile" style="left: 580px; top: 1600px;" onclick="openScreen('parent/SCR-PARENT-003-add-child.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">PARENT-003</div>
+        <iframe src="../parent/SCR-PARENT-003-add-child.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-PARENT-003 新增孩子</div>
+    </div>
+
+    <div class="screen-card module-profile" style="left: 840px; top: 1600px;" onclick="openScreen('parent/SCR-PARENT-004-settings.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">PARENT-004</div>
+        <iframe src="../parent/SCR-PARENT-004-settings.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-PARENT-004 家長設定</div>
+    </div>
+
+    <div class="screen-card module-profile" style="left: 1100px; top: 1600px;" onclick="openScreen('parent/SCR-PARENT-005-goals.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">PARENT-005</div>
+        <iframe src="../parent/SCR-PARENT-005-goals.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-PARENT-005 學習目標</div>
+    </div>
+
+    <!-- ==================== ROW 7: SETTING (10 screens) ==================== -->
+    <div class="row-label" style="left: 60px; top: 1790px;">Settings</div>
+
+    <div class="screen-card module-setting" style="left: 60px; top: 1880px;" onclick="openScreen('setting/SCR-SETTING-001-profile.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">SET-001</div>
+        <iframe src="../setting/SCR-SETTING-001-profile.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-SETTING-001 個人檔案</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 320px; top: 1880px;" onclick="openScreen('setting/SCR-SETTING-002-edit-profile.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">SET-002</div>
+        <iframe src="../setting/SCR-SETTING-002-edit-profile.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-SETTING-002 編輯資料</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 580px; top: 1880px;" onclick="openScreen('setting/SCR-SETTING-003-notifications.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">SET-003</div>
+        <iframe src="../setting/SCR-SETTING-003-notifications.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-SETTING-003 通知設定</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 840px; top: 1880px;" onclick="openScreen('setting/SCR-SETTING-004-sound.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">SET-004</div>
+        <iframe src="../setting/SCR-SETTING-004-sound.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-SETTING-004 聲音設定</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 1100px; top: 1880px;" onclick="openScreen('setting/SCR-SETTING-005-display.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">SET-005</div>
+        <iframe src="../setting/SCR-SETTING-005-display.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-SETTING-005 顯示設定</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 1360px; top: 1880px;" onclick="openScreen('setting/SCR-SETTING-006-language.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">SET-006</div>
+        <iframe src="../setting/SCR-SETTING-006-language.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-SETTING-006 語言設定</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 1620px; top: 1880px;" onclick="openScreen('setting/SCR-SETTING-009-about.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">SET-009</div>
+        <iframe src="../setting/SCR-SETTING-009-about.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-SETTING-009 關於我們</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 1880px; top: 1880px;" onclick="openScreen('setting/SCR-SETTING-010-terms.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">SET-010</div>
+        <iframe src="../setting/SCR-SETTING-010-terms.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-SETTING-010 服務條款</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 2140px; top: 1880px;" onclick="openScreen('setting/SCR-SETTING-011-privacy.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">SET-011</div>
+        <iframe src="../setting/SCR-SETTING-011-privacy.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-SETTING-011 隱私權</div>
+    </div>
+
+    <div class="screen-card module-setting" style="left: 2400px; top: 1880px;" onclick="openScreen('setting/SCR-SETTING-012-help.html')">
+      <div class="ipad-frame">
+        <div class="screen-id">SET-012</div>
+        <iframe src="../setting/SCR-SETTING-012-help.html" loading="lazy"></iframe>
+      </div>
+      <div class="screen-label">SCR-SETTING-012 幫助回饋</div>
+    </div>
+
+  </div>
+
+  <!-- Zoom Controls -->
+  <div class="zoom-controls">
+    <button class="zoom-btn" onclick="zoomIn()">+</button>
+    <button class="zoom-btn" onclick="zoomOut()">-</button>
+    <button class="zoom-btn" onclick="resetZoom()">&#8634;</button>
+  </div>
+
+  <script>
+    // Device detection from URL parameter (default: iphone)
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentDevice = urlParams.get('device') || 'iphone';
+
+    // Update iframe paths and layout based on device
+    function initDeviceScreenshots() {
+      // Apply device class to body for CSS styling
+      document.body.classList.remove('device-ipad', 'device-iphone');
+      document.body.classList.add('device-' + currentDevice);
+
+      // Add device-frame class to ipad-frame for consistency
+      document.querySelectorAll('.ipad-frame').forEach(el => {
+        el.classList.add('device-frame');
+      });
+
+      // Switch iframe src based on device
+      if (currentDevice === 'iphone') {
+        switchIframeSourcesToIPhone();
+        adjustCardPositionsForIPhone();
+      }
+
+      // Update device badge
+      const badge = document.querySelector('.device-badge');
+      if (badge) {
+        const deviceInfo = currentDevice === 'ipad'
+          ? 'iPad Pro 11" (1194x834)'
+          : 'iPhone 15 Pro (393x852)';
+        badge.innerHTML = `
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            ${currentDevice === 'ipad'
+              ? '<rect x="3" y="2" width="18" height="20" rx="2" stroke-width="1.5"/><line x1="3" y1="18" x2="21" y2="18" stroke-width="1.5"/>'
+              : '<rect x="7" y="2" width="10" height="20" rx="2" stroke-width="1.5"/><line x1="10" y1="18" x2="14" y2="18" stroke-width="1.5"/>'}
+          </svg>
+          {{PROJECT_NAME}} UI Flow - {{TOTAL_SCREENS}} Screens (${deviceInfo})
+        `;
+      }
+    }
+
+    /**
+     * Convert iPad paths to iPhone paths
+     * iPad: ../auth/SCR-AUTH-001.html → iPhone: ../iphone/SCR-AUTH-001.html
+     */
+    function switchIframeSourcesToIPhone() {
+      document.querySelectorAll('.screen-card iframe').forEach(iframe => {
+        const src = iframe.getAttribute('src');
+        if (src) {
+          // Convert module paths to iphone folder
+          // ../auth/SCR-AUTH-001.html → ../iphone/SCR-AUTH-001.html
+          const newSrc = src.replace(/\.\.\/(auth|onboard|dash|feature|report|setting|vocab|train|home|progress|parent)\//, '../iphone/');
+          iframe.setAttribute('src', newSrc);
+        }
+      });
+    }
+
+    // Adjust card positions for iPhone's narrower and taller cards
+    function adjustCardPositionsForIPhone() {
+      // iPad card width: 200px + 60px gap = 260px spacing
+      // iPhone card width: 120px + 40px gap = 160px spacing
+      const ipadXSpacing = 260;
+      const iphoneXSpacing = 160;
+
+      // iPad card height: 140px + 30px label = 170px total
+      // iPhone card height: 260px + 30px label = 290px total
+      // Extra space needed per row: 290 - 170 = 120px
+      const extraHeightPerRow = 120;
+
+      // Row card Y positions (iPad original) - 7 rows for VocabKids
+      // AUTH=200, DASH=480, VOCAB=760, TRAIN=1040, PROGRESS=1320, PARENT=1600, SETTING=1880
+      const cardRowYPositions = [200, 480, 760, 1040, 1320, 1600, 1880];
+
+      // Row label Y positions (iPad original) - ~80-90px above card rows
+      const labelRowYPositions = [110, 390, 670, 950, 1230, 1510, 1790];
+      // Maps to card rows: [0, 1, 2, 3, 4, 5, 6]
+      const labelToCardRowMap = [0, 1, 2, 3, 4, 5, 6];
+
+      // Adjust card positions
+      document.querySelectorAll('.screen-card').forEach(card => {
+        const currentLeft = parseInt(card.style.left) || 0;
+        const currentTop = parseInt(card.style.top) || 0;
+
+        // Adjust X position
+        const colIndex = Math.round((currentLeft - 60) / ipadXSpacing);
+        const newLeft = 60 + (colIndex * iphoneXSpacing);
+        card.style.left = newLeft + 'px';
+
+        // Find card's row index
+        let rowIndex = 0;
+        for (let i = 0; i < cardRowYPositions.length; i++) {
+          if (Math.abs(currentTop - cardRowYPositions[i]) < 50) {
+            rowIndex = i;
+            break;
+          }
+        }
+
+        // Cumulative Y offset
+        const yOffset = rowIndex * extraHeightPerRow;
+        card.style.top = (currentTop + yOffset) + 'px';
+      });
+
+      // Adjust row labels
+      document.querySelectorAll('.row-label').forEach(label => {
+        const currentTop = parseInt(label.style.top) || 0;
+
+        // Find which label row this is
+        let labelIndex = 0;
+        for (let i = 0; i < labelRowYPositions.length; i++) {
+          if (Math.abs(currentTop - labelRowYPositions[i]) < 50) {
+            labelIndex = i;
+            break;
+          }
+        }
+
+        // Get corresponding card row index and apply same offset
+        const cardRowIndex = labelToCardRowMap[labelIndex];
+        const yOffset = cardRowIndex * extraHeightPerRow;
+        label.style.top = (currentTop + yOffset) + 'px';
+      });
+
+      // Adjust SVG arrow paths for iPhone
+      adjustArrowsForIPhone();
+    }
+
+    // Adjust arrow positions for iPhone's narrower and taller cards
+    function adjustArrowsForIPhone() {
+      // iPad: card width 200px, spacing 260px (200 + 60 gap)
+      // iPhone: card width 120px, spacing 160px (120 + 40 gap)
+      const ipadCardWidth = 200;
+      const iphoneCardWidth = 120;
+      const ipadXSpacing = 260;
+      const iphoneXSpacing = 160;
+
+      // Extra height per row for cumulative offset
+      const extraHeightPerRow = 120;
+      // Base Y offset for arrow center (iPhone center is 60px lower: 130 vs 70)
+      const baseYOffset = 60;
+
+      // Card row Y boundaries for arrow detection - CUSTOMIZE FOR YOUR PROJECT
+      function getRowOffset(yNum) {
+        if (yNum <= 310) return 0 * extraHeightPerRow + baseYOffset;
+        if (yNum <= 560) return 1 * extraHeightPerRow + baseYOffset;
+        if (yNum <= 840) return 2 * extraHeightPerRow + baseYOffset;
+        if (yNum <= 1120) return 3 * extraHeightPerRow + baseYOffset;
+        return 4 * extraHeightPerRow + baseYOffset;
+      }
+
+      // Convert iPad X coordinate to iPhone X coordinate
+      function adjustX(xNum) {
+        if (xNum <= 60) return xNum;
+
+        // Determine if this is an arrow start or end based on position within column
+        const relX = xNum - 60;
+        const colIndex = Math.floor(relX / ipadXSpacing);
+        const withinCol = relX % ipadXSpacing;
+
+        // Arrow start: withinCol ≈ 208, Arrow end: withinCol ≈ 252
+        if (withinCol > 230) {
+          // Arrow END (pointing to next card)
+          return 60 + (colIndex + 1) * iphoneXSpacing - 8;
+        } else if (withinCol > 180) {
+          // Arrow START (from card right edge)
+          return 60 + colIndex * iphoneXSpacing + iphoneCardWidth + 8;
+        } else {
+          // Card center or other - scale proportionally
+          return 60 + colIndex * iphoneXSpacing + Math.round(withinCol * iphoneXSpacing / ipadXSpacing);
+        }
+      }
+
+      document.querySelectorAll('.connection-svg path').forEach(path => {
+        const d = path.getAttribute('d');
+        if (!d) return;
+
+        // Parse and adjust coordinates in path
+        let newD = d.replace(/([ML])\s*(\d+)\s+(\d+)/g, (match, cmd, x, y) => {
+          const xNum = parseInt(x);
+          const yNum = parseInt(y);
+
+          const newX = adjustX(xNum);
+          const yOffset = getRowOffset(yNum);
+          return `${cmd} ${newX} ${yNum + yOffset}`;
+        });
+
+        // Handle Q (quadratic curve) commands
+        newD = newD.replace(/Q\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/g, (match, cx, cy, x, y) => {
+          const cxNum = parseInt(cx);
+          const cyNum = parseInt(cy);
+          const xNum = parseInt(x);
+          const yNum = parseInt(y);
+
+          const newCx = adjustX(cxNum);
+          const newX = adjustX(xNum);
+
+          const avgY = (cyNum + yNum) / 2;
+          const yOffset = getRowOffset(avgY);
+          return `Q ${newCx} ${cyNum + yOffset} ${newX} ${yNum + yOffset}`;
+        });
+
+        path.setAttribute('d', newD);
+      });
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', initDeviceScreenshots);
+
+    let currentZoom = 1.0;
+    const flowContainer = document.getElementById('flowContainer');
+
+    function updateZoom() {
+      flowContainer.style.transform = `scale(${currentZoom})`;
+      flowContainer.style.transformOrigin = '0 0';
+    }
+
+    function zoomIn() {
+      currentZoom = Math.min(1.5, currentZoom + 0.1);
+      updateZoom();
+    }
+
+    function zoomOut() {
+      currentZoom = Math.max(0.2, currentZoom - 0.1);
+      updateZoom();
+    }
+
+    function resetZoom() {
+      currentZoom = 1.0;
+      updateZoom();
+    }
+
+    /**
+     * Opens device-preview.html with screen and device parameters
+     * @param {string} screen - iPad screen path (e.g., 'auth/SCR-AUTH-001-login.html')
+     */
+    function openScreen(screen) {
+      // Convert iPad path to iPhone path if in iPhone mode
+      let targetScreen = screen;
+      if (currentDevice === 'iphone') {
+        // auth/SCR-AUTH-001.html → iphone/SCR-AUTH-001.html
+        targetScreen = screen.replace(/^(auth|onboard|dash|feature|report|setting|vocab|train|home)\//, 'iphone/');
+      }
+      const deviceParam = currentDevice === 'iphone' ? '&device=iphone' : '';
+      window.open('../device-preview.html?screen=' + targetScreen + deviceParam, '_blank');
+    }
+
+    // Initialize
+    updateZoom();
+
+    // Drag to pan
+    let isDragging = false;
+    let startX, startY, scrollLeft, scrollTop;
+
+    document.body.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.screen-card') || e.target.closest('.zoom-controls') || e.target.closest('.legend') || e.target.closest('.device-badge')) return;
+      isDragging = true;
+      startX = e.pageX;
+      startY = e.pageY;
+      scrollLeft = window.scrollX;
+      scrollTop = window.scrollY;
+      document.body.style.cursor = 'grabbing';
+    });
+
+    document.body.addEventListener('mouseup', () => {
+      isDragging = false;
+      document.body.style.cursor = 'default';
+    });
+
+    document.body.addEventListener('mouseleave', () => {
+      isDragging = false;
+      document.body.style.cursor = 'default';
+    });
+
+    document.body.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const dx = e.pageX - startX;
+      const dy = e.pageY - startY;
+      window.scrollTo(scrollLeft - dx, scrollTop - dy);
+    });
+
+    // Mouse wheel zoom
+    document.addEventListener('wheel', (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        if (e.deltaY < 0) {
+          zoomIn();
+        } else {
+          zoomOut();
+        }
+      }
+    }, { passive: false });
+  </script>
+</body>
+</html>

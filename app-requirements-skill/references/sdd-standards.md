@@ -36,6 +36,80 @@ DOCX 輸出時，字型設定如下：
 | 標題 | Arial + 微軟正黑體 (混合) |
 | 程式碼 | Consolas |
 
+### Code Block 使用規則
+
+**Code Block（```）僅用於實際程式碼**，DOCX 轉換時會套用等寬字體 + 灰色背景。
+
+| 內容類型 | 是否使用 Code Block | 說明 |
+|---------|-------------------|------|
+| 程式碼 (SQL, JSON, Swift, Kotlin) | ✅ 使用 | 正確用法 |
+| Mermaid 圖表 | ✅ 使用 ```mermaid | 必須標註語言 |
+| **Use Case (前置/後置條件、流程)** | ❌ 禁止 | 使用粗體標籤 + 編號清單 |
+| 一般說明文字 | ❌ 禁止 | 使用段落或清單 |
+| ASCII Art | ❌ 避免 | 改用 Mermaid |
+
+**Use Case 正確格式範例**：
+```markdown
+#### UC-001: 用戶登入
+
+**前置條件：** 用戶已安裝 App
+
+**主要流程：**
+1. 用戶開啟 App
+2. 系統顯示登入畫面
+3. 用戶輸入帳號密碼
+4. 系統驗證成功
+
+**後置條件：** 用戶完成登入
+```
+
+### Mermaid 圖表方向規則
+
+> ⚠️ **重要：優先使用直式 (TB) 而非橫式 (LR)**
+
+DOCX 輸出時，橫式圖表會被縮小導致文字難以閱讀。為確保可讀性：
+
+| 圖表類型 | 推薦方向 | 說明 |
+|---------|---------|------|
+| 流程圖 (flowchart) | `TB` (Top-Bottom) | 直式，文字清晰 |
+| 架構圖 | `TB` | 直式，層次分明 |
+| 簡單連接 (≤3 節點) | `LR` 可接受 | 橫式仍可讀 |
+| 時序圖 (sequence) | 無方向參數 | 自動直式 |
+
+**正確範例 (直式)：**
+```markdown
+flowchart TB
+    subgraph Online["Online Mode"]
+        direction TB
+        Cloud[Cloud Server]
+        Cloud <--> Sync[Sync Manager]
+        Sync <--> Local[Local Cache]
+    end
+```
+
+**混合模式 (層間直式 + 層內橫式) - 適用於多層架構圖：**
+```markdown
+flowchart TB
+    subgraph Presentation["Presentation Layer"]
+        direction LR
+        AuthV[Auth] --- HomeV[Home] --- TrainV[Train]
+    end
+
+    subgraph Business["Business Layer"]
+        direction LR
+        AuthS[Auth Service] --- VocabS[Vocab Service]
+    end
+
+    Presentation --> Business
+```
+> 此模式讓圖表變寬但變矮，適合與標題放在同一頁
+
+**避免使用 (純橫式)：**
+```markdown
+flowchart LR
+    Cloud --> Sync --> Local --> UI
+```
+
 ### 字型大小設定
 
 | 元素 | 大小 |

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} - {{SCREEN_NAME}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/project-theme.css">
+  <script>
+    // Configure Tailwind for responsive breakpoints
+    tailwind.config = {
+      theme: {
+        extend: {
+          screens: {
+            'phone': {'max': '500px'},   // iPhone: 393px
+            'tablet': {'min': '501px'},  // iPad: 1194px
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Responsive container - adapts to device viewport */
+    :root {
+      --ipad-width: 1194px;
+      --ipad-height: 834px;
+      --iphone-width: 393px;
+      --iphone-height: 852px;
+    }
+
+    /* iPad mode (default) */
+    body {
+      width: var(--ipad-width);
+      height: var(--ipad-height);
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* iPhone mode - detected by viewport width */
+    @media (max-width: 500px) {
+      body {
+        width: var(--iphone-width);
+        height: var(--iphone-height);
+      }
+    }
+
+    /* Responsive utilities */
+    .responsive-container {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Card layouts - horizontal on iPad, vertical on iPhone */
+    .card-grid {
+      display: grid;
+      gap: 1rem;
+    }
+    @media (min-width: 501px) {
+      .card-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+      .card-grid-2 { grid-template-columns: repeat(2, 1fr); }
+      .card-grid-3 { grid-template-columns: repeat(3, 1fr); }
+      .card-grid-4 { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 500px) {
+      .card-grid, .card-grid-2, .card-grid-3, .card-grid-4 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Horizontal on iPad, vertical on iPhone */
+    .flex-responsive {
+      display: flex;
+      gap: 1rem;
+    }
+    @media (min-width: 501px) {
+      .flex-responsive { flex-direction: row; }
+    }
+    @media (max-width: 500px) {
+      .flex-responsive { flex-direction: column; }
+    }
+
+    /* Hide on phone / tablet */
+    @media (max-width: 500px) {
+      .tablet-only { display: none !important; }
+    }
+    @media (min-width: 501px) {
+      .phone-only { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-b from-slate-50 to-slate-100">
+
+  <!-- Responsive Screen Container -->
+  <div class="responsive-container flex flex-col">
+
+    <!-- Header - adapts padding and font sizes -->
+    <header class="bg-white/80 backdrop-blur-lg border-b border-gray-200
+                   px-4 py-3 tablet:px-6 tablet:py-4 flex-shrink-0">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2 tablet:gap-4">
+          <!-- Back Button -->
+          <button onclick="history.back()"
+                  class="w-8 h-8 tablet:w-10 tablet:h-10 rounded-full bg-gray-100
+                         flex items-center justify-center hover:bg-gray-200 transition">
+            <svg class="w-4 h-4 tablet:w-5 tablet:h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+          </button>
+          <h1 class="text-base tablet:text-xl font-bold text-gray-800">{{SCREEN_TITLE}}</h1>
+        </div>
+        <div class="flex items-center gap-2 tablet:gap-3">
+          <!-- Action buttons slot -->
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area - scrollable -->
+    <main class="flex-1 overflow-y-auto p-4 tablet:p-6">
+      <!-- Your screen content goes here -->
+      <div class="bg-white rounded-xl tablet:rounded-2xl shadow-lg p-4 tablet:p-8">
+        <h2 class="text-lg tablet:text-2xl font-bold text-gray-800 mb-2 tablet:mb-4">{{SCREEN_NAME}}</h2>
+        <p class="text-sm tablet:text-base text-gray-600">Screen content placeholder. Replace with actual UI components.</p>
+
+        <!-- Example responsive card grid -->
+        <div class="card-grid-2 mt-4 tablet:mt-6">
+          <div class="bg-gray-50 rounded-lg p-3 tablet:p-4">
+            <p class="text-xs tablet:text-sm text-gray-500">Card 1</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3 tablet:p-4">
+            <p class="text-xs tablet:text-sm text-gray-500">Card 2</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Bottom Navigation (Optional) -->
+    <!--
+    <nav class="bg-white/90 backdrop-blur-lg border-t border-gray-200 flex-shrink-0">
+      <div class="flex justify-around items-center h-14 tablet:h-20 px-4 tablet:px-6">
+        <a href="#" class="flex flex-col items-center gap-0.5 tablet:gap-1 text-indigo-600">
+          <svg class="w-5 h-5 tablet:w-6 tablet:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+          </svg>
+          <span class="text-[10px] tablet:text-xs font-medium">Home</span>
+        </a>
+        <a href="#" class="flex flex-col items-center gap-0.5 tablet:gap-1 text-gray-400">
+          <svg class="w-5 h-5 tablet:w-6 tablet:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span class="text-[10px] tablet:text-xs font-medium">Settings</span>
+        </a>
+      </div>
+    </nav>
+    -->
+
+  </div>
+
+<!-- IMPORTANT: Include notify-parent.js for device-preview.html sidebar sync -->
+<script src="../shared/notify-parent.js"></script>
+</body>
+</html>
+
+<!--
+================================================================================
+RESPONSIVE SCREEN TEMPLATE
+================================================================================
+This template uses responsive design to work on both iPad and iPhone.
+
+DEVICE SPECIFICATIONS:
+- iPad Pro 11": 1194 x 834 (landscape)
+- iPhone 15 Pro: 393 x 852 (portrait)
+
+RESPONSIVE UTILITIES:
+- tablet:   Classes that apply only on iPad (min-width: 501px)
+- phone:    Classes that apply only on iPhone (max-width: 500px)
+- tablet-only: Element visible only on iPad
+- phone-only:  Element visible only on iPhone
+
+LAYOUT PATTERNS:
+- card-grid:   Auto-fit grid, 1 col on phone, multi-col on tablet
+- card-grid-2: 2 columns on tablet, 1 on phone
+- card-grid-3: 3 columns on tablet, 1 on phone
+- card-grid-4: 4 columns on tablet, 1 on phone
+- flex-responsive: Row on tablet, column on phone
+
+TEXT SIZES:
+- Phone:  text-xs, text-sm, text-base, text-lg
+- Tablet: tablet:text-sm, tablet:text-base, tablet:text-lg, tablet:text-xl
+
+SPACING:
+- Phone:  p-3, p-4, gap-2, gap-3
+- Tablet: tablet:p-4, tablet:p-6, tablet:p-8, tablet:gap-4
+
+@requirements: {{REQ_ID}}
+@screen-id: {{SCREEN_ID}}
+@screen-name: {{SCREEN_NAME}}
+@description: {{SCREEN_DESCRIPTION}}
+================================================================================
+-->

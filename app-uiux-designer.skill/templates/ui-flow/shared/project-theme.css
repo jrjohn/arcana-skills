@@ -36,14 +36,21 @@
   --color-error: #EF4444;
   --color-info: #3B82F6;
 
-  /* Module Colors */
-  --color-module-auth: #6366F1;
-  --color-module-onboard: #8B5CF6;
-  --color-module-dash: #F59E0B;
-  --color-module-feature: #10B981;
-  --color-module-profile: #EC4899;
-  --color-module-report: #3B82F6;
-  --color-module-setting: #64748B;
+  /* Module Colors - Standard (適用所有 App 類型) */
+  --color-module-auth: #6366F1;      /* 認證：Indigo */
+  --color-module-onboard: #8B5CF6;   /* 引導：Violet */
+  --color-module-dash: #F59E0B;      /* 儀表板：Amber */
+  --color-module-home: #F59E0B;      /* 首頁：Amber */
+  --color-module-feature: #10B981;   /* 功能：Emerald */
+  --color-module-profile: #EC4899;   /* 個人：Pink */
+  --color-module-report: #3B82F6;    /* 報告：Blue */
+  --color-module-setting: #64748B;   /* 設定：Slate */
+
+  /* Module Colors - Extended (專案可自訂) */
+  --color-module-vocab: #14B8A6;     /* 字庫：Teal */
+  --color-module-train: #F97316;     /* 訓練：Orange */
+  --color-module-progress: #06B6D4;  /* 進度：Cyan */
+  --color-module-parent: #EC4899;    /* 家長：Pink */
 
   /* Spacing Scale */
   --spacing-xs: 4px;
