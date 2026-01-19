@@ -452,13 +452,29 @@ EOF
 
     # Install npm dependencies
     info "  Installing Puppeteer (this may take a moment)..."
-    (cd "$tools_dir" && npm install --silent 2>/dev/null)
+    local npm_output
+    local npm_exit_code
 
-    if [ -d "$tools_dir/node_modules/puppeteer" ]; then
+    # Run npm install and capture output
+    npm_output=$(cd "$tools_dir" && npm install 2>&1)
+    npm_exit_code=$?
+
+    if [ $npm_exit_code -eq 0 ] && [ -d "$tools_dir/node_modules/puppeteer" ]; then
         success "Shared tools installed"
+    elif [ -d "$tools_dir/node_modules/puppeteer" ]; then
+        # Puppeteer exists but npm had warnings
+        success "Shared tools installed (with warnings)"
     else
-        warn "Puppeteer installation may have issues, please run manually:"
-        info "  cd $tools_dir && npm install"
+        warn "Puppeteer installation failed"
+        if [ -n "$npm_output" ]; then
+            echo ""
+            echo -e "${YELLOW}npm output:${NC}"
+            echo "$npm_output"
+        fi
+        echo ""
+        info "Please run manually:"
+        info "  cd $tools_dir"
+        info "  npm install"
     fi
 }
 
