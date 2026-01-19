@@ -696,40 +696,70 @@ function Install-SharedTools {
     }
 
     $packageJsonPath = Join-Path $toolsDir "package.json"
-    $packageJson | ConvertTo-Json -Depth 10 | Set-Content $packageJsonPath -Encoding UTF8
+    # Use WriteAllText to avoid BOM that breaks npm
+    $jsonContent = $packageJson | ConvertTo-Json -Depth 10
+    [System.IO.File]::WriteAllText($packageJsonPath, $jsonContent)
 
     # Install npm dependencies
     Write-Info "  Installing Puppeteer (this may take a moment)..."
+
+    # Get npm path - on Windows it's usually npm.cmd
+    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npmCmd) {
+        Write-Warn "npm not found in PATH"
+        Write-Info "  Please run manually: cd $toolsDir && npm install"
+        return
+    }
+
+    $puppeteerPath = Join-Path $toolsDir "node_modules\puppeteer"
+
     Push-Location $toolsDir
     try {
-        # Run npm install and capture both stdout and stderr
-        $npmOutput = npm install 2>&1
+        # Run npm install using cmd.exe for better Windows compatibility
+        $npmOutput = cmd.exe /c "npm install --no-fund --no-audit --loglevel=error 2>&1"
         $npmExitCode = $LASTEXITCODE
 
-        $puppeteerPath = Join-Path $toolsDir "node_modules\puppeteer"
-        if ($npmExitCode -eq 0 -and (Test-Path $puppeteerPath)) {
+        # Give filesystem a moment to settle
+        Start-Sleep -Milliseconds 500
+
+        # Check if puppeteer was actually installed (this is the real success indicator)
+        if (Test-Path $puppeteerPath) {
             Write-Success "Shared tools installed"
         }
-        elseif (Test-Path $puppeteerPath) {
-            # Puppeteer exists but npm had warnings
-            Write-Success "Shared tools installed (with warnings)"
+        elseif ($npmExitCode -eq 0) {
+            # npm succeeded but puppeteer not found - wait and recheck
+            Start-Sleep -Seconds 2
+            if (Test-Path $puppeteerPath) {
+                Write-Success "Shared tools installed"
+            }
+            else {
+                Write-Warn "npm completed but Puppeteer not found, retrying..."
+                # Retry with explicit puppeteer install
+                cmd.exe /c "npm install puppeteer --no-fund --no-audit 2>&1" | Out-Null
+                Start-Sleep -Seconds 2
+                if (Test-Path $puppeteerPath) {
+                    Write-Success "Shared tools installed (on retry)"
+                }
+                else {
+                    Write-Warn "Puppeteer installation incomplete"
+                    Write-Info "  Please run manually: cd $toolsDir && npm install"
+                }
+            }
         }
         else {
-            Write-Warn "Puppeteer installation failed"
-            if ($npmOutput) {
-                Write-Host ""
-                Write-Host "npm output:" -ForegroundColor Yellow
-                Write-Host ($npmOutput | Out-String)
+            # Check if it installed despite non-zero exit code (warnings can cause this)
+            if (Test-Path $puppeteerPath) {
+                Write-Success "Shared tools installed (with warnings)"
             }
-            Write-Host ""
-            Write-Info "Please run manually:"
-            Write-Info "  cd $toolsDir"
-            Write-Info "  npm install"
+            else {
+                Write-Warn "npm install had issues (exit code: $npmExitCode)"
+                Write-Info "  Please run manually: cd $toolsDir && npm install"
+            }
         }
     }
     catch {
         Write-Warn "Failed to install shared tools: $($_.Exception.Message)"
-        Write-Info "  Run manually: cd $toolsDir && npm install"
+        Write-Info "  Please run manually: cd $toolsDir && npm install"
     }
     finally {
         Pop-Location
