@@ -667,6 +667,51 @@ function Install-Hooks {
     Write-Success "Hooks installed"
 }
 
+# Install shared tools (Puppeteer, etc.)
+function Install-SharedTools {
+    $toolsDir = Join-Path $ClaudeDir "tools"
+
+    Write-Info "Installing shared tools (Puppeteer)..."
+
+    # Create tools directory
+    if (-not (Test-Path $toolsDir)) {
+        New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
+    }
+
+    # Create package.json for shared tools
+    $packageJson = @{
+        name = "claude-shared-tools"
+        version = "1.0.0"
+        description = "Shared tools for Claude Code skills"
+        dependencies = @{
+            puppeteer = "^23.0.0"
+        }
+    }
+
+    $packageJsonPath = Join-Path $toolsDir "package.json"
+    $packageJson | ConvertTo-Json -Depth 10 | Set-Content $packageJsonPath -Encoding UTF8
+
+    # Install npm dependencies
+    Write-Info "  Installing Puppeteer (this may take a moment)..."
+    Push-Location $toolsDir
+    try {
+        npm install --silent 2>$null
+        $puppeteerPath = Join-Path $toolsDir "node_modules\puppeteer"
+        if (Test-Path $puppeteerPath) {
+            Write-Success "Shared tools installed"
+        }
+        else {
+            Write-Warn "Puppeteer installation may have issues, please run manually:"
+            Write-Info "  cd $toolsDir && npm install"
+        }
+    }
+    catch {
+        Write-Warn "Failed to install shared tools (npm may not be available)"
+        Write-Info "  Run manually: cd $toolsDir && npm install"
+    }
+    Pop-Location
+}
+
 # Print completion message
 function Show-Completion {
     $skillsDir = Get-SkillsDir
@@ -740,6 +785,7 @@ function Main {
         Merge-Settings -SourcePath $sourcePath
         Merge-ClaudeMd -SourcePath $sourcePath
         Install-Hooks -SourcePath $sourcePath
+        Install-SharedTools
 
         Show-Completion
     }
