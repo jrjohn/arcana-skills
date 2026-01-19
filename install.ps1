@@ -656,6 +656,13 @@ function Install-Hooks {
         Write-Info "  Installed hook: $($_.Name)"
     }
 
+    # Copy Node.js hook scripts (cross-platform)
+    Get-ChildItem -Path $hooksSource -Filter "*.js" | ForEach-Object {
+        $targetPath = Join-Path $HooksDir $_.Name
+        Copy-Item $_.FullName $targetPath -Force
+        Write-Info "  Installed hook: $($_.Name)"
+    }
+
     # Copy statusline script
     $statuslineSource = Join-Path $SourcePath "config\statusline-command.ps1"
     if (Test-Path $statuslineSource) {

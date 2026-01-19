@@ -374,7 +374,14 @@ merge_claude_md() {
 
         # Remove old config and add new
         info "  Updating Arcana Skills config..."
-        sed -i.backup "/$marker/,/# End Arcana Skills/d" "$USER_CLAUDE_MD"
+        # Use portable sed syntax for both macOS (BSD) and Linux (GNU)
+        if [[ "$(uname -s)" == "Darwin" ]]; then
+            # macOS BSD sed requires separate -i and backup extension
+            sed -i '' "/$marker/,/# End Arcana Skills/d" "$USER_CLAUDE_MD"
+        else
+            # Linux GNU sed
+            sed -i "/$marker/,/# End Arcana Skills/d" "$USER_CLAUDE_MD"
+        fi
     fi
 
     # Append template to user's CLAUDE.md
@@ -394,8 +401,18 @@ install_hooks() {
     info "Installing hooks..."
     mkdir -p "$HOOKS_DIR"
 
-    # Copy all hook scripts
+    # Copy shell hook scripts
     for hook_file in "$hooks_source"/*.sh; do
+        if [ -f "$hook_file" ]; then
+            local filename=$(basename "$hook_file")
+            cp "$hook_file" "$HOOKS_DIR/$filename"
+            chmod +x "$HOOKS_DIR/$filename"
+            info "  Installed hook: $filename"
+        fi
+    done
+
+    # Copy Node.js hook scripts (cross-platform)
+    for hook_file in "$hooks_source"/*.js; do
         if [ -f "$hook_file" ]; then
             local filename=$(basename "$hook_file")
             cp "$hook_file" "$HOOKS_DIR/$filename"

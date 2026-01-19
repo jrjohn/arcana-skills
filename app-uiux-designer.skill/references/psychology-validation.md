@@ -1,6 +1,6 @@
 # UI 心理學驗證指南
 
-驗證 UI 設計是否符合設計心理學原則，與 `medical-software-requirements-skill` 的心理學規範整合。
+驗證 UI 設計是否符合設計心理學原則，與 `app-requirements-skill` 的心理學規範整合。
 
 ## 目錄
 1. [驗證原則](#驗證原則)
@@ -14,7 +14,7 @@
 
 ### 原則來源
 
-驗證規則整合自 `medical-software-requirements-skill` 的三份心理學文件：
+驗證規則整合自 `app-requirements-skill` 的三份心理學文件：
 
 | 文件 | 路徑 | 主要原則 |
 |------|------|----------|
@@ -506,11 +506,11 @@ function validateFeedback(html, hasLoadingState) {
 
 ---
 
-## 與 medical-software-requirements-skill 整合
+## 與 app-requirements-skill 整合
 
 ### 自動觸發
 
-當 `medical-software-requirements-skill` 執行以下操作時，建議同時執行心理學驗證：
+當 `app-requirements-skill` 執行以下操作時，建議同時執行心理學驗證：
 
 1. 產出 SDD UI/UX 章節
 2. 審查 UI 設計

@@ -23,7 +23,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/validate-ui-flow.sh",
+            "command": "node ~/.claude/hooks/hook-runner.js validate-ui-flow",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "node ~/.claude/hooks/hook-runner.js enforce-uiux-skill",
             "timeout": 30
           }
         ]

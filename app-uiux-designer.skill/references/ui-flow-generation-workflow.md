@@ -288,12 +288,12 @@ UI Flow Diagram 使用 iframe 顯示實際畫面內容：
 
 ```bash
 # 規範化 MD
-bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SDD.md
-bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SRS.md
+bash ~/.claude/skills/app-requirements-skill/remove-heading-numbers.sh docs/SDD.md
+bash ~/.claude/skills/app-requirements-skill/remove-heading-numbers.sh docs/SRS.md
 
 # 轉換 DOCX
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SDD.md docs/SDD.docx
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SRS.md docs/SRS.docx
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js docs/SDD.md docs/SDD.docx
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js docs/SRS.md docs/SRS.docx
 ```
 
 ---
