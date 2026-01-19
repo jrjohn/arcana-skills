@@ -17,7 +17,7 @@
 ## 概述
 
 ### 目的
-解決 `app-uiux-designer.skill` 與 `medical-software-requirements-skill` 之間的單向資料流問題，實現雙向同步：
+解決 `app-uiux-designer.skill` 與 `app-requirements-skill` 之間的單向資料流問題，實現雙向同步：
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -496,16 +496,16 @@ def update_rtm_with_srs(rtm_path, new_srs_items):
 
 ```bash
 # 步驟 5a: 移除手動編號（規範化 MD）
-bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SRS.md
+bash ~/.claude/skills/app-requirements-skill/remove-heading-numbers.sh docs/SRS.md
 
 # 步驟 5b: 轉換為 DOCX
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js \
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js \
     docs/SRS.md \
     docs/SRS.docx
 
 # 一鍵執行（推薦）
-bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SRS.md && \
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SRS.md docs/SRS.docx
+bash ~/.claude/skills/app-requirements-skill/remove-heading-numbers.sh docs/SRS.md && \
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js docs/SRS.md docs/SRS.docx
 ```
 
 ### SRS 回補報告
@@ -644,9 +644,9 @@ def update_sdd(sdd_path, updates):
 #### 步驟 5a: 移除手動編號（規範化 MD）
 
 ```bash
-# 使用 medical-software-requirements-skill 的標題編號移除腳本
+# 使用 app-requirements-skill 的標題編號移除腳本
 # 確保 MD 符合 IEC 62304 文件格式規範（無手動編號）
-bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SDD.md
+bash ~/.claude/skills/app-requirements-skill/remove-heading-numbers.sh docs/SDD.md
 
 # 輸出範例：
 # ✅ 成功移除 12 個手動編號
@@ -666,11 +666,11 @@ bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers
 #### 步驟 5b: 轉換為 DOCX
 
 ```bash
-# 使用 medical-software-requirements-skill 的 MD 轉 DOCX 腳本
+# 使用 app-requirements-skill 的 MD 轉 DOCX 腳本
 # 自動產生階層式編號 (1., 1.1, 1.1.1, 1.1.1.1, 1.1.1.1.1)
 # 自動渲染 Mermaid 圖表為 SVG
 # 處理中英文字型（微軟正黑體 + Arial）
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js \
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js \
     docs/SDD.md \
     docs/SDD.docx
 
@@ -685,8 +685,8 @@ node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js \
 
 ```bash
 # 規範化 MD + 轉換 DOCX（推薦使用）
-bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SDD.md && \
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SDD.md docs/SDD.docx
+bash ~/.claude/skills/app-requirements-skill/remove-heading-numbers.sh docs/SDD.md && \
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js docs/SDD.md docs/SDD.docx
 ```
 
 ### 步驟 6: 更新 RTM
@@ -960,11 +960,11 @@ def auto_map_scr_to_srs(screens, srs_items):
 
 ---
 
-## 與 medical-software-requirements-skill 整合
+## 與 app-requirements-skill 整合
 
 ### 觸發條件
 
-當 `medical-software-requirements-skill` 偵測到以下情況時，建議執行回補：
+當 `app-requirements-skill` 偵測到以下情況時，建議執行回補：
 
 1. SDD UI/UX 章節缺少截圖
 2. Button Navigation 表格不完整
@@ -974,18 +974,18 @@ def auto_map_scr_to_srs(screens, srs_items):
 ### 整合命令
 
 ```bash
-# 在 medical-software-requirements-skill 中呼叫
+# 在 app-requirements-skill 中呼叫
 執行 UI Review 並回補 SDD ./docs/SDD.md
 
 # 等同於完整流程
 1. app-uiux-designer.skill 生成 UI
 2. 執行回補 SDD.md 和 SRS.md（更新內容）
 3. 規範化 MD（移除手動編號）
-   bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SDD.md
-   bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SRS.md
+   bash ~/.claude/skills/app-requirements-skill/remove-heading-numbers.sh docs/SDD.md
+   bash ~/.claude/skills/app-requirements-skill/remove-heading-numbers.sh docs/SRS.md
 4. 重新產生 DOCX
-   node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SDD.md docs/SDD.docx
-   node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SRS.md docs/SRS.docx
+   node ~/.claude/skills/app-requirements-skill/md-to-docx.js docs/SDD.md docs/SDD.docx
+   node ~/.claude/skills/app-requirements-skill/md-to-docx.js docs/SRS.md docs/SRS.docx
 5. 驗證 RTM 追溯
 ```
 
@@ -993,8 +993,8 @@ def auto_map_scr_to_srs(screens, srs_items):
 
 ```bash
 # 完整回補流程：更新 MD → 規範化 → 轉 DOCX
-bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SDD.md && \
-bash ~/.claude/skills/medical-software-requirements-skill/remove-heading-numbers.sh docs/SRS.md && \
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SDD.md docs/SDD.docx && \
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js docs/SRS.md docs/SRS.docx
+bash ~/.claude/skills/app-requirements-skill/remove-heading-numbers.sh docs/SDD.md && \
+bash ~/.claude/skills/app-requirements-skill/remove-heading-numbers.sh docs/SRS.md && \
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js docs/SDD.md docs/SDD.docx && \
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js docs/SRS.md docs/SRS.docx
 ```

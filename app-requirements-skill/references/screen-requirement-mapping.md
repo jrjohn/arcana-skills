@@ -227,7 +227,7 @@ SRS-001 (需求: 帳號密碼登入)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│            medical-software-requirements-skill              │
+│            app-requirements-skill              │
 │                                                             │
 │  SRS.md                          SDD.md                     │
 │  ├── 功能需求                    ├── UI/UX 設計章節          │
@@ -289,8 +289,8 @@ node ~/.claude/skills/app-uiux-designer.skill/scripts/embed-screenshots-to-sdd.j
 回補 SRS ./docs/SRS.md --from ./generated-ui/
 
 # 7. 重新產生 DOCX
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js ./docs/SRS.md
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js ./docs/SDD.md
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js ./docs/SRS.md
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js ./docs/SDD.md
 
 # 8. 驗證 RTM 100% 追溯
 驗證 RTM ./docs/RTM.md
@@ -302,7 +302,7 @@ node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js ./docs/S
 
 | Skill | ID 格式 | 範例 |
 |-------|---------|------|
-| medical-software-requirements-skill | SCR-AUTH-001 | SCR-AUTH-001 登入畫面 |
+| app-requirements-skill | SCR-AUTH-001 | SCR-AUTH-001 登入畫面 |
 | app-uiux-designer.skill | SCR-AUTH-001 | SCR-AUTH-001-login.html |
 
 ### 資料同步項目

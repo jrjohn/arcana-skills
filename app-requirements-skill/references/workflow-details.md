@@ -1,6 +1,6 @@
 # 工作流程詳細說明
 
-本文件包含 medical-software-requirements-skill 的詳細工作流程說明。
+本文件包含 app-requirements-skill 的詳細工作流程說明。
 
 ## 🧠 心理學自動套用流程
 
@@ -10,13 +10,13 @@
 
 ```bash
 # 1. 設計心理學
-cat ~/.claude/skills/medical-software-requirements-skill/references/design-psychology.md
+cat ~/.claude/skills/app-requirements-skill/references/design-psychology.md
 
 # 2. 認知心理學
-cat ~/.claude/skills/medical-software-requirements-skill/references/cognitive-psychology.md
+cat ~/.claude/skills/app-requirements-skill/references/cognitive-psychology.md
 
 # 3. 文件編排心理學
-cat ~/.claude/skills/medical-software-requirements-skill/references/document-layout-psychology.md
+cat ~/.claude/skills/app-requirements-skill/references/document-layout-psychology.md
 ```
 
 ### Step 2: 根據任務類型套用心理學
@@ -169,20 +169,20 @@ cat ~/.claude/skills/medical-software-requirements-skill/references/document-lay
 
 ### 轉換器 (md-to-docx.js)
 
-**位置：** `~/.claude/skills/medical-software-requirements-skill/md-to-docx.js`
+**位置：** `~/.claude/skills/app-requirements-skill/md-to-docx.js`
 
 ```bash
 # 安裝依賴 (首次使用)
-cd ~/.claude/skills/medical-software-requirements-skill
+cd ~/.claude/skills/app-requirements-skill
 npm install docx
 npm install -g @mermaid-js/mermaid-cli  # 若需渲染 Mermaid 圖表
 
 # 轉換文件
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js <input.md>
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js <input.md>
 
 # 範例
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SRS-VocabKids-1.0.md
-node ~/.claude/skills/medical-software-requirements-skill/md-to-docx.js SDD-VocabKids-1.0.md
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js SRS-VocabKids-1.0.md
+node ~/.claude/skills/app-requirements-skill/md-to-docx.js SDD-VocabKids-1.0.md
 ```
 
 ### 轉換器功能
