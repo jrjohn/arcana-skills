@@ -414,6 +414,37 @@ install_hooks() {
     success "Hooks installed"
 }
 
+# Install shared tools (Puppeteer, etc.)
+install_shared_tools() {
+    local tools_dir="$CLAUDE_DIR/tools"
+
+    info "Installing shared tools (Puppeteer)..."
+    mkdir -p "$tools_dir"
+
+    # Create package.json for shared tools
+    cat > "$tools_dir/package.json" << 'EOF'
+{
+  "name": "claude-shared-tools",
+  "version": "1.0.0",
+  "description": "Shared tools for Claude Code skills",
+  "dependencies": {
+    "puppeteer": "^23.0.0"
+  }
+}
+EOF
+
+    # Install npm dependencies
+    info "  Installing Puppeteer (this may take a moment)..."
+    (cd "$tools_dir" && npm install --silent 2>/dev/null)
+
+    if [ -d "$tools_dir/node_modules/puppeteer" ]; then
+        success "Shared tools installed"
+    else
+        warn "Puppeteer installation may have issues, please run manually:"
+        info "  cd $tools_dir && npm install"
+    fi
+}
+
 # Create skills directory if not exists
 ensure_skills_dir() {
     if [ ! -d "$SKILLS_DIR" ]; then
@@ -603,6 +634,7 @@ main() {
     merge_settings
     merge_claude_md
     install_hooks
+    install_shared_tools
 
     cleanup
     print_completion
