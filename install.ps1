@@ -702,21 +702,38 @@ function Install-SharedTools {
     Write-Info "  Installing Puppeteer (this may take a moment)..."
     Push-Location $toolsDir
     try {
-        npm install --silent 2>$null
+        # Run npm install and capture both stdout and stderr
+        $npmOutput = npm install 2>&1
+        $npmExitCode = $LASTEXITCODE
+
         $puppeteerPath = Join-Path $toolsDir "node_modules\puppeteer"
-        if (Test-Path $puppeteerPath) {
+        if ($npmExitCode -eq 0 -and (Test-Path $puppeteerPath)) {
             Write-Success "Shared tools installed"
         }
+        elseif (Test-Path $puppeteerPath) {
+            # Puppeteer exists but npm had warnings
+            Write-Success "Shared tools installed (with warnings)"
+        }
         else {
-            Write-Warn "Puppeteer installation may have issues, please run manually:"
-            Write-Info "  cd $toolsDir && npm install"
+            Write-Warn "Puppeteer installation failed"
+            if ($npmOutput) {
+                Write-Host ""
+                Write-Host "npm output:" -ForegroundColor Yellow
+                Write-Host ($npmOutput | Out-String)
+            }
+            Write-Host ""
+            Write-Info "Please run manually:"
+            Write-Info "  cd $toolsDir"
+            Write-Info "  npm install"
         }
     }
     catch {
-        Write-Warn "Failed to install shared tools (npm may not be available)"
+        Write-Warn "Failed to install shared tools: $($_.Exception.Message)"
         Write-Info "  Run manually: cd $toolsDir && npm install"
     }
-    Pop-Location
+    finally {
+        Pop-Location
+    }
 }
 
 # Print completion message
