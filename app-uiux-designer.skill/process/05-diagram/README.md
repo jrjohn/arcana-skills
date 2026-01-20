@@ -548,6 +548,32 @@ fi
 
 ---
 
+## 🚨🚨🚨 完成前強制驗證 (MANDATORY) 🚨🚨🚨
+
+> **⚠️ 在標記 05-diagram 為 completed 之前，必須執行以下命令！**
+
+```bash
+# 🚨 強制執行 - 不可跳過！
+node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/post-generation-gate.js {PROJECT}/04-ui-flow
+```
+
+**驗證清單 (必須全部通過)：**
+
+| 項目 | 要求 |
+|------|------|
+| index.html | 存在 + 模組完整 |
+| device-preview.html | 存在 + 側邊欄正確 |
+| ui-flow-diagram-ipad.html | 存在 + 畫面數匹配 |
+| ui-flow-diagram-iphone.html | 存在 + 畫面數匹配 |
+
+**若 post-generation-gate.js 輸出 "❌ FAILED"：**
+1. 禁止進入下一 phase
+2. 必須修復所有問題
+3. 重新執行 post-generation-gate.js
+4. 直到顯示 "✅ PASSED"
+
+---
+
 ## 下一節點
 
 → `process/06-screenshot/README.md` (截圖產生)
