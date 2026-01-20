@@ -858,6 +858,33 @@ echo "======================================"
 
 ---
 
+## 🚨🚨🚨 完成前強制驗證 (MANDATORY - 不可跳過) 🚨🚨🚨
+
+> **⚠️ 在標記 03-generation 為 completed 之前，必須執行以下命令！**
+
+### 🔥 強制執行 post-generation-gate.js
+
+```bash
+# 🚨 這是強制步驟 - 不能只用 grep 檢查！
+node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/post-generation-gate.js {PROJECT}/04-ui-flow
+```
+
+**驗證清單 (必須全部通過)：**
+
+| 項目 | 要求 |
+|------|------|
+| **index.html** | 存在 + 模組數正確 + 無未替換變數 |
+| **device-preview.html** | 存在 + 側邊欄畫面數正確 |
+| **所有 SCR-*.html** | 無 alert() + 無空 onclick |
+
+**若輸出顯示 "❌ FAILED"：**
+1. **禁止**進入下一 phase
+2. 必須修復所有問題
+3. 重新執行 post-generation-gate.js
+4. 直到顯示 "✅ PASSED"
+
+---
+
 ## 🚨 Exit Validation (Anti-Forgetting Protocol)
 
 > **在標記 03-generation 為 completed 前，必須執行此驗證！**
@@ -865,7 +892,7 @@ echo "======================================"
 ### 執行方式
 
 ```bash
-# 執行 exit-validation.sh
+# 執行 exit-validation.sh (或直接用 post-generation-gate.js)
 bash ~/.claude/skills/app-uiux-designer.skill/process/03-generation/exit-validation.sh {PROJECT_PATH}
 ```
 

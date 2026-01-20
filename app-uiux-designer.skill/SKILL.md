@@ -136,6 +136,65 @@ grep -n '<button' SCR-*.html | grep -v 'onclick='
 
 ---
 
+## 🚨🚨🚨 MANDATORY VALIDATION EXECUTION (BLOCKING) 🚨🚨🚨
+
+> **⚠️ CRITICAL: Claude 必須實際執行以下驗證腳本，不能只閱讀文檔！**
+
+### 強制執行命令 (每次 phase 完成前必須執行)
+
+```bash
+# 🚨 在標記任何 phase 為 completed 之前，必須執行此命令！
+node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/post-generation-gate.js Z:/path/to/project/04-ui-flow
+```
+
+### 驗證清單 (必須全部通過)
+
+| 檔案 | 驗證項目 | 執行命令 |
+|------|----------|----------|
+| **index.html** | 存在 + 模組完整 + 無未替換變數 | `node post-generation-gate.js` |
+| **device-preview.html** | 存在 + 側邊欄畫面數正確 | `node post-generation-gate.js` |
+| **ui-flow-diagram-ipad.html** | 存在 + 畫面數匹配 | `node post-generation-gate.js` |
+| **ui-flow-diagram-iphone.html** | 存在 + 畫面數匹配 | `node post-generation-gate.js` |
+
+### 禁止行為 (FORBIDDEN)
+
+- ❌ **禁止**：只用 grep 檢查而不執行 post-generation-gate.js
+- ❌ **禁止**：手動更新 current-process.json 而不執行驗證
+- ❌ **禁止**：標記 phase 為 completed 而沒有驗證輸出
+- ❌ **禁止**：跳過驗證步驟繼續下一個 phase
+
+### 正確執行流程
+
+```
+完成 03-generation / 04-validation / 05-diagram 後：
+
+1. 執行 post-generation-gate.js
+   └── node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/post-generation-gate.js {PROJECT}/04-ui-flow
+
+2. 確認輸出顯示 "✅ PASSED"
+   └── 若顯示 "❌ FAILED" → 必須修復問題再重新執行
+
+3. 才能更新 current-process.json
+   └── 將 phase 標記為 completed
+
+4. 才能進入下一個 phase
+```
+
+### Claude 自我檢查問題
+
+在標記任何 phase 為 completed 之前，Claude 必須能回答：
+
+1. ✅ 我是否執行了 `node post-generation-gate.js`？
+2. ✅ 輸出是否顯示 "PASSED"？
+3. ✅ index.html 是否通過驗證？
+4. ✅ device-preview.html 是否通過驗證？
+5. ✅ ui-flow-diagram-ipad.html 是否通過驗證？
+6. ✅ ui-flow-diagram-iphone.html 是否通過驗證？
+
+**若任一答案為 "否"，禁止進入下一階段！**
+
+---
+
 ## ⚠️ Auto-Validation Rules (MANDATORY - 不可跳過)
 
 > **Claude 必須在每個節點完成前自動執行驗證，無需用戶提醒！**
@@ -478,6 +537,26 @@ done
 | 08 | finalize | 07 完成 | 追溯驗證通過 + 完成報告 |
 
 > ⚠️ **注意**: 01-discovery 和 02-planning 已由 app-requirements-skill 完成，本 Skill 跳過
+
+### 🚨 Phase 完成前強制驗證 (BLOCKING - 每次都要執行)
+
+| Phase | 完成後必須執行 | 預期結果 |
+|-------|---------------|----------|
+| 03-generation | `node post-generation-gate.js` | ✅ PASSED |
+| 04-validation | `node post-generation-gate.js` | ✅ PASSED |
+| 05-diagram | `node post-generation-gate.js` | ✅ PASSED |
+
+```bash
+# 🚨 每個 phase 完成後必須執行此命令
+node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/post-generation-gate.js {PROJECT}/04-ui-flow
+
+# 若無法執行 Node.js，使用快速檢查
+echo "=== Quick File Check ==="
+ls -la {PROJECT}/04-ui-flow/index.html
+ls -la {PROJECT}/04-ui-flow/device-preview.html
+ls -la {PROJECT}/04-ui-flow/docs/ui-flow-diagram-ipad.html
+ls -la {PROJECT}/04-ui-flow/docs/ui-flow-diagram-iphone.html
+```
 
 ### 🚨 06-screenshot Error Recovery Logic (BLOCKING)
 

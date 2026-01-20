@@ -140,6 +140,64 @@ function extractClickableElements(htmlContent, filePath) {
     });
   }
 
+  // 3b2. onclick="void(0)" (佔位符 onclick - 潛在問題)
+  const voidOnclickRegex = /<(?:button|a|div)[^>]*onclick\s*=\s*["'](?:javascript:)?void\s*\(\s*0\s*\)["'][^>]*>/gi;
+  while ((match = voidOnclickRegex.exec(htmlContent)) !== null) {
+    const tag = match[0];
+    const lineNumber = getLineNumber(htmlContent, match.index);
+
+    // 提取元素 ID
+    const idMatch = tag.match(/id\s*=\s*["']([^"']+)["']/i);
+    const elementId = idMatch ? idMatch[1] : '(no id)';
+
+    // 提取元素文字內容 (查找到結束標籤)
+    const tagName = tag.match(/<(\w+)/)?.[1] || 'element';
+    const closeTagPos = htmlContent.indexOf(`</${tagName}>`, match.index);
+    const elementContent = closeTagPos > match.index
+      ? htmlContent.substring(match.index, closeTagPos + tagName.length + 3)
+      : tag;
+    const textContent = extractTextContent(elementContent);
+
+    // 判斷是否為導航按鈕 (有 chevron 圖標或特定命名)
+    const isNavigationButton = detectSettingsRow(elementContent) ||
+      elementId.startsWith('cell_') ||
+      elementId.startsWith('btn_') ||
+      elementId.startsWith('lnk_') ||
+      elementId.startsWith('nav_');
+
+    // 判斷是否為外部連結 (可接受使用 void(0))
+    const isExternalLink = textContent.includes('評價') ||
+      textContent.includes('評分') ||
+      textContent.includes('App Store') ||
+      elementId.includes('rate') ||
+      elementId.includes('external');
+
+    if (isNavigationButton && !isExternalLink) {
+      elements.push({
+        type: 'void-onclick-navigation',
+        target: 'void(0)',
+        raw: tag.substring(0, 80) + (tag.length > 80 ? '...' : ''),
+        lineNumber: lineNumber,
+        isIssue: true,
+        issue: `⚠️ Navigation button [${elementId}] uses void(0) - needs real target`,
+        textContent: textContent,
+        elementId: elementId,
+      });
+    } else if (!isExternalLink) {
+      // 非導航按鈕但也使用 void(0)，記錄為警告
+      elements.push({
+        type: 'void-onclick-warning',
+        target: 'void(0)',
+        raw: tag.substring(0, 80) + (tag.length > 80 ? '...' : ''),
+        lineNumber: lineNumber,
+        isIssue: false, // 不計入錯誤，但會顯示警告
+        issue: `ℹ️ Element [${elementId}] uses void(0) - acceptable for UI interactions`,
+        textContent: textContent,
+        elementId: elementId,
+      });
+    }
+  }
+
   // 3c. button 無 onclick (檢查是否在可點擊區域內)
   const buttonRegex = /<button[^>]*>[\s\S]*?<\/button>/gi;
   while ((match = buttonRegex.exec(htmlContent)) !== null) {
@@ -557,8 +615,9 @@ function validateNavigation(baseDir) {
       }
     }
 
-    // 檢查 device-preview.html 的 postMessage 監聽器
+    // 檢查 device-preview.html 的 postMessage 監聽器和 sidebar sync 函數
     if (filename === 'device-preview.html') {
+      // 檢查 postMessage 監聽器
       if (!content.includes('addEventListener') || !content.includes('pageLoaded')) {
         screenResult.issues.push({
           type: 'missing-postmessage-listener',
@@ -573,6 +632,42 @@ function validateNavigation(baseDir) {
           issue: 'Missing postMessage listener for sidebar sync',
         });
         results.invalidElements++;
+      }
+
+      // 檢查 syncSidebarFromIframe 函數
+      if (!content.includes('syncSidebarFromIframe')) {
+        screenResult.issues.push({
+          type: 'missing-sidebar-sync-function',
+          line: 0,
+          issue: '⚠️ CRITICAL: Missing syncSidebarFromIframe function - Sidebar will not highlight current screen',
+          raw: 'Add: function syncSidebarFromIframe(url) { ... }',
+        });
+        results.issues.push({
+          screen: file.relative,
+          type: 'missing-sidebar-sync-function',
+          lineNumber: 0,
+          issue: 'Missing syncSidebarFromIframe function',
+        });
+        results.invalidElements++;
+      }
+
+      // 檢查 data-screen 屬性 (用於 sidebar sync)
+      const screenItemsCount = (content.match(/class="screen-item/g) || []).length;
+      const dataScreenCount = (content.match(/data-screen="/g) || []).length;
+      if (screenItemsCount > 0 && dataScreenCount < screenItemsCount) {
+        screenResult.issues.push({
+          type: 'missing-data-screen-attributes',
+          line: 0,
+          issue: `⚠️ WARNING: ${screenItemsCount - dataScreenCount} screen items missing data-screen attribute - Sidebar sync may not work properly`,
+          raw: 'Add: data-screen="module/SCR-XXX.html" to each screen-item',
+        });
+        results.issues.push({
+          screen: file.relative,
+          type: 'missing-data-screen-attributes',
+          lineNumber: 0,
+          issue: `${screenItemsCount - dataScreenCount} screen items missing data-screen attribute`,
+        });
+        // Don't count as invalid element, just a warning
       }
     }
 
@@ -759,6 +854,16 @@ function generateFixSuggestions(results) {
         break;
       case 'button-no-onclick':
         console.log('Fix: Add onclick handler to button, e.g., onclick="location.href=\'target.html\'"');
+        break;
+      case 'void-onclick-navigation':
+        const voidPrediction = predictTargetScreen(issue.textContent || '', issue.screen);
+        console.log(`🚨 Fix: Navigation button [${issue.elementId || '(unknown)'}] uses void(0) placeholder!`);
+        console.log(`   Button text: "${issue.textContent || '(unknown)'}"`);
+        console.log('   Option 1 (Create target screen):');
+        console.log(`     onclick="location.href='${voidPrediction.screenId}'"`);
+        console.log('   Option 2 (Navigate to existing screen):');
+        console.log(`     onclick="location.href='SCR-MODULE-XXX-name.html'"`);
+        console.log('   ⚠️ void(0) is NOT acceptable for navigation buttons!');
         break;
       case 'onclick-href':
       case 'href':
