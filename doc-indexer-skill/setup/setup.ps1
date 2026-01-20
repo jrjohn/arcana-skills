@@ -17,7 +17,7 @@ Write-Host ""
 # 設定變數
 $SkillDir = "$env:USERPROFILE\.claude\skills\doc-indexer-skill"
 $JarName = "doc-indexer-1.0.0-all.jar"
-$JarUrl = "https://github.com/jrjohn/doc-indexer/releases/latest/download/$JarName"
+$JarUrl = "https://github.com/jrjohn/arcana-skills/releases/latest/download/$JarName"
 $JavaMinVersion = 17
 
 # 函數: 檢查 Java 版本
@@ -174,7 +174,7 @@ if (-not (Test-Path $JarPath)) {
             Write-Host "無法找到原始碼，請手動下載 JAR" -ForegroundColor Red
             Write-Host ""
             Write-Host "手動下載步驟:" -ForegroundColor Cyan
-            Write-Host "1. 前往 https://github.com/jrjohn/doc-indexer/releases"
+            Write-Host "1. 前往 https://github.com/jrjohn/arcana-skills/releases"
             Write-Host "2. 下載 $JarName"
             Write-Host "3. 將檔案複製到 $InstallDir"
         }

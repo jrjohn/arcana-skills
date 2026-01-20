@@ -82,6 +82,12 @@ cd arcana-skills
 |-------|-------------|
 | `app-requirements-skill` | IEC 62304 compliant software requirements gathering and documentation (SRS/SDD/SWD/STP/STC/SVV/RTM with 100% traceability) |
 
+### Utility Skills
+
+| Skill | Description |
+|-------|-------------|
+| `doc-indexer-skill` | Document indexing and full-text search tool (Apache Tika + Lucene, PDF/Word/Excel/OCR support, Chinese tokenization) |
+
 ## Uninstallation
 
 ### macOS / Linux
@@ -145,7 +151,8 @@ arcana-skills/
 ├── springboot-developer-skill/
 ├── windows-developer-skill/
 ├── app-requirements-skill/
-└── app-uiux-designer.skill/
+├── app-uiux-designer.skill/
+└── doc-indexer-skill/
 ```
 
 ## System Requirements
@@ -154,6 +161,7 @@ arcana-skills/
 - **Windows**: PowerShell 5.1+ or PowerShell Core, Git
 - Claude Code CLI (`npm install -g @anthropic-ai/claude-code`)
 - Node.js 18+ (required for some skills)
+- Java 17+ (required for doc-indexer-skill)
 - jq (optional, for settings auto-configuration on macOS/Linux)
 
 ## Verify Installation

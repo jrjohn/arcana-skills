@@ -38,6 +38,7 @@ SKILLS=(
     "windows-developer-skill"
     "app-requirements-skill"
     "app-uiux-designer.skill"
+    "doc-indexer-skill"
 )
 
 # Config paths
