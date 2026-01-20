@@ -1,0 +1,74 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'com.docindex'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Apache Tika - 文件內容提取
+    implementation 'org.apache.tika:tika-core:2.9.1'
+    implementation 'org.apache.tika:tika-parsers-standard-package:2.9.1'
+
+    // Apache Lucene - 全文索引
+    implementation 'org.apache.lucene:lucene-core:9.9.1'
+    implementation 'org.apache.lucene:lucene-queryparser:9.9.1'
+    implementation 'org.apache.lucene:lucene-analysis-common:9.9.1'
+    implementation 'org.apache.lucene:lucene-analysis-smartcn:9.9.1'  // 中文分詞
+
+    // JSON 處理
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    // CLI 工具
+    implementation 'info.picocli:picocli:4.7.5'
+    annotationProcessor 'info.picocli:picocli-codegen:4.7.5'
+
+    // 日誌
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'ch.qos.logback:logback-classic:1.4.14'
+
+    // 測試
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
+}
+
+application {
+    mainClass = 'com.docindex.cli.DocIndexCli'
+}
+
+// 使用 Shadow 插件建立 fat jar（正確處理 SPI 服務檔案合併）
+shadowJar {
+    archiveClassifier = 'all'
+    mergeServiceFiles()  // 合併 META-INF/services 檔案
+
+    manifest {
+        attributes 'Main-Class': 'com.docindex.cli.DocIndexCli'
+    }
+
+    // 排除衝突的檔案
+    exclude 'module-info.class'
+    exclude 'META-INF/versions/*/module-info.class'
+    exclude 'META-INF/INDEX.LIST'
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+}
+
+// 讓 fatJar 指向 shadowJar
+tasks.register('fatJar') {
+    dependsOn shadowJar
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}

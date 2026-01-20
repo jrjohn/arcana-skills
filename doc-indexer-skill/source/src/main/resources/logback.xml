@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 預設只輸出 WARN 以上的日誌，避免干擾 CLI 輸出 -->
+    <root level="WARN">
+        <appender-ref ref="STDERR"/>
+    </root>
+
+    <!-- Tika 和 PDFBox 的日誌降級 -->
+    <logger name="org.apache.tika" level="ERROR"/>
+    <logger name="org.apache.pdfbox" level="ERROR"/>
+    <logger name="org.apache.fontbox" level="ERROR"/>
+</configuration>
