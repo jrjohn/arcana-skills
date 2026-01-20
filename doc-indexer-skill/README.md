@@ -69,14 +69,36 @@ java -jar doc-indexer-1.0.0-all.jar search "關鍵字" [-n 數量]
 - 總頁數
 - 匹配的頁碼陣列
 
-## 使用環境
+## 安裝
+
+### 自動安裝
+
+**macOS / Linux:**
+```bash
+bash ~/.claude/skills/doc-indexer-skill/setup/setup.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+PowerShell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\skills\doc-indexer-skill\setup\setup.ps1"
+```
+
+### 手動下載
+
+從 GitHub Releases 下載 JAR：
+https://github.com/jrjohn/arcana-skills/releases
+
+## 環境需求
+
+- Java 17 或以上版本
 
 ```bash
-export JAVA_HOME=/Users/jrjohn/Library/Java/JavaVirtualMachines/ms-17.0.16/Contents/Home
-```
+# macOS (Homebrew)
+brew install openjdk@17
 
-## 工具位置
+# Linux (apt)
+sudo apt install openjdk-17-jdk
 
-```
-/Users/jrjohn/Documents/projects/doc_index/doc-indexer/build/libs/doc-indexer-1.0.0-all.jar
+# Windows (winget)
+winget install Microsoft.OpenJDK.17
 ```

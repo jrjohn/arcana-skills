@@ -14,7 +14,7 @@ echo ""
 SKILL_DIR="$HOME/.claude/skills/doc-indexer-skill"
 INSTALL_DIR="$HOME/.local/share/doc-indexer"
 JAR_NAME="doc-indexer-1.0.0-all.jar"
-JAR_URL="https://github.com/jrjohn/doc-indexer/releases/latest/download/${JAR_NAME}"
+JAR_URL="https://github.com/jrjohn/arcana-skills/releases/latest/download/${JAR_NAME}"
 JAVA_MIN_VERSION="17"
 
 # 顏色
