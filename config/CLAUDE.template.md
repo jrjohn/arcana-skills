@@ -65,4 +65,39 @@ If lines > 2,200 OR tokens > 20,000, the file needs restructuring.
 4. **Cross-reference** - Link related files
 5. **Version notes** - Track major changes
 
+## IEC 62304 Workflow Enforcement
+
+### MANDATORY: Skill Coordination Rules
+
+When using `app-requirements-skill` for App development documentation:
+
+| Phase | Action | MANDATORY |
+|-------|--------|-----------|
+| 需求收集開始 | 啟用 `app-uiux-designer.skill` 詢問 UI 需求 | **YES** |
+| SDD 完成後 | 啟用 `app-uiux-designer.skill` 產生 UI Flow | **YES** |
+| UI Flow 完成後 | 回補 SDD + SRS | **YES** |
+
+### Forbidden Actions
+
+- **禁止** 直接手動建立 UI Flow HTML（必須透過 app-uiux-designer.skill）
+- **禁止** 跳過 UI 需求收集階段
+- **禁止** SDD 完成後不產生 UI Flow
+
+### Checklist Before Completing App Documentation
+
+```
+[ ] 需求收集時已詢問 UI 需求（平台、裝置、畫面數、模組、風格、色彩、深色模式）
+[ ] SRS 完成
+[ ] SDD 完成
+[ ] 已啟用 app-uiux-designer.skill 產生：
+    [ ] Design Token JSON
+    [ ] Theme CSS
+    [ ] HTML UI Flow
+    [ ] Screenshots
+[ ] SDD 已回補 UI 原型參考
+[ ] SRS 已回補 Screen References + Inferred Requirements
+[ ] RTM 追溯 100%
+[ ] DOCX 已產生
+```
+
 # End Arcana Skills

@@ -383,6 +383,48 @@ function Remove-DirectoryRobust {
     }
 }
 
+# Merge skill-specific CLAUDE.md into user's CLAUDE.md
+function Merge-SkillClaudeMd {
+    param(
+        [string]$SkillName,
+        [string]$TargetPath
+    )
+
+    $skillClaudeMd = Join-Path $TargetPath "$SkillName\CLAUDE.md"
+    $markerStart = "# Skill: $SkillName"
+    $markerEnd = "# End Skill: $SkillName"
+
+    if (-not (Test-Path $skillClaudeMd)) {
+        return
+    }
+
+    Write-Info "  Merging CLAUDE.md for $SkillName..."
+
+    # Create user CLAUDE.md if not exists
+    if (-not (Test-Path $UserClaudeMd)) {
+        "" | Set-Content $UserClaudeMd -Encoding UTF8
+    }
+
+    # Read current content
+    $content = Get-Content $UserClaudeMd -Raw -ErrorAction SilentlyContinue
+    if ($null -eq $content) { $content = "" }
+
+    # Check if already contains this skill's config and remove it
+    if ($content -match [regex]::Escape($markerStart)) {
+        $pattern = "(?s)$([regex]::Escape($markerStart)).*?$([regex]::Escape($markerEnd))\r?\n?"
+        $content = [regex]::Replace($content, $pattern, "")
+    }
+
+    # Read skill CLAUDE.md content
+    $skillContent = Get-Content $skillClaudeMd -Raw
+
+    # Append skill CLAUDE.md with markers
+    $newContent = $content.TrimEnd() + "`n`n$markerStart`n$skillContent`n$markerEnd`n"
+    $newContent | Set-Content $UserClaudeMd -Encoding UTF8 -NoNewline
+
+    Write-Success "  CLAUDE.md merged for $SkillName"
+}
+
 # Install a single skill
 function Install-Skill {
     param(
@@ -453,6 +495,9 @@ function Install-Skill {
         }
         Pop-Location
     }
+
+    # Merge skill-specific CLAUDE.md if exists
+    Merge-SkillClaudeMd -SkillName $SkillName -TargetPath $TargetPath
 
     Write-Success "Installed: $SkillName"
 }
@@ -602,7 +647,8 @@ function Merge-ClaudeMd {
     param([string]$SourcePath)
 
     $templateClaudeMd = Join-Path $SourcePath "config\CLAUDE.template.md"
-    $marker = "# Arcana Skills Configuration"
+    $markerStart = "# Arcana Skills Configuration"
+    $markerEnd = "# End Arcana Skills"
 
     if (-not (Test-Path $templateClaudeMd)) {
         Write-Warn "CLAUDE.template.md not found, skipping CLAUDE.md merge"
@@ -619,17 +665,24 @@ function Merge-ClaudeMd {
         return
     }
 
-    # Check if already contains our config
+    # Read current content
     $content = Get-Content $UserClaudeMd -Raw
-    if ($content -match [regex]::Escape($marker)) {
+    if ($null -eq $content) { $content = "" }
+
+    # Check if already contains our config
+    if ($content -match [regex]::Escape($markerStart)) {
         Write-Info "  CLAUDE.md already contains Arcana Skills config"
-        Write-Info "  Keeping existing config"
-        return
+        Write-Info "  Updating Arcana Skills config..."
+
+        # Remove old config section
+        $pattern = "(?s)\r?\n?$([regex]::Escape($markerStart)).*?$([regex]::Escape($markerEnd))\r?\n?"
+        $content = [regex]::Replace($content, $pattern, "")
     }
 
     # Append template
     $templateContent = Get-Content $templateClaudeMd -Raw
-    Add-Content $UserClaudeMd "`n$templateContent"
+    $newContent = $content.TrimEnd() + "`n`n$templateContent"
+    $newContent | Set-Content $UserClaudeMd -Encoding UTF8 -NoNewline
     Write-Success "CLAUDE.md updated"
 }
 
