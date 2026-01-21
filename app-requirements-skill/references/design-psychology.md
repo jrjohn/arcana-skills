@@ -1,257 +1,262 @@
-# 設計心理學原則 (Design Psychology)
+# Design Psychology Principles
 
-本文件定義 UI/UX 設計必須遵循的設計心理學原則，確保良好的使用者體驗。
+This document defines the design psychology principles that UI/UX design must follow to ensure a good user experience.
 
-## 核心原則
+## Core Principles
 
-### 1. 認知負荷理論 (Cognitive Load Theory)
+### 1. Cognitive Load Theory
 
-**定義：** 避免一次呈現過多資訊，減輕使用者認知負擔。
+**Definition:** Avoid presenting too much information at once, reducing users' cognitive burden.
 
-**應用場景：**
-- Dashboard 設計
-- 功能分層
-- 表單設計
+**Application Scenarios:**
+- Dashboard design
+- Feature layering
+- Form design
 
-**設計指引：**
-| 原則 | 說明 | 範例 |
-|------|------|------|
-| 分塊 (Chunking) | 將資訊分成小塊呈現 | 表單分多步驟填寫 |
-| 漸進載入 | 先顯示重要資訊，詳細內容延後 | Dashboard 先顯示摘要 |
-| 視覺層級 | 用大小、顏色區分重要性 | 主按鈕使用主色調 |
-
----
-
-### 2. 漸進式揭露 (Progressive Disclosure)
-
-**定義：** 逐步引導使用者深入，不一次展示所有功能。
-
-**應用場景：**
-- Onboarding 流程
-- 功能導航
-- 設定頁面
-
-**設計指引：**
-```
-標準流程：
-登入 → Dashboard 總覽 → 選擇功能 → 詳細操作
-
-禁止流程：
-登入 → 直接進入複雜功能（跳過總覽）
-```
+**Design Guidelines:**
+| Principle | Description | Example |
+|-----------|-------------|---------|
+| Chunking | Present information in small chunks | Multi-step form filling |
+| Progressive Loading | Show important info first, details later | Dashboard shows summary first |
+| Visual Hierarchy | Use size, color to differentiate importance | Primary buttons use primary color |
 
 ---
 
-### 3. 空間定向 (Spatial Orientation)
+### 2. Progressive Disclosure
 
-**定義：** 讓使用者知道「我在哪」、「能去哪」。
+**Definition:** Gradually guide users deeper, not showing all features at once.
 
-**應用場景：**
-- 導航設計
-- Dashboard 心理地圖
-- 麵包屑 (Breadcrumb)
+**Application Scenarios:**
+- Onboarding flow
+- Feature navigation
+- Settings page
 
-**設計指引：**
-| 元素 | 功能 | 實作方式 |
-|------|------|---------|
-| 底部導航列 | 顯示目前位置 | 高亮當前 Tab |
-| 頂部標題 | 顯示頁面名稱 | 固定顯示 |
-| 返回按鈕 | 提供退出路徑 | 左上角箭頭 |
+**Design Guidelines:**
+```
+Standard flow:
+Login → Dashboard Overview → Select Feature → Detailed Operation
+
+Prohibited flow:
+Login → Directly enter complex feature (skip overview)
+```
+
+---
+
+### 3. Spatial Orientation
+
+**Definition:** Let users know "where am I" and "where can I go".
+
+**Application Scenarios:**
+- Navigation design
+- Dashboard mental map
+- Breadcrumb
+
+**Design Guidelines:**
+| Element | Function | Implementation |
+|---------|----------|----------------|
+| Bottom Navigation Bar | Show current location | Highlight current Tab |
+| Top Title | Show page name | Fixed display |
+| Back Button | Provide exit path | Arrow in top left |
 
 ---
 
 ### 4. Fitts' Law
 
-**定義：** 目標越大越近，越容易點擊。
+**Definition:** Larger and closer targets are easier to click.
 
-**應用場景：**
-- 按鈕尺寸設計
-- 觸控區域
-- 主要操作位置
+**Application Scenarios:**
+- Button size design
+- Touch targets
+- Primary action positioning
 
-**設計指引：**
-| 元素 | 最小尺寸 | 建議尺寸 |
-|------|---------|---------|
-| 按鈕 | 44×44 pt | 48×48 pt |
-| 觸控區域 | 44×44 pt | 包含間距 |
-| 主操作按鈕 | - | 螢幕底部或拇指可達區 |
+**Design Guidelines:**
+| Element | Minimum Size | Recommended Size |
+|---------|--------------|------------------|
+| Button | 44×44 pt | 48×48 pt |
+| Touch Area | 44×44 pt | Including padding |
+| Primary Action Button | - | Bottom of screen or thumb-reachable zone |
 
 ---
 
 ### 5. Hick's Law
 
-**定義：** 選項越多，決策時間越長。
+**Definition:** More options lead to longer decision time.
 
-**應用場景：**
-- 選項分類
-- 選單設計
-- 設定頁面
+**Application Scenarios:**
+- Option categorization
+- Menu design
+- Settings page
 
-**設計指引：**
+**Design Guidelines:**
 ```
-❌ 錯誤：一次顯示 20 個選項
-✅ 正確：分類為 4-5 個群組，每組 3-4 個選項
+❌ Wrong: Display 20 options at once
+✅ Correct: Categorize into 4-5 groups, 3-4 options each
 
-❌ 錯誤：設定頁面列出所有設定項
-✅ 正確：分為「帳戶」「通知」「隱私」「其他」子類別
+❌ Wrong: Settings page lists all settings
+✅ Correct: Divided into "Account" "Notifications" "Privacy" "Other" subcategories
 ```
 
 ---
 
-### 6. 成就感設計 (Achievement Psychology)
+### 6. Achievement Psychology
 
-**定義：** 進度可視化增強動機。
+**Definition:** Visible progress enhances motivation.
 
-**應用場景：**
-- 遊戲化元素
-- 進度條
-- 徽章系統
+**Application Scenarios:**
+- Gamification elements
+- Progress bars
+- Badge systems
 
-**設計指引：**
-| 元素 | 功能 | 心理效果 |
-|------|------|---------|
-| 進度條 | 顯示完成百分比 | 激勵完成 |
-| 打卡天數 | 連續使用記錄 | 養成習慣 |
-| 徽章/成就 | 里程碑獎勵 | 正向回饋 |
-| 星星/點數 | 即時獎勵 | 短期激勵 |
-
----
-
-## 流程設計檢查清單
-
-在審查 App 流程設計時，必須確認以下問題：
-
-### 登入後階段
-
-| 檢查項目 | 正確設計 | 錯誤設計 |
-|---------|---------|---------|
-| 是否有 Dashboard？ | 登入 → Dashboard | 登入 → 直接進入功能 |
-| 是否顯示狀態？ | 顯示連線狀態、進度 | 無狀態指示 |
-| 是否有導航？ | 底部 Tab 或漢堡選單 | 無明確導航 |
-
-### 功能入口階段
-
-| 檢查項目 | 正確設計 | 錯誤設計 |
-|---------|---------|---------|
-| 前置條件檢查？ | 進入前檢查裝置連線 | 進入後才發現無法使用 |
-| 友善引導？ | 提示「請先連接」+ 按鈕 | 僅顯示錯誤訊息 |
-| 離線功能？ | 不需裝置的功能可離線 | 全部功能都需連線 |
-
-### 完成後階段
-
-| 檢查項目 | 正確設計 | 錯誤設計 |
-|---------|---------|---------|
-| 正向回饋？ | 成功動畫、鼓勵訊息 | 僅顯示「完成」 |
-| 獎勵機制？ | 獲得星星、徽章 | 無獎勵 |
-| 下一步引導？ | 建議下一個任務 | 返回首頁無提示 |
+**Design Guidelines:**
+| Element | Function | Psychological Effect |
+|---------|----------|---------------------|
+| Progress Bar | Show completion percentage | Motivates completion |
+| Streak Days | Consecutive usage record | Forms habit |
+| Badges/Achievements | Milestone rewards | Positive feedback |
+| Stars/Points | Instant rewards | Short-term motivation |
 
 ---
 
-## 前置條件設計模式
+## Flow Design Checklist
 
-### 標準前置條件檢查流程
+When reviewing App flow design, must confirm the following:
+
+### Post-Login Phase
+
+| Check Item | Correct Design | Wrong Design |
+|------------|----------------|--------------|
+| Is there a Dashboard? | Login → Dashboard | Login → Directly enter feature |
+| Is status displayed? | Show connection status, progress | No status indication |
+| Is there navigation? | Bottom Tab or hamburger menu | No clear navigation |
+
+### Feature Entry Phase
+
+| Check Item | Correct Design | Wrong Design |
+|------------|----------------|--------------|
+| Prerequisite check? | Check device connection before entry | Only discover unusable after entry |
+| Friendly guidance? | Prompt "Please connect first" + button | Only show error message |
+| Offline features? | Features not requiring device work offline | All features need connection |
+
+### Completion Phase
+
+| Check Item | Correct Design | Wrong Design |
+|------------|----------------|--------------|
+| Positive feedback? | Success animation, encouragement message | Only shows "Complete" |
+| Reward mechanism? | Earn stars, badges | No rewards |
+| Next step guidance? | Suggest next task | Return to home with no prompt |
+
+---
+
+## Prerequisite Design Pattern
+
+### Standard Prerequisite Check Flow
 
 ```
-使用者點擊功能入口
+User clicks feature entry
         │
         ▼
-    檢查前置條件
+    Check prerequisites
         │
     ┌───┴───┐
     │       │
     ▼       ▼
-  滿足    未滿足
+   Met    Not Met
     │       │
     ▼       ▼
-進入功能  顯示引導
+Enter    Show
+feature  guidance
           │
           ▼
     ┌─────────────┐
-    │ 友善提示訊息 │
-    │ [前往設定]   │
+    │ Friendly    │
+    │ prompt      │
+    │ [Go to      │
+    │  Settings]  │
     └─────────────┘
           │
           ▼
-    完成設定後返回
+    Return after
+    completing setup
 ```
 
-### 範例：訓練模組前置條件
+### Example: Training Module Prerequisites
 
 ```swift
 func checkTrainingPrerequisites() -> PrerequisiteResult {
-    // 1. 檢查裝置連線
+    // 1. Check device connection
     if !deviceManager.isConnected {
         return .notMet(
-            message: "請先連接 iNAP 設備",
+            message: "Please connect device first",
             action: .navigateTo(.devicePairing)
         )
     }
 
-    // 2. 檢查裝置電量
+    // 2. Check device battery
     if deviceManager.batteryLevel < 20 {
         return .warning(
-            message: "設備電量低於 20%，建議充電後再訓練"
+            message: "Device battery below 20%, recommend charging before training"
         )
     }
 
-    // 3. 前置條件滿足
+    // 3. Prerequisites met
     return .met
 }
 ```
 
 ---
 
-## Dashboard 設計規範
+## Dashboard Design Specifications
 
-Dashboard 是 App 的「心理緩衝區」，必須包含以下元素：
+Dashboard is the App's "psychological buffer zone", must contain the following elements:
 
-### 必要元素
+### Required Elements
 
-| 元素 | 功能 | 心理學依據 |
-|------|------|-----------|
-| **裝置狀態** | 顯示連線/未連線 | 空間定向 - 前置條件提示 |
-| **進度總覽** | 顯示完成百分比 | 成就感設計 |
-| **今日任務** | 顯示待完成項目 | 漸進式揭露 - 引導下一步 |
-| **快速入口** | 常用功能按鈕 | Fitts' Law - 提高效率 |
-| **導航列** | 底部 Tab | 空間定向 - 知道能去哪 |
+| Element | Function | Psychology Basis |
+|---------|----------|------------------|
+| **Device Status** | Show connected/disconnected | Spatial Orientation - Prerequisite prompt |
+| **Progress Overview** | Show completion percentage | Achievement Psychology |
+| **Today's Tasks** | Show pending items | Progressive Disclosure - Guide next step |
+| **Quick Entry** | Common feature buttons | Fitts' Law - Improve efficiency |
+| **Navigation Bar** | Bottom Tab | Spatial Orientation - Know where to go |
 
-### Dashboard 佈局範例
+### Dashboard Layout Example
 
 ```
 ┌────────────────────────────────────┐
-│  頭像  │  星星: 150 ⭐  │  Day 7   │  ← 狀態列
+│  Avatar │  Stars: 150 ⭐  │  Day 7  │  ← Status bar
 ├────────────────────────────────────┤
-│  🔵 設備已連線     電量 85%        │  ← 裝置狀態
+│  🔵 Device Connected    85% Battery │  ← Device status
 ├────────────────────────────────────┤
 │  ┌────────────┐  ┌────────────┐   │
-│  │ 今日特訓    │  │ 鎂夢教練   │   │  ← 雙欄卡片
-│  │ • 配戴練習  │  │ 昨天睡得   │   │
-│  │ • 氣密練習  │  │ 很好哦！   │   │
+│  │ Today's    │  │ Coach Says │   │  ← Dual cards
+│  │ Training   │  │ Great job  │   │
+│  │ • Practice │  │ yesterday! │   │
+│  │ • Exercise │  │            │   │
 │  └────────────┘  └────────────┘   │
 ├────────────────────────────────────┤
-│  鎂夢日誌                          │  ← 數據摘要
-│  昨晚睡眠 7h 32m  ⭐⭐⭐⭐          │
+│  Sleep Log                         │  ← Data summary
+│  Last night 7h 32m  ⭐⭐⭐⭐       │
 ├────────────────────────────────────┤
-│  🏠   📊   🎮   ⚙️   👤           │  ← 底部導航
+│  🏠   📊   🎮   ⚙️   👤          │  ← Bottom navigation
 └────────────────────────────────────┘
 ```
 
 ---
 
-## 參考資源
+## Reference Resources
 
-### 設計心理學書籍
+### Design Psychology Books
 - Don Norman - "The Design of Everyday Things"
 - Steve Krug - "Don't Make Me Think"
 - Susan Weinschenk - "100 Things Every Designer Needs to Know About People"
 
-### 相關法則
+### Related Laws
 - Fitts' Law (1954)
 - Hick's Law (1952)
-- Miller's Law (1956) - 7±2 項目記憶限制
-- Jakob's Law - 使用者期待一致性
+- Miller's Law (1956) - 7±2 item memory limit
+- Jakob's Law - Users expect consistency
 
-### 醫療軟體特殊考量
-- IEC 62366-1:2015 - 醫療器材可用性工程
+### Medical Software Special Considerations
+- IEC 62366-1:2015 - Usability Engineering for Medical Devices
 - FDA Human Factors Guidance
-- 臨床環境特殊需求（手套操作、緊急情況）
+- Clinical environment special needs (glove operation, emergency situations)

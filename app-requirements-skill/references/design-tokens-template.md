@@ -1,8 +1,8 @@
-# Design Tokens 範本
+# Design Tokens Template
 
-Design Tokens 是設計系統的基礎變數，可匯出供開發使用。
+Design Tokens are foundational variables of a design system that can be exported for development use.
 
-## 完整 Design Tokens 結構
+## Complete Design Tokens Structure
 
 ```json
 {
@@ -17,7 +17,7 @@ Design Tokens 是設計系統的基礎變數，可匯出供開發使用。
 
 ---
 
-## 色彩 (Colors)
+## Colors
 
 ### colors.json
 
@@ -95,7 +95,7 @@ Design Tokens 是設計系統的基礎變數，可匯出供開發使用。
 
 ---
 
-## 字型 (Typography)
+## Typography
 
 ### typography.json
 
@@ -146,7 +146,7 @@ Design Tokens 是設計系統的基礎變數，可匯出供開發使用。
 
 ---
 
-## 間距 (Spacing)
+## Spacing
 
 ### spacing.json
 
@@ -191,7 +191,7 @@ Design Tokens 是設計系統的基礎變數，可匯出供開發使用。
 
 ---
 
-## 圓角 (Border Radius)
+## Border Radius
 
 ### borderRadius.json
 
@@ -219,7 +219,7 @@ Design Tokens 是設計系統的基礎變數，可匯出供開發使用。
 
 ---
 
-## 陰影 (Shadow)
+## Shadow
 
 ### shadow.json
 
@@ -279,7 +279,7 @@ Design Tokens 是設計系統的基礎變數，可匯出供開發使用。
 
 ---
 
-## 平台轉換
+## Platform Conversion
 
 ### Android (XML)
 
@@ -349,16 +349,16 @@ enum BorderRadius {
 
 ---
 
-## Figma Token Studio 匯出
+## Figma Token Studio Export
 
-使用 Figma Token Studio 外掛可直接匯出上述格式：
+Use Figma Token Studio plugin to directly export the above formats:
 
-1. 在 Figma 中安裝 Token Studio
-2. 定義所有 Tokens
-3. 匯出為 JSON
-4. 使用 Style Dictionary 轉換為各平台格式
+1. Install Token Studio in Figma
+2. Define all Tokens
+3. Export as JSON
+4. Use Style Dictionary to convert to platform-specific formats
 
-### Style Dictionary 配置
+### Style Dictionary Configuration
 
 ```json
 {

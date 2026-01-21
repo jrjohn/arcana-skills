@@ -44,189 +44,192 @@ Prepared by {{author}}
 
 ### 1.1 References
 
-| 文件編號 | 文件名稱 | 版本 |
-|---------|---------|------|
-| SRS-xxx | 軟體需求規格書 | [版本] |
-| SDD-xxx | 軟體設計規格書 | [版本] |
-| SWD-xxx | 軟體詳細設計書 | [版本] |
-| STP-xxx | 軟體測試計畫 | [版本] |
-| STC-xxx | 軟體測試案例 | [版本] |
-| SVV-xxx | 軟體驗證與確認報告 | [版本] |
+| Document ID | Document Name | Version |
+|-------------|---------------|---------|
+| SRS-xxx | Software Requirements Specification | [Version] |
+| SDD-xxx | Software Design Description | [Version] |
+| SWD-xxx | Software Detailed Design | [Version] |
+| STP-xxx | Software Test Plan | [Version] |
+| STC-xxx | Software Test Cases | [Version] |
+| SVV-xxx | Software Verification & Validation Report | [Version] |
 
 ---
 
-## 2. 追溯矩陣概述
+## 2. Traceability Matrix Overview
 
-### 2.1 追溯目的
+### 2.1 Purpose
 
-本追溯矩陣用於：
-- 確保所有需求皆已實作與驗證
-- 支援變更影響分析
-- 符合 IEC 62304 追溯性要求
-- 支援法規審查與稽核
+This traceability matrix is used for:
+- Ensuring all requirements are implemented and verified
+- Supporting change impact analysis
+- Compliance with IEC 62304 traceability requirements
+- Supporting regulatory review and audits
 
-### 2.2 追溯層級
+### 2.2 Traceability Levels
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        追溯層級架構                              │
+│                    Traceability Level Architecture              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  使用者需求     系統需求      軟體需求      軟體設計      程式碼  │
-│     URD   →      SYS    →     SRS    →     SDD    →    SWD    │
-│                                 │            │           │      │
-│                                 ↓            ↓           ↓      │
-│                              測試計畫     測試案例    驗證報告   │
-│                               STP    →    STC    →    SVV      │
+│  User Requirements  System Requirements  Software Requirements  │
+│       URD     →         SYS        →         SRS              │
+│                                              │                  │
+│  Software Design   Detailed Design    Code                      │
+│       SDD     →         SWD                                     │
+│        │              │                │                        │
+│        ↓              ↓                ↓                        │
+│     Test Plan     Test Cases     Verification Report            │
+│       STP     →      STC     →      SVV                        │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.3 追溯關係說明
+### 2.3 Traceability Relationship Description
 
-| 追溯關係 | 說明 | 方向 |
-|---------|------|------|
-| SRS → SDD | 需求實現於設計 | 正向 |
-| SDD → SWD | 設計實現於程式 | 正向 |
-| SRS → STC | 需求驗證於測試 | 正向 |
-| STC → SVV | 測試記錄於驗證 | 正向 |
-| SDD ← SRS | 設計源自需求 | 反向 |
-| SWD ← SDD | 程式源自設計 | 反向 |
-
----
-
-## 3. 完整追溯矩陣
-
-### 3.1 功能需求追溯矩陣
-
-> **每列必須填寫完整，所有欄位不可為空（除 NFR 外）**
-
-| SRS ID | SRS 名稱 | 安全分類 | SDD ID | SWD ID | UI (SCR) ID | STC ID | SVV ID | 狀態 |
-|--------|---------|---------|--------|--------|-------------|--------|--------|------|
-| SRS-AUTH-001 | [需求名稱] | Class A | SDD-AUTH-001 | SWD-AUTH-001, 002 | SCR-AUTH-001 | STC-AUTH-001, 002 | SVV-006 | ✅ |
-| SRS-AUTH-002 | [需求名稱] | Class A | SDD-AUTH-002 | SWD-AUTH-003 | SCR-AUTH-002 | STC-AUTH-003 | SVV-006 | ✅ |
-| SRS-TRAIN-001 | [需求名稱] | Class B | SDD-TRAIN-001 | SWD-TRAIN-001, 002 | SCR-TRAIN-001 | STC-TRAIN-001, 002 | SVV-006 | ✅ |
-| SRS-TRAIN-002 | [需求名稱] | Class B | SDD-TRAIN-002 | SWD-TRAIN-003 | SCR-TRAIN-002 | STC-TRAIN-003 | SVV-006 | ✅ |
-| SRS-REPORT-001 | [需求名稱] | Class A | SDD-REPORT-001 | SWD-REPORT-001 | SCR-REPORT-001 | STC-REPORT-001, 002 | SVV-006 | ✅ |
-
-**狀態說明：**
-- ✅ 完整追溯 (所有欄位皆有對應 ID)
-- ⚠️ 部分追溯 (缺少某些欄位) - **必須補充**
-- ❌ 無追溯 - **必須補充**
-
-### 3.2 非功能需求追溯矩陣
-
-| SRS ID | SRS 名稱 | 類型 | SDD ID | STC ID | SVV ID | 狀態 |
-|--------|---------|------|--------|--------|--------|------|
-| SRS-NFR-001 | [效能需求] | 效能 | SDD-ARCH-001 | STC-PERF-001 | SVV-006 | 完整 |
-| SRS-NFR-002 | [安全需求] | 安全 | SDD-SEC-001 | STC-SEC-001 | SVV-006 | 完整 |
-| SRS-NFR-003 | [可靠性需求] | 可靠性 | SDD-REL-001 | STC-REL-001 | SVV-006 | 完整 |
-
-### 3.3 介面需求追溯矩陣
-
-| SRS ID | SRS 名稱 | 介面類型 | SDD ID | SWD ID | STC ID | 狀態 |
-|--------|---------|---------|--------|--------|--------|------|
-| SRS-UI-001 | [UI需求] | 使用者介面 | SDD-UI-001 | SWD-UI-001 | STC-UI-001 | 完整 |
-| SRS-HW-001 | [硬體介面] | 硬體介面 | SDD-HW-001 | SWD-HW-001 | STC-HW-001 | 完整 |
-| SRS-SW-001 | [軟體介面] | 軟體介面 | SDD-SW-001 | SWD-SW-001 | STC-SW-001 | 完整 |
+| Relationship | Description | Direction |
+|--------------|-------------|-----------|
+| SRS → SDD | Requirements implemented in design | Forward |
+| SDD → SWD | Design implemented in code | Forward |
+| SRS → STC | Requirements verified by tests | Forward |
+| STC → SVV | Tests recorded in verification | Forward |
+| SDD ← SRS | Design originates from requirements | Reverse |
+| SWD ← SDD | Code originates from design | Reverse |
 
 ---
 
-## 4. 雙向追溯分析
+## 3. Complete Traceability Matrix
 
-### 4.1 正向追溯 (需求 → 驗證)
+### 3.1 Functional Requirements Traceability Matrix
 
-驗證每個需求都有對應的設計、詳細設計、UI 畫面和測試。
+> **Each row must be complete; all fields cannot be empty (except NFR)**
 
-> **所有欄位必須為 ✓，不接受部分追溯**
+| SRS ID | SRS Name | Safety Class | SDD ID | SWD ID | UI (SCR) ID | STC ID | SVV ID | Status |
+|--------|----------|--------------|--------|--------|-------------|--------|--------|--------|
+| SRS-AUTH-001 | [Requirement Name] | Class A | SDD-AUTH-001 | SWD-AUTH-001, 002 | SCR-AUTH-001 | STC-AUTH-001, 002 | SVV-006 | ✅ |
+| SRS-AUTH-002 | [Requirement Name] | Class A | SDD-AUTH-002 | SWD-AUTH-003 | SCR-AUTH-002 | STC-AUTH-003 | SVV-006 | ✅ |
+| SRS-TRAIN-001 | [Requirement Name] | Class B | SDD-TRAIN-001 | SWD-TRAIN-001, 002 | SCR-TRAIN-001 | STC-TRAIN-001, 002 | SVV-006 | ✅ |
+| SRS-TRAIN-002 | [Requirement Name] | Class B | SDD-TRAIN-002 | SWD-TRAIN-003 | SCR-TRAIN-002 | STC-TRAIN-003 | SVV-006 | ✅ |
+| SRS-REPORT-001 | [Requirement Name] | Class A | SDD-REPORT-001 | SWD-REPORT-001 | SCR-REPORT-001 | STC-REPORT-001, 002 | SVV-006 | ✅ |
 
-| SRS ID | → SDD | → SWD | → UI (SCR) | → STC | → SVV | 追溯完整性 |
-|--------|-------|-------|------------|-------|-------|-----------|
-| SRS-AUTH-001 | ✓ | ✓ | ✓ | ✓ | ✓ | ✅ 完整 |
-| SRS-AUTH-002 | ✓ | ✓ | ✓ | ✓ | ✓ | ✅ 完整 |
-| SRS-TRAIN-001 | ✓ | ✓ | ✓ | ✓ | ✓ | ✅ 完整 |
-| SRS-TRAIN-002 | ✓ | ✓ | ✓ | ✓ | ✓ | ✅ 完整 |
-| SRS-NFR-001 | ✓ | - | - | ✓ | ✓ | ✅ 完整 (NFR 無 UI) |
+**Status Legend:**
+- ✅ Complete traceability (all fields have corresponding IDs)
+- ⚠️ Partial traceability (missing some fields) - **Must be completed**
+- ❌ No traceability - **Must be completed**
 
-### 4.2 反向追溯 (驗證 → 需求)
+### 3.2 Non-Functional Requirements Traceability Matrix
 
-驗證每個設計、實作和測試都能追溯回需求。
+| SRS ID | SRS Name | Type | SDD ID | STC ID | SVV ID | Status |
+|--------|----------|------|--------|--------|--------|--------|
+| SRS-NFR-001 | [Performance Requirement] | Performance | SDD-ARCH-001 | STC-PERF-001 | SVV-006 | Complete |
+| SRS-NFR-002 | [Security Requirement] | Security | SDD-SEC-001 | STC-SEC-001 | SVV-006 | Complete |
+| SRS-NFR-003 | [Reliability Requirement] | Reliability | SDD-REL-001 | STC-REL-001 | SVV-006 | Complete |
 
-#### 4.2.1 設計 → 需求
+### 3.3 Interface Requirements Traceability Matrix
 
-| SDD ID | SDD 名稱 | ← SRS ID | 追溯狀態 |
-|--------|---------|---------|---------|
-| SDD-001 | [設計名稱] | SRS-001 | 已追溯 |
-| SDD-002 | [設計名稱] | SRS-002 | 已追溯 |
-| SDD-003 | [設計名稱] | SRS-003 | 已追溯 |
-
-#### 4.2.2 程式 → 設計
-
-| SWD ID | SWD 名稱 | ← SDD ID | ← SRS ID | 追溯狀態 |
-|--------|---------|---------|---------|---------|
-| SWD-001 | [程式名稱] | SDD-001 | SRS-001 | 已追溯 |
-| SWD-002 | [程式名稱] | SDD-001 | SRS-001 | 已追溯 |
-| SWD-003 | [程式名稱] | SDD-002 | SRS-002 | 已追溯 |
-
-#### 4.2.3 測試 → 需求
-
-| STC ID | STC 名稱 | ← SRS ID | 追溯狀態 |
-|--------|---------|---------|---------|
-| STC-001 | [測試名稱] | SRS-001 | 已追溯 |
-| STC-002 | [測試名稱] | SRS-001 | 已追溯 |
-| STC-003 | [測試名稱] | SRS-002 | 已追溯 |
-
-### 4.3 孤立項目分析
-
-#### 4.3.1 無追溯來源的項目
-
-| 項目類型 | ID | 名稱 | 問題說明 | 處理狀態 |
-|---------|-----|------|---------|---------|
-| 設計 | - | - | 無孤立設計 | - |
-| 程式 | - | - | 無孤立程式 | - |
-| 測試 | - | - | 無孤立測試 | - |
-
-#### 4.3.2 無追溯目標的項目
-
-| 項目類型 | ID | 名稱 | 缺少追溯 | 處理狀態 |
-|---------|-----|------|---------|---------|
-| 需求 | - | - | 無缺漏 | - |
+| SRS ID | SRS Name | Interface Type | SDD ID | SWD ID | STC ID | Status |
+|--------|----------|----------------|--------|--------|--------|--------|
+| SRS-UI-001 | [UI Requirement] | User Interface | SDD-UI-001 | SWD-UI-001 | STC-UI-001 | Complete |
+| SRS-HW-001 | [Hardware Interface] | Hardware Interface | SDD-HW-001 | SWD-HW-001 | STC-HW-001 | Complete |
+| SRS-SW-001 | [Software Interface] | Software Interface | SDD-SW-001 | SWD-SW-001 | STC-SW-001 | Complete |
 
 ---
 
-## 5. 覆蓋率分析
+## 4. Bidirectional Traceability Analysis
 
-### 5.1 需求覆蓋率統計
+### 4.1 Forward Traceability (Requirements → Verification)
 
-> **⚠️ 所有覆蓋率必須達到 100%**
+Verify that each requirement has corresponding design, detailed design, UI screen, and tests.
 
-| 覆蓋類型 | 總數 | 已覆蓋 | 未覆蓋 | 覆蓋率 | 要求 |
-|---------|------|--------|--------|--------|------|
-| SRS → SDD (設計) | [N] | [N] | 0 | 100% | **必須 100%** |
-| SRS → SWD (詳細設計) | [N] | [N] | 0 | 100% | **必須 100%** |
-| SRS → UI (SCR) | [N] | [N] | 0 | 100% | **必須 100%** |
-| SRS → STC (測試) | [N] | [N] | 0 | 100% | **必須 100%** |
-| SRS → SVV (驗證) | [N] | [N] | 0 | 100% | **必須 100%** |
+> **All fields must be ✓, partial traceability is not acceptable**
 
-### 5.2 設計覆蓋率統計
+| SRS ID | → SDD | → SWD | → UI (SCR) | → STC | → SVV | Traceability Completeness |
+|--------|-------|-------|------------|-------|-------|---------------------------|
+| SRS-AUTH-001 | ✓ | ✓ | ✓ | ✓ | ✓ | ✅ Complete |
+| SRS-AUTH-002 | ✓ | ✓ | ✓ | ✓ | ✓ | ✅ Complete |
+| SRS-TRAIN-001 | ✓ | ✓ | ✓ | ✓ | ✓ | ✅ Complete |
+| SRS-TRAIN-002 | ✓ | ✓ | ✓ | ✓ | ✓ | ✅ Complete |
+| SRS-NFR-001 | ✓ | - | - | ✓ | ✓ | ✅ Complete (NFR has no UI) |
 
-| 覆蓋類型 | 總數 | 已覆蓋 | 未覆蓋 | 覆蓋率 | 要求 |
-|---------|------|--------|--------|--------|------|
-| SDD ← SRS | [N] | [N] | 0 | 100% | **必須 100%** |
-| SDD → SWD | [N] | [N] | 0 | 100% | **必須 100%** |
+### 4.2 Reverse Traceability (Verification → Requirements)
 
-### 5.3 測試覆蓋率統計
+Verify that each design, implementation, and test can be traced back to requirements.
 
-| 覆蓋類型 | 總數 | 已覆蓋 | 未覆蓋 | 覆蓋率 | 要求 |
-|---------|------|--------|--------|--------|------|
-| STC ← SRS | [N] | [N] | 0 | 100% | **必須 100%** |
-| SWD → STC | [N] | [N] | 0 | 100% | **必須 100%** |
-| STC → SVV | [N] | [N] | 0 | 100% | **必須 100%** |
+#### 4.2.1 Design → Requirements
 
-### 5.4 覆蓋率趨勢圖
+| SDD ID | SDD Name | ← SRS ID | Traceability Status |
+|--------|----------|----------|---------------------|
+| SDD-001 | [Design Name] | SRS-001 | Traced |
+| SDD-002 | [Design Name] | SRS-002 | Traced |
+| SDD-003 | [Design Name] | SRS-003 | Traced |
+
+#### 4.2.2 Code → Design
+
+| SWD ID | SWD Name | ← SDD ID | ← SRS ID | Traceability Status |
+|--------|----------|----------|----------|---------------------|
+| SWD-001 | [Code Name] | SDD-001 | SRS-001 | Traced |
+| SWD-002 | [Code Name] | SDD-001 | SRS-001 | Traced |
+| SWD-003 | [Code Name] | SDD-002 | SRS-002 | Traced |
+
+#### 4.2.3 Tests → Requirements
+
+| STC ID | STC Name | ← SRS ID | Traceability Status |
+|--------|----------|----------|---------------------|
+| STC-001 | [Test Name] | SRS-001 | Traced |
+| STC-002 | [Test Name] | SRS-001 | Traced |
+| STC-003 | [Test Name] | SRS-002 | Traced |
+
+### 4.3 Orphan Item Analysis
+
+#### 4.3.1 Items Without Traceability Source
+
+| Item Type | ID | Name | Issue Description | Processing Status |
+|-----------|-----|------|-------------------|-------------------|
+| Design | - | - | No orphan designs | - |
+| Code | - | - | No orphan code | - |
+| Test | - | - | No orphan tests | - |
+
+#### 4.3.2 Items Without Traceability Target
+
+| Item Type | ID | Name | Missing Traceability | Processing Status |
+|-----------|-----|------|---------------------|-------------------|
+| Requirement | - | - | No gaps | - |
+
+---
+
+## 5. Coverage Analysis
+
+### 5.1 Requirements Coverage Statistics
+
+> **⚠️ All coverage rates must reach 100%**
+
+| Coverage Type | Total | Covered | Uncovered | Coverage Rate | Requirement |
+|---------------|-------|---------|-----------|---------------|-------------|
+| SRS → SDD (Design) | [N] | [N] | 0 | 100% | **Must be 100%** |
+| SRS → SWD (Detailed Design) | [N] | [N] | 0 | 100% | **Must be 100%** |
+| SRS → UI (SCR) | [N] | [N] | 0 | 100% | **Must be 100%** |
+| SRS → STC (Testing) | [N] | [N] | 0 | 100% | **Must be 100%** |
+| SRS → SVV (Verification) | [N] | [N] | 0 | 100% | **Must be 100%** |
+
+### 5.2 Design Coverage Statistics
+
+| Coverage Type | Total | Covered | Uncovered | Coverage Rate | Requirement |
+|---------------|-------|---------|-----------|---------------|-------------|
+| SDD ← SRS | [N] | [N] | 0 | 100% | **Must be 100%** |
+| SDD → SWD | [N] | [N] | 0 | 100% | **Must be 100%** |
+
+### 5.3 Test Coverage Statistics
+
+| Coverage Type | Total | Covered | Uncovered | Coverage Rate | Requirement |
+|---------------|-------|---------|-----------|---------------|-------------|
+| STC ← SRS | [N] | [N] | 0 | 100% | **Must be 100%** |
+| SWD → STC | [N] | [N] | 0 | 100% | **Must be 100%** |
+| STC → SVV | [N] | [N] | 0 | 100% | **Must be 100%** |
+
+### 5.4 Coverage Trend Chart
 
 ```
-覆蓋率 (%)
+Coverage (%)
 100 ┤ ████████████████████████████████ 100%
  90 ┤
  80 ┤
@@ -238,113 +241,113 @@ Prepared by {{author}}
  20 ┤
  10 ┤
   0 ┼─────────────────────────────────
-     需求→設計  需求→程式  需求→測試  整體
+     Req→Design  Req→Code  Req→Test  Overall
 ```
 
 ---
 
-## 6. 變更影響追溯
+## 6. Change Impact Traceability
 
-### 6.1 變更影響分析範例
+### 6.1 Change Impact Analysis Example
 
-當需求變更時，使用此矩陣分析影響範圍：
+When requirements change, use this matrix to analyze impact scope:
 
-**範例：SRS-001 變更影響分析**
+**Example: SRS-001 Change Impact Analysis**
 
-| 變更需求 | 受影響設計 | 受影響程式 | 受影響測試 | 重新驗證 |
-|---------|-----------|-----------|-----------|---------|
+| Changed Requirement | Affected Design | Affected Code | Affected Tests | Re-verification |
+|--------------------|-----------------|---------------|----------------|-----------------|
 | SRS-001 | SDD-001 | SWD-001, SWD-002 | STC-001, STC-002 | SVV-006 |
 
-**影響評估**：
-- 設計變更: 1 項
-- 程式變更: 2 項
-- 測試更新: 2 項
-- 驗證重做: 是
+**Impact Assessment**:
+- Design changes: 1 item
+- Code changes: 2 items
+- Test updates: 2 items
+- Re-verification: Yes
 
-### 6.2 變更追溯記錄
+### 6.2 Change Traceability Records
 
-| 變更 ID | 變更日期 | 變更項目 | 影響範圍 | 處理狀態 |
-|--------|---------|---------|---------|---------|
-| CHG-001 | [日期] | SRS-001 | SDD-001, SWD-001, STC-001 | 已完成 |
-| CHG-002 | [日期] | SDD-002 | SWD-003, STC-003 | 已完成 |
+| Change ID | Change Date | Changed Item | Impact Scope | Processing Status |
+|-----------|-------------|--------------|--------------|-------------------|
+| CHG-001 | [Date] | SRS-001 | SDD-001, SWD-001, STC-001 | Completed |
+| CHG-002 | [Date] | SDD-002 | SWD-003, STC-003 | Completed |
 
-### 6.3 影響範圍查詢
+### 6.3 Impact Scope Query
 
-#### 6.3.1 依需求查詢影響
+#### 6.3.1 Query Impact by Requirement
 
-輸入 SRS ID，查詢所有受影響項目：
-
-```
-查詢: SRS-001
-結果:
-├── 設計: SDD-001
-│   └── 程式: SWD-001, SWD-002
-├── 測試: STC-001, STC-002
-└── 驗證: SVV-006
-```
-
-#### 6.3.2 依設計查詢影響
-
-輸入 SDD ID，查詢上下游追溯：
+Input SRS ID to query all affected items:
 
 ```
-查詢: SDD-001
-結果:
-├── 上游需求: SRS-001
-├── 下游程式: SWD-001, SWD-002
-└── 相關測試: STC-001, STC-002
+Query: SRS-001
+Result:
+├── Design: SDD-001
+│   └── Code: SWD-001, SWD-002
+├── Tests: STC-001, STC-002
+└── Verification: SVV-006
+```
+
+#### 6.3.2 Query Impact by Design
+
+Input SDD ID to query upstream and downstream traceability:
+
+```
+Query: SDD-001
+Result:
+├── Upstream requirement: SRS-001
+├── Downstream code: SWD-001, SWD-002
+└── Related tests: STC-001, STC-002
 ```
 
 ---
 
-## 7. 附錄
+## 7. Appendix
 
-### 7.1 追溯矩陣維護指南
+### 7.1 Traceability Matrix Maintenance Guide
 
-**新增需求時** (必須建立完整追溯鏈)：
-1. 在 SRS 中新增需求，分配 SRS-{MODULE}-xxx ID
-2. 建立對應 SDD-{MODULE}-xxx 架構設計 ← **必須**
-3. 建立對應 SWD-{MODULE}-xxx 詳細設計 ← **必須**
-4. 建立對應 SCR-{MODULE}-xxx UI 畫面設計 ← **必須 (功能需求)**
-5. 建立對應 STC-{MODULE}-xxx 測試案例 ← **必須**
-6. 更新本追溯矩陣，確認所有覆蓋率維持 100%
+**When adding new requirements** (must establish complete traceability chain):
+1. Add requirement in SRS, assign SRS-{MODULE}-xxx ID
+2. Create corresponding SDD-{MODULE}-xxx architecture design ← **Required**
+3. Create corresponding SWD-{MODULE}-xxx detailed design ← **Required**
+4. Create corresponding SCR-{MODULE}-xxx UI screen design ← **Required (for functional requirements)**
+5. Create corresponding STC-{MODULE}-xxx test cases ← **Required**
+6. Update this traceability matrix, confirm all coverage rates remain at 100%
 
-> **⚠️ 任何新需求都必須同時建立完整追溯鏈，不接受部分追溯**
+> **⚠️ Any new requirement must simultaneously establish complete traceability chain; partial traceability is not acceptable**
 
-**變更需求時**：
-1. 識別變更的 SRS ID
-2. 使用第 6 節方法分析影響
-3. 更新所有受影響文件
-4. 更新本追溯矩陣
-5. 重新執行受影響測試
+**When changing requirements**:
+1. Identify the changed SRS ID
+2. Use Section 6 method to analyze impact
+3. Update all affected documents
+4. Update this traceability matrix
+5. Re-execute affected tests
 
-**刪除需求時**：
-1. 確認需求可刪除
-2. 標記相關設計、程式、測試為廢棄
-3. 更新本追溯矩陣
-4. 記錄刪除原因
+**When deleting requirements**:
+1. Confirm requirement can be deleted
+2. Mark related design, code, tests as deprecated
+3. Update this traceability matrix
+4. Record deletion reason
 
-### 7.2 追溯狀態定義
+### 7.2 Traceability Status Definitions
 
-| 狀態 | 定義 |
-|-----|------|
-| 完整 | 正向與反向追溯皆完整 |
-| 部分 | 部分追溯關係缺失 |
-| 缺失 | 無追溯關係 |
-| 待確認 | 追溯關係待確認 |
+| Status | Definition |
+|--------|------------|
+| Complete | Forward and reverse traceability are both complete |
+| Partial | Some traceability relationships are missing |
+| Missing | No traceability relationship |
+| Pending | Traceability relationship to be confirmed |
 
-### 7.3 術語定義
+### 7.3 Terminology Definitions
 
-| 術語 | 定義 |
-|-----|------|
-| 正向追溯 | 從需求追溯到設計、實作、測試 |
-| 反向追溯 | 從測試、實作、設計追溯回需求 |
-| 覆蓋率 | 已建立追溯關係的項目比例 |
+| Term | Definition |
+|------|------------|
+| Forward Traceability | Tracing from requirements to design, implementation, testing |
+| Reverse Traceability | Tracing from testing, implementation, design back to requirements |
+| Coverage Rate | Proportion of items with established traceability relationships |
 
-### 7.4 縮寫
+### 7.4 Abbreviations
 
-| 縮寫 | 全稱 |
-|-----|------|
+| Abbreviation | Full Name |
+|--------------|-----------|
 | RTM | Requirements Traceability Matrix |
 | SRS | Software Requirements Specification |
 | SDD | Software Design Description |
@@ -354,10 +357,10 @@ Prepared by {{author}}
 
 ---
 
-## 簽核
+## Sign-off
 
-| 角色 | 姓名 | 簽名 | 日期 |
-|-----|------|------|------|
-| 作者 | | | |
-| 審核者 | | | |
-| 核准者 | | | |
+| Role | Name | Signature | Date |
+|------|------|-----------|------|
+| Author | | | |
+| Reviewer | | | |
+| Approver | | | |

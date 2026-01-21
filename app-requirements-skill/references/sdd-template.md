@@ -1,151 +1,151 @@
 # SDD-{{PROJECT_CODE}}-1.0
 
-## 軟體設計規格書 (Software Design Description)
+## Software Design Description
 
-**文件編號：** SDD-{{PROJECT_CODE}}-1.0
-**版本：** 1.0
-**建立日期：** {{DATE}}
-**最後更新：** {{DATE}}
-**專案名稱：** {{PROJECT_NAME}}
-**文件狀態：** 草稿
+**Document ID:** SDD-{{PROJECT_CODE}}-1.0
+**Version:** 1.0
+**Created Date:** {{DATE}}
+**Last Updated:** {{DATE}}
+**Project Name:** {{PROJECT_NAME}}
+**Document Status:** Draft
 
 ---
 
-### 文件核准
+### Document Approval
 
-| 角色 | 姓名 | 日期 |
+| Role | Name | Date |
 |------|------|------|
-| 作者 | | |
-| 審核者 | | |
-| 核准者 | | |
+| Author | | |
+| Reviewer | | |
+| Approver | | |
 
 ---
 
-## 目錄
+## Table of Contents
 
-1. [版本歷史](#1-版本歷史)
-2. [使用案例設計](#2-使用案例設計-use-case-specifications)
-3. [系統架構設計](#3-系統架構設計)
-4. [模組設計](#4-模組設計)
-5. [資料設計](#5-資料設計)
-6. [介面設計](#6-介面設計)
-7. [共用設計元素](#7-共用設計元素)
-8. [安全設計考量](#8-安全設計考量)
-9. [附錄](#9-附錄)
+1. [Revision History](#1-revision-history)
+2. [Use Case Specifications](#2-use-case-specifications)
+3. [System Architecture Design](#3-system-architecture-design)
+4. [Module Design](#4-module-design)
+5. [Data Design](#5-data-design)
+6. [Interface Design](#6-interface-design)
+7. [Common Design Elements](#7-common-design-elements)
+8. [Safety Design Considerations](#8-safety-design-considerations)
+9. [Appendix](#9-appendix)
 
 ---
 
-## 1. 版本歷史
+## 1. Revision History
 
-| 版本 | 日期 | 修改內容 | 作者 |
-|-----|------|---------|------|
-| 1.0 | {{DATE}} | 初版建立 | |
+| Version | Date | Changes | Author |
+|---------|------|---------|--------|
+| 1.0 | {{DATE}} | Initial version | |
 
-### 1.1 參考文件
+### 1.1 Reference Documents
 
-| 文件編號 | 文件名稱 | 版本 |
-|---------|---------|------|
-| SRS-{{PROJECT_CODE}}-1.0 | 軟體需求規格書 | 1.0 |
+| Document ID | Document Name | Version |
+|-------------|---------------|---------|
+| SRS-{{PROJECT_CODE}}-1.0 | Software Requirements Specification | 1.0 |
 
-### 1.2 需求追溯對照
+### 1.2 Requirements Traceability
 
-| 設計項目 ID | 對應需求 ID |
-|------------|------------|
+| Design Item ID | Corresponding Requirement ID |
+|----------------|------------------------------|
 | SDD-001 | REQ-XXX-001 |
 | SDD-002 | REQ-XXX-002 |
 
 ---
 
-## 2. 使用案例設計 (Use Case Specifications)
+## 2. Use Case Specifications
 
-> **說明**：本章節定義系統的使用案例規格，包含案例簡述、基本事件流、替代事件流、及活動圖。
-> 每個使用案例應對應 SRS 中的功能需求。
+> **Description**: This section defines system use case specifications, including case summaries, basic event flows, alternative event flows, and activity diagrams.
+> Each use case should correspond to functional requirements in the SRS.
 
-### 2.1 使用案例總覽
+### 2.1 Use Case Overview
 
-| 用例 ID | 用例名稱 | 參與者 | 對應需求 | 優先級 |
-|--------|---------|--------|---------|--------|
-| UC-001 | [用例名稱] | [參與者] | SRS-xxx | P1 |
-| UC-002 | [用例名稱] | [參與者] | SRS-xxx | P2 |
+| Use Case ID | Use Case Name | Actor | Related Requirements | Priority |
+|-------------|---------------|-------|---------------------|----------|
+| UC-001 | [Use Case Name] | [Actor] | SRS-xxx | P1 |
+| UC-002 | [Use Case Name] | [Actor] | SRS-xxx | P2 |
 
-### 2.2 使用案例詳細規格
+### 2.2 Detailed Use Case Specifications
 
 ---
 
-#### UC-001 [用例名稱]
+#### UC-001 [Use Case Name]
 
-| 屬性 | 內容 |
-|-----|------|
-| **用例 ID** | UC-001 |
-| **用例名稱** | [用例名稱] |
-| **參與者 (Actor)** | [主要參與者] |
-| **對應需求** | SRS-xxx, SRS-xxx |
-| **優先級** | P1 |
+| Attribute | Content |
+|-----------|---------|
+| **Use Case ID** | UC-001 |
+| **Use Case Name** | [Use Case Name] |
+| **Actor** | [Primary Actor] |
+| **Related Requirements** | SRS-xxx, SRS-xxx |
+| **Priority** | P1 |
 
-**用例簡述 (Brief Description)**：
-[一段話描述此用例的目的與預期結果，約 2-3 句]
+**Brief Description**:
+[A paragraph describing the purpose and expected outcome of this use case, approximately 2-3 sentences]
 
-**前置條件 (Preconditions)**：
-1. [前置條件 1]
-2. [前置條件 2]
+**Preconditions**:
+1. [Precondition 1]
+2. [Precondition 2]
 
-**後置條件 (Postconditions)**：
-1. [後置條件 1：成功時的系統狀態]
-2. [後置條件 2]
+**Postconditions**:
+1. [Postcondition 1: System state on success]
+2. [Postcondition 2]
 
-**基本事件流 (Basic Flow)**：
+**Basic Flow**:
 
-| 步驟 | 參與者動作 | 系統回應 |
-|-----|-----------|---------|
-| 1 | [使用者操作] | [系統處理與回應] |
-| 2 | [使用者操作] | [系統處理與回應] |
-| 3 | [使用者操作] | [系統處理與回應] |
-| 4 | - | [系統完成處理] |
+| Step | Actor Action | System Response |
+|------|--------------|-----------------|
+| 1 | [User action] | [System processing and response] |
+| 2 | [User action] | [System processing and response] |
+| 3 | [User action] | [System processing and response] |
+| 4 | - | [System completes processing] |
 
-**替代事件流 (Alternative Flows)**：
+**Alternative Flows**:
 
-| 流程 ID | 分支點 | 條件 | 步驟 |
-|--------|--------|-----|------|
-| A1 | 步驟 2 | [條件描述] | [替代步驟說明] |
-| A2 | 步驟 3 | [條件描述] | [替代步驟說明] |
+| Flow ID | Branch Point | Condition | Steps |
+|---------|--------------|-----------|-------|
+| A1 | Step 2 | [Condition description] | [Alternative step description] |
+| A2 | Step 3 | [Condition description] | [Alternative step description] |
 
-**例外事件流 (Exception Flows)**：
+**Exception Flows**:
 
-| 流程 ID | 分支點 | 錯誤條件 | 處理方式 |
-|--------|--------|---------|---------|
-| E1 | 步驟 2 | [錯誤條件] | [錯誤處理與訊息] |
-| E2 | 步驟 3 | [錯誤條件] | [錯誤處理與訊息] |
+| Flow ID | Branch Point | Error Condition | Handling |
+|---------|--------------|-----------------|----------|
+| E1 | Step 2 | [Error condition] | [Error handling and message] |
+| E2 | Step 3 | [Error condition] | [Error handling and message] |
 
-**活動圖 (Activity Diagram)**：
+**Activity Diagram**:
 
 ```mermaid
 flowchart TD
-    Start([開始]) --> A["步驟 1: 使用者操作"]
-    A --> B{"條件判斷?"}
-    B -->|是| C["步驟 2a: 處理 A"]
-    B -->|否| D["步驟 2b: 處理 B"]
-    C --> E["步驟 3: 系統回應"]
+    Start([Start]) --> A["Step 1: User Action"]
+    A --> B{"Condition?"}
+    B -->|Yes| C["Step 2a: Process A"]
+    B -->|No| D["Step 2b: Process B"]
+    C --> E["Step 3: System Response"]
     D --> E
-    E --> F{"成功?"}
-    F -->|是| G["步驟 4: 完成處理"]
-    F -->|否| H["例外處理"]
+    E --> F{"Success?"}
+    F -->|Yes| G["Step 4: Complete Processing"]
+    F -->|No| H["Exception Handling"]
     H --> A
-    G --> End([結束])
+    G --> End([End])
 ```
 
-**補充說明**：
-- [其他需要說明的事項]
-- [業務規則或限制]
+**Additional Notes**:
+- [Other items requiring explanation]
+- [Business rules or constraints]
 
 ---
 
-## 3. 系統架構設計
+## 3. System Architecture Design
 
-### 3.1 架構概述
+### 3.1 Architecture Overview
 
-[描述整體系統架構設計理念]
+[Describe overall system architecture design philosophy]
 
-### 3.2 架構圖
+### 3.2 Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -166,239 +166,239 @@ flowchart TD
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 3.3 分層說明
+### 3.3 Layer Description
 
-| 層級 | 名稱 | 職責 | 主要元件 |
-|-----|------|------|---------|
-| 1 | Presentation Layer | UI 呈現與使用者互動 | View, Controller |
-| 2 | Business Layer | 業務邏輯處理 | Service, UseCase |
-| 3 | Data Layer | 資料存取與管理 | Repository, DAO |
+| Layer | Name | Responsibility | Main Components |
+|-------|------|----------------|-----------------|
+| 1 | Presentation Layer | UI presentation and user interaction | View, Controller |
+| 2 | Business Layer | Business logic processing | Service, UseCase |
+| 3 | Data Layer | Data access and management | Repository, DAO |
 
-### 3.4 軟體單元架構
+### 3.4 Software Unit Architecture
 
-| 單元 ID | 單元名稱 | 所屬層級 | 安全分類 |
-|--------|---------|---------|---------|
-| SDD-UNIT-001 | [單元名稱] | [層級] | [A/B/C] |
-
----
-
-## 4. 模組設計
-
-> **說明**：每個模組設計包含功能說明、處理邏輯、以及相關的畫面設計 (UI/UX)，
-> 將設計與畫面整合呈現，便於完整理解模組功能。
-
-### 4.1 模組總覽
-
-| ID | 模組名稱 | 對應需求 | 安全分類 | 說明 |
-|----|---------|---------|---------|------|
-| SDD-001 | [模組名稱] | SRS-001 | [A/B/C] | [簡述] |
-| SDD-002 | [模組名稱] | SRS-002 | [A/B/C] | [簡述] |
+| Unit ID | Unit Name | Layer | Safety Class |
+|---------|-----------|-------|--------------|
+| SDD-UNIT-001 | [Unit Name] | [Layer] | [A/B/C] |
 
 ---
 
-### 4.2 SDD-001 [模組名稱]
+## 4. Module Design
 
-| 屬性 | 內容 |
-|-----|------|
+> **Description**: Each module design includes functional description, processing logic, and related screen design (UI/UX),
+> integrating design and screens for complete understanding of module functionality.
+
+### 4.1 Module Overview
+
+| ID | Module Name | Related Requirements | Safety Class | Description |
+|----|-------------|---------------------|--------------|-------------|
+| SDD-001 | [Module Name] | SRS-001 | [A/B/C] | [Brief description] |
+| SDD-002 | [Module Name] | SRS-002 | [A/B/C] | [Brief description] |
+
+---
+
+### 4.2 SDD-001 [Module Name]
+
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SDD-001 |
-| **名稱** | [模組名稱] |
-| **對應需求** | SRS-001, SRS-002 |
-| **安全分類** | [Class A/B/C] |
-| **所屬層級** | [層級名稱] |
-| **職責** | [描述模組職責] |
+| **Name** | [Module Name] |
+| **Related Requirements** | SRS-001, SRS-002 |
+| **Safety Class** | [Class A/B/C] |
+| **Layer** | [Layer Name] |
+| **Responsibility** | [Describe module responsibility] |
 
-#### 4.2.1 功能說明
+#### 4.2.1 Functional Description
 
-[描述此模組的主要功能與業務邏輯]
+[Describe the main functions and business logic of this module]
 
-#### 4.2.2 輸入/輸出
+#### 4.2.2 Input/Output
 
-**輸入**：
-| 參數 | 類型 | 說明 |
-|-----|------|------|
-| [參數名] | [類型] | [說明] |
+**Input**:
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| [Parameter Name] | [Type] | [Description] |
 
-**輸出**：
-| 參數 | 類型 | 說明 |
-|-----|------|------|
-| [參數名] | [類型] | [說明] |
+**Output**:
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| [Parameter Name] | [Type] | [Description] |
 
-#### 4.2.3 處理邏輯
+#### 4.2.3 Processing Logic
 
-1. [步驟1]
-2. [步驟2]
-3. [步驟3]
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
 
-#### 4.2.4 相依模組
+#### 4.2.4 Dependencies
 
-- SDD-002: [相依說明]
+- SDD-002: [Dependency description]
 
-#### 4.2.5 錯誤處理
+#### 4.2.5 Error Handling
 
-| 錯誤碼 | 錯誤說明 | 處理方式 |
-|--------|---------|---------|
-| [代碼] | [說明] | [處理方式] |
+| Error Code | Error Description | Handling |
+|------------|-------------------|----------|
+| [Code] | [Description] | [Handling method] |
 
-#### 4.2.6 畫面設計
+#### 4.2.6 Screen Design
 
-##### SCR-XXX-001 [畫面名稱]
+##### SCR-XXX-001 [Screen Name]
 
-| 屬性 | 內容 |
-|-----|------|
-| **畫面 ID** | SCR-XXX-001 |
-| **畫面名稱** | [畫面名稱] |
-| **對應需求** | SRS-001 |
-| **Figma 連結** | [連結]() |
+| Attribute | Content |
+|-----------|---------|
+| **Screen ID** | SCR-XXX-001 |
+| **Screen Name** | [Screen Name] |
+| **Related Requirements** | SRS-001 |
+| **Figma Link** | [Link]() |
 
-**1. 程式介面**
+**1. Interface Layout**
 
 ```
 ┌────────────────────────────────────────────────┐
-│                   [標題列]                       │
+│                   [Header]                       │
 ├────────────────────────────────────────────────┤
 │                                                │
 │   ┌────────────────────────────────────┐      │
-│   │ [輸入欄位 1]                        │      │
+│   │ [Input Field 1]                     │      │
 │   └────────────────────────────────────┘      │
 │                                                │
 │   ┌────────────────────────────────────┐      │
-│   │ [輸入欄位 2]                        │      │
+│   │ [Input Field 2]                     │      │
 │   └────────────────────────────────────┘      │
 │                                                │
 │   ┌────────────────────────────────────┐      │
-│   │         [主要按鈕]                  │      │
+│   │         [Primary Button]            │      │
 │   └────────────────────────────────────┘      │
 │                                                │
 └────────────────────────────────────────────────┘
 ```
 
-**2. 功能說明**
+**2. Functional Description**
 
-[描述此畫面的主要功能與操作流程]
+[Describe the main functions and operation flow of this screen]
 
-- 啟動時，系統會在左側列表顯示所有資料
-- 選擇列表項目後，資料會自動顯示在右側修改區
-- 修改資料後點擊「修改」按鈕即可儲存變更
-- 點擊「刪除」按鈕可刪除選中的記錄
-- 點擊「清空」按鈕可清除修改區的內容
-- 在新增區填入資料後點擊「新增」按鈕可新增記錄
+- On launch, the system displays all data in the left list
+- After selecting a list item, data automatically displays in the right edit area
+- After editing, click "Modify" button to save changes
+- Click "Delete" button to delete selected record
+- Click "Clear" button to clear the edit area
+- Fill in data in the add area and click "Add" to create a new record
 
-**3. UI 元件規格**
+**3. UI Component Specifications**
 
-| 元件 ID | 元件類型 | 規格 | 對應需求 |
-|---------|---------|------|----------|
-| lst_data | ListView | 顯示所有資料列表 | SRS-001 |
-| txt_field1 | TextField | 輸入欄位 1 | SRS-001 |
-| txt_field2 | TextField | 輸入欄位 2 | SRS-001 |
-| btn_modify | Button | 修改按鈕 | SRS-001 |
-| btn_delete | Button | 刪除按鈕 | SRS-001 |
-| btn_clear | Button | 清空按鈕 | - |
-| btn_add | Button | 新增按鈕 | SRS-002 |
+| Component ID | Component Type | Specification | Related Requirement |
+|--------------|----------------|---------------|---------------------|
+| lst_data | ListView | Display all data list | SRS-001 |
+| txt_field1 | TextField | Input field 1 | SRS-001 |
+| txt_field2 | TextField | Input field 2 | SRS-001 |
+| btn_modify | Button | Modify button | SRS-001 |
+| btn_delete | Button | Delete button | SRS-001 |
+| btn_clear | Button | Clear button | - |
+| btn_add | Button | Add button | SRS-002 |
 
-**4. 互動規格**
+**4. Interaction Specifications**
 
-| 互動事件 | 觸發元件 | 行為 | 動畫/效果 |
-|---------|---------|------|----------|
-| 選擇列表項目 | lst_data | 載入資料至修改區 | 高亮選中項 |
-| 點擊修改 | btn_modify | 儲存修改並更新列表 | 成功提示 |
-| 點擊刪除 | btn_delete | 刪除記錄並更新列表 | 確認對話框 |
-| 點擊新增 | btn_add | 新增記錄並更新列表 | 成功提示 |
+| Interaction Event | Trigger Component | Behavior | Animation/Effect |
+|-------------------|-------------------|----------|------------------|
+| Select list item | lst_data | Load data to edit area | Highlight selected |
+| Click modify | btn_modify | Save changes and update list | Success prompt |
+| Click delete | btn_delete | Delete record and update list | Confirmation dialog |
+| Click add | btn_add | Add record and update list | Success prompt |
 
 **5. Button Navigation** ⚠️ MANDATORY
 
-> **重要：** 此表格為 `app-uiux-designer.skill` 產生 UI Flow 的關鍵資料來源。
-> 每個可點擊元素（按鈕、連結、Tab）都必須指定明確的 `Target Screen`。
+> **Important:** This table is the key data source for `app-uiux-designer.skill` to generate UI Flow.
+> Every clickable element (buttons, links, tabs) must specify a clear `Target Screen`.
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_modify | 修改 | Button | (current) | 資料驗證通過 |
-| btn_delete | 刪除 | Button | (current) | 確認刪除後 |
-| btn_add | 新增 | Button | (current) | 資料驗證通過 |
-| btn_back | 返回 | Button | SCR-XXX-001 | - |
-| lnk_detail | 查看詳情 | Link | SCR-XXX-003 | - |
+| btn_modify | Modify | Button | (current) | Data validation passed |
+| btn_delete | Delete | Button | (current) | After delete confirmation |
+| btn_add | Add | Button | (current) | Data validation passed |
+| btn_back | Back | Button | SCR-XXX-001 | - |
+| lnk_detail | View Details | Link | SCR-XXX-003 | - |
 
-> **Target Screen 值說明：**
-> - `SCR-XXX-001` - 導航到指定畫面
-> - `(current)` - 留在當前畫面（僅更新資料）
-> - `(modal)` - 彈出對話框/底部選單
-> - `(back)` - 返回上一頁
-> - `(external)` - 開啟外部連結
+> **Target Screen Value Description:**
+> - `SCR-XXX-001` - Navigate to specified screen
+> - `(current)` - Stay on current screen (data update only)
+> - `(modal)` - Show dialog/bottom sheet
+> - `(back)` - Return to previous page
+> - `(external)` - Open external link
 
-**6. UI 原型參考** (Phase 3 回填)
+**6. UI Prototype Reference** (Phase 3 Backfill)
 
-> ⚠️ **格式規範：** 不使用表格，直接嵌入圖片。由 `app-uiux-designer.skill` 07-feedback 階段回填。
+> ⚠️ **Format Specification:** Do not use tables, embed images directly. Backfilled by `app-uiux-designer.skill` in 07-feedback phase.
 
-**iPad 版本：**
+**iPad Version:**
 
 ![](images/ipad/SCR-XXX-001-name.png)
 
-**iPhone 版本：**
+**iPhone Version:**
 
 ![](images/iphone/SCR-XXX-001-name.png)
 
-**7. 錯誤處理 UI**
+**7. Error Handling UI**
 
-| 錯誤類型 | 錯誤訊息 | UI 位置 | 樣式 |
-|---------|---------|---------|------|
-| 欄位為空 | 請填寫必填欄位 | 欄位下方 | 紅字 |
-| 資料重複 | 此資料已存在 | 表單上方 | 紅色警告框 |
-
----
-
-##### SCR-XXX-002 [另一個畫面名稱]
-
-| 屬性 | 內容 |
-|-----|------|
-| **畫面 ID** | SCR-XXX-002 |
-| **畫面名稱** | [畫面名稱] |
-| **對應需求** | SRS-002 |
-
-**1. 程式介面**
-
-[畫面布局圖]
-
-**2. 功能說明**
-
-[功能描述]
+| Error Type | Error Message | UI Location | Style |
+|------------|---------------|-------------|-------|
+| Empty field | Please fill in required fields | Below field | Red text |
+| Duplicate data | This data already exists | Above form | Red warning box |
 
 ---
 
-### 4.3 SDD-002 [另一個模組名稱]
+##### SCR-XXX-002 [Another Screen Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
+| **Screen ID** | SCR-XXX-002 |
+| **Screen Name** | [Screen Name] |
+| **Related Requirements** | SRS-002 |
+
+**1. Interface Layout**
+
+[Screen layout diagram]
+
+**2. Functional Description**
+
+[Functional description]
+
+---
+
+### 4.3 SDD-002 [Another Module Name]
+
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SDD-002 |
-| **名稱** | [模組名稱] |
-| **對應需求** | SRS-003 |
-| **安全分類** | [Class A/B/C] |
-| **所屬層級** | [層級名稱] |
-| **職責** | [描述模組職責] |
+| **Name** | [Module Name] |
+| **Related Requirements** | SRS-003 |
+| **Safety Class** | [Class A/B/C] |
+| **Layer** | [Layer Name] |
+| **Responsibility** | [Describe module responsibility] |
 
-#### 4.3.1 功能說明
+#### 4.3.1 Functional Description
 
-[描述此模組的主要功能]
+[Describe the main functions of this module]
 
-#### 4.3.2 輸入/輸出
+#### 4.3.2 Input/Output
 
-**輸入**：
-| 參數 | 類型 | 說明 |
-|-----|------|------|
-| [參數名] | [類型] | [說明] |
+**Input**:
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| [Parameter Name] | [Type] | [Description] |
 
-**輸出**：
-| 參數 | 類型 | 說明 |
-|-----|------|------|
-| [參數名] | [類型] | [說明] |
+**Output**:
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| [Parameter Name] | [Type] | [Description] |
 
-#### 4.3.3 畫面設計
+#### 4.3.3 Screen Design
 
-[此模組的相關畫面設計]
+[Related screen designs for this module]
 
 ---
 
-## 5. 資料設計
+## 5. Data Design
 
-### 5.1 資料模型
+### 5.1 Data Model
 
 ```
 ┌─────────────────┐       ┌─────────────────┐
@@ -410,45 +410,45 @@ flowchart TD
 └─────────────────┘       └─────────────────┘
 ```
 
-### 5.2 資料實體定義
+### 5.2 Data Entity Definitions
 
-#### 5.2.1 [實體名稱]
+#### 5.2.1 [Entity Name]
 
-| 欄位 | 類型 | 必填 | 說明 |
-|-----|------|------|------|
-| id | String | Y | 主鍵 |
-| name | String | Y | 名稱 |
-| createdAt | DateTime | Y | 建立時間 |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| id | String | Y | Primary key |
+| name | String | Y | Name |
+| createdAt | DateTime | Y | Creation time |
 
-### 5.3 資料流程
+### 5.3 Data Flow
 
 ```
-[輸入來源] → [處理模組] → [儲存位置]
+[Input Source] → [Processing Module] → [Storage Location]
 ```
 
-### 5.4 資料安全
+### 5.4 Data Security
 
-| 資料類型 | 敏感等級 | 加密方式 | 存取控制 |
-|---------|---------|---------|---------|
-| [類型] | [高/中/低] | [加密演算法] | [控制方式] |
+| Data Type | Sensitivity Level | Encryption | Access Control |
+|-----------|-------------------|------------|----------------|
+| [Type] | [High/Medium/Low] | [Encryption algorithm] | [Control method] |
 
 ---
 
-## 6. 介面設計
+## 6. Interface Design
 
-### 6.1 內部介面
+### 6.1 Internal Interfaces
 
-#### SDD-INT-001 [介面名稱]
+#### SDD-INT-001 [Interface Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SDD-INT-001 |
-| **名稱** | [介面名稱] |
-| **類型** | [API/Event/Message] |
-| **提供者** | [模組 ID] |
-| **使用者** | [模組 ID] |
+| **Name** | [Interface Name] |
+| **Type** | [API/Event/Message] |
+| **Provider** | [Module ID] |
+| **Consumer** | [Module ID] |
 
-**介面定義**：
+**Interface Definition**:
 ```
 interface [InterfaceName] {
     method1(param1: Type): ReturnType
@@ -456,19 +456,19 @@ interface [InterfaceName] {
 }
 ```
 
-### 6.2 外部介面
+### 6.2 External Interfaces
 
-#### SDD-EXT-001 [外部介面名稱]
+#### SDD-EXT-001 [External Interface Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SDD-EXT-001 |
-| **名稱** | [介面名稱] |
-| **對應需求** | SRS-HW-001 |
-| **通訊協定** | [協定名稱] |
-| **資料格式** | [JSON/XML/Binary] |
+| **Name** | [Interface Name] |
+| **Related Requirements** | SRS-HW-001 |
+| **Protocol** | [Protocol Name] |
+| **Data Format** | [JSON/XML/Binary] |
 
-**訊息格式**：
+**Message Format**:
 ```json
 {
     "field1": "string",
@@ -478,128 +478,128 @@ interface [InterfaceName] {
 
 ---
 
-## 7. 共用設計元素
+## 7. Common Design Elements
 
-> **說明**：本章節定義跨模組共用的設計元素，包含色彩系統、字型系統、共用元件、動畫規格等。
+> **Description**: This section defines cross-module common design elements, including color system, typography, common components, animation specifications, etc.
 
-### 7.1 色彩系統
+### 7.1 Color System
 
-| 色彩名稱 | HEX 值 | 用途 |
-|---------|--------|------|
-| Primary | #[XXXXXX] | 主要按鈕、強調色 |
-| Primary Dark | #[XXXXXX] | 按下狀態 |
-| Secondary | #[XXXXXX] | 次要元素 |
-| Success | #[XXXXXX] | 成功狀態 |
-| Warning | #[XXXXXX] | 警告狀態 |
-| Error | #[XXXXXX] | 錯誤狀態 |
-| Background | #[XXXXXX] | 背景色 |
-| Surface | #[XXXXXX] | 卡片/表面 |
-| Text Primary | #[XXXXXX] | 主要文字 |
-| Text Secondary | #[XXXXXX] | 次要文字 |
+| Color Name | HEX Value | Usage |
+|------------|-----------|-------|
+| Primary | #[XXXXXX] | Primary buttons, accent color |
+| Primary Dark | #[XXXXXX] | Pressed state |
+| Secondary | #[XXXXXX] | Secondary elements |
+| Success | #[XXXXXX] | Success state |
+| Warning | #[XXXXXX] | Warning state |
+| Error | #[XXXXXX] | Error state |
+| Background | #[XXXXXX] | Background color |
+| Surface | #[XXXXXX] | Cards/surfaces |
+| Text Primary | #[XXXXXX] | Primary text |
+| Text Secondary | #[XXXXXX] | Secondary text |
 
-### 7.2 字型系統
+### 7.2 Typography System
 
-| 樣式名稱 | 字型 | 大小 | 行高 | 字重 | 用途 |
-|---------|------|------|------|------|------|
-| Headline Large | [字型] | 32px | 40px | Bold | 頁面標題 |
-| Headline Medium | [字型] | 28px | 36px | Bold | 區塊標題 |
-| Title Large | [字型] | 22px | 28px | Medium | 卡片標題 |
-| Body Large | [字型] | 16px | 24px | Regular | 內文 |
-| Body Medium | [字型] | 14px | 20px | Regular | 次要內文 |
-| Label Large | [字型] | 14px | 20px | Medium | 按鈕文字 |
-| Caption | [字型] | 12px | 16px | Regular | 輔助說明 |
+| Style Name | Font | Size | Line Height | Weight | Usage |
+|------------|------|------|-------------|--------|-------|
+| Headline Large | [Font] | 32px | 40px | Bold | Page titles |
+| Headline Medium | [Font] | 28px | 36px | Bold | Section titles |
+| Title Large | [Font] | 22px | 28px | Medium | Card titles |
+| Body Large | [Font] | 16px | 24px | Regular | Body text |
+| Body Medium | [Font] | 14px | 20px | Regular | Secondary text |
+| Label Large | [Font] | 14px | 20px | Medium | Button text |
+| Caption | [Font] | 12px | 16px | Regular | Helper text |
 
-### 7.3 共用元件庫
+### 7.3 Common Component Library
 
-| 元件名稱 | 變體 | 說明 |
-|---------|------|------|
-| Button | Primary, Secondary, Disabled, Loading | 按鈕元件 |
-| TextField | Default, Focused, Error, Disabled | 文字輸入 |
-| Card | Default, Elevated, Outlined | 卡片容器 |
-| Alert | Info, Success, Warning, Error | 提示訊息 |
-| Loading | Small, Medium, Large | 載入動畫 |
+| Component Name | Variants | Description |
+|----------------|----------|-------------|
+| Button | Primary, Secondary, Disabled, Loading | Button component |
+| TextField | Default, Focused, Error, Disabled | Text input |
+| Card | Default, Elevated, Outlined | Card container |
+| Alert | Info, Success, Warning, Error | Alert messages |
+| Loading | Small, Medium, Large | Loading animation |
 
-### 7.4 動畫與轉場設計
+### 7.4 Animation and Transition Design
 
-#### 7.4.1 頁面轉場
+#### 7.4.1 Page Transitions
 
-| 轉場類型 | 動畫效果 | 時長 | 緩動曲線 | 使用情境 |
-|---------|---------|------|---------|---------|
-| Push | 從右滑入 | 300ms | ease-out | 進入下一層頁面 |
-| Pop | 向右滑出 | 250ms | ease-in | 返回上一層 |
-| Modal | 從底部彈出 | 300ms | ease-out | 彈出選單/表單 |
-| Fade | 淡入淡出 | 200ms | linear | Tab 切換 |
+| Transition Type | Animation Effect | Duration | Easing | Use Case |
+|-----------------|------------------|----------|--------|----------|
+| Push | Slide in from right | 300ms | ease-out | Enter next level page |
+| Pop | Slide out to right | 250ms | ease-in | Return to previous level |
+| Modal | Slide up from bottom | 300ms | ease-out | Popup menu/form |
+| Fade | Fade in/out | 200ms | linear | Tab switching |
 
-#### 7.4.2 元件動畫
+#### 7.4.2 Component Animations
 
-| 動畫 ID | 動畫名稱 | 格式 | 用途 | 觸發條件 |
-|---------|---------|------|------|---------|
-| ANI-001 | loading_spinner | Lottie | 載入中 | API 呼叫時 |
-| ANI-002 | success_check | Lottie | 操作成功 | 提交成功後 |
-| ANI-003 | error_shake | CSS | 錯誤提示 | 驗證失敗時 |
+| Animation ID | Animation Name | Format | Usage | Trigger |
+|--------------|----------------|--------|-------|---------|
+| ANI-001 | loading_spinner | Lottie | Loading | On API call |
+| ANI-002 | success_check | Lottie | Success | After submit success |
+| ANI-003 | error_shake | CSS | Error prompt | On validation failure |
 
-### 7.5 響應式設計
+### 7.5 Responsive Design
 
-| 斷點名稱 | 螢幕寬度 | 設備類型 | Layout 調整 |
-|---------|---------|---------|------------|
-| Compact | < 600dp | 手機 (直立) | 單欄佈局 |
-| Medium | 600-840dp | 手機 (橫向) / 小平板 | 雙欄可選 |
-| Expanded | > 840dp | 平板 / 桌面 | 多欄佈局 |
+| Breakpoint | Screen Width | Device Type | Layout Adjustment |
+|------------|--------------|-------------|-------------------|
+| Compact | < 600dp | Phone (portrait) | Single column layout |
+| Medium | 600-840dp | Phone (landscape) / Small tablet | Dual column optional |
+| Expanded | > 840dp | Tablet / Desktop | Multi-column layout |
 
-### 7.6 無障礙設計 (Accessibility)
+### 7.6 Accessibility Design
 
-| 項目 | 要求 | 驗證方法 |
-|-----|------|---------|
-| 色彩對比 | WCAG AA (4.5:1) | Contrast 檢查工具 |
-| 觸控目標 | 最小 44×44 pt | 設計審查 |
-| 焦點順序 | 邏輯順序 | 鍵盤導航測試 |
-| 替代文字 | 所有圖片/圖示 | 程式碼審查 |
-
----
-
-## 8. 安全設計考量
-
-### 8.1 風險緩解設計
-
-| 風險 ID | 風險描述 | 緩解設計 | 對應模組 |
-|--------|---------|---------|---------|
-| RISK-001 | [風險描述] | [緩解措施] | SDD-001 |
-
-### 8.2 錯誤處理策略
-
-| 錯誤類型 | 處理策略 | 恢復機制 |
-|---------|---------|---------|
-| [類型] | [策略] | [機制] |
-
-### 8.3 安全關鍵模組
-
-| 模組 ID | 安全分類 | 安全措施 |
-|--------|---------|---------|
-| SDD-001 | [A/B/C] | [措施說明] |
+| Item | Requirement | Validation Method |
+|------|-------------|-------------------|
+| Color contrast | WCAG AA (4.5:1) | Contrast checking tool |
+| Touch target | Minimum 44×44 pt | Design review |
+| Focus order | Logical order | Keyboard navigation test |
+| Alt text | All images/icons | Code review |
 
 ---
 
-## 9. 附錄
+## 8. Safety Design Considerations
 
-### 9.1 設計決策記錄
+### 8.1 Risk Mitigation Design
 
-| 決策 ID | 主題 | 決策內容 | 理由 | 日期 |
-|--------|------|---------|------|------|
-| DEC-001 | [主題] | [決策] | [理由] | [日期] |
+| Risk ID | Risk Description | Mitigation Design | Related Module |
+|---------|------------------|-------------------|----------------|
+| RISK-001 | [Risk description] | [Mitigation measures] | SDD-001 |
 
-### 9.2 術語定義
+### 8.2 Error Handling Strategy
 
-| 術語 | 定義 |
-|-----|------|
-| [術語] | [定義] |
+| Error Type | Handling Strategy | Recovery Mechanism |
+|------------|-------------------|-------------------|
+| [Type] | [Strategy] | [Mechanism] |
 
-### 9.3 縮寫
+### 8.3 Safety-Critical Modules
 
-| 縮寫 | 全稱 |
-|-----|------|
+| Module ID | Safety Class | Safety Measures |
+|-----------|--------------|-----------------|
+| SDD-001 | [A/B/C] | [Measure description] |
+
+---
+
+## 9. Appendix
+
+### 9.1 Design Decision Records
+
+| Decision ID | Topic | Decision | Rationale | Date |
+|-------------|-------|----------|-----------|------|
+| DEC-001 | [Topic] | [Decision] | [Rationale] | [Date] |
+
+### 9.2 Terminology Definitions
+
+| Term | Definition |
+|------|------------|
+| [Term] | [Definition] |
+
+### 9.3 Abbreviations
+
+| Abbreviation | Full Name |
+|--------------|-----------|
 | SDD | Software Design Description |
 | DAO | Data Access Object |
 
 ---
 
-> **文件結束**
+> **End of Document**

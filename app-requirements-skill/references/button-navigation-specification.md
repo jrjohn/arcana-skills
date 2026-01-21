@@ -2,70 +2,70 @@
 
 ## Overview
 
-本規格定義了 SDD 中 Button Navigation Table 的標準格式，以及如何與 `app-uiux-designer.skill` 的模板整合。
+This specification defines the standard format for Button Navigation Tables in SDD and how they integrate with `app-uiux-designer.skill` templates.
 
-**目標：** SDD 提供 Button Navigation 作為**優先來源**，減少 UI Flow 的預測需求。
+**Goal:** SDD provides Button Navigation as the **primary source**, reducing prediction needs for UI Flow.
 
-### 導航解析優先順序
+### Navigation Resolution Priority
 
 ```
-1️⃣ SDD Button Navigation 表格 (優先)
-   → 如果有 Target Screen，直接使用
+1️⃣ SDD Button Navigation Table (Priority)
+   → If Target Screen exists, use directly
 
-2️⃣ app-uiux-designer.skill 智慧預測 (備用)
-   → 如果 SDD 沒有提供，根據命名約定預測
+2️⃣ app-uiux-designer.skill Smart Prediction (Fallback)
+   → If SDD doesn't provide, predict based on naming conventions
 
-3️⃣ 預設值 (最後)
-   → 無法判斷時使用 # 或 (current)
+3️⃣ Default Values (Last Resort)
+   → Use # or (current) when unable to determine
 ```
 
-**注意：** 預測功能保留作為備用機制，確保 UI Flow 在 SDD 不完整時仍可產出。
+**Note:** Prediction functionality is retained as fallback mechanism, ensuring UI Flow can still be generated when SDD is incomplete.
 
 ---
 
 ## SDD Button Navigation Table Format
 
-### 標準格式（必須）
+### Standard Format (Mandatory)
 
-每個 SCR-* 畫面區塊**必須**包含以下 Button Navigation 表格：
+Each SCR-* screen section **must** include the following Button Navigation table:
 
 ```markdown
 ### Button Navigation
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_login | 登入 | Button | SCR-AUTH-004-role | 驗證成功 |
-| btn_register | 立即註冊 | Link | SCR-AUTH-002-register | - |
-| btn_forgot | 忘記密碼? | Link | SCR-AUTH-003-forgot-password | - |
-| btn_apple | Apple | Button | SCR-AUTH-004-role | Apple 登入成功 |
-| btn_google | Google | Button | SCR-AUTH-004-role | Google 登入成功 |
+| btn_login | Login | Button | SCR-AUTH-004-role | Validation success |
+| btn_register | Register Now | Link | SCR-AUTH-002-register | - |
+| btn_forgot | Forgot Password? | Link | SCR-AUTH-003-forgot-password | - |
+| btn_apple | Apple | Button | SCR-AUTH-004-role | Apple login success |
+| btn_google | Google | Button | SCR-AUTH-004-role | Google login success |
 | btn_back | < | Button | history.back() | - |
 ```
 
-### 欄位說明
+### Column Descriptions
 
 | Column | Description | Required | Example |
 |--------|-------------|----------|---------|
-| **Element ID** | 元素唯一識別碼 | Yes | `btn_login` |
-| **Element Text** | 顯示文字 | Yes | `登入` |
-| **Type** | 元素類型 | Yes | `Button`, `Link`, `Icon`, `Tab`, `Row` |
-| **Target Screen** | 導航目標 | Yes | `SCR-AUTH-004-role` |
-| **Condition** | 觸發條件 | Optional | `驗證成功`, `-` |
+| **Element ID** | Unique element identifier | Yes | `btn_login` |
+| **Element Text** | Display text | Yes | `Login` |
+| **Type** | Element type | Yes | `Button`, `Link`, `Icon`, `Tab`, `Row` |
+| **Target Screen** | Navigation target | Yes | `SCR-AUTH-004-role` |
+| **Condition** | Trigger condition | Optional | `Validation success`, `-` |
 
-### Target Screen 格式
+### Target Screen Formats
 
 | Format | Usage | Example |
 |--------|-------|---------|
-| `SCR-MODULE-NNN-name` | 導航到指定畫面 | `SCR-AUTH-004-role` |
-| `history.back()` | 返回上一頁 | 用於 Back/Close 按鈕 |
-| `(close modal)` | 關閉 Modal | 用於 Modal 內的關閉按鈕 |
-| `(submit form)` | 提交表單後導航 | 需搭配 Condition 指定成功/失敗目標 |
+| `SCR-MODULE-NNN-name` | Navigate to specified screen | `SCR-AUTH-004-role` |
+| `history.back()` | Return to previous page | For Back/Close buttons |
+| `(close modal)` | Close Modal | For close buttons in Modal |
+| `(submit form)` | Navigate after form submission | Need Condition to specify success/failure targets |
 
 ---
 
 ## UI Flow Template Variable Mapping
 
-### SDD → HTML 變數對應表
+### SDD → HTML Variable Mapping Table
 
 | SDD Button Navigation | HTML Template Variable | HTML Output |
 |-----------------------|------------------------|-------------|
@@ -75,45 +75,45 @@
 | `Target Screen: SCR-SETTING-001-settings` | `{{TARGET_SETTINGS}}` | `onclick="location.href='SCR-SETTING-001-settings.html'"` |
 | `Target Screen: history.back()` | `{{TARGET_BACK}}` | `onclick="history.back()"` |
 
-### 標準變數列表
+### Standard Variable List
 
 ```
-{{TARGET_BACK}}              - 返回上一頁 (通常是 history.back())
-{{TARGET_HOME}}              - 首頁
-{{TARGET_SETTINGS}}          - 設定頁
-{{TARGET_PROFILE}}           - 個人資料頁
-{{TARGET_AFTER_LOGIN}}       - 登入成功後導航目標
-{{TARGET_REGISTER}}          - 註冊頁
-{{TARGET_FORGOT_PASSWORD}}   - 忘記密碼頁
-{{TARGET_SECURITY}}          - 帳號安全頁
-{{TARGET_NOTIFICATION}}      - 通知設定頁
-{{TARGET_APPEARANCE}}        - 外觀設定頁
-{{TARGET_PRIVACY}}           - 隱私設定頁
-{{TARGET_DATA}}              - 資料管理頁
-{{TARGET_TERMS}}             - 服務條款頁
-{{TARGET_ABOUT}}             - 關於頁
-{{TARGET_LOGOUT}}            - 登出 (通常回到登入頁)
+{{TARGET_BACK}}              - Return to previous page (usually history.back())
+{{TARGET_HOME}}              - Home page
+{{TARGET_SETTINGS}}          - Settings page
+{{TARGET_PROFILE}}           - Profile page
+{{TARGET_AFTER_LOGIN}}       - Navigation target after login success
+{{TARGET_REGISTER}}          - Registration page
+{{TARGET_FORGOT_PASSWORD}}   - Forgot password page
+{{TARGET_SECURITY}}          - Account security page
+{{TARGET_NOTIFICATION}}      - Notification settings page
+{{TARGET_APPEARANCE}}        - Appearance settings page
+{{TARGET_PRIVACY}}           - Privacy settings page
+{{TARGET_DATA}}              - Data management page
+{{TARGET_TERMS}}             - Terms of service page
+{{TARGET_ABOUT}}             - About page
+{{TARGET_LOGOUT}}            - Logout (usually returns to login page)
 ```
 
 ---
 
 ## SDD Pre-Generation Checklist
 
-在呼叫 `app-uiux-designer.skill` 產生 UI Flow 之前，**必須**完成以下檢查：
+Before calling `app-uiux-designer.skill` to generate UI Flow, the following checks **must** be completed:
 
-### ⚠️ Button Navigation 完整性檢查 (100% 必須)
+### ⚠️ Button Navigation Completeness Check (100% Required)
 
-- [ ] 每個 SCR-* 區塊都有 `### Button Navigation` 表格
-- [ ] 每個可點擊元素都有 Target Screen
-- [ ] 所有 Target Screen 指向存在的 SCR-* ID
-- [ ] 沒有懸空的 Target Screen（指向不存在的畫面）
-- [ ] `history.back()` 用於所有返回按鈕
-- [ ] Modal/Sheet 有明確的關閉機制
+- [ ] Every SCR-* section has a `### Button Navigation` table
+- [ ] Every clickable element has a Target Screen
+- [ ] All Target Screens point to existing SCR-* IDs
+- [ ] No dangling Target Screens (pointing to non-existent screens)
+- [ ] `history.back()` used for all back buttons
+- [ ] Modal/Sheet has clear close mechanism
 
-### 驗證腳本
+### Validation Script
 
 ```bash
-# 執行 Button Navigation 驗證
+# Execute Button Navigation validation
 node ~/.claude/skills/app-requirements-skill/scripts/validate-button-navigation.js [SDD_FILE]
 ```
 
@@ -121,32 +121,32 @@ node ~/.claude/skills/app-requirements-skill/scripts/validate-button-navigation.
 
 ## Integration Workflow
 
-### 完整流程（規格驅動，無預測）
+### Complete Flow (Spec-Driven, No Prediction)
 
 ```
-Phase 1: 需求收集 (app-requirements-skill)
-├── 收集功能需求
-├── 定義 REQ-* 清單
-└── 輸出: SRS
+Phase 1: Requirements Gathering (app-requirements-skill)
+├── Gather functional requirements
+├── Define REQ-* list
+└── Output: SRS
 
-Phase 2: 畫面設計規格 (app-requirements-skill)
-├── 定義所有 SCR-* 畫面
-├── 為每個畫面建立 Button Navigation Table ⚠️ 完整填寫
-├── 驗證 Navigation 完整性 (100% 覆蓋)
-└── 輸出: SDD (spec-complete)
+Phase 2: Screen Design Specification (app-requirements-skill)
+├── Define all SCR-* screens
+├── Create Button Navigation Table for each screen ⚠️ Complete filling
+├── Validate Navigation completeness (100% coverage)
+└── Output: SDD (spec-complete)
 
-Phase 3: UI Flow 生成 (app-uiux-designer.skill)
-├── 讀取 SDD 的 Button Navigation Table
-├── 將 Target Screen 轉換為 {{TARGET_*}} 變數
-├── 複製模板並替換變數
-├── **不需要預測任何導航目標**
-└── 輸出: HTML UI Flow
+Phase 3: UI Flow Generation (app-uiux-designer.skill)
+├── Read SDD's Button Navigation Table
+├── Convert Target Screen to {{TARGET_*}} variables
+├── Copy templates and replace variables
+├── **No navigation target prediction needed**
+└── Output: HTML UI Flow
 
-Phase 4: SRS/SDD 回補 (app-uiux-designer.skill → app-requirements-skill)
-├── 截圖嵌入 SDD
-├── 更新 SRS Screen References
-├── 驗證 RTM 覆蓋率
-└── 輸出: 更新後的 SRS/SDD
+Phase 4: SRS/SDD Backfill (app-uiux-designer.skill → app-requirements-skill)
+├── Embed screenshots in SDD
+├── Update SRS Screen References
+├── Verify RTM coverage
+└── Output: Updated SRS/SDD
 ```
 
 ---
@@ -155,58 +155,58 @@ Phase 4: SRS/SDD 回補 (app-uiux-designer.skill → app-requirements-skill)
 
 ### Example 1: Login Screen (SCR-AUTH-001)
 
-**SDD 定義：**
+**SDD Definition:**
 
 ```markdown
 #### SCR-AUTH-001: Login Screen
 
-**模組：** AUTH
-**優先級：** P0
-**相關需求：** REQ-AUTH-001, REQ-AUTH-002
+**Module:** AUTH
+**Priority:** P0
+**Related Requirements:** REQ-AUTH-001, REQ-AUTH-002
 
-##### 畫面說明
-使用者登入畫面，支援 Email/密碼登入及社群登入。
+##### Screen Description
+User login screen, supports Email/password login and social login.
 
-##### UI 元件表
+##### UI Component Table
 
 | Component | Type | Description | Requirement |
 |-----------|------|-------------|-------------|
-| txt_email | TextField | Email 輸入框 | REQ-AUTH-001 |
-| txt_password | PasswordField | 密碼輸入框 | REQ-AUTH-001 |
-| btn_login | Button | 登入按鈕 | REQ-AUTH-001 |
-| btn_apple | Button | Apple 登入 | REQ-AUTH-002 |
-| btn_google | Button | Google 登入 | REQ-AUTH-002 |
-| lnk_forgot | Link | 忘記密碼連結 | REQ-AUTH-003 |
-| lnk_register | Link | 註冊連結 | REQ-AUTH-004 |
+| txt_email | TextField | Email input field | REQ-AUTH-001 |
+| txt_password | PasswordField | Password input field | REQ-AUTH-001 |
+| btn_login | Button | Login button | REQ-AUTH-001 |
+| btn_apple | Button | Apple login | REQ-AUTH-002 |
+| btn_google | Button | Google login | REQ-AUTH-002 |
+| lnk_forgot | Link | Forgot password link | REQ-AUTH-003 |
+| lnk_register | Link | Register link | REQ-AUTH-004 |
 
 ##### Button Navigation ⚠️ MANDATORY
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_login | 登入 | Button | SCR-AUTH-004-role | 驗證成功 |
-| btn_apple | Apple | Button | SCR-AUTH-004-role | Apple 登入成功 |
-| btn_google | Google | Button | SCR-AUTH-004-role | Google 登入成功 |
-| lnk_forgot | 忘記密碼? | Link | SCR-AUTH-003-forgot-password | - |
-| lnk_register | 立即註冊 | Link | SCR-AUTH-002-register | - |
+| btn_login | Login | Button | SCR-AUTH-004-role | Validation success |
+| btn_apple | Apple | Button | SCR-AUTH-004-role | Apple login success |
+| btn_google | Google | Button | SCR-AUTH-004-role | Google login success |
+| lnk_forgot | Forgot Password? | Link | SCR-AUTH-003-forgot-password | - |
+| lnk_register | Register Now | Link | SCR-AUTH-002-register | - |
 ```
 
-**UI Flow 模板變數對應：**
+**UI Flow Template Variable Mapping:**
 
 ```html
-<!-- login-ipad.html 模板 -->
-<button onclick="location.href='{{TARGET_AFTER_LOGIN}}'">登入</button>
-<a href="{{TARGET_FORGOT_PASSWORD}}">忘記密碼?</a>
-<a href="{{TARGET_REGISTER}}">立即註冊</a>
+<!-- login-ipad.html template -->
+<button onclick="location.href='{{TARGET_AFTER_LOGIN}}'">Login</button>
+<a href="{{TARGET_FORGOT_PASSWORD}}">Forgot Password?</a>
+<a href="{{TARGET_REGISTER}}">Register Now</a>
 
-<!-- 替換後 -->
-<button onclick="location.href='SCR-AUTH-004-role.html'">登入</button>
-<a href="SCR-AUTH-003-forgot-password.html">忘記密碼?</a>
-<a href="SCR-AUTH-002-register.html">立即註冊</a>
+<!-- After replacement -->
+<button onclick="location.href='SCR-AUTH-004-role.html'">Login</button>
+<a href="SCR-AUTH-003-forgot-password.html">Forgot Password?</a>
+<a href="SCR-AUTH-002-register.html">Register Now</a>
 ```
 
 ### Example 2: Settings Screen (SCR-SETTING-001)
 
-**SDD 定義：**
+**SDD Definition:**
 
 ```markdown
 ##### Button Navigation ⚠️ MANDATORY
@@ -214,16 +214,16 @@ Phase 4: SRS/SDD 回補 (app-uiux-designer.skill → app-requirements-skill)
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
 | btn_back | < | Icon | history.back() | - |
-| row_profile | 個人資料 | Row | SCR-SETTING-002-profile | - |
-| row_security | 帳號安全 | Row | SCR-SETTING-003-security | - |
-| row_privacy | 隱私設定 | Row | SCR-SETTING-004-privacy | - |
-| row_data | 資料管理 | Row | SCR-SETTING-005-data | - |
-| row_notification | 通知設定 | Row | SCR-SETTING-006-notification | - |
-| row_appearance | 主題外觀 | Row | SCR-SETTING-007-appearance | - |
-| row_voice | 語音設定 | Row | SCR-SETTING-008-voice | - |
-| row_terms | 服務條款 | Row | SCR-SETTING-010-terms | - |
-| row_about | 關於 | Row | SCR-SETTING-012-about | - |
-| btn_logout | 登出 | Button | SCR-AUTH-001-login | 確認登出 |
+| row_profile | Profile | Row | SCR-SETTING-002-profile | - |
+| row_security | Account Security | Row | SCR-SETTING-003-security | - |
+| row_privacy | Privacy Settings | Row | SCR-SETTING-004-privacy | - |
+| row_data | Data Management | Row | SCR-SETTING-005-data | - |
+| row_notification | Notification Settings | Row | SCR-SETTING-006-notification | - |
+| row_appearance | Theme Appearance | Row | SCR-SETTING-007-appearance | - |
+| row_voice | Voice Settings | Row | SCR-SETTING-008-voice | - |
+| row_terms | Terms of Service | Row | SCR-SETTING-010-terms | - |
+| row_about | About | Row | SCR-SETTING-012-about | - |
+| btn_logout | Logout | Button | SCR-AUTH-001-login | Confirm logout |
 ```
 
 ---
@@ -233,41 +233,41 @@ Phase 4: SRS/SDD 回補 (app-uiux-designer.skill → app-requirements-skill)
 ### Rule 1: No Empty Targets
 
 ```
-❌ 錯誤: Target Screen 為空
-| btn_login | 登入 | Button |  | - |
+❌ Wrong: Target Screen is empty
+| btn_login | Login | Button |  | - |
 
-✅ 正確: Target Screen 有明確目標
-| btn_login | 登入 | Button | SCR-AUTH-004-role | 驗證成功 |
+✅ Correct: Target Screen has clear target
+| btn_login | Login | Button | SCR-AUTH-004-role | Validation success |
 ```
 
 ### Rule 2: All Targets Must Exist
 
 ```
-❌ 錯誤: Target Screen 指向不存在的畫面
-| btn_login | 登入 | Button | SCR-AUTH-999-unknown | - |
+❌ Wrong: Target Screen points to non-existent screen
+| btn_login | Login | Button | SCR-AUTH-999-unknown | - |
 
-✅ 正確: Target Screen 存在於 SDD 中
-| btn_login | 登入 | Button | SCR-AUTH-004-role | - |
+✅ Correct: Target Screen exists in SDD
+| btn_login | Login | Button | SCR-AUTH-004-role | - |
 ```
 
 ### Rule 3: Settings Rows Must Navigate
 
 ```
-❌ 錯誤: 設定列使用 alert()
-| row_profile | 個人資料 | Row | alert('功能開發中') | - |
+❌ Wrong: Settings row uses alert()
+| row_profile | Profile | Row | alert('Feature coming soon') | - |
 
-✅ 正確: 設定列導航到子畫面
-| row_profile | 個人資料 | Row | SCR-SETTING-002-profile | - |
+✅ Correct: Settings row navigates to sub-screen
+| row_profile | Profile | Row | SCR-SETTING-002-profile | - |
 ```
 
 ### Rule 4: Consistent Format
 
 ```
-❌ 錯誤: Target 包含副檔名
-| btn_login | 登入 | Button | SCR-AUTH-004-role.html | - |
+❌ Wrong: Target includes file extension
+| btn_login | Login | Button | SCR-AUTH-004-role.html | - |
 
-✅ 正確: Target 只有 Screen ID
-| btn_login | 登入 | Button | SCR-AUTH-004-role | - |
+✅ Correct: Target is only Screen ID
+| btn_login | Login | Button | SCR-AUTH-004-role | - |
 ```
 
 ---
@@ -276,7 +276,7 @@ Phase 4: SRS/SDD 回補 (app-uiux-designer.skill → app-requirements-skill)
 
 | Before (Prediction-Based) | After (Spec-Driven) |
 |---------------------------|---------------------|
-| SDD 只有畫面名稱 | SDD 包含完整 Button Navigation |
-| UI Flow 要「猜」導航目標 | UI Flow 直接讀取 SDD 定義 |
-| 可能有導航缺失 | 100% 導航覆蓋保證 |
-| 回補時可能發現不一致 | 規格一致，無需修正 |
+| SDD only has screen names | SDD includes complete Button Navigation |
+| UI Flow has to "guess" navigation targets | UI Flow directly reads SDD definitions |
+| May have navigation gaps | 100% navigation coverage guaranteed |
+| May find inconsistencies during backfill | Spec consistent, no corrections needed |

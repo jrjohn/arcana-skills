@@ -1,66 +1,66 @@
-# COMMON 狀態模組模板 (Common States Module Template)
+# COMMON States Module Template (Common States Module)
 
-共用狀態畫面的標準定義，**所有 App 必須包含**這些狀態畫面以提供完整的用戶體驗。
-
----
-
-## 模組概述
-
-| 項目 | 值 |
-|------|-----|
-| 模組代碼 | COMMON |
-| 必要性 | **必要** |
-| 最少畫面數 | 4 |
-| 完整畫面數 | 5 |
-| 相關需求 | REQ-COMMON-* |
+Standard definitions for shared state screens. **All Apps must include** these state screens to provide a complete user experience.
 
 ---
 
-## 標準畫面清單
+## Module Overview
 
-| 畫面 ID | 名稱 | 必要性 | 優先級 | 用途 |
-|---------|------|--------|--------|------|
-| SCR-COMMON-001-loading | 載入中狀態 | **必要** | P0 | API 呼叫等待 |
-| SCR-COMMON-002-empty | 空狀態 | **必要** | P0 | 無資料時顯示 |
-| SCR-COMMON-003-error | 錯誤狀態 | **必要** | P0 | 操作失敗 |
-| SCR-COMMON-004-no-network | 無網路狀態 | **必要** | P0 | 離線時顯示 |
-| SCR-COMMON-005-confirm | 確認對話框 | 選配 | P1 | 重要操作確認 |
+| Item | Value |
+|------|-------|
+| Module Code | COMMON |
+| Necessity | **Required** |
+| Minimum Screens | 4 |
+| Complete Screens | 5 |
+| Related Requirements | REQ-COMMON-* |
 
 ---
 
-## 畫面詳細設計
+## Standard Screen List
 
-### SCR-COMMON-001-loading: 載入中狀態 ⚠️ 必要
+| Screen ID | Name | Necessity | Priority | Usage |
+|-----------|------|-----------|----------|-------|
+| SCR-COMMON-001-loading | Loading State | **Required** | P0 | API call waiting |
+| SCR-COMMON-002-empty | Empty State | **Required** | P0 | Display when no data |
+| SCR-COMMON-003-error | Error State | **Required** | P0 | Operation failed |
+| SCR-COMMON-004-no-network | No Network State | **Required** | P0 | Display when offline |
+| SCR-COMMON-005-confirm | Confirmation Dialog | Optional | P1 | Important action confirmation |
 
-**必要性：** **必要**
+---
 
-**畫面說明：**
-顯示於 API 呼叫或資料載入期間，提供視覺回饋讓用戶知道系統正在處理。
+## Detailed Screen Design
 
-**UI 元件：**
+### SCR-COMMON-001-loading: Loading State ⚠️ Required
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| spinner | ActivityIndicator | 旋轉載入動畫 |
-| lbl_message | Text | 載入提示文字（選配） |
-| progress_bar | ProgressBar | 進度條（選配） |
+**Necessity:** **Required**
 
-**設計規範：**
+**Screen Description:**
+Displayed during API calls or data loading, providing visual feedback to let users know the system is processing.
 
-| 項目 | 規範 |
-|------|------|
-| 背景 | 半透明遮罩或全螢幕 |
-| 動畫 | 旋轉或脈衝效果 |
-| 提示文字 | 「載入中...」或具體說明 |
-| 超時處理 | 超過 10 秒顯示重試選項 |
+**UI Components:**
 
-**Button Navigation：**
+| Component | Type | Description |
+|-----------|------|-------------|
+| spinner | ActivityIndicator | Spinning loading animation |
+| lbl_message | Text | Loading hint text (optional) |
+| progress_bar | ProgressBar | Progress bar (optional) |
+
+**Design Specifications:**
+
+| Item | Specification |
+|------|---------------|
+| Background | Semi-transparent overlay or full screen |
+| Animation | Rotation or pulse effect |
+| Hint Text | "Loading..." or specific description |
+| Timeout Handling | Show retry option after 10 seconds |
+
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_cancel | 取消 | Button | history.back() | 可取消的操作 |
+| btn_cancel | Cancel | Button | history.back() | Cancellable operation |
 
-**CSS 動畫範例：**
+**CSS Animation Example:**
 
 ```css
 @keyframes spin {
@@ -75,194 +75,194 @@
 
 ---
 
-### SCR-COMMON-002-empty: 空狀態 ⚠️ 必要
+### SCR-COMMON-002-empty: Empty State ⚠️ Required
 
-**必要性：** **必要**
+**Necessity:** **Required**
 
-**畫面說明：**
-當列表或內容區域沒有資料時顯示，引導用戶採取行動。
+**Screen Description:**
+Displayed when a list or content area has no data, guiding users to take action.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| img_illustration | Image | 空狀態插圖 |
-| lbl_title | Text | 標題（如「尚無資料」） |
-| lbl_description | Text | 說明文字 |
-| btn_action | Button | 主要行動按鈕 |
+| Component | Type | Description |
+|-----------|------|-------------|
+| img_illustration | Image | Empty state illustration |
+| lbl_title | Text | Title (e.g., "No Data Yet") |
+| lbl_description | Text | Description text |
+| btn_action | Button | Primary action button |
 
-**設計規範：**
+**Design Specifications:**
 
-| 項目 | 規範 |
-|------|------|
-| 插圖 | 友善、輕量的 SVG 插圖 |
-| 標題 | 簡潔說明目前狀態 |
-| 說明 | 引導用戶下一步 |
-| 按鈕 | 提供解決方案（如「新增」） |
+| Item | Specification |
+|------|---------------|
+| Illustration | Friendly, lightweight SVG illustration |
+| Title | Briefly describe current state |
+| Description | Guide user to next step |
+| Button | Provide solution (e.g., "Add") |
 
-**Button Navigation：**
-
-| Element ID | Element Text | Type | Target Screen | Condition |
-|------------|--------------|------|---------------|-----------|
-| btn_action | 新增 | Button | (新增畫面) | 根據內容類型 |
-| btn_refresh | 重新整理 | Button | (current) | 刷新列表 |
-
-**空狀態文案範例：**
-
-| 場景 | 標題 | 說明 | 按鈕 |
-|------|------|------|------|
-| 字庫列表 | 尚無字庫 | 建立您的第一個字庫開始學習 | 新增字庫 |
-| 好友列表 | 還沒有好友 | 邀請好友一起學習 | 邀請好友 |
-| 搜尋結果 | 找不到結果 | 試試其他關鍵字 | 清除搜尋 |
-| 通知列表 | 沒有通知 | 有新消息時會在這裡顯示 | - |
-
----
-
-### SCR-COMMON-003-error: 錯誤狀態 ⚠️ 必要
-
-**必要性：** **必要**
-
-**畫面說明：**
-當操作失敗或發生錯誤時顯示，提供重試或回報選項。
-
-**UI 元件：**
-
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| img_error | Image | 錯誤插圖 |
-| lbl_title | Text | 錯誤標題 |
-| lbl_message | Text | 錯誤說明 |
-| btn_retry | Button | 重試按鈕 |
-| btn_back | Button | 返回按鈕 |
-| lnk_report | Link | 回報問題（選配） |
-
-**設計規範：**
-
-| 項目 | 規範 |
-|------|------|
-| 插圖 | 友善但能傳達問題的圖示 |
-| 標題 | 不要只說「錯誤」，要說明發生什麼 |
-| 說明 | 提供可能的解決方案 |
-| 按鈕 | 重試或返回 |
-
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_retry | 重試 | Button | (current) | 重新執行操作 |
-| btn_back | 返回 | Button | history.back() | - |
-| lnk_report | 回報問題 | Link | SCR-SETTING-012-feedback | - |
+| btn_action | Add | Button | (Add screen) | Based on content type |
+| btn_refresh | Refresh | Button | (current) | Refresh list |
 
-**錯誤類型與文案：**
+**Empty State Copy Examples:**
 
-| 錯誤類型 | 標題 | 說明 |
-|----------|------|------|
-| 伺服器錯誤 | 系統暫時無法使用 | 請稍後再試 |
-| 權限不足 | 無法存取此內容 | 請確認您的帳戶權限 |
-| 驗證失敗 | 操作無法完成 | 請重新登入後再試 |
-| 未知錯誤 | 發生了一些問題 | 請重試或聯繫客服 |
+| Scenario | Title | Description | Button |
+|----------|-------|-------------|--------|
+| Vocabulary List | No Vocabularies Yet | Create your first vocabulary to start learning | Add Vocabulary |
+| Friends List | No Friends Yet | Invite friends to learn together | Invite Friends |
+| Search Results | No Results Found | Try different keywords | Clear Search |
+| Notification List | No Notifications | New messages will appear here | - |
 
 ---
 
-### SCR-COMMON-004-no-network: 無網路狀態 ⚠️ 必要
+### SCR-COMMON-003-error: Error State ⚠️ Required
 
-**必要性：** **必要**
+**Necessity:** **Required**
 
-**畫面說明：**
-當裝置離線或網路連線中斷時顯示。
+**Screen Description:**
+Displayed when an operation fails or an error occurs, providing retry or report options.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| img_offline | Image | 離線插圖（雲朵+叉叉） |
-| lbl_title | Text | 「網路連線中斷」 |
-| lbl_message | Text | 說明文字 |
-| btn_retry | Button | 重試連線 |
-| lbl_offline_mode | Text | 離線模式說明（選配） |
+| Component | Type | Description |
+|-----------|------|-------------|
+| img_error | Image | Error illustration |
+| lbl_title | Text | Error title |
+| lbl_message | Text | Error description |
+| btn_retry | Button | Retry button |
+| btn_back | Button | Back button |
+| lnk_report | Link | Report issue (optional) |
 
-**設計規範：**
+**Design Specifications:**
 
-| 項目 | 規範 |
-|------|------|
-| 插圖 | 清楚傳達網路問題 |
-| 離線功能 | 說明哪些功能可離線使用 |
-| 重試 | 提供重試按鈕 |
-| 自動偵測 | 網路恢復時自動刷新 |
+| Item | Specification |
+|------|---------------|
+| Illustration | Friendly but conveys the problem |
+| Title | Don't just say "Error", explain what happened |
+| Description | Provide possible solutions |
+| Button | Retry or go back |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_retry | 重試連線 | Button | (current) | 檢查網路後重試 |
-| btn_offline | 離線模式 | Button | (離線首頁) | 支援離線功能時 |
+| btn_retry | Retry | Button | (current) | Re-execute operation |
+| btn_back | Back | Button | history.back() | - |
+| lnk_report | Report Issue | Link | SCR-SETTING-012-feedback | - |
+
+**Error Types and Copy:**
+
+| Error Type | Title | Description |
+|------------|-------|-------------|
+| Server Error | System Temporarily Unavailable | Please try again later |
+| Permission Denied | Cannot Access This Content | Please verify your account permissions |
+| Validation Failed | Operation Cannot Be Completed | Please log in again and retry |
+| Unknown Error | Something Went Wrong | Please retry or contact support |
 
 ---
 
-### SCR-COMMON-005-confirm: 確認對話框
+### SCR-COMMON-004-no-network: No Network State ⚠️ Required
 
-**必要性：** 選配（建議包含）
+**Necessity:** **Required**
 
-**畫面說明：**
-重要操作前的確認對話框，如刪除、登出等。
+**Screen Description:**
+Displayed when the device is offline or network connection is interrupted.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| lbl_title | Text | 確認標題 |
-| lbl_message | Text | 確認說明 |
-| btn_confirm | Button | 確認按鈕（危險操作用紅色） |
-| btn_cancel | Button | 取消按鈕 |
+| Component | Type | Description |
+|-----------|------|-------------|
+| img_offline | Image | Offline illustration (cloud with X) |
+| lbl_title | Text | "Network Connection Lost" |
+| lbl_message | Text | Description text |
+| btn_retry | Button | Retry Connection |
+| lbl_offline_mode | Text | Offline mode description (optional) |
 
-**設計規範：**
+**Design Specifications:**
 
-| 項目 | 規範 |
-|------|------|
-| 標題 | 清楚說明要確認的操作 |
-| 說明 | 提醒操作後果 |
-| 按鈕順序 | 取消在左，確認在右 |
-| 危險操作 | 確認按鈕使用紅色 |
+| Item | Specification |
+|------|---------------|
+| Illustration | Clearly conveys network issue |
+| Offline Features | Describe which features work offline |
+| Retry | Provide retry button |
+| Auto Detection | Auto refresh when network recovers |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_confirm | 確認 | Button | (執行後目標) | 操作完成 |
-| btn_cancel | 取消 | Button | (close modal) | - |
-
-**常見確認場景：**
-
-| 場景 | 標題 | 說明 | 確認按鈕 |
-|------|------|------|----------|
-| 刪除項目 | 確定要刪除嗎？ | 此操作無法復原 | 刪除（紅） |
-| 登出 | 確定要登出嗎？ | 您需要重新登入 | 登出 |
-| 取消編輯 | 放棄變更？ | 未儲存的變更將會遺失 | 放棄 |
-| 購買確認 | 確認購買？ | 將扣除 XX 金幣 | 確認購買 |
+| btn_retry | Retry Connection | Button | (current) | Check network then retry |
+| btn_offline | Offline Mode | Button | (offline home) | When offline features supported |
 
 ---
 
-## 狀態畫面使用指南
+### SCR-COMMON-005-confirm: Confirmation Dialog
 
-### 使用時機
+**Necessity:** Optional (recommended to include)
 
-| 狀態 | 使用時機 |
-|------|----------|
-| Loading | API 呼叫、資料載入、檔案上傳 |
-| Empty | 列表為空、搜尋無結果、首次使用 |
-| Error | API 錯誤、操作失敗、驗證失敗 |
-| No Network | 網路中斷、離線狀態 |
-| Confirm | 刪除、登出、不可逆操作 |
+**Screen Description:**
+Confirmation dialog before important operations like delete, logout, etc.
 
-### 設計原則
+**UI Components:**
 
-1. **友善語氣** - 不要責怪用戶
-2. **清楚說明** - 告訴用戶發生什麼
-3. **提供出路** - 給用戶下一步行動
-4. **一致風格** - 所有狀態畫面風格一致
+| Component | Type | Description |
+|-----------|------|-------------|
+| lbl_title | Text | Confirmation title |
+| lbl_message | Text | Confirmation description |
+| btn_confirm | Button | Confirm button (red for dangerous actions) |
+| btn_cancel | Button | Cancel button |
+
+**Design Specifications:**
+
+| Item | Specification |
+|------|---------------|
+| Title | Clearly state the action to confirm |
+| Description | Remind of action consequences |
+| Button Order | Cancel on left, Confirm on right |
+| Dangerous Action | Confirm button in red |
+
+**Button Navigation:**
+
+| Element ID | Element Text | Type | Target Screen | Condition |
+|------------|--------------|------|---------------|-----------|
+| btn_confirm | Confirm | Button | (post-action target) | Operation complete |
+| btn_cancel | Cancel | Button | (close modal) | - |
+
+**Common Confirmation Scenarios:**
+
+| Scenario | Title | Description | Confirm Button |
+|----------|-------|-------------|----------------|
+| Delete Item | Are you sure you want to delete? | This action cannot be undone | Delete (red) |
+| Logout | Are you sure you want to logout? | You will need to log in again | Logout |
+| Cancel Edit | Discard changes? | Unsaved changes will be lost | Discard |
+| Purchase Confirmation | Confirm purchase? | Will deduct XX coins | Confirm Purchase |
 
 ---
 
-## 參考來源
+## State Screen Usage Guide
 
-本模板基於 VocabMaster 專案的 COMMON 模組設計，符合 iOS Human Interface Guidelines 和 Material Design 3 的狀態畫面規範。
+### When to Use
+
+| State | When to Use |
+|-------|-------------|
+| Loading | API calls, Data loading, File uploads |
+| Empty | Empty lists, No search results, First-time use |
+| Error | API errors, Operation failures, Validation failures |
+| No Network | Network interruption, Offline state |
+| Confirm | Delete, Logout, Irreversible operations |
+
+### Design Principles
+
+1. **Friendly Tone** - Don't blame the user
+2. **Clear Explanation** - Tell users what happened
+3. **Provide Exit** - Give users next action
+4. **Consistent Style** - All state screens have consistent style
+
+---
+
+## Reference Source
+
+This template is based on the COMMON module design from the VocabMaster project, compliant with iOS Human Interface Guidelines and Material Design 3 state screen specifications.

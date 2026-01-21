@@ -1,173 +1,173 @@
-# 醫療健康類 App 追加需求 (REQ-HEALTH-*)
+# Healthcare App Additional Requirements (REQ-HEALTH-*)
 
-本文件定義醫療健康類 App 的追加需求模組，與 `standard-app-requirements.md` 配合使用。
-適用於：健康追蹤、醫療照護、患者管理、遠距醫療等 App 類型。
+This document defines additional requirements modules for Healthcare Apps, used in conjunction with `standard-app-requirements.md`.
+Applicable to: Health tracking, medical care, patient management, telemedicine, and similar App types.
 
-**重要**：醫療健康類 App 須特別注意法規合規要求（HIPAA、個資法等）。
-
----
-
-## 觸發關鍵字
-
-當用戶描述中包含以下關鍵字時，自動載入本需求模組：
-
-- 醫療、健康、健檢
-- 患者、病人、病歷
-- 處方、用藥、藥物
-- 預約、掛號、看診
-- 生理數據、血壓、血糖
+**Important**: Healthcare Apps require special attention to regulatory compliance (HIPAA, GDPR, data protection laws, etc.).
 
 ---
 
-## 健康數據管理模組 (REQ-HEALTH-DATA-*)
+## Trigger Keywords
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-HEALTH-DATA-001 | 數據輸入 | 手動輸入健康數據（血壓、體重等） | P0 |
-| REQ-HEALTH-DATA-002 | 數據歷史 | 查看健康數據歷史記錄 | P0 |
-| REQ-HEALTH-DATA-003 | 數據圖表 | 健康數據趨勢圖表 | P1 |
-| REQ-HEALTH-DATA-004 | HealthKit 整合 | 與 Apple Health 同步 | P1 |
-| REQ-HEALTH-DATA-005 | 穿戴裝置整合 | 同步穿戴裝置數據 | P2 |
-| REQ-HEALTH-DATA-006 | 數據匯出 | 匯出健康數據報告 | P1 |
-| REQ-HEALTH-DATA-007 | 數據分享 | 與醫療人員分享數據 | P2 |
-| REQ-HEALTH-DATA-008 | 異常提醒 | 數據異常時發出警示 | P1 |
+When user descriptions contain the following keywords, automatically load this requirements module:
+
+- Medical, health, health check
+- Patient, medical records
+- Prescription, medication, drugs
+- Appointment, registration, consultation
+- Vital signs, blood pressure, blood sugar
 
 ---
 
-## 用藥管理模組 (REQ-HEALTH-MED-*)
+## Health Data Management Module (REQ-HEALTH-DATA-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-HEALTH-MED-001 | 藥物清單 | 管理正在服用的藥物 | P0 |
-| REQ-HEALTH-MED-002 | 用藥提醒 | 設定服藥提醒 | P0 |
-| REQ-HEALTH-MED-003 | 服藥記錄 | 記錄服藥狀況 | P0 |
-| REQ-HEALTH-MED-004 | 藥物資訊 | 查看藥物說明資訊 | P1 |
-| REQ-HEALTH-MED-005 | 藥物交互 | 藥物交互作用提醒 | P2 |
-| REQ-HEALTH-MED-006 | 處方翻拍 | 拍照記錄處方箋 | P1 |
-| REQ-HEALTH-MED-007 | 補充提醒 | 藥物即將用完提醒 | P2 |
-
----
-
-## 預約掛號模組 (REQ-HEALTH-APPT-*)
-
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-HEALTH-APPT-001 | 醫療院所搜尋 | 搜尋醫院/診所 | P0 |
-| REQ-HEALTH-APPT-002 | 線上掛號 | 線上預約掛號 | P0 |
-| REQ-HEALTH-APPT-003 | 預約列表 | 查看/管理預約 | P0 |
-| REQ-HEALTH-APPT-004 | 預約提醒 | 看診前提醒通知 | P0 |
-| REQ-HEALTH-APPT-005 | 取消/改期 | 取消或更改預約 | P1 |
-| REQ-HEALTH-APPT-006 | 候診進度 | 查看目前候診進度 | P1 |
-| REQ-HEALTH-APPT-007 | 看診紀錄 | 查看歷史看診紀錄 | P1 |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-HEALTH-DATA-001 | Data Input | Manually input health data (blood pressure, weight, etc.) | P0 |
+| REQ-HEALTH-DATA-002 | Data History | View health data history records | P0 |
+| REQ-HEALTH-DATA-003 | Data Charts | Health data trend charts | P1 |
+| REQ-HEALTH-DATA-004 | HealthKit Integration | Sync with Apple Health | P1 |
+| REQ-HEALTH-DATA-005 | Wearable Integration | Sync data from wearable devices | P2 |
+| REQ-HEALTH-DATA-006 | Data Export | Export health data reports | P1 |
+| REQ-HEALTH-DATA-007 | Data Sharing | Share data with healthcare providers | P2 |
+| REQ-HEALTH-DATA-008 | Abnormal Alerts | Alert when data is abnormal | P1 |
 
 ---
 
-## 病歷管理模組 (REQ-HEALTH-RECORD-*)
+## Medication Management Module (REQ-HEALTH-MED-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-HEALTH-RECORD-001 | 個人病歷 | 查看個人病歷摘要 | P0 |
-| REQ-HEALTH-RECORD-002 | 檢驗報告 | 查看檢驗報告結果 | P1 |
-| REQ-HEALTH-RECORD-003 | 影像報告 | 查看 X 光/MRI 等影像 | P2 |
-| REQ-HEALTH-RECORD-004 | 病歷下載 | 下載病歷副本 | P1 |
-| REQ-HEALTH-RECORD-005 | 緊急聯絡 | 緊急聯絡資訊設定 | P0 |
-| REQ-HEALTH-RECORD-006 | 過敏記錄 | 記錄過敏原資訊 | P0 |
-
----
-
-## 遠距醫療模組 (REQ-HEALTH-TELE-*)
-
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-HEALTH-TELE-001 | 視訊問診 | 與醫師視訊看診 | P1 |
-| REQ-HEALTH-TELE-002 | 文字諮詢 | 文字訊息諮詢 | P1 |
-| REQ-HEALTH-TELE-003 | 圖片上傳 | 上傳症狀照片 | P1 |
-| REQ-HEALTH-TELE-004 | 電子處方 | 接收電子處方箋 | P2 |
-| REQ-HEALTH-TELE-005 | 諮詢記錄 | 查看諮詢歷史 | P1 |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-HEALTH-MED-001 | Medication List | Manage currently taken medications | P0 |
+| REQ-HEALTH-MED-002 | Medication Reminders | Set medication reminders | P0 |
+| REQ-HEALTH-MED-003 | Medication Log | Record medication intake | P0 |
+| REQ-HEALTH-MED-004 | Medication Info | View medication information | P1 |
+| REQ-HEALTH-MED-005 | Drug Interactions | Drug interaction warnings | P2 |
+| REQ-HEALTH-MED-006 | Prescription Photo | Take photos of prescriptions | P1 |
+| REQ-HEALTH-MED-007 | Refill Reminder | Reminder when medication is running low | P2 |
 
 ---
 
-## 安全合規模組 (REQ-HEALTH-SEC-*)
+## Appointment Booking Module (REQ-HEALTH-APPT-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-HEALTH-SEC-001 | 數據加密 | 敏感健康數據加密儲存 | P0 |
-| REQ-HEALTH-SEC-002 | 傳輸加密 | TLS 1.3 加密傳輸 | P0 |
-| REQ-HEALTH-SEC-003 | 生物辨識 | Face ID/Touch ID 保護 | P0 |
-| REQ-HEALTH-SEC-004 | 自動登出 | 閒置自動登出 | P0 |
-| REQ-HEALTH-SEC-005 | 存取日誌 | 記錄數據存取日誌 | P1 |
-| REQ-HEALTH-SEC-006 | 同意管理 | 數據使用同意書管理 | P0 |
-| REQ-HEALTH-SEC-007 | 數據刪除 | 使用者數據刪除請求 | P0 |
-| REQ-HEALTH-SEC-008 | 稽核追蹤 | 符合法規的稽核追蹤 | P1 |
-
----
-
-## 需求數量估算
-
-| 模組 | P0 | P1 | P2 | 小計 |
-|------|----|----|----|----|
-| 健康數據管理 | 2 | 4 | 2 | 8 |
-| 用藥管理 | 3 | 2 | 2 | 7 |
-| 預約掛號 | 4 | 3 | 0 | 7 |
-| 病歷管理 | 3 | 2 | 1 | 6 |
-| 遠距醫療 | 0 | 4 | 1 | 5 |
-| 安全合規 | 6 | 2 | 0 | 8 |
-| **總計** | **18** | **17** | **6** | **41** |
-
-加上 `standard-app-requirements.md` 的通用需求（約 40-60 個），
-醫療健康類 App 總需求預估：**81-101 個需求**
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-HEALTH-APPT-001 | Facility Search | Search hospitals/clinics | P0 |
+| REQ-HEALTH-APPT-002 | Online Booking | Book appointments online | P0 |
+| REQ-HEALTH-APPT-003 | Appointment List | View/manage appointments | P0 |
+| REQ-HEALTH-APPT-004 | Appointment Reminder | Reminder notification before appointment | P0 |
+| REQ-HEALTH-APPT-005 | Cancel/Reschedule | Cancel or reschedule appointments | P1 |
+| REQ-HEALTH-APPT-006 | Queue Status | View current queue status | P1 |
+| REQ-HEALTH-APPT-007 | Visit History | View historical visit records | P1 |
 
 ---
 
-## 畫面清單預估 (SCR-HEALTH-*)
+## Medical Records Module (REQ-HEALTH-RECORD-*)
 
-| 畫面類型 | 預估數量 | 說明 |
-|----------|---------|------|
-| 健康數據 | 4-6 | 總覽、輸入、歷史、圖表 |
-| 用藥管理 | 3-4 | 藥物列表、提醒、記錄 |
-| 預約掛號 | 4-5 | 搜尋、預約、列表 |
-| 病歷查看 | 3-4 | 摘要、報告、影像 |
-| 遠距醫療 | 2-3 | 諮詢、視訊 |
-| **總計** | **16-22** | |
-
----
-
-## 法規合規考量
-
-### HIPAA (美國)
-- 個人健康資訊 (PHI) 保護
-- 最小必要原則
-- 業務夥伴協議 (BAA)
-
-### 個資法 (台灣)
-- 敏感個資蒐集同意
-- 資料當事人權利
-- 跨境傳輸限制
-
-### IEC 62304 (醫療軟體)
-- 軟體安全等級分類
-- 軟體生命週期管理
-- 風險管理整合
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-HEALTH-RECORD-001 | Personal Records | View personal medical record summary | P0 |
+| REQ-HEALTH-RECORD-002 | Lab Reports | View lab test results | P1 |
+| REQ-HEALTH-RECORD-003 | Imaging Reports | View X-ray/MRI/etc. images | P2 |
+| REQ-HEALTH-RECORD-004 | Record Download | Download medical record copies | P1 |
+| REQ-HEALTH-RECORD-005 | Emergency Contact | Emergency contact information settings | P0 |
+| REQ-HEALTH-RECORD-006 | Allergy Records | Record allergen information | P0 |
 
 ---
 
-## 技術考量
+## Telemedicine Module (REQ-HEALTH-TELE-*)
 
-### 數據安全
-- AES-256 加密（靜態數據）
-- TLS 1.3（傳輸中數據）
-- Keychain 憑證儲存
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-HEALTH-TELE-001 | Video Consultation | Video consultation with doctor | P1 |
+| REQ-HEALTH-TELE-002 | Text Consultation | Text message consultation | P1 |
+| REQ-HEALTH-TELE-003 | Image Upload | Upload symptom photos | P1 |
+| REQ-HEALTH-TELE-004 | E-Prescription | Receive electronic prescriptions | P2 |
+| REQ-HEALTH-TELE-005 | Consultation History | View consultation history | P1 |
 
-### HealthKit 整合
+---
+
+## Security Compliance Module (REQ-HEALTH-SEC-*)
+
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-HEALTH-SEC-001 | Data Encryption | Encrypt sensitive health data at rest | P0 |
+| REQ-HEALTH-SEC-002 | Transport Encryption | TLS 1.3 encrypted transmission | P0 |
+| REQ-HEALTH-SEC-003 | Biometric Auth | Face ID/Touch ID protection | P0 |
+| REQ-HEALTH-SEC-004 | Auto Logout | Auto logout on idle | P0 |
+| REQ-HEALTH-SEC-005 | Access Logs | Record data access logs | P1 |
+| REQ-HEALTH-SEC-006 | Consent Management | Data usage consent management | P0 |
+| REQ-HEALTH-SEC-007 | Data Deletion | User data deletion requests | P0 |
+| REQ-HEALTH-SEC-008 | Audit Trail | Regulatory-compliant audit trail | P1 |
+
+---
+
+## Requirements Count Estimate
+
+| Module | P0 | P1 | P2 | Subtotal |
+|--------|----|----|----|----|
+| Health Data Management | 2 | 4 | 2 | 8 |
+| Medication Management | 3 | 2 | 2 | 7 |
+| Appointment Booking | 4 | 3 | 0 | 7 |
+| Medical Records | 3 | 2 | 1 | 6 |
+| Telemedicine | 0 | 4 | 1 | 5 |
+| Security Compliance | 6 | 2 | 0 | 8 |
+| **Total** | **18** | **17** | **6** | **41** |
+
+Plus generic requirements from `standard-app-requirements.md` (approximately 40-60),
+Healthcare App total requirements estimate: **81-101 requirements**
+
+---
+
+## Screen List Estimate (SCR-HEALTH-*)
+
+| Screen Type | Estimated Count | Description |
+|-------------|-----------------|-------------|
+| Health Data | 4-6 | Overview, input, history, charts |
+| Medication Management | 3-4 | Medication list, reminders, logs |
+| Appointment Booking | 4-5 | Search, booking, list |
+| Medical Records | 3-4 | Summary, reports, images |
+| Telemedicine | 2-3 | Consultation, video |
+| **Total** | **16-22** | |
+
+---
+
+## Regulatory Compliance Considerations
+
+### HIPAA (USA)
+- Protected Health Information (PHI) protection
+- Minimum necessary principle
+- Business Associate Agreement (BAA)
+
+### GDPR (EU)
+- Sensitive personal data collection consent
+- Data subject rights
+- Cross-border transfer restrictions
+
+### IEC 62304 (Medical Software)
+- Software safety classification
+- Software lifecycle management
+- Risk management integration
+
+---
+
+## Technical Considerations
+
+### Data Security
+- AES-256 encryption (data at rest)
+- TLS 1.3 (data in transit)
+- Keychain credential storage
+
+### HealthKit Integration
 - HealthKit Framework
-- 數據類型授權
-- 背景更新
+- Data type authorization
+- Background updates
 
-### 視訊功能
+### Video Functionality
 - WebRTC
-- 第三方: Twilio / Agora
+- Third-party: Twilio / Agora
 
-### 稽核日誌
-- 詳細操作日誌
-- 防篡改儲存
-- 合規報告產生
+### Audit Logging
+- Detailed operation logs
+- Tamper-proof storage
+- Compliance report generation

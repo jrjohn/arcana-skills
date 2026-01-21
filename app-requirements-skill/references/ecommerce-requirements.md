@@ -1,151 +1,151 @@
-# 電商類 App 追加需求 (REQ-ECOM-*)
+# E-commerce App Additional Requirements (REQ-ECOM-*)
 
-本文件定義電商類 App 的追加需求模組，與 `standard-app-requirements.md` 配合使用。
-適用於：購物平台、商品展示、線上交易、訂單管理等 App 類型。
-
----
-
-## 觸發關鍵字
-
-當用戶描述中包含以下關鍵字時，自動載入本需求模組：
-
-- 購物、電商、商城、網購
-- 商品、產品、貨品
-- 購物車、結帳、付款
-- 訂單、物流、配送
-- 促銷、優惠、折扣
+This document defines additional requirements modules for E-commerce Apps, used in conjunction with `standard-app-requirements.md`.
+Applicable to: Shopping platforms, product displays, online transactions, order management, and similar App types.
 
 ---
 
-## 商品展示模組 (REQ-ECOM-PRODUCT-*)
+## Trigger Keywords
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-ECOM-PRODUCT-001 | 商品列表 | 以列表/網格方式展示商品 | P0 |
-| REQ-ECOM-PRODUCT-002 | 商品詳情 | 顯示商品完整資訊（圖片、價格、描述、規格） | P0 |
-| REQ-ECOM-PRODUCT-003 | 商品分類 | 按類別瀏覽商品 | P0 |
-| REQ-ECOM-PRODUCT-004 | 商品搜尋 | 關鍵字搜尋商品 | P0 |
-| REQ-ECOM-PRODUCT-005 | 商品篩選 | 按價格、品牌、規格等篩選 | P1 |
-| REQ-ECOM-PRODUCT-006 | 商品排序 | 按價格、銷量、評價等排序 | P1 |
-| REQ-ECOM-PRODUCT-007 | 商品收藏 | 收藏/取消收藏商品 | P1 |
-| REQ-ECOM-PRODUCT-008 | 商品評價 | 查看商品評價與評分 | P1 |
-| REQ-ECOM-PRODUCT-009 | 商品圖片縮放 | 支援圖片縮放查看 | P1 |
-| REQ-ECOM-PRODUCT-010 | 規格選擇 | 選擇商品規格（顏色、尺寸等） | P0 |
+When user descriptions contain the following keywords, automatically load this requirements module:
+
+- Shopping, e-commerce, mall, online shopping
+- Products, goods, merchandise
+- Shopping cart, checkout, payment
+- Orders, logistics, delivery
+- Promotions, discounts, coupons
 
 ---
 
-## 購物車模組 (REQ-ECOM-CART-*)
+## Product Display Module (REQ-ECOM-PRODUCT-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-ECOM-CART-001 | 加入購物車 | 將商品加入購物車 | P0 |
-| REQ-ECOM-CART-002 | 購物車列表 | 查看購物車內商品 | P0 |
-| REQ-ECOM-CART-003 | 數量修改 | 修改購物車商品數量 | P0 |
-| REQ-ECOM-CART-004 | 移除商品 | 從購物車移除商品 | P0 |
-| REQ-ECOM-CART-005 | 購物車小計 | 顯示金額小計 | P0 |
-| REQ-ECOM-CART-006 | 庫存檢查 | 結帳前檢查庫存狀態 | P1 |
-| REQ-ECOM-CART-007 | 購物車同步 | 跨裝置同步購物車 | P2 |
-
----
-
-## 結帳流程模組 (REQ-ECOM-CHECKOUT-*)
-
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-ECOM-CHECKOUT-001 | 收貨地址 | 選擇或新增收貨地址 | P0 |
-| REQ-ECOM-CHECKOUT-002 | 配送方式 | 選擇配送方式 | P0 |
-| REQ-ECOM-CHECKOUT-003 | 付款方式 | 選擇付款方式 | P0 |
-| REQ-ECOM-CHECKOUT-004 | 訂單確認 | 確認訂單內容 | P0 |
-| REQ-ECOM-CHECKOUT-005 | 優惠碼 | 輸入並套用優惠碼 | P1 |
-| REQ-ECOM-CHECKOUT-006 | 發票資訊 | 填寫發票資訊 | P1 |
-| REQ-ECOM-CHECKOUT-007 | 訂單備註 | 填寫訂單備註 | P2 |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-ECOM-PRODUCT-001 | Product List | Display products in list/grid format | P0 |
+| REQ-ECOM-PRODUCT-002 | Product Details | Display complete product info (images, price, description, specs) | P0 |
+| REQ-ECOM-PRODUCT-003 | Product Categories | Browse products by category | P0 |
+| REQ-ECOM-PRODUCT-004 | Product Search | Search products by keywords | P0 |
+| REQ-ECOM-PRODUCT-005 | Product Filtering | Filter by price, brand, specifications, etc. | P1 |
+| REQ-ECOM-PRODUCT-006 | Product Sorting | Sort by price, sales, ratings, etc. | P1 |
+| REQ-ECOM-PRODUCT-007 | Product Favorites | Add/remove products from favorites | P1 |
+| REQ-ECOM-PRODUCT-008 | Product Reviews | View product reviews and ratings | P1 |
+| REQ-ECOM-PRODUCT-009 | Image Zoom | Support pinch-to-zoom on product images | P1 |
+| REQ-ECOM-PRODUCT-010 | Variant Selection | Select product variants (color, size, etc.) | P0 |
 
 ---
 
-## 支付整合模組 (REQ-ECOM-PAY-*)
+## Shopping Cart Module (REQ-ECOM-CART-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-ECOM-PAY-001 | 信用卡支付 | 支援信用卡付款 | P0 |
-| REQ-ECOM-PAY-002 | Apple Pay | 支援 Apple Pay | P1 |
-| REQ-ECOM-PAY-003 | 第三方支付 | 支援 Line Pay/街口等 | P1 |
-| REQ-ECOM-PAY-004 | 支付安全 | PCI DSS 合規 | P0 |
-| REQ-ECOM-PAY-005 | 付款確認 | 顯示付款結果 | P0 |
-| REQ-ECOM-PAY-006 | 付款失敗處理 | 付款失敗時的錯誤處理 | P0 |
-
----
-
-## 訂單管理模組 (REQ-ECOM-ORDER-*)
-
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-ECOM-ORDER-001 | 訂單列表 | 查看歷史訂單 | P0 |
-| REQ-ECOM-ORDER-002 | 訂單詳情 | 查看訂單詳細資訊 | P0 |
-| REQ-ECOM-ORDER-003 | 訂單狀態 | 顯示訂單狀態（待付款/處理中/已出貨等） | P0 |
-| REQ-ECOM-ORDER-004 | 物流追蹤 | 追蹤物流狀態 | P1 |
-| REQ-ECOM-ORDER-005 | 訂單取消 | 取消未出貨訂單 | P1 |
-| REQ-ECOM-ORDER-006 | 退貨申請 | 申請退貨/退款 | P1 |
-| REQ-ECOM-ORDER-007 | 評價商品 | 對已購商品進行評價 | P2 |
-| REQ-ECOM-ORDER-008 | 再次購買 | 快速再次購買歷史訂單商品 | P2 |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-ECOM-CART-001 | Add to Cart | Add products to shopping cart | P0 |
+| REQ-ECOM-CART-002 | Cart List | View products in shopping cart | P0 |
+| REQ-ECOM-CART-003 | Quantity Adjustment | Modify product quantity in cart | P0 |
+| REQ-ECOM-CART-004 | Remove Product | Remove products from cart | P0 |
+| REQ-ECOM-CART-005 | Cart Subtotal | Display amount subtotal | P0 |
+| REQ-ECOM-CART-006 | Stock Check | Check stock status before checkout | P1 |
+| REQ-ECOM-CART-007 | Cart Sync | Sync cart across devices | P2 |
 
 ---
 
-## 促銷活動模組 (REQ-ECOM-PROMO-*)
+## Checkout Flow Module (REQ-ECOM-CHECKOUT-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-ECOM-PROMO-001 | 促銷展示 | 首頁展示促銷活動 | P1 |
-| REQ-ECOM-PROMO-002 | 限時特賣 | 限時優惠倒數計時 | P1 |
-| REQ-ECOM-PROMO-003 | 優惠券領取 | 領取並管理優惠券 | P1 |
-| REQ-ECOM-PROMO-004 | 滿額優惠 | 滿額折扣/免運 | P2 |
-| REQ-ECOM-PROMO-005 | 會員專屬 | 會員專屬優惠 | P2 |
-
----
-
-## 需求數量估算
-
-| 模組 | P0 | P1 | P2 | 小計 |
-|------|----|----|----|----|
-| 商品展示 | 5 | 5 | 0 | 10 |
-| 購物車 | 5 | 1 | 1 | 7 |
-| 結帳流程 | 4 | 2 | 1 | 7 |
-| 支付整合 | 4 | 2 | 0 | 6 |
-| 訂單管理 | 3 | 3 | 2 | 8 |
-| 促銷活動 | 0 | 3 | 2 | 5 |
-| **總計** | **21** | **16** | **6** | **43** |
-
-加上 `standard-app-requirements.md` 的通用需求（約 40-60 個），
-電商類 App 總需求預估：**83-103 個需求**
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-ECOM-CHECKOUT-001 | Shipping Address | Select or add shipping address | P0 |
+| REQ-ECOM-CHECKOUT-002 | Delivery Method | Select delivery method | P0 |
+| REQ-ECOM-CHECKOUT-003 | Payment Method | Select payment method | P0 |
+| REQ-ECOM-CHECKOUT-004 | Order Confirmation | Confirm order content | P0 |
+| REQ-ECOM-CHECKOUT-005 | Promo Code | Enter and apply promo codes | P1 |
+| REQ-ECOM-CHECKOUT-006 | Invoice Info | Fill in invoice information | P1 |
+| REQ-ECOM-CHECKOUT-007 | Order Notes | Add order notes/comments | P2 |
 
 ---
 
-## 畫面清單預估 (SCR-ECOM-*)
+## Payment Integration Module (REQ-ECOM-PAY-*)
 
-| 畫面類型 | 預估數量 | 說明 |
-|----------|---------|------|
-| 商品瀏覽 | 4-6 | 列表、分類、搜尋、篩選 |
-| 商品詳情 | 2-3 | 詳情、評價、規格 |
-| 購物車 | 2-3 | 購物車、數量編輯 |
-| 結帳流程 | 4-6 | 地址、配送、付款、確認 |
-| 訂單管理 | 4-6 | 列表、詳情、物流、退貨 |
-| 促銷活動 | 2-3 | 活動、優惠券 |
-| **總計** | **18-27** | |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-ECOM-PAY-001 | Credit Card Payment | Support credit card payments | P0 |
+| REQ-ECOM-PAY-002 | Apple Pay | Support Apple Pay | P1 |
+| REQ-ECOM-PAY-003 | Third-party Payment | Support Line Pay/PayPal/etc. | P1 |
+| REQ-ECOM-PAY-004 | Payment Security | PCI DSS compliance | P0 |
+| REQ-ECOM-PAY-005 | Payment Confirmation | Display payment result | P0 |
+| REQ-ECOM-PAY-006 | Payment Failure Handling | Error handling for failed payments | P0 |
 
 ---
 
-## 技術考量
+## Order Management Module (REQ-ECOM-ORDER-*)
 
-### 支付整合
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-ECOM-ORDER-001 | Order List | View order history | P0 |
+| REQ-ECOM-ORDER-002 | Order Details | View detailed order information | P0 |
+| REQ-ECOM-ORDER-003 | Order Status | Display order status (pending payment/processing/shipped, etc.) | P0 |
+| REQ-ECOM-ORDER-004 | Shipment Tracking | Track shipment status | P1 |
+| REQ-ECOM-ORDER-005 | Order Cancellation | Cancel unshipped orders | P1 |
+| REQ-ECOM-ORDER-006 | Return Request | Request returns/refunds | P1 |
+| REQ-ECOM-ORDER-007 | Product Review | Review purchased products | P2 |
+| REQ-ECOM-ORDER-008 | Reorder | Quick reorder from order history | P2 |
+
+---
+
+## Promotions Module (REQ-ECOM-PROMO-*)
+
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-ECOM-PROMO-001 | Promotion Display | Display promotions on homepage | P1 |
+| REQ-ECOM-PROMO-002 | Flash Sales | Limited-time offers with countdown | P1 |
+| REQ-ECOM-PROMO-003 | Coupon Collection | Collect and manage coupons | P1 |
+| REQ-ECOM-PROMO-004 | Minimum Spend Offers | Discounts/free shipping above threshold | P2 |
+| REQ-ECOM-PROMO-005 | Member Exclusive | Member-exclusive offers | P2 |
+
+---
+
+## Requirements Count Estimate
+
+| Module | P0 | P1 | P2 | Subtotal |
+|--------|----|----|----|----|
+| Product Display | 5 | 5 | 0 | 10 |
+| Shopping Cart | 5 | 1 | 1 | 7 |
+| Checkout Flow | 4 | 2 | 1 | 7 |
+| Payment Integration | 4 | 2 | 0 | 6 |
+| Order Management | 3 | 3 | 2 | 8 |
+| Promotions | 0 | 3 | 2 | 5 |
+| **Total** | **21** | **16** | **6** | **43** |
+
+Plus generic requirements from `standard-app-requirements.md` (approximately 40-60),
+E-commerce App total requirements estimate: **83-103 requirements**
+
+---
+
+## Screen List Estimate (SCR-ECOM-*)
+
+| Screen Type | Estimated Count | Description |
+|-------------|-----------------|-------------|
+| Product Browsing | 4-6 | List, categories, search, filters |
+| Product Details | 2-3 | Details, reviews, specifications |
+| Shopping Cart | 2-3 | Cart, quantity editing |
+| Checkout Flow | 4-6 | Address, delivery, payment, confirmation |
+| Order Management | 4-6 | List, details, tracking, returns |
+| Promotions | 2-3 | Campaigns, coupons |
+| **Total** | **18-27** | |
+
+---
+
+## Technical Considerations
+
+### Payment Integration
 - Apple Pay: PassKit Framework
-- 信用卡: Stripe / TapPay / 綠界
-- 第三方: Line Pay SDK / 街口 SDK
+- Credit Card: Stripe / TapPay / ECPay
+- Third-party: Line Pay SDK / PayPal SDK
 
-### 安全合規
-- PCI DSS 合規（信用卡處理）
-- 敏感資料加密傳輸
-- 憑證固定 (Certificate Pinning)
+### Security Compliance
+- PCI DSS compliance (credit card processing)
+- Sensitive data encrypted transmission
+- Certificate Pinning
 
-### 效能優化
-- 商品圖片 CDN 快取
-- 分頁載入大量商品
-- 購物車本地快取
+### Performance Optimization
+- Product image CDN caching
+- Paginated loading for large product lists
+- Local cart caching

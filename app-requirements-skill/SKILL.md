@@ -1,357 +1,363 @@
 ---
 name: app-requirements-skill
 description: |
-  IEC 62304 軟體開發文件工具。所有 App 開發皆遵循 IEC 62304 標準流程，產出完整文件套件。
-  當用戶提到以下任一關鍵字時，應主動啟用此 Skill：
+  IEC 62304 Software Development Documentation Tool. All App development follows IEC 62304 standard process to produce complete documentation suite.
+  This Skill should be activated when the user mentions any of the following keywords:
 
-  【通用 App 開發觸發詞】產生一個 App、開發 App、建立 App、製作 App、設計 App、
-  開發一套 App、我要開發、我想開發、幫我開發、開發需求、App 需求、
-  iOS App、Android App、跨平台 App、行動應用、手機應用、
-  需求規格書、設計規格書、軟體規格、UI Flow、互動原型、使用者流程、
-  學習 App、教育 App、電商 App、社群 App、工具 App、
-  SRS 軟體需求規格書、SDD 軟體設計規格書。
+  [General App Development Triggers] Generate an App, Develop App, Create App, Build App, Design App,
+  Develop an App, I want to develop, Help me develop, Development requirements, App requirements,
+  iOS App, Android App, Cross-platform App, Mobile application,
+  Requirements specification, Design specification, Software specification, UI Flow, Interactive prototype, User flow,
+  Learning App, Education App, E-commerce App, Social App, Tool App,
+  SRS Software Requirements Specification, SDD Software Design Specification.
 
-  【IEC 62304 文件觸發詞】SRS、SDD、SWD、STP、STC、SVV、RTM、IEC 62304、
-  check compliance、compliance check、追溯矩陣、軟體需求、軟體設計、
-  測試計畫、測試案例、DOCX 產出、文件產出、需求收集、需求分析、架構設計、詳細設計。
+  [IEC 62304 Document Triggers] SRS, SDD, SWD, STP, STC, SVV, RTM, IEC 62304,
+  check compliance, compliance check, traceability matrix, software requirements, software design,
+  test plan, test cases, DOCX output, document generation, requirements gathering, requirements analysis, architecture design, detailed design.
 
-  【設計相關觸發詞】UI/UX 設計、SCR 畫面、設計心理學、Design Psychology、
-  認知負荷、Cognitive Load、漸進式揭露、Progressive Disclosure、
-  Fitts' Law、Hick's Law、Dashboard、使用者流程、UX Flow、回補、feedback to docs。
+  [Design-related Triggers] UI/UX design, SCR screen, Design Psychology,
+  Cognitive Load, Progressive Disclosure,
+  Fitts' Law, Hick's Law, Dashboard, User flow, UX Flow, feedback, feedback to docs.
 
-  【App 類型自動識別】（所有類型皆遵循 IEC 62304 流程）
-  偵測關鍵字自動載入對應需求模組：
-  • 學習/教育/單字/測驗/課程 → education-requirements.md
-  • 購物/電商/商品/購物車 → ecommerce-requirements.md
-  • 社群/好友/貼文/聊天 → social-requirements.md
-  • 醫療/健康/患者/處方 → healthcare-requirements.md
-  • 筆記/待辦/生產力 → productivity-requirements.md
-  • 其他 → standard-app-requirements.md
+  [App Type Auto-detection] (All types follow IEC 62304 process)
+  Detect keywords to automatically load corresponding requirements module:
+  • Learning/Education/Vocabulary/Quiz/Course → education-requirements.md
+  • Shopping/E-commerce/Product/Cart → ecommerce-requirements.md
+  • Social/Friends/Posts/Chat → social-requirements.md
+  • Medical/Health/Patient/Prescription → healthcare-requirements.md
+  • Notes/Todo/Productivity → productivity-requirements.md
+  • Others → standard-app-requirements.md
 ---
 
-# App 需求收集與文件產出 Skill (IEC 62304)
+# App Requirements Gathering & Documentation Skill (IEC 62304)
 
-本 Skill 提供完整的 App 開發支援：從需求收集、IEC 62304 文件產出、到設計資產管理。
-支援各類型 App：教育學習、電商、社群、生產力工具、醫療健康等。
+This Skill provides comprehensive App development support: from requirements gathering, IEC 62304 document generation, to design asset management.
+Supports various App types: Education/Learning, E-commerce, Social, Productivity Tools, Healthcare, etc.
 
 ---
 
-## 🚀 優化工作流程 (11 步驟)
+## 🚀 Optimized Workflow (11 Steps)
 
 ```
 ═══════════════════════════════════════════════════════════════════
-Phase 0: 需求訪談階段 ⚠️ 強制首要步驟
+Phase 0: Requirements Interview Phase ⚠️ Mandatory First Step
 ═══════════════════════════════════════════════════════════════════
 ┌─────────────────────────────────────────────────────────────────┐
-│ Step 0: 需求訪談 (MANDATORY FIRST STEP)                          │
+│ Step 0: Requirements Interview (MANDATORY FIRST STEP)           │
 │ ─────────────────────────────────────────────────────────────── │
-│ • ⚠️ 必須在撰寫任何文件前完成                                    │
-│ • 使用 AskUserQuestion 工具進行互動式訪談                        │
-│ • 確認：目標平台、帳號架構、技術選型、核心功能優先級              │
-│ • 參考：references/interview-questions.md                       │
-│ • 產出: 訪談結果摘要（內部記錄，用於後續 SRS 撰寫）               │
+│ • ⚠️ Must be completed before writing any documents             │
+│ • Use AskUserQuestion tool for interactive interview            │
+│ • Confirm: Target platform, Account architecture, Tech stack,   │
+│   Core feature priorities                                       │
+│ • Reference: references/interview-questions.md                  │
+│ • Output: Interview summary (internal record for SRS writing)   │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
-                    ⚠️ 阻斷點: 訪談完成才能繼續
+                    ⚠️ Blocking Point: Interview must complete
                               ↓
 ═══════════════════════════════════════════════════════════════════
-Phase 1: 需求階段
+Phase 1: Requirements Phase
 ═══════════════════════════════════════════════════════════════════
 ┌─────────────────────────────────────────────────────────────────┐
-│ Step 1: 撰寫 SRS 軟體需求規格書                                   │
+│ Step 1: Write SRS Software Requirements Specification           │
 │ ─────────────────────────────────────────────────────────────── │
-│ • 根據 Step 0 訪談結果撰寫                                       │
-│ • UI 需求收集（平台/裝置/模組選擇/視覺風格）                      │
-│ • 功能/非功能需求收集                                            │
-│ • 產出: SRS-{Project}-1.0.md                                    │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-═══════════════════════════════════════════════════════════════════
-Phase 2: 設計階段 (SDD + 智慧預測一體化) ⚠️ 關鍵整合
-═══════════════════════════════════════════════════════════════════
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 2: 撰寫 SDD 軟體設計規格書                                   │
-│ ─────────────────────────────────────────────────────────────── │
-│ • 系統架構設計、資料模型設計                                      │
-│ • 基礎畫面 SCR-* 設計 (含 Button Navigation)                     │
-│ • 產出: SDD-{Project}-1.0.md (初版)                             │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 3: 補充設定子頁面設計                                        │
-│ ─────────────────────────────────────────────────────────────── │
-│ • 設定主頁 (SCR-SETTING-001-main)                               │
-│ • 設定子頁面（帳戶、通知、隱私、語言、主題、關於等）              │
-│ • 每個子頁面必須包含完整 Button Navigation                       │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 4: 執行智慧預測找出遺漏畫面 🤖                               │
-│ ─────────────────────────────────────────────────────────────── │
-│ • ⚠️ 關鍵字觸發預測（新增！見 keyword-trigger-prediction.md）    │
-│   - 掃描原始需求中的關鍵字（黏著度→ENGAGE、公開→SOCIAL 等）      │
-│   - 自動預測缺失的完整模組                                       │
-│ • 分析 Button Navigation 找出導航缺口                            │
-│ • 識別缺少的詳情頁、編輯頁、確認頁                               │
-│ • 識別共用狀態畫面（loading/empty/error/no-network）            │
-│ • 產出: 04-ui-flow/workspace/screen-prediction.json             │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 5: 補充預測畫面設計                                          │
-│ ─────────────────────────────────────────────────────────────── │
-│ • 將預測畫面補充至 SDD                                           │
-│ • 確保 Button Navigation 100% 完整                              │
-│ • 更新 SDD.md                                                   │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 6: 列出畫面清單                                              │
-│ ─────────────────────────────────────────────────────────────── │
-│ • 更新 Appendix A 完整畫面清單                                   │
-│ • 驗證所有導航目標都有對應畫面                                    │
-│ • 確認畫面總數正確                                               │
-│ • 產出: SDD-{Project}-1.0.md (完整版)                           │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-                    ⚠️ 阻斷點: 必須完成才能繼續
-                              ↓
-═══════════════════════════════════════════════════════════════════
-Phase 3: UI Flow 階段 ⚠️ 一律使用 app-uiux-designer.skill
-═══════════════════════════════════════════════════════════════════
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 7: UI Flow 框架初始化                                        │
-│ ─────────────────────────────────────────────────────────────── │
-│ • 建立 04-ui-flow/ 目錄結構                                      │
-│ • 複製模板、設定專案變數                                          │
-│ • 建立 workspace/current-process.json                           │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 8: 產出完整 UI Flow HTML 畫面 (一律使用 app-uiux-designer.skill) │
-│ ─────────────────────────────────────────────────────────────── │
-│ • 依據 SDD Button Navigation 產生所有畫面                        │
-│ • 產出 iPad 版本 (04-ui-flow/ipad/*.html)                       │
-│ • 產出 iPhone 版本 (04-ui-flow/iphone/*.html)                   │
-│ • 100% 畫面覆蓋 + 導航驗證                                       │
-│ • 產出截圖 (screenshots/ipad/*.png, screenshots/iphone/*.png)   │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 9: 回填 SDD (一律使用 app-uiux-designer.skill)                │
-│ ─────────────────────────────────────────────────────────────── │
-│ • 各 SCR-* 區塊加入 UI 原型參考                                  │
-│ • 嵌入 images/ipad/*.png                                        │
-│ • 嵌入 images/iphone/*.png                                      │
+│ • Write based on Step 0 interview results                       │
+│ • UI requirements gathering (platform/device/module/visual)     │
+│ • Functional/Non-functional requirements gathering              │
+│ • Output: SRS-{Project}-1.0.md                                  │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ═══════════════════════════════════════════════════════════════════
-Phase 4: 文件完成階段 (一次到位)
+Phase 2: Design Phase (SDD + Smart Prediction Integrated) ⚠️ Key
 ═══════════════════════════════════════════════════════════════════
 ┌─────────────────────────────────────────────────────────────────┐
-│ Step 10: 產出 DOCX 格式文件 (最終版)                               │
+│ Step 2: Write SDD Software Design Specification                 │
+│ ─────────────────────────────────────────────────────────────── │
+│ • System architecture design, Data model design                 │
+│ • Basic screen SCR-* design (with Button Navigation)            │
+│ • Output: SDD-{Project}-1.0.md (initial version)                │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 3: Add Settings Sub-page Design                            │
+│ ─────────────────────────────────────────────────────────────── │
+│ • Settings main page (SCR-SETTING-001-main)                     │
+│ • Settings sub-pages (Account, Notifications, Privacy,          │
+│   Language, Theme, About, etc.)                                 │
+│ • Each sub-page must include complete Button Navigation         │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 4: Execute Smart Prediction to Find Missing Screens 🤖     │
+│ ─────────────────────────────────────────────────────────────── │
+│ • ⚠️ Keyword-triggered prediction (see keyword-trigger-         │
+│   prediction.md)                                                │
+│   - Scan original requirements for keywords (engagement→ENGAGE, │
+│     public→SOCIAL, etc.)                                        │
+│   - Auto-predict missing complete modules                       │
+│ • Analyze Button Navigation to find navigation gaps             │
+│ • Identify missing detail pages, edit pages, confirmation pages │
+│ • Identify shared state screens (loading/empty/error/no-network)│
+│ • Output: 04-ui-flow/workspace/screen-prediction.json           │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 5: Add Predicted Screen Designs                            │
+│ ─────────────────────────────────────────────────────────────── │
+│ • Add predicted screens to SDD                                  │
+│ • Ensure Button Navigation is 100% complete                     │
+│ • Update SDD.md                                                 │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 6: List Screen Inventory                                   │
+│ ─────────────────────────────────────────────────────────────── │
+│ • Update Appendix A complete screen list                        │
+│ • Verify all navigation targets have corresponding screens      │
+│ • Confirm total screen count is correct                         │
+│ • Output: SDD-{Project}-1.0.md (complete version)               │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+                    ⚠️ Blocking Point: Must complete to continue
+                              ↓
+═══════════════════════════════════════════════════════════════════
+Phase 3: UI Flow Phase ⚠️ Always use app-uiux-designer.skill
+═══════════════════════════════════════════════════════════════════
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 7: UI Flow Framework Initialization                        │
+│ ─────────────────────────────────────────────────────────────── │
+│ • Create 04-ui-flow/ directory structure                        │
+│ • Copy templates, set project variables                         │
+│ • Create workspace/current-process.json                         │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 8: Generate Complete UI Flow HTML Screens                  │
+│         (Always use app-uiux-designer.skill)                    │
+│ ─────────────────────────────────────────────────────────────── │
+│ • Generate all screens based on SDD Button Navigation           │
+│ • Generate iPad version (04-ui-flow/ipad/*.html)                │
+│ • Generate iPhone version (04-ui-flow/iphone/*.html)            │
+│ • 100% screen coverage + navigation validation                  │
+│ • Generate screenshots (screenshots/ipad/*.png,                 │
+│   screenshots/iphone/*.png)                                     │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 9: Backfill SDD (Always use app-uiux-designer.skill)       │
+│ ─────────────────────────────────────────────────────────────── │
+│ • Add UI prototype references to each SCR-* section             │
+│ • Embed images/ipad/*.png                                       │
+│ • Embed images/iphone/*.png                                     │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+═══════════════════════════════════════════════════════════════════
+Phase 4: Document Completion Phase (One-time Generation)
+═══════════════════════════════════════════════════════════════════
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 10: Generate DOCX Format Documents (Final)                 │
 │ ─────────────────────────────────────────────────────────────── │
 │ • node md-to-docx.js SRS-*.md → SRS.docx                        │
 │ • node md-to-docx.js SDD-*.md → SDD.docx                        │
-│ • 一次產生，避免重複                                             │
+│ • Generate once, avoid repetition                               │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
-                        ✅ 文件產出完成
+                        ✅ Document Generation Complete
 ```
 
 ---
 
-## ⚠️ 關鍵改進
+## ⚠️ Key Improvements
 
-| 項目 | 舊流程 | 新流程 |
-|------|--------|--------|
-| **需求訪談** | **遺漏或假設** | **Step 0 強制首要步驟 (BLOCKING)** |
-| 設定子頁面 | 遺漏或事後補充 | **Step 3 獨立步驟處理** |
-| 智慧預測時機 | SDD 撰寫後才預測 | **Step 4 立即執行預測** |
-| 子頁面補充 | 手動發現、事後補 | **Step 5 自動預測一次到位** |
-| 畫面清單確認 | 流程中段 | **Step 6 UI Flow 前確認** |
-| UI Flow 產出 | 分散處理 | **Step 8 一律使用 app-uiux-designer.skill** |
-| DOCX 產生 | 多次產生 | **Step 10 最後一次產生** |
-
----
-
-## 強制規則
-
-⚠️ **Phase 0 規則 (BLOCKING - 最高優先級) - Step 0**
-```
-⚠️ 必須先完成需求訪談，才能開始撰寫任何文件
-```
-**強制執行事項：**
-- [ ] **禁止直接撰寫 SRS**：在用戶提出 App 開發需求後，必須先使用 AskUserQuestion 工具進行需求訪談
-- [ ] **訪談範圍**：目標平台、帳號架構、技術選型、核心功能、優先級、特殊需求
-- [ ] **訪談工具**：使用 AskUserQuestion 工具，提供 2-4 個選項讓用戶選擇
-- [ ] **訪談參考**：參見 `references/interview-questions.md`
-- [ ] **訪談記錄**：內部記錄訪談結果，作為 SRS 撰寫依據
-
-**訪談問題範例（使用 AskUserQuestion）：**
-```
-1. 目標平台：iPhone + iPad / 僅 iPad / 完整 Apple 生態系
-2. 帳號架構：家庭群組 / 獨立帳號+連結 / 單帳號切換角色
-3. AI 服務：Claude API / OpenAI API / 兩者皆可
-4. 語音技術：iOS 原生 / 雲端服務 / 混合模式
-5. 核心功能優先級：哪些功能是 MVP 必備？
-```
-
-**違反後果：**
-- 若跳過 Step 0 直接撰寫 SRS，可能導致需求不符、返工、用戶不滿
-- AI 應主動提醒用戶需要先進行需求訪談
+| Item | Old Process | New Process |
+|------|-------------|-------------|
+| **Requirements Interview** | **Missing or assumed** | **Step 0 Mandatory First Step (BLOCKING)** |
+| Settings Sub-pages | Missing or added later | **Step 3 Dedicated step** |
+| Smart Prediction Timing | Predict after SDD writing | **Step 4 Execute immediately** |
+| Sub-page Addition | Manual discovery, added later | **Step 5 Auto-predict, one-time completion** |
+| Screen List Confirmation | Mid-process | **Step 6 Confirm before UI Flow** |
+| UI Flow Generation | Scattered processing | **Step 8 Always use app-uiux-designer.skill** |
+| DOCX Generation | Multiple generations | **Step 10 Generate once at the end** |
 
 ---
 
-⚠️ **Phase 2 規則 (Critical) - Step 2~6**
-```
-撰寫 SDD → 補充設定子頁 → 智慧預測 → 補充預測畫面 → 列出畫面清單
-```
-- Step 3 必須補充完整設定子頁面設計
-- Step 4 必須執行智慧預測找出所有遺漏畫面
-- Step 6 Appendix A 必須包含所有畫面才能進入 Phase 3
+## Mandatory Rules
 
-⚠️ **Phase 2 驗證 (BLOCKING - Step 6 完成前必須通過)**
+⚠️ **Phase 0 Rules (BLOCKING - Highest Priority) - Step 0**
+```
+⚠️ Requirements interview must be completed before writing any documents
+```
+**Mandatory Actions:**
+- [ ] **Do NOT write SRS directly**: After user requests App development, must use AskUserQuestion tool for requirements interview first
+- [ ] **Interview Scope**: Target platform, Account architecture, Tech stack, Core features, Priority, Special requirements
+- [ ] **Interview Tool**: Use AskUserQuestion tool, provide 2-4 options for user selection
+- [ ] **Interview Reference**: See `references/interview-questions.md`
+- [ ] **Interview Record**: Internal record of interview results, used as basis for SRS writing
+
+**Interview Question Examples (Using AskUserQuestion):**
+```
+1. Target Platform: iPhone + iPad / iPad only / Full Apple ecosystem
+2. Account Architecture: Family group / Independent accounts + linking / Single account role switching
+3. AI Service: Claude API / OpenAI API / Either
+4. Voice Technology: iOS native / Cloud service / Hybrid mode
+5. Core Feature Priority: Which features are MVP essentials?
+```
+
+**Violation Consequences:**
+- Skipping Step 0 and writing SRS directly may lead to mismatched requirements, rework, user dissatisfaction
+- AI should proactively remind users that requirements interview is needed first
+
+---
+
+⚠️ **Phase 2 Rules (Critical) - Step 2~6**
+```
+Write SDD → Add Settings Sub-pages → Smart Prediction → Add Predicted Screens → List Screen Inventory
+```
+- Step 3 must add complete settings sub-page designs
+- Step 4 must execute smart prediction to find all missing screens
+- Step 6 Appendix A must include all screens before entering Phase 3
+
+⚠️ **Phase 2 Validation (BLOCKING - Must pass before Step 6 completion)**
 ```bash
-# SDD 畫面一致性驗證
+# SDD Screen Consistency Validation
 SDD_FILE="02-design/SDD-*.md"
 
-# 1. 計算 Appendix A 畫面總數
+# 1. Count Appendix A total screens
 APPENDIX_COUNT=$(grep -E "^\| .* \| [0-9]+ \| SCR-" $SDD_FILE | awk -F'|' '{sum+=$3} END {print sum}')
 
-# 2. 計算 SDD 本文 SCR-* 區塊數
+# 2. Count SDD body SCR-* section count
 BODY_COUNT=$(grep -c "^#### SCR-" $SDD_FILE)
 
-# 3. 驗證一致性
+# 3. Validate consistency
 if [ "$APPENDIX_COUNT" != "$BODY_COUNT" ]; then
-  echo "❌ SDD 畫面不一致: Appendix A=$APPENDIX_COUNT, 本文=$BODY_COUNT"
-  echo "請補充缺少的 $(($APPENDIX_COUNT - $BODY_COUNT)) 個畫面定義"
+  echo "❌ SDD screen inconsistency: Appendix A=$APPENDIX_COUNT, Body=$BODY_COUNT"
+  echo "Please add the missing $(($APPENDIX_COUNT - $BODY_COUNT)) screen definitions"
   exit 1
 fi
-echo "✅ SDD 畫面一致: $BODY_COUNT 個"
+echo "✅ SDD screens consistent: $BODY_COUNT screens"
 ```
-**驗證項目：**
-- [ ] Appendix A 畫面總數 = SDD 本文 `#### SCR-*` 區塊數
-- [ ] 每個 SCR-* 區塊都有 Button Navigation 表格
-- [ ] 畫面 ID 命名一致 (模組-編號-名稱)
+**Validation Items:**
+- [ ] Appendix A total screen count = SDD body `#### SCR-*` section count
+- [ ] Each SCR-* section has Button Navigation table
+- [ ] Screen ID naming is consistent (module-number-name)
 
-⚠️ **必要模組檢核 (BLOCKING - Step 4 完成後必須通過)**
+⚠️ **Required Module Validation (BLOCKING - Must pass after Step 4 completion)**
 ```bash
 #!/bin/bash
-# === 必要模組檢核 ===
+# === Required Module Validation ===
 REQUIRED_MODULES=("AUTH" "PROFILE" "SETTING" "COMMON")
 SDD_FILE="02-design/SDD-*.md"
 
-echo "🔍 檢核必要模組..."
+echo "🔍 Validating required modules..."
 
 ERRORS=0
 for MODULE in "${REQUIRED_MODULES[@]}"; do
   COUNT=$(grep -c "^#### SCR-${MODULE}-" $SDD_FILE 2>/dev/null || echo "0")
   if [ "$COUNT" -eq 0 ]; then
-    echo "❌ 缺少必要模組: $MODULE"
+    echo "❌ Missing required module: $MODULE"
     ERRORS=$((ERRORS+1))
   else
-    echo "✅ $MODULE: $COUNT 個畫面"
+    echo "✅ $MODULE: $COUNT screens"
   fi
 done
 
-# COMMON 狀態畫面特別檢核
+# COMMON state screens special validation
 echo ""
-echo "🔍 檢核 COMMON 狀態畫面..."
+echo "🔍 Validating COMMON state screens..."
 COMMON_STATES=("loading" "empty" "error" "no-network")
 for STATE in "${COMMON_STATES[@]}"; do
   if grep -q "SCR-COMMON-.*-${STATE}" $SDD_FILE 2>/dev/null; then
-    echo "✅ COMMON 狀態: $STATE"
+    echo "✅ COMMON state: $STATE"
   else
-    echo "❌ 缺少 COMMON 狀態: $STATE"
+    echo "❌ Missing COMMON state: $STATE"
     ERRORS=$((ERRORS+1))
   fi
 done
 
 echo ""
 if [ $ERRORS -eq 0 ]; then
-  echo "✅ 必要模組檢核通過"
+  echo "✅ Required module validation passed"
 else
-  echo "❌ 必要模組檢核失敗 ($ERRORS 個錯誤)"
-  echo "⚠️ 請參考 references/common-modules/ 模板補充缺少的模組"
+  echo "❌ Required module validation failed ($ERRORS errors)"
+  echo "⚠️ Please refer to references/common-modules/ templates to add missing modules"
   exit 1
 fi
 ```
-**必要模組最低要求：**
-- [ ] AUTH: login, register, forgot (3 畫面)
-- [ ] PROFILE: view, edit (2 畫面)
-- [ ] SETTING: main, account, privacy, about (4 畫面)
-- [ ] COMMON: loading, empty, error, no-network (4 畫面)
+**Required Module Minimum Requirements:**
+- [ ] AUTH: login, register, forgot (3 screens)
+- [ ] PROFILE: view, edit (2 screens)
+- [ ] SETTING: main, account, privacy, about (4 screens)
+- [ ] COMMON: loading, empty, error, no-network (4 screens)
 
-⚠️ **Phase 3 規則 (Critical) - Step 7~9**
+⚠️ **Phase 3 Rules (Critical) - Step 7~9**
 ```
-⚠️ UI Flow + 回填 SDD 一律使用 app-uiux-designer.skill
+⚠️ UI Flow + SDD Backfill always use app-uiux-designer.skill
 ```
-- Step 7 框架初始化：建立目錄結構和狀態追蹤
-- Step 8 產出 HTML：100% 畫面覆蓋 + 導航驗證 + 截圖產出
-- Step 9 回填 SDD：嵌入 UI 截圖至 SCR-* 區塊 (由 app-uiux-designer.skill 執行)
+- Step 7 Framework Initialization: Create directory structure and state tracking
+- Step 8 Generate HTML: 100% screen coverage + navigation validation + screenshot generation
+- Step 9 Backfill SDD: Embed UI screenshots into SCR-* sections (executed by app-uiux-designer.skill)
 
-⚠️ **Phase 4 規則 (Critical) - Step 10**
+⚠️ **Phase 4 Rules (Critical) - Step 10**
 ```
-產出 DOCX (一次)
+Generate DOCX (once)
 ```
-- Step 10 產出 DOCX：SRS.docx + SDD.docx 一次產出
+- Step 10 Generate DOCX: SRS.docx + SDD.docx one-time generation
 
-⚠️ **Button Navigation 強制**
-- SDD 每個 SCR-* 區塊必須包含 Button Navigation 表格
-- Target Screen 欄位將直接用於 UI Flow 生成
-- 詳見：`references/button-navigation-specification.md`
+⚠️ **Button Navigation Mandatory**
+- Each SDD SCR-* section must include Button Navigation table
+- Target Screen field will be used directly for UI Flow generation
+- See: `references/button-navigation-specification.md`
 
-⚠️ **Markdown 格式規則 (DOCX 轉換相容)**
-- **Code Block（```）僅用於程式碼**：SQL、JSON、Swift、Kotlin 等
-- **Use Case 禁止使用 Code Block**，應使用結構化文字：
+⚠️ **Markdown Format Rules (DOCX Conversion Compatible)**
+- **Code Block (```) only for code**: SQL, JSON, Swift, Kotlin, etc.
+- **Use Cases MUST NOT use Code Block**, use structured text instead:
   ```markdown
-  # ❌ 錯誤：Use Case 用 code block
-  #### UC-001: 用戶登入
+  # ❌ Wrong: Use Case in code block
+  #### UC-001: User Login
   ```
-  前置條件: ...
-  主要流程: 1. ... 2. ...
+  Preconditions: ...
+  Main flow: 1. ... 2. ...
   ```
 
-  # ✅ 正確：Use Case 用粗體標籤 + 編號清單
-  #### UC-001: 用戶登入
-  **前置條件：** 用戶已安裝 App
-  **主要流程：**
-  1. 用戶開啟 App
-  2. 系統顯示登入畫面
-  **後置條件：** 用戶完成登入
+  # ✅ Correct: Use Case with bold labels + numbered list
+  #### UC-001: User Login
+  **Preconditions:** User has installed the App
+  **Main Flow:**
+  1. User opens the App
+  2. System displays login screen
+  **Postconditions:** User completes login
   ```
-- **Mermaid 圖表**：必須標註 ```mermaid，否則會被當作 code block
-- **Mermaid 方向**：必須使用 `flowchart TB` (直式)，禁止 `flowchart LR` (橫式會導致文字過小)
-- **Mermaid 多層架構**：使用混合模式 `flowchart TB` + `direction LR`，讓圖表變寬但變矮
-- **ASCII Art**：避免使用，改用 Mermaid 或圖片
+- **Mermaid Diagrams**: Must be marked as ```mermaid, otherwise treated as code block
+- **Mermaid Direction**: Must use `flowchart TB` (vertical), `flowchart LR` (horizontal) is forbidden (text becomes too small)
+- **Mermaid Multi-layer Architecture**: Use hybrid mode `flowchart TB` + `direction LR`, making diagram wider but shorter
+- **ASCII Art**: Avoid, use Mermaid or images instead
 
-⚠️ **SDD 使用案例完整性驗證 (BLOCKING - Step 2 完成前必須通過)**
+⚠️ **SDD Use Case Completeness Validation (BLOCKING - Must pass before Step 2 completion)**
 
 ```bash
 #!/bin/bash
-# 使用案例完整性驗證
+# Use Case Completeness Validation
 SDD_FILE="02-design/SDD-*.md"
 
-echo "🔍 驗證使用案例完整性..."
+echo "🔍 Validating use case completeness..."
 
-# 1. 統計總覽表格中的 UC 數量
+# 1. Count UC in overview table
 TABLE_COUNT=$(grep -E "^\| UC-" $SDD_FILE | wc -l | tr -d ' ')
 
-# 2. 統計詳細描述的 UC 數量 (#### UC-* 格式)
+# 2. Count detailed UC descriptions (#### UC-* format)
 DETAIL_COUNT=$(grep -c "^#### UC-" $SDD_FILE)
 
 echo ""
-echo "📊 統計結果:"
-echo "   總覽表格 UC 數: $TABLE_COUNT"
-echo "   詳細描述 UC 數: $DETAIL_COUNT"
+echo "📊 Statistics:"
+echo "   Overview table UC count: $TABLE_COUNT"
+echo "   Detailed description UC count: $DETAIL_COUNT"
 
-# 3. 找出缺少詳細描述的 UC
+# 3. Find UCs missing detailed descriptions
 echo ""
 if [ "$TABLE_COUNT" != "$DETAIL_COUNT" ]; then
-  echo "❌ 驗證失敗: 有 $(($TABLE_COUNT - $DETAIL_COUNT)) 個使用案例缺少詳細描述"
+  echo "❌ Validation failed: $(($TABLE_COUNT - $DETAIL_COUNT)) use cases missing detailed descriptions"
   echo ""
-  echo "缺少詳細描述的使用案例:"
+  echo "Use cases missing detailed descriptions:"
   grep -E "^\| UC-" $SDD_FILE | awk -F'|' '{print $2}' | tr -d ' ' | while read uc; do
     if ! grep -q "^#### $uc:" $SDD_FILE; then
       echo "  - $uc"
@@ -360,197 +366,197 @@ if [ "$TABLE_COUNT" != "$DETAIL_COUNT" ]; then
   exit 1
 fi
 
-echo "✅ 驗證通過: 所有 $TABLE_COUNT 個使用案例都有詳細描述"
+echo "✅ Validation passed: All $TABLE_COUNT use cases have detailed descriptions"
 ```
 
-**驗證項目：**
-- [ ] 總覽表格中的每個 `UC-*` 都有對應的 `#### UC-*:` 詳細區塊
-- [ ] 每個詳細區塊包含：前置條件、主要流程、後置條件
+**Validation Items:**
+- [ ] Each `UC-*` in overview table has corresponding `#### UC-*:` detailed section
+- [ ] Each detailed section contains: Preconditions, Main flow, Postconditions
 
-⚠️ **ASCII Art 禁止驗證 (BLOCKING - 文件產出前必須通過)**
+⚠️ **ASCII Art Prohibition Validation (BLOCKING - Must pass before document generation)**
 
 ```bash
 #!/bin/bash
-# ASCII Art 偵測驗證
-echo "🔍 驗證是否有禁用的 ASCII Art..."
+# ASCII Art Detection Validation
+echo "🔍 Validating for prohibited ASCII Art..."
 
 ERRORS=0
 
-# 檢查 SRS 和 SDD 中的 code block
+# Check code blocks in SRS and SDD
 for FILE in 01-requirements/SRS-*.md 02-design/SDD-*.md; do
   if [ -f "$FILE" ]; then
-    # 找出非 mermaid 的 code block 且含有 ASCII 繪圖字元
+    # Find non-mermaid code blocks containing ASCII drawing characters
     ASCII_BLOCKS=$(awk '/^```[^m]|^```$/{flag=1; next} /^```/{flag=0} flag && /[┌┐└┘│─├┤┬┴┼→←↑↓▶◀■□●○]/' "$FILE" | wc -l | tr -d ' ')
     if [ "$ASCII_BLOCKS" -gt 0 ]; then
-      echo "❌ $FILE 含有 ASCII Art ($ASCII_BLOCKS 行)"
+      echo "❌ $FILE contains ASCII Art ($ASCII_BLOCKS lines)"
       ERRORS=$((ERRORS+1))
     fi
   fi
 done
 
 if [ $ERRORS -eq 0 ]; then
-  echo "✅ 無 ASCII Art 違規"
+  echo "✅ No ASCII Art violations"
 else
   echo ""
-  echo "⚠️ 請將 ASCII Art 改為 Mermaid 圖表格式"
+  echo "⚠️ Please convert ASCII Art to Mermaid diagram format"
   exit 1
 fi
 ```
 
 ---
 
-## ⚠️ 分段撰寫規則 (Critical - 防止 Token 溢出)
+## ⚠️ Segmented Writing Rules (Critical - Prevent Token Overflow)
 
-由於 AI 輸出有 token 限制（約 32000 tokens），撰寫 SRS/SDD 文件時**必須分段撰寫**。
+Due to AI output token limits (~32000 tokens), SRS/SDD documents **must be written in segments**.
 
-### 強制分段策略
+### Mandatory Segmentation Strategy
 
-| 文件 | 分段方式 | 每段最大行數 |
-|------|----------|-------------|
-| SRS | 按章節分段 | ≤ 500 行/次 |
-| SDD | 按模組分段 | ≤ 400 行/次 |
+| Document | Segmentation Method | Max Lines Per Segment |
+|----------|---------------------|----------------------|
+| SRS | By chapter | ≤ 500 lines/segment |
+| SDD | By module | ≤ 400 lines/segment |
 
-### SRS 分段順序 (Step 1)
-
-```
-1️⃣ 第一次 Write: 文件資訊 + 產品概述 + 功能需求總覽
-2️⃣ 第二次 Edit: 追加 3.2 需求詳細說明 (AUTH + PROFILE)
-3️⃣ 第三次 Edit: 追加 需求詳細說明 (VOCAB + SENTENCE)
-4️⃣ 第四次 Edit: 追加 需求詳細說明 (TRAIN + PROGRESS)
-5️⃣ 第五次 Edit: 追加 需求詳細說明 (PARENT + ENGAGE + UX)
-6️⃣ 第六次 Edit: 追加 非功能需求 + 介面需求
-7️⃣ 第七次 Edit: 追加 軟體安全分類 + 附錄
-```
-
-### SDD 分段順序 (Step 2)
+### SRS Segmentation Order (Step 1)
 
 ```
-1️⃣ 第一次 Write: 文件資訊 + 使用案例設計 + 系統架構
-2️⃣ 第二次 Edit: 追加 模組設計 (AUTH 模組 + 畫面)
-3️⃣ 第三次 Edit: 追加 模組設計 (VOCAB 模組 + 畫面)
-4️⃣ 第四次 Edit: 追加 模組設計 (TRAIN 模組 + 畫面)
-5️⃣ 第五次 Edit: 追加 模組設計 (PROGRESS + PARENT 模組)
-6️⃣ 第六次 Edit: 追加 模組設計 (SETTING 模組 + 畫面)
-7️⃣ 第七次 Edit: 追加 資料設計 + 介面設計
-8️⃣ 第八次 Edit: 追加 共用設計元素 + 安全設計 + 附錄
+1️⃣ First Write: Document info + Product overview + Functional requirements overview
+2️⃣ Second Edit: Append 3.2 Detailed requirements (AUTH + PROFILE)
+3️⃣ Third Edit: Append detailed requirements (VOCAB + SENTENCE)
+4️⃣ Fourth Edit: Append detailed requirements (TRAIN + PROGRESS)
+5️⃣ Fifth Edit: Append detailed requirements (PARENT + ENGAGE + UX)
+6️⃣ Sixth Edit: Append non-functional requirements + interface requirements
+7️⃣ Seventh Edit: Append software safety classification + appendix
 ```
 
-### 分段撰寫範例
+### SDD Segmentation Order (Step 2)
+
+```
+1️⃣ First Write: Document info + Use case design + System architecture
+2️⃣ Second Edit: Append module design (AUTH module + screens)
+3️⃣ Third Edit: Append module design (VOCAB module + screens)
+4️⃣ Fourth Edit: Append module design (TRAIN module + screens)
+5️⃣ Fifth Edit: Append module design (PROGRESS + PARENT modules)
+6️⃣ Sixth Edit: Append module design (SETTING module + screens)
+7️⃣ Seventh Edit: Append data design + interface design
+8️⃣ Eighth Edit: Append shared design elements + security design + appendix
+```
+
+### Segmented Writing Example
 
 ```markdown
-# ❌ 錯誤做法：一次輸出整份文件
+# ❌ Wrong: Output entire document at once
 Write entire SRS document (5000+ lines) → Token overflow error
 
-# ✅ 正確做法：分段撰寫
-Step 1: Write(SRS-xxx.md, 文件資訊+產品概述, ~300 lines)
-Step 2: Edit(SRS-xxx.md, append AUTH 需求, ~200 lines)
-Step 3: Edit(SRS-xxx.md, append VOCAB 需求, ~200 lines)
+# ✅ Correct: Write in segments
+Step 1: Write(SRS-xxx.md, Document info + Product overview, ~300 lines)
+Step 2: Edit(SRS-xxx.md, append AUTH requirements, ~200 lines)
+Step 3: Edit(SRS-xxx.md, append VOCAB requirements, ~200 lines)
 ...
 ```
 
-### 每次輸出的內容限制
+### Content Limits Per Output
 
-| 內容類型 | 最大行數 | 說明 |
-|---------|---------|------|
-| 單一模組需求 | 200 行 | 含驗收標準 |
-| 單一模組設計 | 300 行 | 含所有 SCR 畫面 |
-| 單一 SCR 畫面 | 80 行 | 含 Button Navigation |
-| 資料模型 | 150 行 | 含實體定義 |
+| Content Type | Max Lines | Description |
+|--------------|-----------|-------------|
+| Single module requirements | 200 lines | Including acceptance criteria |
+| Single module design | 300 lines | Including all SCR screens |
+| Single SCR screen | 80 lines | Including Button Navigation |
+| Data model | 150 lines | Including entity definitions |
 
-### 分段進度追蹤
+### Segmented Progress Tracking
 
-每完成一個分段後，輸出進度摘要：
+After completing each segment, output progress summary:
 
 ```markdown
-✅ SRS 撰寫進度: 3/7 完成
-   - [x] 文件資訊 + 產品概述
-   - [x] AUTH + PROFILE 需求
-   - [x] VOCAB + SENTENCE 需求
-   - [ ] TRAIN + PROGRESS 需求
-   - [ ] PARENT + ENGAGE + UX 需求
-   - [ ] 非功能需求 + 介面需求
-   - [ ] 軟體安全分類 + 附錄
+✅ SRS Writing Progress: 3/7 completed
+   - [x] Document info + Product overview
+   - [x] AUTH + PROFILE requirements
+   - [x] VOCAB + SENTENCE requirements
+   - [ ] TRAIN + PROGRESS requirements
+   - [ ] PARENT + ENGAGE + UX requirements
+   - [ ] Non-functional requirements + Interface requirements
+   - [ ] Software safety classification + Appendix
 ```
 
 ---
 
-## 快速參考
+## Quick Reference
 
-### ID 編號系統
+### ID Numbering System
 
-| 文件類型 | ID 格式 | 範例 |
-|---------|--------|------|
-| SRS 需求 | REQ-{MODULE}-{NNN} | REQ-AUTH-001 |
-| SDD 設計 | SDD-{MODULE}-{NNN} | SDD-AUTH-001 |
-| SDD 畫面 | SCR-{MODULE}-{NNN}-{desc} | SCR-AUTH-001-login |
-| SWD 元件 | SWD-{MODULE}-{NNN} | SWD-AUTH-001 |
-| STC 測試 | STC-{REQ-ID} | STC-REQ-AUTH-001 |
+| Document Type | ID Format | Example |
+|---------------|-----------|---------|
+| SRS Requirement | REQ-{MODULE}-{NNN} | REQ-AUTH-001 |
+| SDD Design | SDD-{MODULE}-{NNN} | SDD-AUTH-001 |
+| SDD Screen | SCR-{MODULE}-{NNN}-{desc} | SCR-AUTH-001-login |
+| SWD Component | SWD-{MODULE}-{NNN} | SWD-AUTH-001 |
+| STC Test | STC-{REQ-ID} | STC-REQ-AUTH-001 |
 
-### 模組代碼
+### Module Codes
 
-| 代碼 | 模組 | 代碼 | 模組 |
-|------|------|------|------|
-| AUTH | 認證 | DASH | Dashboard |
-| VOCAB | 字庫 | TRAIN | 訓練 |
-| REPORT | 報告 | SETTING | 設定 |
-| DEVICE | 設備 | COM | 共用元件 |
-| EDU | 教育學習 | ECOM | 電商 |
-| SOCIAL | 社群 | PROD | 生產力 |
-| HEALTH | 醫療健康 | SYNC | 同步 |
-| COMMON | 共用狀態 | PARENT | 家長控制 |
+| Code | Module | Code | Module |
+|------|--------|------|--------|
+| AUTH | Authentication | DASH | Dashboard |
+| VOCAB | Vocabulary | TRAIN | Training |
+| REPORT | Report | SETTING | Settings |
+| DEVICE | Device | COM | Shared Components |
+| EDU | Education/Learning | ECOM | E-commerce |
+| SOCIAL | Social | PROD | Productivity |
+| HEALTH | Healthcare | SYNC | Sync |
+| COMMON | Common States | PARENT | Parental Control |
 
 ---
 
-## MD 轉 DOCX 指令
+## MD to DOCX Command
 
 ```bash
-# 安裝依賴 (首次)
+# Install dependencies (first time)
 cd ~/.claude/skills/app-requirements-skill
 npm install docx
 
-# 轉換文件 (Phase 4 最後執行)
+# Convert documents (Execute at Phase 4 end)
 node ~/.claude/skills/app-requirements-skill/md-to-docx.js SRS-*.md
 node ~/.claude/skills/app-requirements-skill/md-to-docx.js SDD-*.md
 ```
 
 ---
 
-## 智慧預測 (Phase 2 核心)
+## Smart Prediction (Phase 2 Core)
 
-### 智慧預測來源（優先順序）
+### Smart Prediction Sources (Priority Order)
 
-| 優先級 | 來源 | 說明 |
-|--------|------|------|
-| 1 | **common-modules/** | **必要模組**（AUTH, PROFILE, SETTING, COMMON）|
-| **2** | **🚨 關鍵字觸發預測** | **掃描需求關鍵字，預測完整模組（ENGAGE, SOCIAL 等）** |
-| 3 | App 類型需求 | education/ecommerce/social/healthcare/productivity |
-| 4 | Button Navigation 分析 | 導航缺口分析 |
-| 5 | 命名約定推測 | 詳情頁、編輯頁、確認頁 |
+| Priority | Source | Description |
+|----------|--------|-------------|
+| 1 | **common-modules/** | **Required modules** (AUTH, PROFILE, SETTING, COMMON) |
+| **2** | **🚨 Keyword-triggered Prediction** | **Scan requirement keywords, predict complete modules (ENGAGE, SOCIAL, etc.)** |
+| 3 | App Type Requirements | education/ecommerce/social/healthcare/productivity |
+| 4 | Button Navigation Analysis | Navigation gap analysis |
+| 5 | Naming Convention Inference | Detail pages, Edit pages, Confirmation pages |
 
-> 📁 **必要模組模板位置：** `references/common-modules/`
-> - `common-modules-index.md` - 通用模組索引
-> - `auth-module-template.md` - AUTH 模組模板 (8 畫面)
-> - `profile-module-template.md` - PROFILE 模組模板 (3 畫面)
-> - `setting-module-template.md` - SETTING 模組模板 (18 畫面)
-> - `common-states-template.md` - COMMON 狀態模板 (5 畫面)
+> 📁 **Required Module Template Location:** `references/common-modules/`
+> - `common-modules-index.md` - Common module index
+> - `auth-module-template.md` - AUTH module template (8 screens)
+> - `profile-module-template.md` - PROFILE module template (3 screens)
+> - `setting-module-template.md` - SETTING module template (18 screens)
+> - `common-states-template.md` - COMMON states template (5 screens)
 
-> 🚨 **關鍵字觸發預測：** `references/keyword-trigger-prediction.md`
-> - 黏著度/遊戲化 → ENGAGE 模組 (6 畫面)
-> - 公開/分享/社群 → SOCIAL 模組 (4 畫面)
-> - 合併/分群/匯出 → VOCAB 擴充 (8 畫面)
-> - 報表/週報/日曆 → PROGRESS 擴充 (6 畫面)
+> 🚨 **Keyword-triggered Prediction:** `references/keyword-trigger-prediction.md`
+> - Engagement/Gamification → ENGAGE module (6 screens)
+> - Public/Share/Social → SOCIAL module (4 screens)
+> - Merge/Group/Export → VOCAB extension (8 screens)
+> - Report/Weekly/Calendar → PROGRESS extension (6 screens)
 
-### 預測項目
+### Prediction Items
 
-| 類別 | 預測內容 |
-|------|----------|
-| **必要模組** | AUTH (login/register/forgot)、PROFILE (view/edit)、SETTING (main/account/privacy/about)、COMMON (loading/empty/error/no-network) |
-| **🚨 關鍵字觸發** | ENGAGE (徽章/獎勵/寵物)、SOCIAL (分享/公開)、VOCAB/PROGRESS/TRAIN 擴充 |
-| 導航缺口 | Button Navigation 中 Target Screen 不存在的畫面 |
-| 子頁面 | 設定子頁面、詳情頁面、編輯頁面 |
-| 流程頁面 | 確認對話框、成功/失敗結果頁 |
+| Category | Prediction Content |
+|----------|-------------------|
+| **Required Modules** | AUTH (login/register/forgot), PROFILE (view/edit), SETTING (main/account/privacy/about), COMMON (loading/empty/error/no-network) |
+| **🚨 Keyword-triggered** | ENGAGE (badges/rewards/pet), SOCIAL (share/public), VOCAB/PROGRESS/TRAIN extensions |
+| Navigation Gaps | Screens where Button Navigation Target Screen doesn't exist |
+| Sub-pages | Settings sub-pages, Detail pages, Edit pages |
+| Flow Pages | Confirmation dialogs, Success/Failure result pages |
 
-### 預測輸出
+### Prediction Output
 
 ```json
 {
@@ -564,8 +570,8 @@ node ~/.claude/skills/app-requirements-skill/md-to-docx.js SDD-*.md
     {
       "id": "SCR-COMMON-001-loading",
       "module": "COMMON",
-      "name": "載入中狀態",
-      "reason": "所有 App 必備",
+      "name": "Loading State",
+      "reason": "Required for all Apps",
       "priority": "P0"
     }
   ],
@@ -581,114 +587,114 @@ node ~/.claude/skills/app-requirements-skill/md-to-docx.js SDD-*.md
 
 ---
 
-## SDD SCR 區塊模板 (含 Button Navigation)
+## SDD SCR Section Template (with Button Navigation)
 
 ```markdown
-##### SCR-AUTH-001-login: 登入畫面
+##### SCR-AUTH-001-login: Login Screen
 
-| 屬性 | 內容 |
-|-----|------|
-| **畫面 ID** | SCR-AUTH-001-login |
-| **畫面名稱** | 登入畫面 |
-| **對應需求** | REQ-AUTH-001, REQ-AUTH-002 |
+| Attribute | Content |
+|-----------|---------|
+| **Screen ID** | SCR-AUTH-001-login |
+| **Screen Name** | Login Screen |
+| **Related Requirements** | REQ-AUTH-001, REQ-AUTH-002 |
 
-**功能說明**：
-使用者登入畫面，支援 Email/密碼登入及社群登入。
+**Functional Description**:
+User login screen, supports Email/password login and social login.
 
-**UI 元件規格**：
+**UI Component Specifications**:
 
-| 元件 ID | 元件類型 | 規格 | 對應需求 |
-|---------|---------|------|----------|
-| txt_email | TextField | Email 輸入框 | REQ-AUTH-001 |
-| txt_password | SecureField | 密碼輸入框 | REQ-AUTH-001 |
-| btn_login | Button | 登入按鈕 | REQ-AUTH-001 |
+| Component ID | Component Type | Specification | Related Requirement |
+|--------------|----------------|---------------|---------------------|
+| txt_email | TextField | Email input field | REQ-AUTH-001 |
+| txt_password | SecureField | Password input field | REQ-AUTH-001 |
+| btn_login | Button | Login button | REQ-AUTH-001 |
 
-**Button Navigation**：
+**Button Navigation**:
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_login | 登入 | Button | SCR-AUTH-004-role | 驗證成功 |
-| btn_apple | Apple | Button | SCR-AUTH-004-role | Apple 登入成功 |
-| lnk_forgot | 忘記密碼? | Link | SCR-AUTH-003-forgot | - |
-| lnk_register | 立即註冊 | Link | SCR-AUTH-002-register | - |
+| btn_login | Login | Button | SCR-AUTH-004-role | Validation success |
+| btn_apple | Apple | Button | SCR-AUTH-004-role | Apple login success |
+| lnk_forgot | Forgot Password? | Link | SCR-AUTH-003-forgot | - |
+| lnk_register | Register Now | Link | SCR-AUTH-002-register | - |
 
-##### UI 原型參考
+##### UI Prototype Reference
 
-> ⚠️ **格式規範：** 不使用表格，直接嵌入圖片，不保留 HTML 連結。
+> ⚠️ **Format Specification:** Do not use tables, embed images directly, do not retain HTML links.
 
-**iPad 版本：**
+**iPad Version:**
 
 ![](images/ipad/SCR-AUTH-001-login.png)
 
-**iPhone 版本：**
+**iPhone Version:**
 
 ![](images/iphone/SCR-AUTH-001-login.png)
 ```
 
 ---
 
-## IEC 62304 雙向追蹤 (Bidirectional Traceability)
+## IEC 62304 Bidirectional Traceability
 
-> ⚠️ **強制要求**：SRS 與 SDD 必須建立雙向追蹤以符合 IEC 62304
+> ⚠️ **Mandatory Requirement**: SRS and SDD must establish bidirectional traceability to comply with IEC 62304
 
-### SRS → SDD 追蹤
+### SRS → SDD Traceability
 
-每個 SRS 需求必須包含 `| **SDD 追蹤** | SCR-xxx |` 欄位：
+Each SRS requirement must include `| **SDD Traceability** | SCR-xxx |` field:
 
 ```markdown
-##### REQ-AUTH-001: Email/密碼登入
+##### REQ-AUTH-001: Email/Password Login
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | REQ-AUTH-001 |
-| **描述** | 系統應允許使用者透過 Email 與密碼進行登入驗證 |
-| **優先級** | P0 |
-| **相關需求** | REQ-AUTH-005, REQ-AUTH-006 |
-| **SDD 追蹤** | SCR-AUTH-001-login, SCR-AUTH-002-register |
+| **Description** | System shall allow users to authenticate via Email and password |
+| **Priority** | P0 |
+| **Related Requirements** | REQ-AUTH-005, REQ-AUTH-006 |
+| **SDD Traceability** | SCR-AUTH-001-login, SCR-AUTH-002-register |
 ```
 
-### SDD → SRS 追蹤
+### SDD → SRS Traceability
 
-每個 SDD 畫面必須包含 `| **對應需求** | REQ-xxx |` 欄位：
+Each SDD screen must include `| **Related Requirements** | REQ-xxx |` field:
 
 ```markdown
-##### SCR-AUTH-001-login: 登入畫面
+##### SCR-AUTH-001-login: Login Screen
 
-| 屬性 | 內容 |
-|-----|------|
-| **畫面 ID** | SCR-AUTH-001-login |
-| **畫面名稱** | 登入畫面 |
-| **對應需求** | REQ-AUTH-001, REQ-AUTH-002 |
+| Attribute | Content |
+|-----------|---------|
+| **Screen ID** | SCR-AUTH-001-login |
+| **Screen Name** | Login Screen |
+| **Related Requirements** | REQ-AUTH-001, REQ-AUTH-002 |
 ```
 
-### 追蹤驗證腳本
+### Traceability Validation Script
 
 ```bash
 #!/bin/bash
-# IEC 62304 雙向追蹤驗證
+# IEC 62304 Bidirectional Traceability Validation
 SRS_FILE="01-requirements/SRS-*.md"
 SDD_FILE="02-design/SDD-*.md"
 
-echo "🔍 驗證雙向追蹤..."
+echo "🔍 Validating bidirectional traceability..."
 
-# 1. SRS → SDD: 每個 REQ 都有 SDD 追蹤
+# 1. SRS → SDD: Each REQ has SDD traceability
 SRS_REQ_COUNT=$(grep -c "^##### REQ-" $SRS_FILE)
-SRS_SDD_TRACK=$(grep -c "SDD 追蹤" $SRS_FILE)
-echo "SRS: $SRS_REQ_COUNT 需求, $SRS_SDD_TRACK 有 SDD 追蹤"
+SRS_SDD_TRACK=$(grep -c "SDD Traceability" $SRS_FILE)
+echo "SRS: $SRS_REQ_COUNT requirements, $SRS_SDD_TRACK have SDD traceability"
 
-# 2. SDD → SRS: 每個 SCR 都有對應需求
+# 2. SDD → SRS: Each SCR has related requirements
 SDD_SCR_COUNT=$(grep -c "^##### SCR-" $SDD_FILE)
-SDD_REQ_TRACK=$(grep -c "對應需求" $SDD_FILE)
-echo "SDD: $SDD_SCR_COUNT 畫面, $SDD_REQ_TRACK 有對應需求"
+SDD_REQ_TRACK=$(grep -c "Related Requirements" $SDD_FILE)
+echo "SDD: $SDD_SCR_COUNT screens, $SDD_REQ_TRACK have related requirements"
 
-# 3. 驗證一致性
-[ "$SRS_REQ_COUNT" == "$SRS_SDD_TRACK" ] && echo "✅ SRS 追蹤完整" || echo "❌ SRS 追蹤不完整"
-[ "$SDD_SCR_COUNT" -le "$SDD_REQ_TRACK" ] && echo "✅ SDD 追蹤完整" || echo "❌ SDD 追蹤不完整"
+# 3. Validate consistency
+[ "$SRS_REQ_COUNT" == "$SRS_SDD_TRACK" ] && echo "✅ SRS traceability complete" || echo "❌ SRS traceability incomplete"
+[ "$SDD_SCR_COUNT" -le "$SDD_REQ_TRACK" ] && echo "✅ SDD traceability complete" || echo "❌ SDD traceability incomplete"
 ```
 
 ---
 
-## 專案目錄結構
+## Project Directory Structure
 
 ```
 📁 {project-name}/
@@ -696,7 +702,7 @@ echo "SDD: $SDD_SCR_COUNT 畫面, $SDD_REQ_TRACK 有對應需求"
 ├── 📁 02-design/           # SDD + images/
 ├── 📁 03-assets/           # App Icon, Icons, Images
 ├── 📁 04-ui-flow/          # HTML UI Flow
-│   ├── 📁 workspace/       # 狀態追蹤
+│   ├── 📁 workspace/       # State tracking
 │   ├── 📁 ipad/            # iPad HTML
 │   └── 📁 iphone/          # iPhone HTML
 ├── 📁 05-development/      # SWD
@@ -707,115 +713,115 @@ echo "SDD: $SDD_SCR_COUNT 畫面, $SDD_REQ_TRACK 有對應需求"
 
 ---
 
-## Skill 整合與步驟對照
+## Skill Integration & Step Mapping
 
-| Step | 步驟名稱 | 主導 Skill | 阻斷點 |
-|------|---------|-----------|--------|
-| **0** | **需求訪談 (MANDATORY FIRST)** | **app-requirements-skill** | **⚠️ BLOCKING** |
-| 1 | 撰寫 SRS 軟體需求規格書 | app-requirements-skill | |
-| 2 | 撰寫 SDD 軟體設計規格書 | app-requirements-skill | |
-| 3 | 補充設定子頁面設計 | app-requirements-skill | |
-| 4 | 執行智慧預測找出遺漏畫面 | app-requirements-skill | |
-| 5 | 補充預測畫面設計 | app-requirements-skill | |
-| 6 | 列出畫面清單 | app-requirements-skill | ⚠️ BLOCKING |
-| 7 | UI Flow 框架初始化 | **app-uiux-designer.skill** | |
-| 8 | 產出完整 UI Flow HTML 畫面 | **app-uiux-designer.skill** | |
-| 9 | 回填 SDD | **app-uiux-designer.skill** | |
-| 10 | 產出 DOCX 格式文件 | app-requirements-skill | |
+| Step | Step Name | Leading Skill | Blocking |
+|------|-----------|---------------|----------|
+| **0** | **Requirements Interview (MANDATORY FIRST)** | **app-requirements-skill** | **⚠️ BLOCKING** |
+| 1 | Write SRS Software Requirements Specification | app-requirements-skill | |
+| 2 | Write SDD Software Design Specification | app-requirements-skill | |
+| 3 | Add Settings Sub-page Design | app-requirements-skill | |
+| 4 | Execute Smart Prediction for Missing Screens | app-requirements-skill | |
+| 5 | Add Predicted Screen Designs | app-requirements-skill | |
+| 6 | List Screen Inventory | app-requirements-skill | ⚠️ BLOCKING |
+| 7 | UI Flow Framework Initialization | **app-uiux-designer.skill** | |
+| 8 | Generate Complete UI Flow HTML Screens | **app-uiux-designer.skill** | |
+| 9 | Backfill SDD | **app-uiux-designer.skill** | |
+| 10 | Generate DOCX Format Documents | app-requirements-skill | |
 
-⚠️ **重要：Step 0 必須先完成需求訪談才能繼續**
-⚠️ **重要：Step 7~9 一律使用 app-uiux-designer.skill**
-
----
-
-## References 目錄
-
-### 通用模組模板 (智慧預測優先載入)
-- `common-modules/common-modules-index.md` - **通用模組索引與檢核腳本**
-- `common-modules/auth-module-template.md` - AUTH 模組模板 (8 畫面)
-- `common-modules/profile-module-template.md` - PROFILE 模組模板 (3 畫面)
-- `common-modules/setting-module-template.md` - SETTING 模組模板 (18 畫面)
-- `common-modules/common-states-template.md` - COMMON 狀態模板 (5 畫面)
-
-### 🚨 關鍵字觸發預測 (新增)
-- `keyword-trigger-prediction.md` - **關鍵字觸發模組預測規則**
-  - ENGAGE 模組觸發：黏著度、遊戲化、徽章、獎勵、寵物、排行榜
-  - SOCIAL 模組觸發：公開、分享、社群、邀請
-  - 模組擴充觸發：合併、分群、匯出、週報、日曆
-
-### 工作流程與標準
-- `workflow-details.md` - 完整工作流程詳細說明
-- `iec62304-document-standards.md` - **IEC 62304 統一文件標準** (所有文件適用)
-- `sdd-standards.md` - SDD 專屬補充規範
-- `button-navigation-specification.md` - Button Navigation 規格
-
-### 心理學指南
-- `design-psychology.md` - 設計心理學原則
-- `cognitive-psychology.md` - 認知心理學原則
-
-### IEC 62304 文件範本
-- `srs-template.md` - SRS 範本
-- `sdd-template.md` - SDD 範本
-- `swd-template.md` - SWD 範本
-- `stp-template.md` - STP 範本
-- `stc-template.md` - STC 範本
-- `svv-template.md` - SVV 範本
-- `rtm-template.md` - RTM 範本
-
-### App 類型需求
-- `education-requirements.md` - 教育學習類 App 需求
-- `ecommerce-requirements.md` - 電商類 App 需求
-- `social-requirements.md` - 社群類 App 需求
-- `productivity-requirements.md` - 生產力工具類 App 需求
-- `healthcare-requirements.md` - 醫療健康類 App 需求
-- `standard-app-requirements.md` - 標準 App 功能需求清單
+⚠️ **Important: Step 0 requirements interview must be completed first**
+⚠️ **Important: Steps 7~9 always use app-uiux-designer.skill**
 
 ---
 
-## 追溯完整度要求 (100%)
+## References Directory
 
-| 追溯方向 | 說明 | 要求 |
-|---------|------|------|
-| SRS → SDD | 每個需求有對應設計 | 100% |
-| SDD → SWD | 每個設計有詳細實作 | 100% |
-| SWD → STC | 每個元件有測試案例 | 100% |
-| SRS → SCR | 每個需求有對應畫面 | 100% |
+### Common Module Templates (Smart Prediction Priority Load)
+- `common-modules/common-modules-index.md` - **Common module index & validation scripts**
+- `common-modules/auth-module-template.md` - AUTH module template (8 screens)
+- `common-modules/profile-module-template.md` - PROFILE module template (3 screens)
+- `common-modules/setting-module-template.md` - SETTING module template (18 screens)
+- `common-modules/common-states-template.md` - COMMON states template (5 screens)
+
+### 🚨 Keyword-triggered Prediction (New)
+- `keyword-trigger-prediction.md` - **Keyword-triggered module prediction rules**
+  - ENGAGE module triggers: engagement, gamification, badges, rewards, pet, leaderboard
+  - SOCIAL module triggers: public, share, social, invite
+  - Module extension triggers: merge, group, export, weekly report, calendar
+
+### Workflow & Standards
+- `workflow-details.md` - Complete workflow detailed description
+- `iec62304-document-standards.md` - **IEC 62304 unified document standards** (applies to all documents)
+- `sdd-standards.md` - SDD-specific supplementary specifications
+- `button-navigation-specification.md` - Button Navigation specification
+
+### Psychology Guidelines
+- `design-psychology.md` - Design psychology principles
+- `cognitive-psychology.md` - Cognitive psychology principles
+
+### IEC 62304 Document Templates
+- `srs-template.md` - SRS template
+- `sdd-template.md` - SDD template
+- `swd-template.md` - SWD template
+- `stp-template.md` - STP template
+- `stc-template.md` - STC template
+- `svv-template.md` - SVV template
+- `rtm-template.md` - RTM template
+
+### App Type Requirements
+- `education-requirements.md` - Education/Learning App requirements
+- `ecommerce-requirements.md` - E-commerce App requirements
+- `social-requirements.md` - Social App requirements
+- `productivity-requirements.md` - Productivity Tool App requirements
+- `healthcare-requirements.md` - Healthcare App requirements
+- `standard-app-requirements.md` - Standard App functional requirements list
 
 ---
 
-## 驗證工具
+## Traceability Completeness Requirements (100%)
+
+| Traceability Direction | Description | Requirement |
+|------------------------|-------------|-------------|
+| SRS → SDD | Each requirement has corresponding design | 100% |
+| SDD → SWD | Each design has detailed implementation | 100% |
+| SWD → STC | Each component has test cases | 100% |
+| SRS → SCR | Each requirement has corresponding screen | 100% |
+
+---
+
+## Validation Tools
 
 ```bash
-# 追溯驗證
+# Traceability validation
 node ~/.claude/skills/app-requirements-skill/scripts/verify-traceability.js [project-dir]
 
-# 合規檢查
+# Compliance check
 node ~/.claude/skills/app-requirements-skill/scripts/compliance-checker.js [project-dir]
 ```
 
 ---
 
-## 回補報告範本 (Phase 4)
+## Backfill Report Template (Phase 4)
 
 ```markdown
-## 回補完成報告
+## Backfill Completion Report
 
-### SDD 回補
-| 項目 | 數量 | 狀態 |
-|------|------|------|
-| SCR 畫面更新 | 53 | ✅ 完成 |
-| 圖片嵌入 | 106 | ✅ 完成 |
+### SDD Backfill
+| Item | Count | Status |
+|------|-------|--------|
+| SCR Screen Updates | 53 | ✅ Complete |
+| Image Embeddings | 106 | ✅ Complete |
 
-### SRS 回補
-| 項目 | 數量 | 狀態 |
-|------|------|------|
-| Screen References | 53 | ✅ 完成 |
-| Inferred Requirements | 15 | ✅ 完成 |
-| User Flows 更新 | 6 | ✅ 完成 |
+### SRS Backfill
+| Item | Count | Status |
+|------|-------|--------|
+| Screen References | 53 | ✅ Complete |
+| Inferred Requirements | 15 | ✅ Complete |
+| User Flows Updates | 6 | ✅ Complete |
 
-### DOCX 產生 (一次到位)
-| 項目 | 狀態 |
-|------|------|
-| SRS.docx | ✅ 完成 |
-| SDD.docx | ✅ 完成 |
+### DOCX Generation (One-time)
+| Item | Status |
+|------|--------|
+| SRS.docx | ✅ Complete |
+| SDD.docx | ✅ Complete |
 ```

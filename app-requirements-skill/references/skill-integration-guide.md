@@ -1,58 +1,58 @@
-# Skill 整合指南 (Cross-Skill Integration Guide)
+# Skill Integration Guide (Cross-Skill Integration Guide)
 
-本文件定義 `app-requirements-skill` 與 `app-uiux-designer.skill` 之間的整合協作流程。
+This document defines the integration and collaboration workflow between `app-requirements-skill` and `app-uiux-designer.skill`.
 
 ---
 
-## ⚠️ MANDATORY: UI Flow 必須透過 app-uiux-designer.skill 產生
+## ⚠️ MANDATORY: UI Flow Must Be Generated Through app-uiux-designer.skill
 
-> **這是阻斷規則！禁止手動建立 UI Flow HTML，必須使用 skill 產生！**
+> **This is a blocking rule! Do not manually create UI Flow HTML, must use skill to generate!**
 
-### 強制呼叫方式
+### Mandatory Invocation Method
 
-當 SDD 完成後，**必須**使用 Skill tool 呼叫 app-uiux-designer.skill：
+After SDD is completed, **must** use Skill tool to invoke app-uiux-designer.skill:
 
 ```
-工具：Skill
-參數：
+Tool: Skill
+Parameters:
   skill: "app-uiux-designer.skill"
-  args: "請根據 SDD 文件 ({SDD_PATH}) 產生 HTML UI Flow 互動式原型。
-         專案資訊：
-         - 專案名稱：{PROJECT_NAME}
-         - 目標裝置：{DEVICE}
-         - 視覺風格：{STYLE}
-         - 品牌主色：{COLOR}
-         - 目標使用者：{TARGET_USER}
-         輸出目錄：{OUTPUT_DIR}"
+  args: "Please generate HTML UI Flow interactive prototype based on SDD document ({SDD_PATH}).
+         Project Information:
+         - Project Name: {PROJECT_NAME}
+         - Target Device: {DEVICE}
+         - Visual Style: {STYLE}
+         - Brand Primary Color: {COLOR}
+         - Target User: {TARGET_USER}
+         Output Directory: {OUTPUT_DIR}"
 ```
 
-### 禁止行為
+### Prohibited Actions
 
-| 禁止項目 | 原因 |
-|----------|------|
-| ❌ 手動建立 UI Flow HTML | 必須透過 skill 確保模板合規 |
-| ❌ 跳過 app-uiux-designer.skill | 無法確保 100% 導航覆蓋 |
-| ❌ 無 Button Navigation 就產生 UI Flow | 導航目標不明確 |
+| Prohibited Item | Reason |
+|-----------------|--------|
+| ❌ Manually create UI Flow HTML | Must use skill to ensure template compliance |
+| ❌ Skip app-uiux-designer.skill | Cannot ensure 100% navigation coverage |
+| ❌ Generate UI Flow without Button Navigation | Navigation targets unclear |
 
 ---
 
-## 整合架構
+## Integration Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      App 開發完整流程                            │
+│                   Complete App Development Flow                   │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────────────┐      ┌──────────────────────┐         │
 │  │ app-requirements-skill│      │ app-uiux-designer.skill│       │
 │  │                       │      │                       │        │
-│  │  Phase 1: 需求收集    │      │                       │        │
-│  │  Phase 2: SRS 產出    │      │                       │        │
-│  │  Phase 3: SDD 產出    │─────▶│  Phase 4: UI Flow     │        │
+│  │  Phase 1: Requirements│      │                       │        │
+│  │  Phase 2: SRS Output  │      │                       │        │
+│  │  Phase 3: SDD Output  │─────▶│  Phase 4: UI Flow     │        │
 │  │                       │      │  Phase 5: Screenshots  │        │
-│  │  Phase 6: 文件回補   │◀─────│  Phase 6: SDD/SRS 回補 │        │
-│  │  Phase 7: RTM 驗證    │      │                       │        │
-│  │  Phase 8: DOCX 產出   │      │                       │        │
+│  │  Phase 6: Doc Backfill│◀─────│  Phase 6: SDD/SRS     │        │
+│  │  Phase 7: RTM Verify  │      │           Backfill    │        │
+│  │  Phase 8: DOCX Output │      │                       │        │
 │  └──────────────────────┘      └──────────────────────┘         │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -60,241 +60,241 @@
 
 ---
 
-## 觸發時機
+## Trigger Timing
 
 ### app-requirements-skill → app-uiux-designer.skill
 
-| 觸發條件 | 動作 |
-|---------|------|
-| 需求收集階段開始 | 啟用 uiux skill 詢問 UI 需求（平台、裝置、模組、風格） |
-| SDD 產出完成 | 啟用 uiux skill 產生 HTML UI Flow |
-| SDD 包含 SCR-* 區塊 | uiux skill 為每個 SCR-* 產生對應畫面 |
+| Trigger Condition | Action |
+|-------------------|--------|
+| Requirements gathering phase starts | Activate uiux skill to ask UI requirements (platform, device, modules, style) |
+| SDD output completed | Activate uiux skill to generate HTML UI Flow |
+| SDD contains SCR-* blocks | uiux skill generates corresponding screens for each SCR-* |
 
 ### app-uiux-designer.skill → app-requirements-skill
 
-| 觸發條件 | 動作 |
-|---------|------|
-| UI Flow 產出完成 | 回補 SDD（截圖、UI 原型參考） |
-| UI Flow 產出完成 | 回補 SRS（Screen References、Inferred Requirements） |
-| 發現缺失畫面 | 建議新增 REQ-NAV-* 導航需求 |
+| Trigger Condition | Action |
+|-------------------|--------|
+| UI Flow output completed | Backfill SDD (screenshots, UI prototype references) |
+| UI Flow output completed | Backfill SRS (Screen References, Inferred Requirements) |
+| Missing screens discovered | Suggest adding REQ-NAV-* navigation requirements |
 
 ---
 
-## 資料交換格式
+## Data Exchange Format
 
-### SDD → UI Flow（app-requirements-skill 產出）
+### SDD → UI Flow (app-requirements-skill output)
 
-**⚠️ 關鍵：Button Navigation 表格（MANDATORY）**
+**⚠️ Critical: Button Navigation Table (MANDATORY)**
 
-每個 SCR-* 區塊**必須**包含 Button Navigation 表格，這是 UI Flow 導航的唯一資料來源。
+Each SCR-* block **must** contain a Button Navigation table, which is the sole data source for UI Flow navigation.
 
 ```markdown
-## SCR-AUTH-001-login: 登入畫面
+## SCR-AUTH-001-login: Login Screen
 
-**模組：** AUTH
-**優先級：** P0
-**相關需求：** REQ-AUTH-001, REQ-AUTH-002
+**Module:** AUTH
+**Priority:** P0
+**Related Requirements:** REQ-AUTH-001, REQ-AUTH-002
 
-### 畫面說明
-使用者登入畫面，支援 Email/密碼登入與社群登入。
+### Screen Description
+User login screen supporting Email/password login and social login.
 
-### UI 元件規格
-| 元件 ID | 元件類型 | 規格 | 對應需求 |
-|---------|---------|------|----------|
-| txt_email | TextField | Email 輸入框 | REQ-AUTH-001 |
-| txt_password | PasswordField | 密碼輸入框 | REQ-AUTH-001 |
-| btn_login | Button | 登入按鈕 | REQ-AUTH-001 |
-| btn_register | Link | 註冊連結 | REQ-AUTH-002 |
-| btn_forgot | Link | 忘記密碼連結 | REQ-AUTH-003 |
+### UI Component Specifications
+| Component ID | Component Type | Specification | Related Requirement |
+|--------------|----------------|---------------|---------------------|
+| txt_email | TextField | Email input field | REQ-AUTH-001 |
+| txt_password | PasswordField | Password input field | REQ-AUTH-001 |
+| btn_login | Button | Login button | REQ-AUTH-001 |
+| btn_register | Link | Register link | REQ-AUTH-002 |
+| btn_forgot | Link | Forgot password link | REQ-AUTH-003 |
 
 ### Button Navigation ⚠️ MANDATORY
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_login | 登入 | Button | SCR-DASH-001 | 驗證成功 |
-| btn_register | 立即註冊 | Link | SCR-AUTH-002-register | - |
-| btn_forgot | 忘記密碼 | Link | SCR-AUTH-003-forgot | - |
-| btn_apple | Apple 登入 | Button | SCR-DASH-001 | Apple 驗證成功 |
-| btn_google | Google 登入 | Button | SCR-DASH-001 | Google 驗證成功 |
+| btn_login | Login | Button | SCR-DASH-001 | Validation success |
+| btn_register | Register Now | Link | SCR-AUTH-002-register | - |
+| btn_forgot | Forgot Password | Link | SCR-AUTH-003-forgot | - |
+| btn_apple | Apple Login | Button | SCR-DASH-001 | Apple auth success |
+| btn_google | Google Login | Button | SCR-DASH-001 | Google auth success |
 ```
 
-### Button Navigation → 模板變數對應
+### Button Navigation → Template Variable Mapping
 
-app-uiux-designer.skill 使用 Button Navigation 表格自動填入模板變數：
+app-uiux-designer.skill uses Button Navigation table to auto-fill template variables:
 
-| SDD Target Screen | 模板變數 | 說明 |
-|-------------------|----------|------|
-| `SCR-AUTH-002-register` | `{{TARGET_REGISTER}}` | 註冊頁面 |
-| `SCR-AUTH-003-forgot` | `{{TARGET_FORGOT_PASSWORD}}` | 忘記密碼頁 |
-| `SCR-DASH-001` | `{{TARGET_AFTER_LOGIN}}` | 登入後首頁 |
-| `(current)` | `#` | 留在當前頁面 |
-| `(back)` | `{{TARGET_BACK}}` | 返回上一頁 |
-| `(modal)` | `showModal('...')` | 彈出對話框 |
+| SDD Target Screen | Template Variable | Description |
+|-------------------|-------------------|-------------|
+| `SCR-AUTH-002-register` | `{{TARGET_REGISTER}}` | Registration page |
+| `SCR-AUTH-003-forgot` | `{{TARGET_FORGOT_PASSWORD}}` | Forgot password page |
+| `SCR-DASH-001` | `{{TARGET_AFTER_LOGIN}}` | Home page after login |
+| `(current)` | `#` | Stay on current page |
+| `(back)` | `{{TARGET_BACK}}` | Return to previous page |
+| `(modal)` | `showModal('...')` | Show dialog |
 
-### 導航解析優先順序
+### Navigation Resolution Priority
 
-app-uiux-designer.skill 解析導航目標時，依照以下優先順序：
+app-uiux-designer.skill resolves navigation targets in the following priority order:
 
 ```
-1️⃣ SDD Button Navigation 表格 (優先)
-   ↓ 如果有 Target Screen 欄位，直接使用
+1️⃣ SDD Button Navigation Table (Priority)
+   ↓ If Target Screen field exists, use directly
 
-2️⃣ 智慧預測 (備用)
-   ↓ 如果 SDD 沒有提供，根據命名約定預測
+2️⃣ Smart Prediction (Fallback)
+   ↓ If SDD doesn't provide, predict based on naming conventions
 
-3️⃣ 預設值 (最後)
-   ↓ 無法判斷時使用 # 或 (current)
+3️⃣ Default Value (Last Resort)
+   ↓ When unable to determine, use # or (current)
 ```
 
-**好處：**
-- SDD 完整時 → 零預測，100% 準確
-- SDD 不完整時 → 預測機制確保 UI Flow 仍可產出
-- 向後相容 → 舊專案不需重寫 SDD
+**Benefits:**
+- Complete SDD → Zero prediction, 100% accurate
+- Incomplete SDD → Prediction mechanism ensures UI Flow can still be generated
+- Backward compatible → Old projects don't need to rewrite SDD
 
-### UI Flow → SDD 回補（app-uiux-designer.skill 產出）
+### UI Flow → SDD Backfill (app-uiux-designer.skill output)
 
 ```markdown
-## SCR-AUTH-001-login: 登入畫面
+## SCR-AUTH-001-login: Login Screen
 
-... (原有內容) ...
+... (original content) ...
 
-### UI 原型參考
-| 平台 | 截圖 | HTML 原型 |
-|------|------|-----------|
-| iPad | ![](images/ipad/SCR-AUTH-001-login.png) | [查看](04-ui-flow/auth/SCR-AUTH-001-login.html) |
-| iPhone | ![](images/iphone/SCR-AUTH-001-login.png) | [查看](04-ui-flow/iphone/SCR-AUTH-001-login.html) |
+### UI Prototype Reference
+| Platform | Screenshot | HTML Prototype |
+|----------|------------|----------------|
+| iPad | ![](images/ipad/SCR-AUTH-001-login.png) | [View](04-ui-flow/auth/SCR-AUTH-001-login.html) |
+| iPhone | ![](images/iphone/SCR-AUTH-001-login.png) | [View](04-ui-flow/iphone/SCR-AUTH-001-login.html) |
 ```
 
-### UI Flow → SRS 回補（app-uiux-designer.skill 產出）
+### UI Flow → SRS Backfill (app-uiux-designer.skill output)
 
 ```markdown
 ## Screen References
 
-| 需求 ID | 相關畫面 | 說明 |
-|---------|---------|------|
-| REQ-AUTH-001 | SCR-AUTH-001-login | 登入畫面實作 |
-| REQ-AUTH-002 | SCR-AUTH-002-register | 註冊畫面實作 |
+| Requirement ID | Related Screens | Description |
+|----------------|-----------------|-------------|
+| REQ-AUTH-001 | SCR-AUTH-001-login | Login screen implementation |
+| REQ-AUTH-002 | SCR-AUTH-002-register | Registration screen implementation |
 
-## Inferred Requirements (UI 推導需求)
+## Inferred Requirements (UI-Derived Requirements)
 
-| ID | 來源 | 描述 | 驗收條件 |
-|----|------|------|---------|
-| REQ-NAV-001 | SCR-AUTH-001 登入按鈕 | 登入成功後導向 Dashboard | 驗證憑證後顯示 SCR-DASH-001 |
-| REQ-NAV-002 | SCR-AUTH-001 註冊連結 | 點擊註冊導向註冊頁 | 顯示 SCR-AUTH-002 |
+| ID | Source | Description | Acceptance Criteria |
+|----|--------|-------------|---------------------|
+| REQ-NAV-001 | SCR-AUTH-001 Login button | Navigate to Dashboard after successful login | After credential verification, display SCR-DASH-001 |
+| REQ-NAV-002 | SCR-AUTH-001 Register link | Click register navigates to registration page | Display SCR-AUTH-002 |
 ```
 
 ---
 
-## 驗證檢查點
+## Validation Checkpoints
 
-### Checkpoint 1: SDD 產出後（啟動 UI Flow 前）
-
-```
-☑ SDD 包含所有 SCR-* 區塊
-☑ 每個 SCR-* 有 UI 元素表格
-☑ 每個 UI 元素指定目標畫面（如適用）
-☑ REQ ↔ SCR 對應完整
-```
-
-### Checkpoint 2: UI Flow 產出後
+### Checkpoint 1: After SDD Output (Before Starting UI Flow)
 
 ```
-☑ 所有 SCR-* 有對應 HTML 檔案
-☑ iPad 和 iPhone 版本都存在
-☑ 可點擊元素覆蓋率 = 100%
-☑ 導航完整性驗證通過
-☑ 截圖已產生
+☑ SDD contains all SCR-* blocks
+☑ Each SCR-* has UI element table
+☑ Each UI element specifies target screen (if applicable)
+☑ REQ ↔ SCR mapping complete
 ```
 
-### Checkpoint 3: 回補後（最終驗證）
+### Checkpoint 2: After UI Flow Output
 
 ```
-☑ SDD 包含所有截圖
-☑ SRS 包含 Screen References
-☑ SRS 包含 Inferred Requirements
-☑ RTM 覆蓋率 = 100%
-☑ DOCX 已重新產生
+☑ All SCR-* have corresponding HTML files
+☑ iPad and iPhone versions both exist
+☑ Clickable element coverage = 100%
+☑ Navigation completeness verification passed
+☑ Screenshots generated
+```
+
+### Checkpoint 3: After Backfill (Final Verification)
+
+```
+☑ SDD contains all screenshots
+☑ SRS contains Screen References
+☑ SRS contains Inferred Requirements
+☑ RTM coverage = 100%
+☑ DOCX regenerated
 ```
 
 ---
 
-## ⚠️ 強制規範
+## ⚠️ Mandatory Specifications
 
-### UI Flow 模板使用 (MANDATORY)
+### UI Flow Template Usage (MANDATORY)
 
-app-uiux-designer.skill 產出 UI Flow 時**必須**遵守：
+app-uiux-designer.skill **must** follow when generating UI Flow:
 
-| 規則 | 說明 |
-|------|------|
-| ❌ **禁止** | 從頭建立自訂 HTML 檔案 |
-| ✅ **必須** | 複製 `~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/` 模板 |
-| ✅ **必須** | 替換模板中的 `{{VARIABLE}}` 變數 |
-| ✅ **必須** | 按照模板目錄結構建立畫面 |
+| Rule | Description |
+|------|-------------|
+| ❌ **Prohibited** | Create custom HTML files from scratch |
+| ✅ **Required** | Copy `~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/` templates |
+| ✅ **Required** | Replace `{{VARIABLE}}` variables in templates |
+| ✅ **Required** | Create screens according to template directory structure |
 
-### 模板複製指令
+### Template Copy Commands
 
 ```bash
-# 複製模板到專案
+# Copy templates to project
 cp -r ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/* ./04-ui-flow/
 
-# 模板包含：
-# - index.html (畫面總覽)
-# - device-preview.html (多裝置預覽)
-# - screen-template-iphone.html (iPhone 畫面模板)
-# - screen-template-ipad.html (iPad 畫面模板)
-# - capture-screenshots.js (截圖腳本)
+# Templates include:
+# - index.html (Screen overview)
+# - device-preview.html (Multi-device preview)
+# - screen-template-iphone.html (iPhone screen template)
+# - screen-template-ipad.html (iPad screen template)
+# - capture-screenshots.js (Screenshot script)
 ```
 
 ---
 
-## 錯誤處理
+## Error Handling
 
-### 常見問題與解決方案
+### Common Issues and Solutions
 
-| 問題 | 原因 | 解決方案 |
-|------|------|----------|
-| UI Flow 缺少畫面 | SDD 中 SCR-* 定義不完整 | 補充 SDD 的 SCR-* 區塊 |
-| 可點擊元素無目標 | SDD 未指定目標畫面 | 更新 SDD UI 元素表格 |
-| 截圖嵌入失敗 | 路徑不正確 | 確認 images/ 目錄結構 |
-| RTM 覆蓋不足 | 需求未對應畫面 | 補充 Screen References |
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| UI Flow missing screens | SCR-* definitions incomplete in SDD | Supplement SDD SCR-* blocks |
+| Clickable elements have no target | SDD didn't specify target screen | Update SDD UI element table |
+| Screenshot embedding failed | Incorrect path | Verify images/ directory structure |
+| RTM coverage insufficient | Requirements not mapped to screens | Supplement Screen References |
 
-### 回退策略
+### Fallback Strategy
 
-若 app-uiux-designer.skill 無法使用：
+If app-uiux-designer.skill is unavailable:
 
-1. **基礎 UI Flow**：手動建立簡化版 UI Flow（純文字描述）
-2. **ASCII Wireframe**：在 SDD 中使用 ASCII 線框圖（注意 DOCX 轉換限制）
-3. **外部工具**：使用 Figma/Sketch 產出設計，手動嵌入
+1. **Basic UI Flow**: Manually create simplified UI Flow (text description only)
+2. **ASCII Wireframe**: Use ASCII wireframes in SDD (note DOCX conversion limitations)
+3. **External Tools**: Use Figma/Sketch to create designs, manually embed
 
 ---
 
-## 執行命令
+## Execution Commands
 
-### 完整流程
+### Complete Flow
 
 ```bash
-# 1. 需求收集（app-requirements-skill 主導）
-# 啟動時自動詢問 UI 需求
+# 1. Requirements Gathering (app-requirements-skill leads)
+# UI requirements asked automatically at startup
 
-# 2. SRS/SDD 產出
-# 自動產出 01-planning/SRS-*.md 和 02-design/SDD-*.md
+# 2. SRS/SDD Output
+# Auto-generate 01-planning/SRS-*.md and 02-design/SDD-*.md
 
-# 3. UI Flow 產出（app-uiux-designer.skill）
+# 3. UI Flow Output (app-uiux-designer.skill)
 cd 04-ui-flow
-# HTML 檔案自動產生
+# HTML files auto-generated
 
-# 4. 截圖與驗證
+# 4. Screenshots and Verification
 npm install puppeteer --save-dev
 node capture-screenshots.js
 
-# 5. 文件回補
-# uiux skill 自動回補 SDD 和 SRS
+# 5. Document Backfill
+# uiux skill auto-backfills SDD and SRS
 
-# 6. DOCX 產出
+# 6. DOCX Output
 node ~/.claude/skills/app-requirements-skill/md-to-docx.js SRS-*.md
 node ~/.claude/skills/app-requirements-skill/md-to-docx.js SDD-*.md
 ```
 
-### 僅驗證
+### Verification Only
 
 ```bash
 cd 04-ui-flow
@@ -303,7 +303,7 @@ node capture-screenshots.js --validate-only
 
 ---
 
-## 檔案結構對應
+## File Structure Mapping
 
 ```
 project/
@@ -311,7 +311,7 @@ project/
 │   ├── SRS-{project}.md          ← app-requirements-skill
 │   └── SRS-{project}.docx        ← app-requirements-skill
 ├── 02-design/
-│   ├── SDD-{project}.md          ← app-requirements-skill + uiux 回補
+│   ├── SDD-{project}.md          ← app-requirements-skill + uiux backfill
 │   ├── SDD-{project}.docx        ← app-requirements-skill
 │   └── images/
 │       ├── ipad/*.png            ← app-uiux-designer.skill
@@ -332,17 +332,17 @@ project/
 
 ---
 
-## 版本相容性
+## Version Compatibility
 
-| app-requirements-skill | app-uiux-designer.skill | 狀態 |
-|------------------------|-------------------------|------|
-| v1.0+ | v1.0+ | 相容 |
+| app-requirements-skill | app-uiux-designer.skill | Status |
+|------------------------|-------------------------|--------|
+| v1.0+ | v1.0+ | Compatible |
 
 ---
 
-## 更新日誌
+## Change Log
 
-| 日期 | 版本 | 變更 |
-|------|------|------|
-| 2026-01-09 | 1.1 | 新增強制使用模板規範 (MANDATORY Template Usage) |
-| 2026-01-09 | 1.0 | 初版，定義整合架構與資料交換格式 |
+| Date | Version | Changes |
+|------|---------|---------|
+| 2026-01-09 | 1.1 | Added mandatory template usage specification |
+| 2026-01-09 | 1.0 | Initial version, defined integration architecture and data exchange format |

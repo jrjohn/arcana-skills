@@ -1,450 +1,450 @@
-# 需求訪談問題庫
+# Requirements Interview Question Bank
 
-本文件提供 **Step 0: 需求訪談** 所需的問題模板。
-
----
-
-## ⚠️ Step 0 快速訪談（強制首要步驟）
-
-> **重要**：在撰寫任何文件（SRS/SDD）之前，必須先完成需求訪談。
-> 使用 `AskUserQuestion` 工具進行互動式訪談。
-
-### 快速訪談問題模板（使用 AskUserQuestion）
-
-以下問題應使用 AskUserQuestion 工具，每次提問 2-4 個問題，提供選項讓用戶選擇。
+This document provides question templates for **Step 0: Requirements Interview**.
 
 ---
 
-#### 第一輪：基礎架構與體驗設計
+## ⚠️ Step 0 Quick Interview (Mandatory First Step)
 
-**Q1: 目標平台**
-```json
-{
-  "question": "App 的主要目標平台是？（將影響技術架構與 UI 設計）",
-  "header": "目標平台",
-  "options": [
-    {"label": "iPhone + iPad (Recommended)", "description": "同時支援兩種裝置，最大化覆蓋率"},
-    {"label": "僅 iPad", "description": "專注於大螢幕學習體驗"},
-    {"label": "iPhone + iPad + Mac (Catalyst)", "description": "完整 Apple 生態系支援"}
-  ]
-}
-```
+> **Important**: Before writing any documents (SRS/SDD), the requirements interview must be completed first.
+> Use the `AskUserQuestion` tool for interactive interview.
 
-**Q2: 帳號架構**
-```json
-{
-  "question": "用戶的帳號關係如何設計？",
-  "header": "帳號架構",
-  "options": [
-    {"label": "家庭群組 (1 家長 + 多學生)", "description": "家長管理多個孩子帳號，適合多子女家庭"},
-    {"label": "獨立帳號 + 連結", "description": "學生獨立帳號，家長透過邀請碼連結監督"},
-    {"label": "單一帳號切換角色", "description": "同一帳號內切換家長/學生模式"}
-  ]
-}
-```
+### Quick Interview Question Template (Using AskUserQuestion)
 
-**Q3: 視覺風格**
-```json
-{
-  "question": "App 的視覺風格偏好？",
-  "header": "視覺風格",
-  "options": [
-    {"label": "活潑童趣 (Recommended)", "description": "鮮豔色彩、圓角、可愛插圖，適合兒童"},
-    {"label": "簡約現代", "description": "乾淨介面、中性色調，適合專注學習"},
-    {"label": "遊戲化介面", "description": "豐富動畫、徽章獎勵、排行榜"}
-  ]
-}
-```
-
-**Q4: 主色調選擇**
-```json
-{
-  "question": "App 的主色調偏好？（將影響品牌識別與整體視覺）",
-  "header": "主色調",
-  "options": [
-    {"label": "活力橘黃 (Recommended)", "description": "溫暖、活潑、激發學習動力，適合兒童教育"},
-    {"label": "清新藍綠", "description": "清爽、專注、舒適護眼，適合長時間學習"},
-    {"label": "柔和粉紫", "description": "溫馨、友善、降低壓力感"},
-    {"label": "自然綠色", "description": "平靜、健康、環保形象"}
-  ]
-}
-```
-
-**Q5: 深色模式支援**
-```json
-{
-  "question": "是否需要支援深色模式？",
-  "header": "深色模式",
-  "options": [
-    {"label": "支援 (Recommended)", "description": "跟隨系統設定自動切換，保護眼睛"},
-    {"label": "僅淺色模式", "description": "簡化開發，兒童 App 常見做法"},
-    {"label": "用戶可選", "description": "在設定中手動切換深淺色模式"}
-  ]
-}
-```
-
-**Q6: 離線功能**
-```json
-{
-  "question": "離線功能的支援程度？",
-  "header": "離線支援",
-  "options": [
-    {"label": "完整離線 (Recommended)", "description": "字庫/進度本機快取，離線可完整學習"},
-    {"label": "部分離線", "description": "已下載內容可離線，新內容需網路"},
-    {"label": "需要網路", "description": "所有功能都需要網路連線"}
-  ]
-}
-```
+The following questions should use the AskUserQuestion tool, asking 2-4 questions at a time with options for user selection.
 
 ---
 
-#### 第二輪：技術選型
+#### Round 1: Basic Architecture & Experience Design
 
-**Q7: AI 服務選擇**（如需 AI 功能）
+**Q1: Target Platform**
 ```json
 {
-  "question": "AI 例句生成的服務偏好？",
-  "header": "AI 服務",
+  "question": "What is the primary target platform for the App? (This affects technical architecture and UI design)",
+  "header": "Platform",
   "options": [
-    {"label": "Claude API (Recommended)", "description": "Anthropic 的 Claude，繁中表現優秀"},
-    {"label": "OpenAI API", "description": "GPT 系列，市場成熟度高"},
-    {"label": "兩者皆可（設定可選）", "description": "提供彈性，但增加維護複雜度"}
+    {"label": "iPhone + iPad (Recommended)", "description": "Support both devices for maximum coverage"},
+    {"label": "iPad Only", "description": "Focus on large screen learning experience"},
+    {"label": "iPhone + iPad + Mac (Catalyst)", "description": "Full Apple ecosystem support"}
   ]
 }
 ```
 
-**Q8: 語音技術選擇**（如需語音功能）
+**Q2: Account Architecture**
 ```json
 {
-  "question": "語音功能的技術選擇？",
-  "header": "語音技術",
+  "question": "How should user account relationships be designed?",
+  "header": "Accounts",
   "options": [
-    {"label": "iOS 原生 (AVSpeechSynthesizer)", "description": "免費、離線可用，但語音自然度較低"},
-    {"label": "雲端服務 (Amazon Polly / Azure)", "description": "自然人聲品質高，但需付費且需網路"},
-    {"label": "混合模式 (Recommended)", "description": "預設原生，可選購高品質語音"}
+    {"label": "Family Group (1 Parent + Multiple Students)", "description": "Parent manages multiple child accounts, suitable for multi-child families"},
+    {"label": "Independent Accounts + Linking", "description": "Students have independent accounts, parents link via invitation code to supervise"},
+    {"label": "Single Account Role Switching", "description": "Switch between parent/student modes within the same account"}
+  ]
+}
+```
+
+**Q3: Visual Style**
+```json
+{
+  "question": "What visual style preference for the App?",
+  "header": "Style",
+  "options": [
+    {"label": "Playful & Fun (Recommended)", "description": "Bright colors, rounded corners, cute illustrations, suitable for children"},
+    {"label": "Clean & Modern", "description": "Clean interface, neutral colors, suitable for focused learning"},
+    {"label": "Gamified Interface", "description": "Rich animations, badges, rewards, leaderboards"}
+  ]
+}
+```
+
+**Q4: Primary Color Selection**
+```json
+{
+  "question": "What primary color preference for the App? (This affects brand identity and overall visuals)",
+  "header": "Color",
+  "options": [
+    {"label": "Vibrant Orange-Yellow (Recommended)", "description": "Warm, lively, stimulates learning motivation, suitable for children's education"},
+    {"label": "Fresh Blue-Green", "description": "Cool, focused, easy on eyes, suitable for long study sessions"},
+    {"label": "Soft Pink-Purple", "description": "Warm, friendly, reduces stress"},
+    {"label": "Natural Green", "description": "Calm, healthy, eco-friendly image"}
+  ]
+}
+```
+
+**Q5: Dark Mode Support**
+```json
+{
+  "question": "Should dark mode be supported?",
+  "header": "Dark Mode",
+  "options": [
+    {"label": "Supported (Recommended)", "description": "Follows system settings automatically, protects eyes"},
+    {"label": "Light Mode Only", "description": "Simplifies development, common approach for children's apps"},
+    {"label": "User Selectable", "description": "Manual toggle between light/dark mode in settings"}
+  ]
+}
+```
+
+**Q6: Offline Functionality**
+```json
+{
+  "question": "What level of offline functionality support?",
+  "header": "Offline",
+  "options": [
+    {"label": "Full Offline (Recommended)", "description": "Vocabulary/progress cached locally, complete offline learning"},
+    {"label": "Partial Offline", "description": "Downloaded content available offline, new content requires network"},
+    {"label": "Network Required", "description": "All features require internet connection"}
   ]
 }
 ```
 
 ---
 
-#### 第三輪：功能優先級與資料同步
+#### Round 2: Technical Stack Selection
 
-**Q9: MVP 核心功能**
+**Q7: AI Service Selection** (If AI features needed)
 ```json
 {
-  "question": "第一版 (MVP) 必備的核心功能有哪些？",
-  "header": "MVP 功能",
+  "question": "What AI service preference for sentence generation?",
+  "header": "AI Service",
   "options": [
-    {"label": "聽力 + 拼寫測驗", "description": "基礎學習功能"},
-    {"label": "聽力 + 拼寫 + 發音測驗", "description": "完整語言學習"},
-    {"label": "全部功能 (聽力/發音/拼寫/配對/填空)", "description": "完整版本"}
+    {"label": "Claude API (Recommended)", "description": "Anthropic's Claude, excellent performance in Traditional Chinese"},
+    {"label": "OpenAI API", "description": "GPT series, high market maturity"},
+    {"label": "Either (Configurable)", "description": "Provides flexibility but increases maintenance complexity"}
+  ]
+}
+```
+
+**Q8: Voice Technology Selection** (If voice features needed)
+```json
+{
+  "question": "What voice technology selection?",
+  "header": "Voice",
+  "options": [
+    {"label": "iOS Native (AVSpeechSynthesizer)", "description": "Free, offline available, but lower voice naturalness"},
+    {"label": "Cloud Service (Amazon Polly / Azure)", "description": "High-quality natural voices, but requires payment and network"},
+    {"label": "Hybrid Mode (Recommended)", "description": "Default native, optional premium cloud voices"}
+  ]
+}
+```
+
+---
+
+#### Round 3: Feature Priority & Data Sync
+
+**Q9: MVP Core Features**
+```json
+{
+  "question": "What core features are essential for first version (MVP)?",
+  "header": "MVP Features",
+  "options": [
+    {"label": "Listening + Spelling Tests", "description": "Basic learning features"},
+    {"label": "Listening + Spelling + Pronunciation Tests", "description": "Complete language learning"},
+    {"label": "All Features (Listening/Pronunciation/Spelling/Matching/Fill-in)", "description": "Full version"}
   ],
   "multiSelect": true
 }
 ```
 
-**Q10: 資料同步需求**
+**Q10: Data Sync Requirements**
 ```json
 {
-  "question": "是否需要跨裝置資料同步？",
-  "header": "資料同步",
+  "question": "Is cross-device data sync needed?",
+  "header": "Data Sync",
   "options": [
-    {"label": "iCloud 同步 (Recommended)", "description": "Apple 原生方案，用戶無感同步"},
-    {"label": "自建後端同步", "description": "完全控制，但需維護伺服器"},
-    {"label": "僅本機儲存", "description": "簡單實作，但不支援跨裝置"}
+    {"label": "iCloud Sync (Recommended)", "description": "Apple native solution, seamless user experience"},
+    {"label": "Custom Backend Sync", "description": "Full control, but requires server maintenance"},
+    {"label": "Local Storage Only", "description": "Simple implementation, but no cross-device support"}
   ]
 }
 ```
 
 ---
 
-### 訪談結果記錄模板
+### Interview Results Recording Template
 
-訪談完成後，將結果整理成以下格式，作為 SRS 撰寫依據：
+After interview completion, organize results in the following format as basis for SRS writing:
 
 ```markdown
-## 訪談結果摘要
+## Interview Results Summary
 
-**訪談日期：** YYYY-MM-DD
-**專案名稱：** {Project Name}
+**Interview Date:** YYYY-MM-DD
+**Project Name:** {Project Name}
 
-### 基礎架構
-- **目標平台：** iPhone + iPad
-- **帳號架構：** 家庭群組 (1 家長 + 多學生)
-- **資料同步：** iCloud 同步
+### Basic Architecture
+- **Target Platform:** iPhone + iPad
+- **Account Architecture:** Family Group (1 Parent + Multiple Students)
+- **Data Sync:** iCloud Sync
 
-### 技術選型
-- **AI 服務：** Claude API
-- **語音技術：** 混合模式 (原生 + 可選雲端)
-- **離線支援：** 完整離線
+### Technical Stack
+- **AI Service:** Claude API
+- **Voice Technology:** Hybrid Mode (Native + Optional Cloud)
+- **Offline Support:** Full Offline
 
-### 功能優先級
-- **MVP 功能：** 聽力 + 拼寫 + 發音測驗
-- **Phase 2：** 配對 + 填空
-- **延後功能：** 遊戲化排行榜
+### Feature Priority
+- **MVP Features:** Listening + Spelling + Pronunciation Tests
+- **Phase 2:** Matching + Fill-in
+- **Deferred Features:** Gamification Leaderboard
 
-### 視覺與體驗
-- **視覺風格：** 活潑童趣
-- **主色調：** 活力橘黃 (Primary: #FF9500, Secondary: #FFCC00)
-- **深色模式：** 支援（跟隨系統設定）
-- **目標年齡：** 國小中年級 (8-10 歲)
+### Visual & Experience
+- **Visual Style:** Playful & Fun
+- **Primary Color:** Vibrant Orange-Yellow (Primary: #FF9500, Secondary: #FFCC00)
+- **Dark Mode:** Supported (follows system settings)
+- **Target Age:** Elementary middle grades (8-10 years old)
 
-### 特殊需求
-- {用戶特別提出的需求}
+### Special Requirements
+- {User-specific requirements}
 ```
 
 ---
 
-## 詳細訪談問題庫
+## Detailed Interview Question Bank
 
-以下為更詳細的訪談問題，可依專案複雜度選用。
-
----
-
-## 目錄
-1. [專案願景問題](#1-專案願景問題)
-2. [使用者分析問題](#2-使用者分析問題)
-3. [功能需求問題](#3-功能需求問題)
-4. [技術限制問題](#4-技術限制問題)
-5. [業務規則問題](#5-業務規則問題)
-6. [整合需求問題](#6-整合需求問題)
-7. [醫療特定問題](#7-醫療特定問題)
+Below are more detailed interview questions, selectable based on project complexity.
 
 ---
 
-## 1. 專案願景問題
-
-### 問題解決
-- 這個專案要解決什麼問題？
-- 目前使用者如何處理這個問題？痛點是什麼？
-- 為什麼現有的解決方案不夠好？
-- 如果不做這個專案，會有什麼後果？
-
-### 商業目標
-- 專案的商業目標是什麼？
-- 如何衡量專案成功？有哪些 KPI？
-- 預期的 ROI 是多少？
-- 這個專案如何配合公司整體策略？
-
-### 範圍界定
-- 專案的核心功能是什麼？(Must Have)
-- 哪些功能是 Nice to Have？
-- 有哪些明確不在範圍內的功能？
-- 第一版 (MVP) 的範圍是什麼？
+## Table of Contents
+1. [Project Vision Questions](#1-project-vision-questions)
+2. [User Analysis Questions](#2-user-analysis-questions)
+3. [Functional Requirements Questions](#3-functional-requirements-questions)
+4. [Technical Constraints Questions](#4-technical-constraints-questions)
+5. [Business Rules Questions](#5-business-rules-questions)
+6. [Integration Requirements Questions](#6-integration-requirements-questions)
+7. [Healthcare-Specific Questions](#7-healthcare-specific-questions)
 
 ---
 
-## 2. 使用者分析問題
+## 1. Project Vision Questions
 
-### 使用者識別
-- 誰是主要使用者？請描述他們的特徵
-- 有哪些次要使用者或利害關係人？
-- 不同使用者群體的需求有何差異？
-- 使用者的技術熟練度如何？
+### Problem Solving
+- What problem does this project solve?
+- How do users currently handle this problem? What are their pain points?
+- Why are existing solutions insufficient?
+- What are the consequences of not doing this project?
 
-### 使用情境
-- 使用者通常在什麼情境下使用這個系統？
-- 使用者的典型工作流程是什麼？
-- 使用者會在哪些裝置上使用？
-- 使用頻率是多少？(每日/每週/每月)
+### Business Goals
+- What are the business goals for this project?
+- How do we measure project success? What are the KPIs?
+- What is the expected ROI?
+- How does this project align with overall company strategy?
 
-### 使用者旅程
-- 使用者第一次接觸系統時會做什麼？
-- 使用者完成主要任務的步驟是什麼？
-- 哪些步驟最容易出錯或感到困惑？
-- 使用者如何得知任務完成？
-
----
-
-## 3. 功能需求問題
-
-### 核心功能
-- 系統必須提供哪些核心功能？
-- 每個功能的輸入和輸出是什麼？
-- 功能之間有什麼相依關係？
-- 哪些功能需要特別注意效能？
-
-### 資料需求
-- 系統需要處理哪些資料？
-- 資料的來源是什麼？
-- 資料的格式和結構是什麼？
-- 資料的生命週期如何管理？
-- 有哪些資料品質要求？
-
-### 搜尋與報表
-- 使用者需要搜尋什麼資料？
-- 需要哪些篩選和排序功能？
-- 需要產生哪些報表？
-- 報表的格式和匯出需求是什麼？
-
-### 通知與提醒
-- 系統需要發送哪些通知？
-- 通知的觸發條件是什麼？
-- 通知的管道有哪些？(Email/Push/SMS)
-- 使用者可以如何管理通知偏好？
+### Scope Definition
+- What are the core features? (Must Have)
+- Which features are Nice to Have?
+- What features are explicitly out of scope?
+- What is the first version (MVP) scope?
 
 ---
 
-## 4. 技術限制問題
+## 2. User Analysis Questions
 
-### 現有系統
-- 有哪些現有系統需要整合？
-- 現有系統使用什麼技術？
-- 有哪些資料需要從舊系統遷移？
-- 新舊系統是否需要並行運作？
+### User Identification
+- Who are the primary users? Please describe their characteristics
+- Are there secondary users or stakeholders?
+- How do different user groups' needs differ?
+- What is users' technical proficiency level?
 
-### 技術環境
-- 有指定的技術平台或框架嗎？
-- 部署環境是什麼？(雲端/地端/混合)
-- 有哪些基礎架構限制？
-- 團隊熟悉哪些技術？
+### Usage Scenarios
+- In what scenarios do users typically use this system?
+- What is users' typical workflow?
+- On which devices will users access the system?
+- What is the usage frequency? (Daily/Weekly/Monthly)
 
-### 效能限制
-- 預期的使用者數量是多少？
-- 預期的資料量是多少？
-- 有哪些效能要求？(回應時間/吞吐量)
-- 尖峰負載的情況是什麼？
-
----
-
-## 5. 業務規則問題
-
-### 權限與角色
-- 系統有哪些使用者角色？
-- 每個角色可以執行哪些操作？
-- 權限如何授予和撤銷？
-- 有哪些資料存取限制？
-
-### 工作流程
-- 有哪些需要審批的流程？
-- 審批的層級和條件是什麼？
-- 如何處理例外情況？
-- 有哪些自動化規則？
-
-### 驗證規則
-- 資料輸入有哪些驗證規則？
-- 業務邏輯的驗證條件是什麼？
-- 如何處理驗證失敗？
-- 有哪些資料一致性要求？
-
-### 計算規則
-- 有哪些需要計算的欄位？
-- 計算公式是什麼？
-- 計算的時機和觸發條件是什麼？
-- 計算結果如何四捨五入？
+### User Journey
+- What do users do when they first encounter the system?
+- What are the steps for users to complete main tasks?
+- Which steps are most prone to errors or confusion?
+- How do users know when a task is complete?
 
 ---
 
-## 6. 整合需求問題
+## 3. Functional Requirements Questions
 
-### 外部系統
-- 需要與哪些外部系統整合？
-- 整合的方式是什麼？(API/檔案/資料庫)
-- 資料同步的頻率是什麼？
-- 如何處理整合失敗？
+### Core Features
+- What core features must the system provide?
+- What are the inputs and outputs for each feature?
+- What dependencies exist between features?
+- Which features require special attention to performance?
 
-### 第三方服務
-- 需要使用哪些第三方服務？
-- 服務的 SLA 是什麼？
-- 有備援方案嗎？
-- 費用結構是什麼？
+### Data Requirements
+- What data does the system need to process?
+- What are the data sources?
+- What are the data formats and structures?
+- How is data lifecycle managed?
+- What data quality requirements exist?
 
-### 資料交換
-- 資料交換的格式是什麼？
-- 資料交換的協定是什麼？
-- 有哪些安全性要求？
-- 如何處理資料轉換？
+### Search & Reporting
+- What data do users need to search?
+- What filtering and sorting features are needed?
+- What reports need to be generated?
+- What are the report format and export requirements?
 
----
-
-## 訪談技巧提醒
-
-### 開放式問題
-- 使用「什麼」「如何」「為什麼」開頭
-- 避免引導性問題
-- 給受訪者時間思考
-
-### 追問技巧
-- 「可以舉個例子嗎？」
-- 「還有其他情況嗎？」
-- 「如果...會怎樣？」
-- 「為什麼這個很重要？」
-
-### 確認理解
-- 「讓我確認一下我的理解...」
-- 「所以您的意思是...」
-- 「這樣說對嗎...」
-
-### 記錄要點
-- 需求的來源 (誰提出的)
-- 需求的優先級
-- 需求的理由
-- 待確認的問題
+### Notifications & Alerts
+- What notifications does the system need to send?
+- What are the notification trigger conditions?
+- What notification channels exist? (Email/Push/SMS)
+- How can users manage notification preferences?
 
 ---
 
-## 7. 醫療特定問題
+## 4. Technical Constraints Questions
 
-### 臨床流程
-- 這個軟體會用在哪些臨床場景？
-- 目前的臨床工作流程是什麼？
-- 哪些步驟最容易出錯或造成延誤？
-- 軟體如何融入現有的臨床流程？
-- 是否需要與現有的醫療作業程序 (SOP) 整合？
+### Existing Systems
+- What existing systems need integration?
+- What technologies do existing systems use?
+- What data needs to be migrated from legacy systems?
+- Do new and old systems need to run in parallel?
 
-### 病患安全
-- 軟體失效可能對病患造成什麼影響？
-- 最壞情況下，可能發生什麼危害？
-- 有哪些安全關鍵功能需要特別保護？
-- 需要哪些警示或阻擋機制？
-- 如何確保病患身份不會混淆？
+### Technical Environment
+- Are there specified technology platforms or frameworks?
+- What is the deployment environment? (Cloud/On-premise/Hybrid)
+- What infrastructure constraints exist?
+- What technologies is the team familiar with?
 
-### 軟體安全分類
-- 軟體是否會直接影響診斷或治療決策？
-- 軟體失效時，臨床人員是否有足夠時間採取補救措施？
-- 軟體是否控制或監測維生設備？
-- 預期的軟體安全分類是 Class A、B 還是 C？
+### Performance Constraints
+- What is the expected number of users?
+- What is the expected data volume?
+- What performance requirements exist? (Response time/Throughput)
+- What are peak load scenarios?
 
-### 法規要求
-- 軟體是否需要向 TFDA/FDA/CE 申請許可？
-- 有哪些必須遵循的法規或標準？(IEC 62304、ISO 14971 等)
-- 是否需要第三方驗證或認證？
-- 有哪些文件需要提交給法規單位？
+---
 
-### 資料隱私
-- 軟體會處理哪些個人健康資訊 (PHI)？
-- 資料會儲存在哪裡？(地端/雲端)
-- 是否有跨境傳輸需求？
-- 資料需要保留多久？
-- 有哪些去識別化需求？
+## 5. Business Rules Questions
 
-### 醫療系統整合
-- 需要與哪些醫療系統整合？(HIS/LIS/RIS/PACS)
-- 使用哪些醫療資料交換標準？(HL7/FHIR/DICOM)
-- 現有系統是否支援這些標準？
-- 資料同步的即時性要求是什麼？
+### Permissions & Roles
+- What user roles exist in the system?
+- What operations can each role perform?
+- How are permissions granted and revoked?
+- What data access restrictions exist?
 
-### 使用環境
-- 軟體會在哪種環境下使用？(手術室/病房/門診/居家)
-- 使用者是否可能戴手套操作？
-- 是否需要在緊急情況下快速存取？
-- 環境是否有特殊限制？(感染控制/電磁干擾)
+### Workflows
+- What processes require approval?
+- What are the approval levels and conditions?
+- How are exceptions handled?
+- What automation rules exist?
 
-### 醫療設備連接
-- 是否需要連接醫療設備？
-- 設備的通訊協定是什麼？
-- 設備資料如何傳輸和儲存？
-- 設備斷線時如何處理？
+### Validation Rules
+- What validation rules exist for data input?
+- What are the business logic validation conditions?
+- How are validation failures handled?
+- What data consistency requirements exist?
 
-### 用藥安全
-- 軟體是否涉及藥品處方或給藥？
-- 需要哪些用藥安全檢查？(過敏/交互作用/劑量)
-- 是否需要連接藥品資料庫？
-- 用藥警示的優先級和處理方式是什麼？
+### Calculation Rules
+- What fields require calculation?
+- What are the calculation formulas?
+- What are the calculation timing and trigger conditions?
+- How are calculation results rounded?
 
-### 稽核追蹤
-- 哪些操作需要記錄稽核軌跡？
-- 稽核日誌需要包含哪些資訊？
-- 稽核日誌需要保留多久？
-- 誰有權限查閱稽核日誌？
+---
+
+## 6. Integration Requirements Questions
+
+### External Systems
+- What external systems require integration?
+- What is the integration method? (API/File/Database)
+- What is the data sync frequency?
+- How are integration failures handled?
+
+### Third-Party Services
+- What third-party services are needed?
+- What is the service SLA?
+- Are there backup plans?
+- What is the cost structure?
+
+### Data Exchange
+- What is the data exchange format?
+- What is the data exchange protocol?
+- What security requirements exist?
+- How is data transformation handled?
+
+---
+
+## Interview Tips
+
+### Open-Ended Questions
+- Start with "What," "How," "Why"
+- Avoid leading questions
+- Give interviewees time to think
+
+### Follow-up Techniques
+- "Can you give an example?"
+- "Are there other scenarios?"
+- "What if...?"
+- "Why is this important?"
+
+### Confirm Understanding
+- "Let me confirm my understanding..."
+- "So you mean..."
+- "Is this correct...?"
+
+### Key Points to Record
+- Requirement source (who raised it)
+- Requirement priority
+- Requirement rationale
+- Questions pending confirmation
+
+---
+
+## 7. Healthcare-Specific Questions
+
+### Clinical Workflows
+- In what clinical scenarios will this software be used?
+- What is the current clinical workflow?
+- Which steps are most error-prone or cause delays?
+- How will the software integrate into existing clinical workflows?
+- Does it need to integrate with existing medical SOPs?
+
+### Patient Safety
+- What impact could software failure have on patients?
+- In worst case scenarios, what harm could occur?
+- What safety-critical functions need special protection?
+- What warnings or blocking mechanisms are needed?
+- How do we ensure patient identity is not confused?
+
+### Software Safety Classification
+- Does the software directly affect diagnostic or treatment decisions?
+- When software fails, do clinical staff have sufficient time for remedial action?
+- Does the software control or monitor life-sustaining equipment?
+- What is the expected software safety class: Class A, B, or C?
+
+### Regulatory Requirements
+- Does the software need TFDA/FDA/CE approval?
+- What regulations or standards must be followed? (IEC 62304, ISO 14971, etc.)
+- Is third-party verification or certification needed?
+- What documents need to be submitted to regulatory bodies?
+
+### Data Privacy
+- What Personal Health Information (PHI) will the software process?
+- Where will data be stored? (On-premise/Cloud)
+- Are there cross-border data transfer requirements?
+- How long must data be retained?
+- What de-identification requirements exist?
+
+### Healthcare System Integration
+- What healthcare systems need integration? (HIS/LIS/RIS/PACS)
+- What medical data exchange standards are used? (HL7/FHIR/DICOM)
+- Do existing systems support these standards?
+- What are the real-time data sync requirements?
+
+### Usage Environment
+- In what environment will the software be used? (OR/Ward/Clinic/Home)
+- Will users possibly operate with gloves?
+- Is rapid access needed in emergency situations?
+- Are there special environmental constraints? (Infection control/EMI)
+
+### Medical Device Connectivity
+- Does the software need to connect to medical devices?
+- What is the device communication protocol?
+- How is device data transmitted and stored?
+- How are device disconnections handled?
+
+### Medication Safety
+- Does the software involve medication prescribing or administration?
+- What medication safety checks are needed? (Allergy/Interactions/Dosage)
+- Does it need to connect to medication databases?
+- What are medication alert priorities and handling methods?
+
+### Audit Trail
+- What operations need audit trail logging?
+- What information should audit logs contain?
+- How long must audit logs be retained?
+- Who has permission to view audit logs?

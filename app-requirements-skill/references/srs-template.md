@@ -1,278 +1,278 @@
 # SRS-{{PROJECT_CODE}}-1.0
 
-## 軟體需求規格書 (Software Requirements Specification)
+## Software Requirements Specification
 
-**文件編號：** SRS-{{PROJECT_CODE}}-1.0
-**版本：** 1.0
-**建立日期：** {{DATE}}
-**最後更新：** {{DATE}}
-**專案名稱：** {{PROJECT_NAME}}
-**文件狀態：** 草稿
+**Document ID:** SRS-{{PROJECT_CODE}}-1.0
+**Version:** 1.0
+**Created Date:** {{DATE}}
+**Last Updated:** {{DATE}}
+**Project Name:** {{PROJECT_NAME}}
+**Document Status:** Draft
 
 ---
 
-### 文件核准
+### Document Approval
 
-| 角色 | 姓名 | 日期 |
+| Role | Name | Date |
 |------|------|------|
-| 作者 | | |
-| 審核者 | | |
-| 核准者 | | |
+| Author | | |
+| Reviewer | | |
+| Approver | | |
 
 ---
 
-## 目錄
+## Table of Contents
 
-1. [版本歷史](#1-版本歷史)
-2. [產品概述](#2-產品概述)
-3. [功能需求](#3-功能需求)
-4. [非功能需求](#4-非功能需求)
-5. [介面需求](#5-介面需求)
-6. [軟體安全分類](#6-軟體安全分類)
-7. [附錄](#7-附錄)
-
----
-
-## 1. 版本歷史
-
-| 版本 | 日期 | 修改內容 | 作者 |
-|-----|------|---------|------|
-| 1.0 | {{DATE}} | 初版建立 | |
-
-### 1.1 參考文件
-
-| 文件編號 | 文件名稱 | 版本 |
-|---------|---------|------|
-| SDD-{{PROJECT_CODE}}-1.0 | 軟體設計規格書 | 1.0 |
+1. [Revision History](#1-revision-history)
+2. [Product Overview](#2-product-overview)
+3. [Functional Requirements](#3-functional-requirements)
+4. [Non-Functional Requirements](#4-non-functional-requirements)
+5. [Interface Requirements](#5-interface-requirements)
+6. [Software Safety Classification](#6-software-safety-classification)
+7. [Appendix](#7-appendix)
 
 ---
 
-## 2. 產品概述
+## 1. Revision History
 
-### 2.1 產品目的
+| Version | Date | Changes | Author |
+|---------|------|---------|--------|
+| 1.0 | {{DATE}} | Initial version | |
 
-[描述產品的主要目的和預期用途]
+### 1.1 Reference Documents
 
-### 2.2 產品範圍
-
-[描述產品的功能範圍和邊界]
-
-### 2.3 使用者特性
-
-| 使用者類型 | 說明 | 技術程度 |
-|-----------|------|---------|
-| [類型1] | [說明] | [高/中/低] |
-
-### 2.4 預期使用環境
-
-[描述軟體預期的運行環境]
-
-### 2.5 假設與限制
-
-**假設**：
-- [假設1]
-
-**限制**：
-- [限制1]
+| Document ID | Document Name | Version |
+|-------------|---------------|---------|
+| SDD-{{PROJECT_CODE}}-1.0 | Software Design Description | 1.0 |
 
 ---
 
-## 3. 功能需求
+## 2. Product Overview
 
-### 3.1 需求總覽
+### 2.1 Product Purpose
 
-| ID | 需求名稱 | 優先級 | 安全分類 |
-|----|---------|--------|---------|
-| SRS-001 | [需求名稱] | [高/中/低] | [A/B/C] |
-| SRS-002 | [需求名稱] | [高/中/低] | [A/B/C] |
+[Describe the main purpose and intended use of the product]
 
-### 3.2 需求詳細說明
+### 2.2 Product Scope
+
+[Describe the functional scope and boundaries of the product]
+
+### 2.3 User Characteristics
+
+| User Type | Description | Technical Level |
+|-----------|-------------|-----------------|
+| [Type 1] | [Description] | [High/Medium/Low] |
+
+### 2.4 Intended Use Environment
+
+[Describe the intended operating environment of the software]
+
+### 2.5 Assumptions and Constraints
+
+**Assumptions**:
+- [Assumption 1]
+
+**Constraints**:
+- [Constraint 1]
 
 ---
 
-#### SRS-001 [需求名稱]
+## 3. Functional Requirements
 
-| 屬性 | 內容 |
-|-----|------|
+### 3.1 Requirements Overview
+
+| ID | Requirement Name | Priority | Safety Class |
+|----|------------------|----------|--------------|
+| SRS-001 | [Requirement Name] | [High/Medium/Low] | [A/B/C] |
+| SRS-002 | [Requirement Name] | [High/Medium/Low] | [A/B/C] |
+
+### 3.2 Detailed Requirements
+
+---
+
+#### SRS-001 [Requirement Name]
+
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SRS-001 |
-| **名稱** | [需求名稱] |
-| **描述** | [系統應...] |
-| **來源** | [來源文件或利害關係人] |
-| **優先級** | [高/中/低] |
-| **安全分類** | [Class A/B/C] |
-| **驗證方法** | [測試/分析/檢查/展示] |
-| **前置條件** | [前置條件] |
-| **後置條件** | [後置條件] |
-| **相關需求** | [相關 SRS-xxx ID] |
-| **SDD 追蹤** | [對應 SCR-xxx ID] |
+| **Name** | [Requirement Name] |
+| **Description** | [The system shall...] |
+| **Source** | [Source document or stakeholder] |
+| **Priority** | [High/Medium/Low] |
+| **Safety Class** | [Class A/B/C] |
+| **Verification Method** | [Test/Analysis/Inspection/Demonstration] |
+| **Preconditions** | [Preconditions] |
+| **Postconditions** | [Postconditions] |
+| **Related Requirements** | [Related SRS-xxx ID] |
+| **SDD Traceability** | [Corresponding SCR-xxx ID] |
 
-**接受標準**：
-1. [標準1]
-2. [標準2]
+**Acceptance Criteria**:
+1. [Criterion 1]
+2. [Criterion 2]
 
-**備註**：
-[其他補充說明]
+**Notes**:
+[Additional notes]
 
 ---
 
-#### SRS-002 [需求名稱]
+#### SRS-002 [Requirement Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SRS-002 |
-| **名稱** | [需求名稱] |
-| **描述** | [系統應...] |
-| **來源** | [來源文件或利害關係人] |
-| **優先級** | [高/中/低] |
-| **安全分類** | [Class A/B/C] |
-| **驗證方法** | [測試/分析/檢查/展示] |
-| **前置條件** | [前置條件] |
-| **後置條件** | [後置條件] |
-| **相關需求** | [相關 SRS-xxx ID] |
-| **SDD 追蹤** | [對應 SCR-xxx ID] |
+| **Name** | [Requirement Name] |
+| **Description** | [The system shall...] |
+| **Source** | [Source document or stakeholder] |
+| **Priority** | [High/Medium/Low] |
+| **Safety Class** | [Class A/B/C] |
+| **Verification Method** | [Test/Analysis/Inspection/Demonstration] |
+| **Preconditions** | [Preconditions] |
+| **Postconditions** | [Postconditions] |
+| **Related Requirements** | [Related SRS-xxx ID] |
+| **SDD Traceability** | [Corresponding SCR-xxx ID] |
 
-**接受標準**：
-1. [標準1]
+**Acceptance Criteria**:
+1. [Criterion 1]
 
 ---
 
-## 4. 非功能需求
+## 4. Non-Functional Requirements
 
-### 4.1 效能需求
+### 4.1 Performance Requirements
 
-#### SRS-NFR-001 [效能需求名稱]
+#### SRS-NFR-001 [Performance Requirement Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SRS-NFR-001 |
-| **類型** | 效能 |
-| **描述** | [系統應在 X 秒內完成...] |
-| **度量標準** | [可量化的標準] |
-| **驗證方法** | [測試/分析] |
+| **Type** | Performance |
+| **Description** | [The system shall complete... within X seconds] |
+| **Metric** | [Quantifiable standard] |
+| **Verification Method** | [Test/Analysis] |
 
-### 4.2 安全性需求
+### 4.2 Security Requirements
 
-#### SRS-NFR-002 [安全性需求名稱]
+#### SRS-NFR-002 [Security Requirement Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SRS-NFR-002 |
-| **類型** | 安全性 |
-| **描述** | [描述安全性需求] |
-| **驗證方法** | [測試/分析/檢查] |
+| **Type** | Security |
+| **Description** | [Describe security requirement] |
+| **Verification Method** | [Test/Analysis/Inspection] |
 
-### 4.3 可靠性需求
+### 4.3 Reliability Requirements
 
-#### SRS-NFR-003 [可靠性需求名稱]
+#### SRS-NFR-003 [Reliability Requirement Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SRS-NFR-003 |
-| **類型** | 可靠性 |
-| **描述** | [描述可靠性需求] |
-| **MTBF** | [平均無故障時間] |
-| **驗證方法** | [測試/分析] |
+| **Type** | Reliability |
+| **Description** | [Describe reliability requirement] |
+| **MTBF** | [Mean Time Between Failures] |
+| **Verification Method** | [Test/Analysis] |
 
-### 4.4 可維護性需求
+### 4.4 Maintainability Requirements
 
-#### SRS-NFR-004 [可維護性需求名稱]
+#### SRS-NFR-004 [Maintainability Requirement Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SRS-NFR-004 |
-| **類型** | 可維護性 |
-| **描述** | [描述可維護性需求] |
-| **驗證方法** | [檢查/分析] |
+| **Type** | Maintainability |
+| **Description** | [Describe maintainability requirement] |
+| **Verification Method** | [Inspection/Analysis] |
 
 ---
 
-## 5. 介面需求
+## 5. Interface Requirements
 
-### 5.1 使用者介面需求
+### 5.1 User Interface Requirements
 
-#### SRS-UI-001 [UI需求名稱]
+#### SRS-UI-001 [UI Requirement Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SRS-UI-001 |
-| **描述** | [描述 UI 需求] |
-| **相關畫面** | [畫面名稱/編號] |
+| **Description** | [Describe UI requirement] |
+| **Related Screens** | [Screen name/ID] |
 
-### 5.2 硬體介面需求
+### 5.2 Hardware Interface Requirements
 
-#### SRS-HW-001 [硬體介面需求名稱]
+#### SRS-HW-001 [Hardware Interface Requirement Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SRS-HW-001 |
-| **描述** | [描述硬體介面需求] |
-| **通訊協定** | [協定名稱] |
+| **Description** | [Describe hardware interface requirement] |
+| **Protocol** | [Protocol name] |
 
-### 5.3 軟體介面需求
+### 5.3 Software Interface Requirements
 
-#### SRS-SW-001 [軟體介面需求名稱]
+#### SRS-SW-001 [Software Interface Requirement Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SRS-SW-001 |
-| **描述** | [描述軟體介面需求] |
-| **API 規格** | [API 說明] |
+| **Description** | [Describe software interface requirement] |
+| **API Specification** | [API description] |
 
-### 5.4 通訊介面需求
+### 5.4 Communication Interface Requirements
 
-#### SRS-COM-001 [通訊介面需求名稱]
+#### SRS-COM-001 [Communication Interface Requirement Name]
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | SRS-COM-001 |
-| **描述** | [描述通訊介面需求] |
-| **協定** | [協定名稱] |
-| **頻寬需求** | [需求說明] |
+| **Description** | [Describe communication interface requirement] |
+| **Protocol** | [Protocol name] |
+| **Bandwidth Requirement** | [Requirement description] |
 
 ---
 
-## 6. 軟體安全分類
+## 6. Software Safety Classification
 
-### 6.1 分類依據
+### 6.1 Classification Basis
 
-根據 IEC 62304 標準，軟體安全分類基於軟體失效可能造成的危害程度：
+According to IEC 62304 standard, software safety classification is based on the severity of harm that may result from software failure:
 
-| 分類 | 定義 | 本系統適用 |
-|-----|------|-----------|
-| Class A | 不會造成傷害或對健康的危害 | [是/否] |
-| Class B | 可能造成非嚴重傷害 | [是/否] |
-| Class C | 可能造成死亡或嚴重傷害 | [是/否] |
+| Classification | Definition | Applicable to This System |
+|----------------|------------|---------------------------|
+| Class A | No injury or damage to health | [Yes/No] |
+| Class B | Non-serious injury possible | [Yes/No] |
+| Class C | Death or serious injury possible | [Yes/No] |
 
-### 6.2 本系統分類
+### 6.2 System Classification
 
-**整體軟體安全分類**: [Class A/B/C]
+**Overall Software Safety Classification**: [Class A/B/C]
 
-**分類理由**：
-[說明為何採用此分類]
+**Classification Rationale**:
+[Explain why this classification was adopted]
 
-### 6.3 各功能安全分類
+### 6.3 Function-Level Safety Classification
 
-| 功能 ID | 功能名稱 | 安全分類 | 分類理由 |
-|--------|---------|---------|---------|
-| SRS-001 | [名稱] | [A/B/C] | [理由] |
+| Function ID | Function Name | Safety Class | Classification Rationale |
+|-------------|---------------|--------------|--------------------------|
+| SRS-001 | [Name] | [A/B/C] | [Rationale] |
 
 ---
 
-## 7. 附錄
+## 7. Appendix
 
-### 7.1 術語定義
+### 7.1 Terminology Definitions
 
-| 術語 | 定義 |
-|-----|------|
-| [術語1] | [定義] |
+| Term | Definition |
+|------|------------|
+| [Term 1] | [Definition] |
 
-### 7.2 縮寫
+### 7.2 Abbreviations
 
-| 縮寫 | 全稱 |
-|-----|------|
+| Abbreviation | Full Name |
+|--------------|-----------|
 | SRS | Software Requirements Specification |
 | IEC | International Electrotechnical Commission |
 
 ---
 
-> **文件結束**
+> **End of Document**

@@ -1,135 +1,135 @@
-# PROFILE 模組模板 (Profile Module Template)
+# PROFILE Module Template (Profile Module)
 
-個人檔案模組的標準畫面定義，適用於所有需要用戶資料管理的 App。
-
----
-
-## 模組概述
-
-| 項目 | 值 |
-|------|-----|
-| 模組代碼 | PROFILE |
-| 必要性 | **必要** |
-| 最少畫面數 | 2 |
-| 完整畫面數 | 3 |
-| 相關需求 | REQ-PROFILE-* |
+Standard screen definitions for the Profile module, applicable to all Apps requiring user data management.
 
 ---
 
-## 標準畫面清單
+## Module Overview
 
-| 畫面 ID | 名稱 | 必要性 | 優先級 | 說明 |
-|---------|------|--------|--------|------|
-| SCR-PROFILE-001-view | 個人檔案查看 | **必要** | P0 | 顯示用戶資料 |
-| SCR-PROFILE-002-edit | 個人檔案編輯 | **必要** | P0 | 編輯用戶資料 |
-| SCR-PROFILE-003-avatar | 頭像選擇 | 選配 | P1 | 更換頭像 |
+| Item | Value |
+|------|-------|
+| Module Code | PROFILE |
+| Necessity | **Required** |
+| Minimum Screens | 2 |
+| Complete Screens | 3 |
+| Related Requirements | REQ-PROFILE-* |
 
 ---
 
-## 畫面詳細設計
+## Standard Screen List
 
-### SCR-PROFILE-001-view: 個人檔案查看 ⚠️ 必要
+| Screen ID | Name | Necessity | Priority | Description |
+|-----------|------|-----------|----------|-------------|
+| SCR-PROFILE-001-view | Profile View | **Required** | P0 | Display user data |
+| SCR-PROFILE-002-edit | Profile Edit | **Required** | P0 | Edit user data |
+| SCR-PROFILE-003-avatar | Avatar Selection | Optional | P1 | Change avatar |
 
-**必要性：** **必要**
+---
 
-**畫面說明：**
-顯示用戶的個人資料，包含頭像、名稱、基本資訊等。
+## Detailed Screen Design
 
-**UI 元件：**
+### SCR-PROFILE-001-view: Profile View ⚠️ Required
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| img_avatar | Image | 用戶頭像 |
-| lbl_name | Text | 用戶名稱 |
-| lbl_email | Text | Email（可隱藏部分） |
-| lbl_join_date | Text | 加入日期 |
-| section_stats | Section | 統計資訊區塊 |
-| btn_edit | Button | 編輯按鈕 |
-| btn_back | Button | 返回按鈕 |
+**Necessity:** **Required**
 
-**Button Navigation：**
+**Screen Description:**
+Displays user's profile information including avatar, name, and basic info.
+
+**UI Components:**
+
+| Component | Type | Description |
+|-----------|------|-------------|
+| img_avatar | Image | User avatar |
+| lbl_name | Text | User name |
+| lbl_email | Text | Email (partially hidden) |
+| lbl_join_date | Text | Join date |
+| section_stats | Section | Statistics section |
+| btn_edit | Button | Edit button |
+| btn_back | Button | Back button |
+
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_edit | 編輯 | Button | SCR-PROFILE-002-edit | - |
-| btn_back | 返回 | Button | history.back() | - |
-| img_avatar | (點擊頭像) | Image | SCR-PROFILE-003-avatar | - |
+| btn_edit | Edit | Button | SCR-PROFILE-002-edit | - |
+| btn_back | Back | Button | history.back() | - |
+| img_avatar | (Tap avatar) | Image | SCR-PROFILE-003-avatar | - |
 
 ---
 
-### SCR-PROFILE-002-edit: 個人檔案編輯 ⚠️ 必要
+### SCR-PROFILE-002-edit: Profile Edit ⚠️ Required
 
-**必要性：** **必要**
+**Necessity:** **Required**
 
-**畫面說明：**
-編輯用戶的個人資料，包含名稱、頭像、偏好設定等。
+**Screen Description:**
+Edit user's profile information including name, avatar, preferences, etc.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| img_avatar | Image | 用戶頭像（可點擊更換） |
-| btn_change_avatar | Button | 更換頭像按鈕 |
-| txt_name | TextField | 名稱輸入框 |
-| txt_nickname | TextField | 暱稱輸入框（選配） |
-| txt_bio | TextArea | 自我介紹（選配） |
-| picker_birthday | DatePicker | 生日選擇（選配） |
-| picker_gender | Picker | 性別選擇（選配） |
-| btn_save | Button | 儲存按鈕 |
-| btn_cancel | Button | 取消按鈕 |
+| Component | Type | Description |
+|-----------|------|-------------|
+| img_avatar | Image | User avatar (tappable to change) |
+| btn_change_avatar | Button | Change avatar button |
+| txt_name | TextField | Name input field |
+| txt_nickname | TextField | Nickname input field (optional) |
+| txt_bio | TextArea | Bio (optional) |
+| picker_birthday | DatePicker | Birthday picker (optional) |
+| picker_gender | Picker | Gender picker (optional) |
+| btn_save | Button | Save button |
+| btn_cancel | Button | Cancel button |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_change_avatar | 更換頭像 | Button | SCR-PROFILE-003-avatar | - |
-| btn_save | 儲存 | Button | SCR-PROFILE-001-view | 儲存成功 |
-| btn_cancel | 取消 | Button | history.back() | - |
+| btn_change_avatar | Change Avatar | Button | SCR-PROFILE-003-avatar | - |
+| btn_save | Save | Button | SCR-PROFILE-001-view | Save success |
+| btn_cancel | Cancel | Button | history.back() | - |
 
 ---
 
-### SCR-PROFILE-003-avatar: 頭像選擇
+### SCR-PROFILE-003-avatar: Avatar Selection
 
-**必要性：** 選配
+**Necessity:** Optional
 
-**畫面說明：**
-選擇或上傳用戶頭像。
+**Screen Description:**
+Select or upload user avatar.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| img_current | Image | 目前頭像 |
-| grid_presets | Grid | 預設頭像選項 |
-| btn_camera | Button | 拍照 |
-| btn_gallery | Button | 從相簿選擇 |
-| btn_save | Button | 確認選擇 |
-| btn_cancel | Button | 取消 |
+| Component | Type | Description |
+|-----------|------|-------------|
+| img_current | Image | Current avatar |
+| grid_presets | Grid | Preset avatar options |
+| btn_camera | Button | Take Photo |
+| btn_gallery | Button | Choose from Gallery |
+| btn_save | Button | Confirm Selection |
+| btn_cancel | Button | Cancel |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_camera | 拍照 | Button | (系統相機) | - |
-| btn_gallery | 從相簿選擇 | Button | (系統相簿) | - |
-| btn_save | 確認 | Button | history.back() | 頭像已更新 |
-| btn_cancel | 取消 | Button | history.back() | - |
+| btn_camera | Take Photo | Button | (System Camera) | - |
+| btn_gallery | Choose from Gallery | Button | (System Gallery) | - |
+| btn_save | Confirm | Button | history.back() | Avatar updated |
+| btn_cancel | Cancel | Button | history.back() | - |
 
 ---
 
-## 擴展畫面（選配）
+## Extension Screens (Optional)
 
-根據 App 類型可擴展以下畫面：
+Based on App type, the following screens can be extended:
 
-| 畫面 ID | 名稱 | 適用場景 |
-|---------|------|----------|
-| SCR-PROFILE-004-settings | 個人偏好設定 | 學習類 App |
-| SCR-PROFILE-005-security | 安全設定 | 金融/醫療類 App |
-| SCR-PROFILE-006-badges | 成就徽章 | 遊戲化 App |
-| SCR-PROFILE-007-history | 活動歷史 | 電商/社群 App |
+| Screen ID | Name | Applicable Scenario |
+|-----------|------|---------------------|
+| SCR-PROFILE-004-settings | Personal Preferences | Education Apps |
+| SCR-PROFILE-005-security | Security Settings | Finance/Healthcare Apps |
+| SCR-PROFILE-006-badges | Achievement Badges | Gamified Apps |
+| SCR-PROFILE-007-history | Activity History | E-commerce/Social Apps |
 
 ---
 
-## 參考來源
+## Reference Source
 
-本模板基於 VocabMaster 專案的 PROFILE 模組設計。
+This template is based on the PROFILE module design from the VocabMaster project.
