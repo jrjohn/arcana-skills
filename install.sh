@@ -503,6 +503,46 @@ clone_repo() {
     SCRIPT_DIR="$TEMP_DIR/arcana-skills"
 }
 
+# Merge skill-specific CLAUDE.md into user's CLAUDE.md
+merge_skill_claude_md() {
+    local skill_name=$1
+    local skill_claude_md="$SKILLS_DIR/$skill_name/CLAUDE.md"
+    local marker_start="# Skill: $skill_name"
+    local marker_end="# End Skill: $skill_name"
+
+    if [ ! -f "$skill_claude_md" ]; then
+        return 0
+    fi
+
+    info "  Merging CLAUDE.md for $skill_name..."
+
+    # Create user CLAUDE.md if not exists
+    if [ ! -f "$USER_CLAUDE_MD" ]; then
+        echo "" > "$USER_CLAUDE_MD"
+    fi
+
+    # Check if already contains this skill's config
+    if grep -q "$marker_start" "$USER_CLAUDE_MD" 2>/dev/null; then
+        # Remove old skill config
+        if [[ "$(uname -s)" == "Darwin" ]]; then
+            sed -i '' "/$marker_start/,/$marker_end/d" "$USER_CLAUDE_MD"
+        else
+            sed -i "/$marker_start/,/$marker_end/d" "$USER_CLAUDE_MD"
+        fi
+    fi
+
+    # Append skill CLAUDE.md with markers
+    {
+        echo ""
+        echo "$marker_start"
+        cat "$skill_claude_md"
+        echo ""
+        echo "$marker_end"
+    } >> "$USER_CLAUDE_MD"
+
+    success "  CLAUDE.md merged for $skill_name"
+}
+
 # Install a single skill
 install_skill() {
     local skill_name=$1
@@ -535,6 +575,9 @@ install_skill() {
         info "  Installing npm dependencies for $skill_name..."
         (cd "$target_path" && npm install --silent)
     fi
+
+    # Merge skill-specific CLAUDE.md if exists
+    merge_skill_claude_md "$skill_name"
 
     success "Installed: $skill_name"
 }
