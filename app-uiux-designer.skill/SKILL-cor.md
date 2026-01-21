@@ -26,15 +26,15 @@ description: |
 
 | Step | Process | 進入條件 | 退出條件 |
 |------|---------|----------|----------|
-| 00 | init | 請求 UI Flow | 模板已複製、變數已替換 |
-| 01 | discovery | 00 完成 | UI 需求已收集 |
-| 02 | planning | 01 完成 | SCR-* 清單已建立 |
-| 03 | generation | 02 完成 | **iPad + iPhone HTML 已產生、index.html 變數已替換** (BLOCKING) |
+| 00 | init | SDD 完整 + 智慧預測完成 | 模板已複製、變數已替換 |
+| 03 | generation | 00 完成 | **iPad + iPhone HTML 已產生、index.html 變數已替換** (BLOCKING) |
 | 04 | validation | 03 完成 | **覆蓋率 = 100%** (BLOCKING) |
-| 05 | diagram | 04 通過 | ui-flow-diagram.html 完成 |
+| 05 | diagram | 04 通過 | ui-flow-diagram-ipad/iphone.html 完成 |
 | 06 | screenshot | 05 完成 | 截圖已產生 |
 | 07 | feedback | 06 完成 | SDD/SRS 已更新 |
-| 08 | finalize | 07 完成 | 驗證通過 |
+| 08 | finalize | 07 完成 | 驗證通過 + 完成報告 |
+
+> ⚠️ **注意**: 01-discovery 和 02-planning 已由 `app-requirements-skill` 完成，本 Skill 從 00-init 直接進入 03-generation
 
 ---
 
@@ -48,9 +48,49 @@ Claude 收到 skill 啟用時：
    - 若 current_process = null → 從 00-init 開始
 3. 讀取 process/{current}/README.md
 4. 執行節點步驟
-5. 完成後更新 current-process.json
+5. 完成後執行 Node Transition Protocol (NTP)
 6. 進入下一節點
 ```
+
+---
+
+## Node Transition Protocol (NTP) ⭐ NEW
+
+> **節點轉換時自動產生 Phase Summary，支援 Context Compact**
+
+### 轉換流程
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. Exit Validation    - 驗證當前節點完成                      │
+│  2. Generate Summary   - 產生 Phase Summary                   │
+│  3. Save to Workspace  - 保存到 phase-summary.md              │
+│  4. Update State       - 更新 current-process.json            │
+│  5. Output Prompt      - 輸出下一節點指引                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 執行命令
+
+```bash
+node node-transition.js <from-node> <to-node> [project-path]
+
+# 範例
+node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/node-transition.js 03-generation 04-validation /path/to/04-ui-flow
+```
+
+### Phase Summary 保存位置
+
+| 檔案 | 說明 |
+|------|------|
+| `workspace/phase-summary.md` | 當前 Phase Summary (最新) |
+| `workspace/phase-history.md` | 所有 Phase Summary 歷史 |
+
+### Claude 在 Compaction 後
+
+1. 讀取 `workspace/phase-summary.md` 恢復上下文
+2. 讀取 `workspace/current-process.json` 確認當前節點
+3. 繼續執行當前節點的剩餘工作
 
 ---
 
@@ -62,16 +102,29 @@ Claude 收到 skill 啟用時：
 | `workspace/context/` | 已載入的節點檔案 |
 | `workspace/state/` | Compaction 保存點 |
 
-### Compaction 保護
+### Compaction 保護 (AFP)
 
-**每完成重要步驟時**，執行：
+**節點轉換時**（使用 NTP）：
+```bash
+node node-transition.js <from> <to> [path]
+# 自動產生 phase-summary.md + 更新 current-process.json
+```
+
+**手動保存**：
 ```bash
 cp workspace/current-process.json workspace/state/process-state.json
 ```
 
 **Compaction 後恢復**：
-1. 讀取 `workspace/state/process-state.json`
-2. 繼續該節點的剩餘工作
+```bash
+# 1. 快速健康檢查
+bash quick-health-check.sh [project-path]
+
+# 2. 讀取 Phase Summary 恢復上下文
+cat workspace/phase-summary.md
+
+# 3. 繼續當前節點
+```
 
 ---
 
@@ -112,11 +165,14 @@ VARS=$(grep -c '{{.*}}' index.html)
 
 | 腳本 | 位置 | 說明 |
 |------|------|------|
+| **node-transition.js** | `templates/ui-flow/` | **節點轉換 + Phase Summary (NTP)** ⭐ |
+| **exit-gate.js** | `templates/ui-flow/` | **統一驗證入口** |
+| **quick-health-check.sh** | `templates/ui-flow/` | **Compaction 後快速檢查** |
 | init-project.sh | `process/00-init/templates/` | 專案初始化 |
 | validate-navigation.js | `templates/ui-flow/` | 導航驗證 |
-| capture-screenshots.js | `templates/ui-flow/` | 截圖生成 |
-| **convert-to-iphone.sh** | `templates/ui-flow/scripts/` | **iPad→iPhone 轉換 (MANDATORY)** |
-| **update-index-counts.sh** | `templates/ui-flow/scripts/` | **index.html 變數替換 (MANDATORY)** |
+| capture-screenshots.js | `templates/ui-flow/` | 截圖生成 + Error Recovery |
+| convert-to-iphone.sh | `templates/ui-flow/scripts/` | iPad→iPhone 轉換 |
+| update-index-counts.sh | `templates/ui-flow/scripts/` | index.html 變數替換 |
 
 ### Script Dependencies (MANDATORY)
 

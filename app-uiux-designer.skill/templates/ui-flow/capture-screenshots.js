@@ -29,10 +29,16 @@ const fs = require('fs');
 const args = process.argv.slice(2);
 const VALIDATE_ONLY = args.includes('--validate-only');
 const SKIP_VALIDATION = args.includes('--skip-validation');
+const RETRY_FAILED = args.includes('--retry-failed');
+const PROJECT_PATH = args.find(a => !a.startsWith('--')) || process.cwd();
 
 // IMPORTANT: Strict validation blocking mode
 // When true, UI Flow generation is BLOCKED if validation fails
 const BLOCK_ON_FAILURE = true;
+
+// Error Recovery Configuration
+const ERROR_LOG_FILE = 'workspace/screenshot-error-log.json';
+const MAX_RETRIES = 3;
 
 // Screen definitions - Customize for your project
 const SCREENS = {
@@ -321,39 +327,74 @@ async function validateNavigationIntegrity() {
   return issues;
 }
 
-async function captureScreenshots() {
+async function captureScreenshots(basePath, screensToCapture, retryOnly = false) {
   const browser = await puppeteer.launch({
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
-  const baseUrl = `file://${path.resolve(__dirname)}`;
+  const baseUrl = `file://${path.resolve(basePath)}`;
   let totalScreens = 0;
   let capturedScreens = 0;
+  let failedScreens = 0;
+
+  // Use discovered screens or predefined SCREENS
+  const screens = screensToCapture || discoverScreens(basePath);
+
+  // Load error log for retry mode
+  const errorLog = loadErrorLog();
+  const failedScreenIds = new Set(errorLog.errors.map(e => `${e.device}/${e.screenId}`));
 
   // Count total screens
   for (const device of Object.keys(DEVICES)) {
-    for (const module of Object.keys(SCREENS)) {
-      totalScreens += SCREENS[module].length;
+    for (const module of Object.keys(screens)) {
+      if (screens[module]) {
+        if (retryOnly) {
+          totalScreens += screens[module].filter(s => failedScreenIds.has(`${device}/${s.id}`)).length;
+        } else {
+          totalScreens += screens[module].length;
+        }
+      }
     }
   }
 
-  console.log(`\n{{PROJECT_NAME}} Screenshot Capture\n`);
-  console.log(`Total screens to capture: ${totalScreens}\n`);
+  if (totalScreens === 0) {
+    console.log('\n   No screens to capture.');
+    await browser.close();
+    return { captured: 0, failed: 0 };
+  }
+
+  console.log(`\n   Screenshot Capture\n`);
+  console.log(`   Total screens to capture: ${totalScreens}\n`);
+
+  // Reset error log for new run
+  if (!retryOnly) {
+    errorLog.errors = [];
+  }
+  errorLog.lastRun = new Date().toISOString();
 
   for (const [deviceName, deviceConfig] of Object.entries(DEVICES)) {
-    console.log(`\nCapturing ${deviceName.toUpperCase()} screens...`);
+    console.log(`\n   Capturing ${deviceName.toUpperCase()} screens...`);
     console.log(`   Viewport: ${deviceConfig.viewport.width} x ${deviceConfig.viewport.height}\n`);
 
     const page = await browser.newPage();
     await page.setViewport(deviceConfig.viewport);
 
-    for (const [moduleName, screens] of Object.entries(SCREENS)) {
+    for (const [moduleName, moduleScreens] of Object.entries(screens)) {
+      if (!moduleScreens) continue;
+
       // Determine output folder
-      const outputFolder = path.join(__dirname, 'screenshots', moduleName);
+      const outputFolder = path.join(basePath, 'screenshots', deviceName);
       await ensureDir(outputFolder);
 
-      for (const screen of screens) {
+      for (const screen of moduleScreens) {
+        const screenKey = `${deviceName}/${screen.id}`;
+
+        // Skip if retry mode and this wasn't a failed screen
+        if (retryOnly && !failedScreenIds.has(screenKey)) {
+          continue;
+        }
+
         // Build URL based on device
         let htmlFile;
         if (deviceName === 'iphone') {
@@ -361,26 +402,51 @@ async function captureScreenshots() {
         } else {
           htmlFile = `${moduleName}/${screen.id}.html`;
         }
+
+        const fullHtmlPath = path.join(basePath, htmlFile);
+
+        // Check if file exists before trying to capture
+        if (!fs.existsSync(fullHtmlPath)) {
+          failedScreens++;
+          recordError(errorLog, screen.id, deviceName, 'HTML file not found', fullHtmlPath);
+          console.log(`   ❌ [${capturedScreens + failedScreens}/${totalScreens}] ${screen.id} - FILE NOT FOUND`);
+          continue;
+        }
+
         const url = `${baseUrl}/${htmlFile}`;
 
         // Build output path
         const outputPath = path.join(outputFolder, `${screen.id}.png`);
 
-        try {
-          await page.goto(url, { waitUntil: 'networkidle0', timeout: 10000 });
+        let retryCount = 0;
+        let success = false;
 
-          // Wait for fonts and animations
-          await new Promise(resolve => setTimeout(resolve, 500));
+        while (retryCount < MAX_RETRIES && !success) {
+          try {
+            await page.goto(url, { waitUntil: 'networkidle0', timeout: 15000 });
 
-          await page.screenshot({
-            path: outputPath,
-            fullPage: false
-          });
+            // Wait for fonts and animations
+            await new Promise(resolve => setTimeout(resolve, 500));
 
-          capturedScreens++;
-          console.log(`   [${capturedScreens}/${totalScreens}] ${screen.id} (${screen.name})`);
-        } catch (error) {
-          console.log(`   [${capturedScreens}/${totalScreens}] ${screen.id} - ${error.message}`);
+            await page.screenshot({
+              path: outputPath,
+              fullPage: false
+            });
+
+            capturedScreens++;
+            success = true;
+            console.log(`   ✅ [${capturedScreens + failedScreens}/${totalScreens}] ${screen.id}`);
+          } catch (error) {
+            retryCount++;
+            if (retryCount >= MAX_RETRIES) {
+              failedScreens++;
+              recordError(errorLog, screen.id, deviceName, error.message, fullHtmlPath);
+              console.log(`   ❌ [${capturedScreens + failedScreens}/${totalScreens}] ${screen.id} - ${error.message}`);
+            } else {
+              console.log(`   ⚠️  ${screen.id} - Retry ${retryCount}/${MAX_RETRIES}...`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          }
         }
       }
     }
@@ -390,8 +456,146 @@ async function captureScreenshots() {
 
   await browser.close();
 
-  console.log(`\nDone! Captured ${capturedScreens}/${totalScreens} screenshots.\n`);
-  console.log(`Screenshots saved to: ${path.join(__dirname, 'screenshots')}\n`);
+  // Save error log
+  saveErrorLog(errorLog);
+
+  console.log(`\n   Done!`);
+  console.log(`   ✅ Captured: ${capturedScreens}`);
+  console.log(`   ❌ Failed: ${failedScreens}`);
+  console.log(`   📁 Output: ${path.join(basePath, 'screenshots')}`);
+
+  if (failedScreens > 0) {
+    console.log(`\n   ⚠️ Error log saved to: ${ERROR_LOG_FILE}`);
+    console.log(`   📌 To retry failed screens: node capture-screenshots.js --retry-failed ${basePath}`);
+  }
+
+  return { captured: capturedScreens, failed: failedScreens, errorLog };
+}
+
+// =============================================================================
+// ERROR RECOVERY SYSTEM
+// =============================================================================
+
+/**
+ * Load error log from previous run
+ */
+function loadErrorLog() {
+  const logPath = path.join(PROJECT_PATH, ERROR_LOG_FILE);
+  if (fs.existsSync(logPath)) {
+    try {
+      return JSON.parse(fs.readFileSync(logPath, 'utf-8'));
+    } catch (e) {
+      return { errors: [], lastRun: null };
+    }
+  }
+  return { errors: [], lastRun: null };
+}
+
+/**
+ * Save error log
+ */
+function saveErrorLog(errorLog) {
+  const logPath = path.join(PROJECT_PATH, ERROR_LOG_FILE);
+  const workspaceDir = path.dirname(logPath);
+  if (!fs.existsSync(workspaceDir)) {
+    fs.mkdirSync(workspaceDir, { recursive: true });
+  }
+  fs.writeFileSync(logPath, JSON.stringify(errorLog, null, 2));
+}
+
+/**
+ * Record a screenshot error
+ */
+function recordError(errorLog, screenId, device, errorMessage, htmlPath) {
+  errorLog.errors.push({
+    screenId,
+    device,
+    error: errorMessage,
+    htmlPath,
+    timestamp: new Date().toISOString(),
+    success: false,
+    retryCount: 0
+  });
+}
+
+/**
+ * Auto-discover all screens from file system
+ */
+function discoverScreens(basePath) {
+  const screens = {};
+  const moduleDirs = ['auth', 'common', 'dash', 'home', 'onboard', 'parent', 'profile', 'progress', 'report', 'setting', 'train', 'vocab', 'feature', 'engage'];
+
+  for (const module of moduleDirs) {
+    const modulePath = path.join(basePath, module);
+    if (fs.existsSync(modulePath)) {
+      const files = fs.readdirSync(modulePath).filter(f => f.startsWith('SCR-') && f.endsWith('.html'));
+      if (files.length > 0) {
+        screens[module] = files.map(f => ({
+          id: f.replace('.html', ''),
+          name: f.replace('.html', '').split('-').slice(2).join('-')
+        }));
+      }
+    }
+  }
+
+  return screens;
+}
+
+/**
+ * Pre-validation: Check all HTML files exist before taking screenshots
+ */
+async function preValidateScreens(basePath) {
+  console.log('\n=== PRE-VALIDATION: Screen File Check ===\n');
+
+  const screens = discoverScreens(basePath);
+  const errors = [];
+  let totalScreens = 0;
+  let existingScreens = 0;
+
+  for (const [module, moduleScreens] of Object.entries(screens)) {
+    for (const screen of moduleScreens) {
+      totalScreens++;
+
+      // Check iPad version
+      const ipadPath = path.join(basePath, module, `${screen.id}.html`);
+      if (fs.existsSync(ipadPath)) {
+        existingScreens++;
+      } else {
+        errors.push({
+          screenId: screen.id,
+          device: 'ipad',
+          path: ipadPath,
+          error: 'File not found'
+        });
+      }
+
+      // Check iPhone version
+      const iphonePath = path.join(basePath, 'iphone', `${screen.id}.html`);
+      if (!fs.existsSync(iphonePath)) {
+        errors.push({
+          screenId: screen.id,
+          device: 'iphone',
+          path: iphonePath,
+          error: 'iPhone version not found'
+        });
+      }
+    }
+  }
+
+  console.log(`   Total screens: ${totalScreens}`);
+  console.log(`   Existing iPad files: ${existingScreens}`);
+  console.log(`   Missing files: ${errors.length}`);
+
+  if (errors.length > 0) {
+    console.log('\n   Missing files:');
+    const uniqueErrors = [...new Set(errors.map(e => `${e.device}/${e.screenId}`))];
+    uniqueErrors.slice(0, 10).forEach(e => console.log(`   - ${e}`));
+    if (uniqueErrors.length > 10) {
+      console.log(`   ... and ${uniqueErrors.length - 10} more`);
+    }
+  }
+
+  return { screens, errors, totalScreens, existingScreens };
 }
 
 // =============================================================================
@@ -399,11 +603,37 @@ async function captureScreenshots() {
 // =============================================================================
 
 async function main() {
+  const basePath = PROJECT_PATH;
+
   console.log('\n' + '='.repeat(60));
-  console.log('{{PROJECT_NAME}} UI Flow Screenshot Capture & Validation');
+  console.log('  UI Flow Screenshot Capture & Validation');
+  console.log('  with Error Recovery Support');
   console.log('='.repeat(60));
+  console.log(`\n   Project: ${basePath}`);
 
   let validationPassed = true;
+
+  // Handle retry mode
+  if (RETRY_FAILED) {
+    console.log('\n   Mode: RETRY FAILED SCREENSHOTS');
+    const errorLog = loadErrorLog();
+    if (errorLog.errors.length === 0) {
+      console.log('   No failed screenshots to retry.');
+      process.exit(0);
+    }
+    console.log(`   Retrying ${errorLog.errors.length} failed screenshot(s)...`);
+    const screens = discoverScreens(basePath);
+    const result = await captureScreenshots(basePath, screens, true);
+    process.exit(result.failed > 0 ? 1 : 0);
+  }
+
+  // Step 0: Pre-validation - check all HTML files exist
+  const preValidation = await preValidateScreens(basePath);
+  if (preValidation.errors.length > 0) {
+    console.log('\n   ⚠️ Some screen files are missing.');
+    console.log('   Screenshot capture may fail for missing files.');
+    console.log('   Consider returning to 03-generation to create missing screens.');
+  }
 
   // Step 1: Validation (unless skipped)
   if (!SKIP_VALIDATION) {
@@ -417,8 +647,11 @@ async function main() {
       console.error('!'.repeat(60));
       console.error('\n   All invalid targets must be fixed before proceeding.');
       console.error('\n   Missing screens:');
-      for (const inv of clickableResults.invalidElements) {
+      for (const inv of clickableResults.invalidElements.slice(0, 10)) {
         console.error(`   - ${inv.target} (referenced from ${inv.screen})`);
+      }
+      if (clickableResults.invalidElements.length > 10) {
+        console.error(`   ... and ${clickableResults.invalidElements.length - 10} more`);
       }
       validationPassed = false;
     }
@@ -452,7 +685,22 @@ async function main() {
 
   // Step 2: Screenshot capture (unless validate-only)
   if (!VALIDATE_ONLY && (validationPassed || SKIP_VALIDATION)) {
-    await captureScreenshots();
+    const screens = discoverScreens(basePath);
+    const result = await captureScreenshots(basePath, screens, false);
+
+    // Check for failures and provide recovery instructions
+    if (result.failed > 0) {
+      console.log('\n' + '='.repeat(60));
+      console.log('  ERROR RECOVERY INSTRUCTIONS');
+      console.log('='.repeat(60));
+      console.log(`\n   ${result.failed} screenshot(s) failed.`);
+      console.log('\n   Options:');
+      console.log('   1. Return to 03-generation to create missing HTML files');
+      console.log(`   2. Retry failed screenshots: node capture-screenshots.js --retry-failed ${basePath}`);
+      console.log(`   3. Check error log: ${ERROR_LOG_FILE}`);
+      console.log('\n   ⚠️ If HTML files are missing, you MUST return to 03-generation!');
+      process.exit(1);
+    }
   }
 
   console.log('\n' + '='.repeat(60));

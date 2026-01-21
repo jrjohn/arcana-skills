@@ -730,9 +730,11 @@ Claude 收到 skill 啟用時：
    - 若 current_process 存在 → 恢復到該節點
 5. 讀取 [SKILL_DIR]/process/{current}/README.md
 6. 執行節點步驟
-7. 完成後更新專案的 workspace/current-process.json
+7. 完成後執行 Node Transition Protocol (NTP) ⭐
 8. 進入下一節點
 ```
+
+> ⭐ **使用 NTP 轉換節點**: `node node-transition.js <from> <to> [project-path]`
 
 **路徑說明：**
 - `[SKILL_DIR]` = `~/.claude/skills/app-uiux-designer.skill/` (skill 本身)
@@ -774,6 +776,9 @@ Claude 收到 skill 啟用時：
 |---------------|------|
 | `04-ui-flow/workspace/current-process.json` | 目前流程狀態 |
 | `04-ui-flow/workspace/screen-prediction.json` | 智慧預測結果 (Phase 2 產生) |
+| `04-ui-flow/workspace/phase-summary.md` | **⭐ 最新 Phase Summary (NTP 產生)** |
+| `04-ui-flow/workspace/phase-history.md` | **所有 Phase Summary 歷史** |
+| `04-ui-flow/workspace/validation-chain.json` | 驗證歷史記錄 |
 | `04-ui-flow/workspace/state/` | Compaction 保存點 |
 
 ### 初始化 workspace
@@ -812,11 +817,14 @@ mkdir -p {PROJECT}/04-ui-flow/workspace/{context,state}
 | 腳本 | 位置 | 說明 |
 |------|------|------|
 | init-project.sh | `process/00-init/templates/` | 專案初始化 |
+| **node-transition.js** | `templates/ui-flow/` | **⭐ 節點轉換 + Phase Summary (NTP)** |
+| **exit-gate.js** | `templates/ui-flow/` | **統一驗證入口** |
+| **quick-health-check.sh** | `templates/ui-flow/` | **Compaction 後快速檢查** |
 | **post-generation-gate.js** | `templates/ui-flow/` | **🚨 產生後閘門 (BLOCKING - 自動執行所有驗證)** |
 | validate-navigation.js | `templates/ui-flow/` | 導航驗證 |
 | validate-iframe-src.js | `templates/ui-flow/` | iframe src 路徑驗證 |
 | validate-consistency.js | `templates/ui-flow/` | 一致性驗證 |
-| capture-screenshots.js | `templates/ui-flow/` | 截圖生成 |
+| capture-screenshots.js | `templates/ui-flow/` | 截圖生成 + Error Recovery |
 | convert-to-iphone.sh | 專案內 `scripts/` | iPad→iPhone 轉換 |
 
 ### 🚨 post-generation-gate.js (MANDATORY)
@@ -906,10 +914,11 @@ node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/validate-iframe-
 | 指令 | 動作 |
 |------|------|
 | `進入節點 XX` | 讀取 `process/XX/README.md` |
-| `下一步` | 自動判斷並進入下一節點 |
+| `下一步` | 執行 NTP 轉換到下一節點 ⭐ |
 | `保存狀態` | 複製 current-process.json 到 state/ |
-| `恢復狀態` | 從 state/ 讀取並恢復 |
+| `恢復狀態` | 執行 quick-health-check.sh + 讀取 phase-summary.md |
 | `顯示進度` | 讀取 current-process.json 的 progress |
+| `健康檢查` | 執行 quick-health-check.sh |
 
 ---
 
@@ -975,11 +984,13 @@ Claude AI 有以下限制可能導致遺忘：
 1. 必須執行 exit-validation.sh
 2. 必須更新 current-process.json 的 validation_state
 3. 必須記錄到 validation-chain.json
+4. 使用 NTP 轉換節點 (自動產生 phase-summary.md) ⭐
 
 Compaction 後恢復：
 1. 執行 quick-health-check.sh
-2. 讀取 validation-chain.json 確認已完成的驗證
-3. 從最後一個有效狀態繼續
+2. 讀取 phase-summary.md 恢復上下文 ⭐ NTP
+3. 讀取 validation-chain.json 確認已完成的驗證
+4. 從最後一個有效狀態繼續
 ```
 
 ### Enhanced current-process.json 結構
@@ -1078,10 +1089,13 @@ Compaction 後恢復：
 
 ```bash
 # 1. 執行快速健康檢查
-bash ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/quick-health-check.sh
+bash ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/quick-health-check.sh [project-path]
 
-# 2. 檢查輸出並恢復狀態
-node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/recover-state.js
+# 2. 讀取 Phase Summary 恢復上下文 ⭐ NTP
+cat workspace/phase-summary.md
+
+# 3. 檢查輸出並恢復狀態
+node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/recover-state.js [project-path]
 ```
 
 ### quick-health-check.sh 內容
@@ -1150,3 +1164,124 @@ echo "📍 請從節點 '$CURRENT' 繼續"
 2. **完成任何修改後**：更新 recovery_hints.last_action
 3. **完成節點前**：必須執行 exit-validation 並記錄
 4. **發現不一致時**：優先相信檔案狀態而非記憶
+
+---
+
+## ⭐ Node Transition Protocol (NTP)
+
+> **節點轉換時自動產生 Phase Summary，支援 Context Compact**
+
+### 概念
+
+NTP 確保在節點轉換時：
+1. 自動驗證當前節點完成
+2. 產生 Phase Summary 保存上下文
+3. 更新流程狀態
+4. 輸出下一節點指引
+
+### 轉換流程
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. Exit Validation    - 驗證當前節點完成                      │
+│  2. Generate Summary   - 產生 Phase Summary                   │
+│  3. Save to Workspace  - 保存到 phase-summary.md              │
+│  4. Update State       - 更新 current-process.json            │
+│  5. Output Prompt      - 輸出下一節點指引                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 執行命令
+
+```bash
+# 節點轉換時使用
+node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/node-transition.js <from-node> <to-node> [project-path]
+
+# 範例：從 03-generation 轉到 04-validation
+node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/node-transition.js 03-generation 04-validation /path/to/04-ui-flow
+```
+
+### Phase Summary 保存位置
+
+| 檔案 | 說明 |
+|------|------|
+| `workspace/phase-summary.md` | 當前 Phase Summary (最新) |
+| `workspace/phase-history.md` | 所有 Phase Summary 歷史 |
+
+### Compaction 後恢復流程
+
+當 Claude 從 compaction 恢復時：
+
+```bash
+# 1. 快速健康檢查
+bash ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/quick-health-check.sh [project-path]
+
+# 2. 讀取 Phase Summary 恢復上下文
+cat workspace/phase-summary.md
+
+# 3. 讀取當前節點
+cat workspace/current-process.json | jq '.current_process'
+
+# 4. 繼續執行當前節點
+```
+
+### NTP 與 AFP 整合
+
+| 機制 | 功能 | 時機 |
+|------|------|------|
+| **NTP** | 產生 Phase Summary | 節點轉換時 |
+| **AFP** | 驗證歷史 + 狀態恢復 | 任何時候 |
+| **Exit Gate** | 統一驗證入口 | 節點完成前 |
+| **Quick Health Check** | 快速狀態確認 | Compaction 後 |
+
+### 節點完成流程 (使用 NTP)
+
+```
+完成當前節點工作
+       ↓
+執行 exit-gate.js 驗證
+       ↓
+   ┌───┴───┐
+   ↓       ↓
+ PASS    FAIL
+   ↓       ↓
+執行     修復問題
+NTP      重新驗證
+   ↓
+自動產生 Phase Summary
+自動更新 current-process.json
+       ↓
+讀取下一節點 README.md
+       ↓
+繼續執行
+```
+
+### 使用範例
+
+```bash
+# 03-generation 完成後，轉換到 04-validation
+node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/node-transition.js 03-generation 04-validation
+
+# 輸出範例：
+# ╔════════════════════════════════════════════════════════════╗
+# ║           NODE TRANSITION PROTOCOL (NTP)                   ║
+# ╚════════════════════════════════════════════════════════════╝
+#
+# ▶ Running exit validation for 03-generation...
+# ✅ Saved to: workspace/phase-summary.md
+# ✅ current-process.json updated
+#
+# CONTEXT COMPACT POINT
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# PHASE SUMMARY (Preserve this information)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# ## Completed: 03-generation (HTML Generation)
+# - iPad screens: 48
+# - iPhone screens: 48
+# - Modules: auth, common, dash, ...
+#
+# ## Next: 04-validation
+# - Action: Validate 100% navigation coverage
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```

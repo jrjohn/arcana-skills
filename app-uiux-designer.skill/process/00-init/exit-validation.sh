@@ -1,79 +1,94 @@
 #!/bin/bash
 # ============================================================================
-# Exit Validation - 00-init
+# Exit Validation: 00-init
 # ============================================================================
-# Must pass before marking 00-init as completed
+# Purpose: Validate that 00-init phase is complete before proceeding
+# Usage: bash exit-validation.sh [project-04-ui-flow-path]
 # ============================================================================
 
 set -e
 PROJECT_PATH="${1:-.}"
-cd "$PROJECT_PATH/04-ui-flow"
+cd "$PROJECT_PATH" 2>/dev/null || { echo "Error: Cannot access $PROJECT_PATH"; exit 1; }
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
 echo ""
-echo "🔍 Exit Validation: 00-init"
-echo "=============================="
+echo -e "${BLUE}============================================${NC}"
+echo -e "${BLUE}  Exit Validation: 00-init${NC}"
+echo -e "${BLUE}============================================${NC}"
 echo ""
 
 ERRORS=0
 
-# 1. Check workspace exists
-echo "📁 Checking workspace..."
-[ -d "workspace" ] || { echo "❌ workspace/ not found"; ERRORS=$((ERRORS+1)); }
-[ -d "workspace/context" ] || { echo "❌ workspace/context/ not found"; ERRORS=$((ERRORS+1)); }
-[ -d "workspace/state" ] || { echo "❌ workspace/state/ not found"; ERRORS=$((ERRORS+1)); }
-[ $ERRORS -eq 0 ] && echo "✅ workspace structure OK"
-
-# 2. Check current-process.json
-echo ""
-echo "📄 Checking current-process.json..."
-if [ -f "workspace/current-process.json" ]; then
-  # Check for required fields
-  grep -q '"current_process"' workspace/current-process.json || { echo "❌ Missing current_process field"; ERRORS=$((ERRORS+1)); }
-  grep -q '"progress"' workspace/current-process.json || { echo "❌ Missing progress field"; ERRORS=$((ERRORS+1)); }
-  [ $ERRORS -eq 0 ] && echo "✅ current-process.json valid"
-else
-  echo "❌ current-process.json not found"
-  ERRORS=$((ERRORS+1))
-fi
-
-# 3. Check directory structure
-echo ""
-echo "📁 Checking directory structure..."
-REQUIRED_DIRS=("auth" "common" "dash" "parent" "profile" "progress" "setting" "train" "vocab" "docs" "iphone" "shared")
-for dir in "${REQUIRED_DIRS[@]}"; do
-  if [ -d "$dir" ]; then
-    echo "  ✅ $dir/"
-  else
-    echo "  ❌ $dir/ missing"
-    ERRORS=$((ERRORS+1))
-  fi
+# Check 1: Core files exist
+echo -e "${BLUE}[1/4] Core Files${NC}"
+CORE_FILES=("index.html" "device-preview.html" "shared/project-theme.css" "shared/notify-parent.js")
+for file in "${CORE_FILES[@]}"; do
+    if [ -f "$file" ]; then
+        lines=$(wc -l < "$file" | tr -d ' ')
+        echo -e "  ${GREEN}✅${NC} $file ($lines lines)"
+    else
+        echo -e "  ${RED}❌${NC} $file missing"
+        ERRORS=$((ERRORS+1))
+    fi
 done
 
-# 4. Check shared files
+# Check 2: Required scripts exist
 echo ""
-echo "📁 Checking shared files..."
-[ -f "shared/project-theme.css" ] || { echo "❌ shared/project-theme.css not found"; ERRORS=$((ERRORS+1)); }
-[ -f "shared/notify-parent.js" ] || { echo "❌ shared/notify-parent.js not found"; ERRORS=$((ERRORS+1)); }
-[ $ERRORS -eq 0 ] && echo "✅ shared files OK"
+echo -e "${BLUE}[2/4] Required Scripts${NC}"
+SCRIPT_FILES=("capture-screenshots.js" "validate-navigation.js")
+for file in "${SCRIPT_FILES[@]}"; do
+    if [ -f "$file" ]; then
+        echo -e "  ${GREEN}✅${NC} $file"
+    else
+        echo -e "  ${RED}❌${NC} $file missing"
+        ERRORS=$((ERRORS+1))
+    fi
+done
+
+# Check 3: Template variables replaced
+echo ""
+echo -e "${BLUE}[3/4] Template Variables${NC}"
+UNREPLACED=$(grep -roh '{{[A-Z_]*}}' *.html 2>/dev/null | sort -u | wc -l | tr -d ' ')
+if [ "$UNREPLACED" -eq 0 ]; then
+    echo -e "  ${GREEN}✅${NC} All variables replaced"
+else
+    echo -e "  ${RED}❌${NC} Found $UNREPLACED unreplaced variables"
+    grep -roh '{{[A-Z_]*}}' *.html 2>/dev/null | sort -u | head -5
+    ERRORS=$((ERRORS+1))
+fi
+
+# Check 4: Workspace initialized
+echo ""
+echo -e "${BLUE}[4/4] Workspace${NC}"
+if [ -f "workspace/current-process.json" ]; then
+    echo -e "  ${GREEN}✅${NC} workspace/current-process.json exists"
+else
+    echo -e "  ${RED}❌${NC} workspace/current-process.json missing"
+    ERRORS=$((ERRORS+1))
+fi
+
+if [ -d "workspace/context" ] && [ -d "workspace/state" ]; then
+    echo -e "  ${GREEN}✅${NC} workspace directories exist"
+else
+    echo -e "  ${YELLOW}⚠️${NC} workspace subdirectories incomplete"
+fi
 
 # Summary
 echo ""
-echo "=============================="
+echo -e "${BLUE}============================================${NC}"
 if [ $ERRORS -eq 0 ]; then
-  echo "✅ Exit Validation PASSED"
-  echo ""
-  echo "Updating validation-chain.json..."
-
-  # Update validation chain
-  TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  if [ -f "workspace/validation-chain.json" ]; then
-    # Add to existing chain (simplified - in production use jq)
-    echo "Chain updated at $TIMESTAMP"
-  fi
-
-  exit 0
+    echo -e "${GREEN}✅ 00-init Exit Validation PASSED${NC}"
+    echo ""
+    exit 0
 else
-  echo "❌ Exit Validation FAILED ($ERRORS errors)"
-  echo "Fix issues before proceeding to 03-generation"
-  exit 1
+    echo -e "${RED}❌ 00-init Exit Validation FAILED${NC}"
+    echo -e "   Errors: $ERRORS"
+    echo ""
+    exit 1
 fi
