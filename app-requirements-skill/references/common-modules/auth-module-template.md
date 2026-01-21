@@ -1,259 +1,259 @@
-# AUTH 模組模板 (Authentication Module Template)
+# AUTH Module Template (Authentication Module)
 
-認證模組的標準畫面定義，適用於所有需要用戶登入的 App。
-
----
-
-## 模組概述
-
-| 項目 | 值 |
-|------|-----|
-| 模組代碼 | AUTH |
-| 必要性 | **必要** |
-| 最少畫面數 | 3 |
-| 完整畫面數 | 8 |
-| 相關需求 | REQ-AUTH-* |
+Standard screen definitions for the Authentication module, applicable to all Apps requiring user login.
 
 ---
 
-## 標準畫面清單
+## Module Overview
 
-| 畫面 ID | 名稱 | 必要性 | 優先級 | 說明 |
-|---------|------|--------|--------|------|
-| SCR-AUTH-001-welcome | 歡迎頁 | 選配 | P1 | 首次開啟引導頁 |
-| SCR-AUTH-002-login | 登入頁 | **必要** | P0 | Email/Social 登入 |
-| SCR-AUTH-003-register | 註冊頁 | **必要** | P0 | 新用戶註冊 |
-| SCR-AUTH-004-forgot | 忘記密碼 | **必要** | P0 | 密碼重設入口 |
-| SCR-AUTH-005-verify | 驗證碼輸入 | 選配 | P1 | Email/SMS 驗證 |
-| SCR-AUTH-006-reset-sent | 重設郵件已發送 | 選配 | P2 | 確認訊息頁 |
-| SCR-AUTH-007-role | 角色選擇 | 選配 | P1 | 多角色 App 使用 |
-| SCR-AUTH-008-pin | PIN 碼驗證 | 選配 | P1 | 家長/管理員驗證 |
+| Item | Value |
+|------|-------|
+| Module Code | AUTH |
+| Necessity | **Required** |
+| Minimum Screens | 3 |
+| Complete Screens | 8 |
+| Related Requirements | REQ-AUTH-* |
 
 ---
 
-## 畫面詳細設計
+## Standard Screen List
 
-### SCR-AUTH-001-welcome: 歡迎頁
+| Screen ID | Name | Necessity | Priority | Description |
+|-----------|------|-----------|----------|-------------|
+| SCR-AUTH-001-welcome | Welcome Page | Optional | P1 | First-time onboarding page |
+| SCR-AUTH-002-login | Login Page | **Required** | P0 | Email/Social login |
+| SCR-AUTH-003-register | Register Page | **Required** | P0 | New user registration |
+| SCR-AUTH-004-forgot | Forgot Password | **Required** | P0 | Password reset entry |
+| SCR-AUTH-005-verify | Verification Code | Optional | P1 | Email/SMS verification |
+| SCR-AUTH-006-reset-sent | Reset Email Sent | Optional | P2 | Confirmation message page |
+| SCR-AUTH-007-role | Role Selection | Optional | P1 | For multi-role Apps |
+| SCR-AUTH-008-pin | PIN Verification | Optional | P1 | Parent/Admin verification |
 
-**必要性：** 選配（建議首次安裝使用）
+---
 
-**畫面說明：**
-首次開啟 App 時的引導頁面，展示產品特色和價值主張。
+## Detailed Screen Design
 
-**UI 元件：**
+### SCR-AUTH-001-welcome: Welcome Page
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| app_logo | Image | App Logo 圖示 |
-| welcome_title | Text | 歡迎標題 |
-| welcome_description | Text | 產品說明文字 |
-| btn_start | Button | 開始使用按鈕 |
-| lnk_login | Link | 已有帳號？登入 |
+**Necessity:** Optional (recommended for first-time installation)
 
-**Button Navigation：**
+**Screen Description:**
+Onboarding page displayed when the App is first opened, showcasing product features and value proposition.
+
+**UI Components:**
+
+| Component | Type | Description |
+|-----------|------|-------------|
+| app_logo | Image | App Logo icon |
+| welcome_title | Text | Welcome title |
+| welcome_description | Text | Product description text |
+| btn_start | Button | Get Started button |
+| lnk_login | Link | Already have an account? Login |
+
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_start | 開始使用 | Button | SCR-AUTH-003-register | - |
-| lnk_login | 已有帳號？登入 | Link | SCR-AUTH-002-login | - |
+| btn_start | Get Started | Button | SCR-AUTH-003-register | - |
+| lnk_login | Already have an account? Login | Link | SCR-AUTH-002-login | - |
 
 ---
 
-### SCR-AUTH-002-login: 登入頁 ⚠️ 必要
+### SCR-AUTH-002-login: Login Page ⚠️ Required
 
-**必要性：** **必要**
+**Necessity:** **Required**
 
-**畫面說明：**
-用戶登入頁面，支援 Email/密碼登入及社群帳號登入。
+**Screen Description:**
+User login page supporting Email/password login and social account login.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| txt_email | TextField | Email 輸入框 |
-| txt_password | SecureField | 密碼輸入框（遮罩） |
-| btn_login | Button | 登入按鈕 |
-| btn_apple | Button | Apple ID 登入 |
-| btn_google | Button | Google 登入（選配） |
-| lnk_forgot | Link | 忘記密碼？ |
-| lnk_register | Link | 立即註冊 |
+| Component | Type | Description |
+|-----------|------|-------------|
+| txt_email | TextField | Email input field |
+| txt_password | SecureField | Password input field (masked) |
+| btn_login | Button | Login button |
+| btn_apple | Button | Apple ID login |
+| btn_google | Button | Google login (optional) |
+| lnk_forgot | Link | Forgot Password? |
+| lnk_register | Link | Register Now |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_login | 登入 | Button | SCR-HOME-001-main | 驗證成功 |
-| btn_apple | Apple 登入 | Button | SCR-HOME-001-main | Apple 登入成功 |
-| btn_google | Google 登入 | Button | SCR-HOME-001-main | Google 登入成功 |
-| lnk_forgot | 忘記密碼？ | Link | SCR-AUTH-004-forgot | - |
-| lnk_register | 立即註冊 | Link | SCR-AUTH-003-register | - |
+| btn_login | Login | Button | SCR-HOME-001-main | Validation success |
+| btn_apple | Apple Login | Button | SCR-HOME-001-main | Apple login success |
+| btn_google | Google Login | Button | SCR-HOME-001-main | Google login success |
+| lnk_forgot | Forgot Password? | Link | SCR-AUTH-004-forgot | - |
+| lnk_register | Register Now | Link | SCR-AUTH-003-register | - |
 
 ---
 
-### SCR-AUTH-003-register: 註冊頁 ⚠️ 必要
+### SCR-AUTH-003-register: Register Page ⚠️ Required
 
-**必要性：** **必要**
+**Necessity:** **Required**
 
-**畫面說明：**
-新用戶註冊頁面，收集必要的帳戶資訊。
+**Screen Description:**
+New user registration page, collecting necessary account information.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| txt_name | TextField | 名稱輸入框 |
-| txt_email | TextField | Email 輸入框 |
-| txt_password | SecureField | 密碼輸入框 |
-| txt_confirm | SecureField | 確認密碼輸入框 |
-| chk_terms | Checkbox | 同意條款 |
-| btn_register | Button | 註冊按鈕 |
-| lnk_login | Link | 已有帳號？登入 |
-| lnk_terms | Link | 使用條款 |
-| lnk_privacy | Link | 隱私政策 |
+| Component | Type | Description |
+|-----------|------|-------------|
+| txt_name | TextField | Name input field |
+| txt_email | TextField | Email input field |
+| txt_password | SecureField | Password input field |
+| txt_confirm | SecureField | Confirm password input field |
+| chk_terms | Checkbox | Agree to terms |
+| btn_register | Button | Register button |
+| lnk_login | Link | Already have an account? Login |
+| lnk_terms | Link | Terms of Service |
+| lnk_privacy | Link | Privacy Policy |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_register | 註冊 | Button | SCR-AUTH-005-verify | 需要驗證 |
-| btn_register | 註冊 | Button | SCR-HOME-001-main | 直接通過 |
-| lnk_login | 已有帳號？登入 | Link | SCR-AUTH-002-login | - |
-| lnk_terms | 使用條款 | Link | SCR-SETTING-*-terms | - |
-| lnk_privacy | 隱私政策 | Link | SCR-SETTING-*-privacy | - |
+| btn_register | Register | Button | SCR-AUTH-005-verify | Verification needed |
+| btn_register | Register | Button | SCR-HOME-001-main | Direct pass |
+| lnk_login | Already have an account? Login | Link | SCR-AUTH-002-login | - |
+| lnk_terms | Terms of Service | Link | SCR-SETTING-*-terms | - |
+| lnk_privacy | Privacy Policy | Link | SCR-SETTING-*-privacy | - |
 
 ---
 
-### SCR-AUTH-004-forgot: 忘記密碼 ⚠️ 必要
+### SCR-AUTH-004-forgot: Forgot Password ⚠️ Required
 
-**必要性：** **必要**
+**Necessity:** **Required**
 
-**畫面說明：**
-密碼重設申請頁面。
+**Screen Description:**
+Password reset request page.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| txt_email | TextField | Email 輸入框 |
-| btn_send | Button | 發送重設郵件 |
-| btn_back | Button | 返回登入 |
+| Component | Type | Description |
+|-----------|------|-------------|
+| txt_email | TextField | Email input field |
+| btn_send | Button | Send Reset Email |
+| btn_back | Button | Back to Login |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_send | 發送重設郵件 | Button | SCR-AUTH-006-reset-sent | 發送成功 |
-| btn_back | 返回登入 | Button | SCR-AUTH-002-login | - |
+| btn_send | Send Reset Email | Button | SCR-AUTH-006-reset-sent | Send success |
+| btn_back | Back to Login | Button | SCR-AUTH-002-login | - |
 
 ---
 
-### SCR-AUTH-005-verify: 驗證碼輸入
+### SCR-AUTH-005-verify: Verification Code
 
-**必要性：** 選配
+**Necessity:** Optional
 
-**畫面說明：**
-Email 或 SMS 驗證碼輸入頁面。
+**Screen Description:**
+Email or SMS verification code input page.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| lbl_instruction | Text | 驗證說明文字 |
-| txt_code | TextField | 驗證碼輸入（6位數） |
-| btn_verify | Button | 驗證按鈕 |
-| btn_resend | Button | 重新發送 |
-| btn_back | Button | 返回 |
+| Component | Type | Description |
+|-----------|------|-------------|
+| lbl_instruction | Text | Verification instruction text |
+| txt_code | TextField | Verification code input (6 digits) |
+| btn_verify | Button | Verify button |
+| btn_resend | Button | Resend |
+| btn_back | Button | Back |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_verify | 驗證 | Button | SCR-HOME-001-main | 驗證成功 |
-| btn_resend | 重新發送 | Button | (current) | 顯示倒數計時 |
-| btn_back | 返回 | Button | history.back() | - |
+| btn_verify | Verify | Button | SCR-HOME-001-main | Verification success |
+| btn_resend | Resend | Button | (current) | Show countdown timer |
+| btn_back | Back | Button | history.back() | - |
 
 ---
 
-### SCR-AUTH-006-reset-sent: 重設郵件已發送
+### SCR-AUTH-006-reset-sent: Reset Email Sent
 
-**必要性：** 選配
+**Necessity:** Optional
 
-**畫面說明：**
-密碼重設郵件發送成功的確認頁面。
+**Screen Description:**
+Confirmation page after password reset email is successfully sent.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| icon_success | Image | 成功圖示 |
-| lbl_title | Text | 郵件已發送 |
-| lbl_instruction | Text | 請檢查您的信箱 |
-| btn_login | Button | 返回登入 |
+| Component | Type | Description |
+|-----------|------|-------------|
+| icon_success | Image | Success icon |
+| lbl_title | Text | Email Sent |
+| lbl_instruction | Text | Please check your inbox |
+| btn_login | Button | Back to Login |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_login | 返回登入 | Button | SCR-AUTH-002-login | - |
+| btn_login | Back to Login | Button | SCR-AUTH-002-login | - |
 
 ---
 
-### SCR-AUTH-007-role: 角色選擇
+### SCR-AUTH-007-role: Role Selection
 
-**必要性：** 選配（多角色 App 使用）
+**Necessity:** Optional (for multi-role Apps)
 
-**畫面說明：**
-登入後選擇使用角色（如：學生/家長、買家/賣家）。
+**Screen Description:**
+Select user role after login (e.g., Student/Parent, Buyer/Seller).
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| lbl_title | Text | 請選擇您的身份 |
-| btn_role_1 | Button | 角色 1（如：學生） |
-| btn_role_2 | Button | 角色 2（如：家長） |
+| Component | Type | Description |
+|-----------|------|-------------|
+| lbl_title | Text | Please select your identity |
+| btn_role_1 | Button | Role 1 (e.g., Student) |
+| btn_role_2 | Button | Role 2 (e.g., Parent) |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_role_1 | 學生 | Button | SCR-HOME-001-student | - |
-| btn_role_2 | 家長 | Button | SCR-HOME-001-parent | 可能需要 PIN |
+| btn_role_1 | Student | Button | SCR-HOME-001-student | - |
+| btn_role_2 | Parent | Button | SCR-HOME-001-parent | May require PIN |
 
 ---
 
-### SCR-AUTH-008-pin: PIN 碼驗證
+### SCR-AUTH-008-pin: PIN Verification
 
-**必要性：** 選配（家長控制或管理員功能）
+**Necessity:** Optional (for parental control or admin features)
 
-**畫面說明：**
-PIN 碼驗證頁面，用於保護敏感功能。
+**Screen Description:**
+PIN verification page to protect sensitive features.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| lbl_title | Text | 請輸入 PIN 碼 |
-| txt_pin | SecureField | 4-6 位數 PIN |
-| btn_verify | Button | 確認 |
-| btn_cancel | Button | 取消 |
-| lnk_forgot | Link | 忘記 PIN？ |
+| Component | Type | Description |
+|-----------|------|-------------|
+| lbl_title | Text | Please enter PIN |
+| txt_pin | SecureField | 4-6 digit PIN |
+| btn_verify | Button | Confirm |
+| btn_cancel | Button | Cancel |
+| lnk_forgot | Link | Forgot PIN? |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| btn_verify | 確認 | Button | (目標畫面) | PIN 正確 |
-| btn_cancel | 取消 | Button | history.back() | - |
-| lnk_forgot | 忘記 PIN？ | Link | (重設流程) | - |
+| btn_verify | Confirm | Button | (target screen) | PIN correct |
+| btn_cancel | Cancel | Button | history.back() | - |
+| lnk_forgot | Forgot PIN? | Link | (reset flow) | - |
 
 ---
 
-## 參考來源
+## Reference Source
 
-本模板基於 VocabMaster 專案的 AUTH 模組設計，經過驗證可支援：
-- Email/密碼登入
-- Apple ID 登入
-- Google 登入（選配）
-- 多角色切換
-- 家長 PIN 保護
+This template is based on the AUTH module design from the VocabMaster project, verified to support:
+- Email/password login
+- Apple ID login
+- Google login (optional)
+- Multi-role switching
+- Parental PIN protection

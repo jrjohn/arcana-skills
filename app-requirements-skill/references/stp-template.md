@@ -29,294 +29,294 @@ Prepared by {{author}}
 
 ### 1.1 References
 
-| 文件編號 | 文件名稱 | 版本 |
-|---------|---------|------|
-| SRS-xxx | 軟體需求規格書 | [版本] |
-| SDD-xxx | 軟體設計規格書 | [版本] |
-| SWD-xxx | 軟體詳細設計書 | [版本] |
+| Document ID | Document Name | Version |
+|-------------|---------------|---------|
+| SRS-xxx | Software Requirements Specification | [Version] |
+| SDD-xxx | Software Design Description | [Version] |
+| SWD-xxx | Software Detailed Design | [Version] |
 
 ---
 
-## 2. 測試範圍與目標
+## 2. Test Scope and Objectives
 
-### 2.1 測試目標
+### 2.1 Test Objectives
 
-| 目標 ID | 目標說明 | 對應標準條款 |
-|--------|---------|-------------|
-| OBJ-001 | 驗證所有軟體需求已正確實作 | IEC 62304 §5.7 |
-| OBJ-002 | 確認軟體符合安全分類要求 | IEC 62304 §4.3 |
-| OBJ-003 | 驗證軟體單元正確運作 | IEC 62304 §5.5.5 |
-| OBJ-004 | 驗證軟體整合後正確運作 | IEC 62304 §5.6.5 |
+| Objective ID | Objective Description | Related Standard Clause |
+|--------------|----------------------|-------------------------|
+| OBJ-001 | Verify all software requirements are correctly implemented | IEC 62304 §5.7 |
+| OBJ-002 | Confirm software meets safety classification requirements | IEC 62304 §4.3 |
+| OBJ-003 | Verify software units operate correctly | IEC 62304 §5.5.5 |
+| OBJ-004 | Verify software operates correctly after integration | IEC 62304 §5.6.5 |
 
-### 2.2 測試範圍
+### 2.2 Test Scope
 
-#### 2.2.1 納入測試範圍
+#### 2.2.1 In Scope
 
-| 項目 | 說明 | 對應文件 |
-|-----|------|---------|
-| [功能1] | [說明] | SRS-001 |
-| [功能2] | [說明] | SRS-002 |
+| Item | Description | Related Document |
+|------|-------------|------------------|
+| [Feature 1] | [Description] | SRS-001 |
+| [Feature 2] | [Description] | SRS-002 |
 
-#### 2.2.2 不納入測試範圍
+#### 2.2.2 Out of Scope
 
-| 項目 | 排除原因 |
-|-----|---------|
-| [項目1] | [原因說明] |
+| Item | Exclusion Reason |
+|------|------------------|
+| [Item 1] | [Reason description] |
 
-### 2.3 測試完成標準
+### 2.3 Test Exit Criteria
 
-| 標準 ID | 完成標準 | 量化指標 |
-|--------|---------|---------|
-| EXIT-001 | 所有測試案例執行完畢 | 100% 執行率 |
-| EXIT-002 | 嚴重缺陷全部修復 | 0 Critical/High 缺陷 |
-| EXIT-003 | 測試覆蓋率達標 | ≥ 80% 程式碼覆蓋率 |
-| EXIT-004 | 所有需求皆有對應測試 | 100% 需求覆蓋率 |
-
----
-
-## 3. 測試策略
-
-### 3.1 測試策略總覽
-
-| ID | 策略名稱 | 測試類型 | 對應階段 | 安全分類要求 |
-|----|---------|---------|---------|-------------|
-| STP-001 | 單元測試策略 | 單元測試 | 開發階段 | Class B, C |
-| STP-002 | 整合測試策略 | 整合測試 | 整合階段 | Class B, C |
-| STP-003 | 系統測試策略 | 系統測試 | 系統階段 | Class A, B, C |
-| STP-004 | 回歸測試策略 | 回歸測試 | 維護階段 | Class A, B, C |
-
-### 3.2 測試策略詳細說明
+| Criteria ID | Exit Criteria | Quantitative Metric |
+|-------------|---------------|---------------------|
+| EXIT-001 | All test cases executed | 100% execution rate |
+| EXIT-002 | All severe defects fixed | 0 Critical/High defects |
+| EXIT-003 | Test coverage meets target | ≥ 80% code coverage |
+| EXIT-004 | All requirements have corresponding tests | 100% requirement coverage |
 
 ---
 
-#### STP-001 單元測試策略
+## 3. Test Strategy
 
-| 屬性 | 內容 |
-|-----|------|
+### 3.1 Test Strategy Overview
+
+| ID | Strategy Name | Test Type | Corresponding Phase | Safety Class Requirement |
+|----|---------------|-----------|---------------------|--------------------------|
+| STP-001 | Unit Test Strategy | Unit Test | Development Phase | Class B, C |
+| STP-002 | Integration Test Strategy | Integration Test | Integration Phase | Class B, C |
+| STP-003 | System Test Strategy | System Test | System Phase | Class A, B, C |
+| STP-004 | Regression Test Strategy | Regression Test | Maintenance Phase | Class A, B, C |
+
+### 3.2 Detailed Test Strategy Description
+
+---
+
+#### STP-001 Unit Test Strategy
+
+| Attribute | Content |
+|-----------|---------|
 | **ID** | STP-001 |
-| **名稱** | 單元測試策略 |
-| **目的** | 驗證個別軟體單元的正確性 |
-| **對應標準** | IEC 62304 §5.5.5 |
-| **適用分類** | Class B, Class C |
+| **Name** | Unit Test Strategy |
+| **Purpose** | Verify correctness of individual software units |
+| **Related Standard** | IEC 62304 §5.5.5 |
+| **Applicable Classification** | Class B, Class C |
 
-**測試方法**：
-- 白箱測試：語句覆蓋、分支覆蓋、條件覆蓋
-- 黑箱測試：等價類劃分、邊界值分析
+**Test Methods**:
+- White-box testing: Statement coverage, branch coverage, condition coverage
+- Black-box testing: Equivalence partitioning, boundary value analysis
 
-**覆蓋率要求**：
-| 安全分類 | 語句覆蓋 | 分支覆蓋 | MC/DC |
-|---------|---------|---------|-------|
+**Coverage Requirements**:
+| Safety Class | Statement Coverage | Branch Coverage | MC/DC |
+|--------------|-------------------|-----------------|-------|
 | Class A | - | - | - |
 | Class B | ≥ 80% | ≥ 70% | - |
 | Class C | ≥ 90% | ≥ 85% | ≥ 80% |
 
-**測試工具**：
-| 工具名稱 | 用途 | 版本 |
-|---------|------|------|
-| [工具1] | 單元測試框架 | [版本] |
-| [工具2] | 覆蓋率分析 | [版本] |
+**Test Tools**:
+| Tool Name | Purpose | Version |
+|-----------|---------|---------|
+| [Tool 1] | Unit test framework | [Version] |
+| [Tool 2] | Coverage analysis | [Version] |
 
 ---
 
-#### STP-002 整合測試策略
+#### STP-002 Integration Test Strategy
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | STP-002 |
-| **名稱** | 整合測試策略 |
-| **目的** | 驗證軟體單元整合後的正確性 |
-| **對應標準** | IEC 62304 §5.6 |
-| **適用分類** | Class B, Class C |
+| **Name** | Integration Test Strategy |
+| **Purpose** | Verify correctness of integrated software units |
+| **Related Standard** | IEC 62304 §5.6 |
+| **Applicable Classification** | Class B, Class C |
 
-**整合方式**：
-- [ ] 大爆炸整合 (Big Bang)
-- [x] 漸進式整合 (Incremental)
-  - [x] 由上而下 (Top-down)
-  - [ ] 由下而上 (Bottom-up)
-  - [ ] 三明治 (Sandwich)
+**Integration Approach**:
+- [ ] Big Bang
+- [x] Incremental
+  - [x] Top-down
+  - [ ] Bottom-up
+  - [ ] Sandwich
 
-**整合順序**：
+**Integration Order**:
 ```
 Layer 1: Presentation → Business (SDD-001 → SDD-002)
 Layer 2: Business → Data (SDD-002 → SDD-003)
-Layer 3: 外部介面整合 (SDD-003 → External)
+Layer 3: External interface integration (SDD-003 → External)
 ```
 
-**測試項目**：
-| 項目 | 說明 | 對應模組 |
-|-----|------|---------|
-| 介面正確性 | 模組間介面呼叫正確 | SDD-001, SDD-002 |
-| 資料流正確性 | 資料傳遞正確無誤 | SDD-002, SDD-003 |
-| 錯誤傳遞 | 錯誤正確傳遞處理 | 全模組 |
+**Test Items**:
+| Item | Description | Related Modules |
+|------|-------------|-----------------|
+| Interface correctness | Inter-module interface calls are correct | SDD-001, SDD-002 |
+| Data flow correctness | Data transfer is accurate | SDD-002, SDD-003 |
+| Error propagation | Errors are correctly propagated and handled | All modules |
 
 ---
 
-#### STP-003 系統測試策略
+#### STP-003 System Test Strategy
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | STP-003 |
-| **名稱** | 系統測試策略 |
-| **目的** | 驗證系統符合軟體需求規格 |
-| **對應標準** | IEC 62304 §5.7 |
-| **適用分類** | Class A, B, C |
+| **Name** | System Test Strategy |
+| **Purpose** | Verify system meets software requirements specification |
+| **Related Standard** | IEC 62304 §5.7 |
+| **Applicable Classification** | Class A, B, C |
 
-**測試類型**：
-| 類型 | 說明 | 對應需求類型 |
-|-----|------|-------------|
-| 功能測試 | 驗證功能需求 | SRS-xxx |
-| 效能測試 | 驗證效能需求 | SRS-NFR-xxx |
-| 安全測試 | 驗證安全需求 | SRS-NFR-xxx |
-| 可用性測試 | 驗證使用者介面 | SRS-UI-xxx |
+**Test Types**:
+| Type | Description | Related Requirement Type |
+|------|-------------|--------------------------|
+| Functional testing | Verify functional requirements | SRS-xxx |
+| Performance testing | Verify performance requirements | SRS-NFR-xxx |
+| Security testing | Verify security requirements | SRS-NFR-xxx |
+| Usability testing | Verify user interface | SRS-UI-xxx |
 
-**測試環境**：
-- 使用與正式環境相同配置
-- 使用代表性測試資料
+**Test Environment**:
+- Use same configuration as production environment
+- Use representative test data
 
 ---
 
-#### STP-004 回歸測試策略
+#### STP-004 Regression Test Strategy
 
-| 屬性 | 內容 |
-|-----|------|
+| Attribute | Content |
+|-----------|---------|
 | **ID** | STP-004 |
-| **名稱** | 回歸測試策略 |
-| **目的** | 確認變更未影響既有功能 |
-| **對應標準** | IEC 62304 §6.2.4 |
-| **適用分類** | Class A, B, C |
+| **Name** | Regression Test Strategy |
+| **Purpose** | Confirm changes have not affected existing functionality |
+| **Related Standard** | IEC 62304 §6.2.4 |
+| **Applicable Classification** | Class A, B, C |
 
-**觸發條件**：
-- 缺陷修復後
-- 功能變更後
-- 環境變更後
+**Trigger Conditions**:
+- After defect fix
+- After feature change
+- After environment change
 
-**測試範圍選擇**：
-| 變更類型 | 測試範圍 |
-|---------|---------|
-| 單一模組修改 | 該模組 + 相依模組 |
-| 跨模組修改 | 受影響模組 + 整合測試 |
-| 核心功能修改 | 完整回歸測試 |
-
----
-
-## 4. 測試環境
-
-### 4.1 硬體環境
-
-| 項目 | 規格 | 用途 |
-|-----|------|------|
-| 測試伺服器 | [規格說明] | 執行測試 |
-| 測試終端 | [規格說明] | 使用者測試 |
-
-### 4.2 軟體環境
-
-| 軟體 | 版本 | 用途 |
-|-----|------|------|
-| 作業系統 | [版本] | 執行環境 |
-| 資料庫 | [版本] | 資料儲存 |
-| 測試框架 | [版本] | 自動化測試 |
-
-### 4.3 測試資料
-
-| 資料類型 | 說明 | 來源 |
-|---------|------|------|
-| 正常資料 | 有效輸入資料 | 模擬生成 |
-| 邊界資料 | 邊界值資料 | 手動設計 |
-| 異常資料 | 無效輸入資料 | 手動設計 |
-
-### 4.4 測試工具清單
-
-| 工具名稱 | 版本 | 用途 | 驗證狀態 |
-|---------|------|------|---------|
-| [工具1] | [版本] | 單元測試 | [已驗證/待驗證] |
-| [工具2] | [版本] | 覆蓋率分析 | [已驗證/待驗證] |
-| [工具3] | [版本] | 缺陷追蹤 | [已驗證/待驗證] |
+**Test Scope Selection**:
+| Change Type | Test Scope |
+|-------------|------------|
+| Single module modification | That module + dependent modules |
+| Cross-module modification | Affected modules + integration tests |
+| Core feature modification | Full regression test |
 
 ---
 
-## 5. 測試時程
+## 4. Test Environment
 
-### 5.1 測試階段規劃
+### 4.1 Hardware Environment
 
-| 階段 | 開始日期 | 結束日期 | 里程碑 |
-|-----|---------|---------|--------|
-| 測試計畫 | [日期] | [日期] | 測試計畫核准 |
-| 測試設計 | [日期] | [日期] | 測試案例完成 |
-| 單元測試 | [日期] | [日期] | 單元測試完成 |
-| 整合測試 | [日期] | [日期] | 整合測試完成 |
-| 系統測試 | [日期] | [日期] | 系統測試完成 |
-| 驗收測試 | [日期] | [日期] | 測試結案 |
+| Item | Specification | Purpose |
+|------|---------------|---------|
+| Test server | [Specification description] | Execute tests |
+| Test terminal | [Specification description] | User testing |
 
-### 5.2 測試人力配置
+### 4.2 Software Environment
 
-| 角色 | 人員 | 職責 |
-|-----|------|------|
-| 測試主管 | [姓名] | 測試規劃與管理 |
-| 測試工程師 | [姓名] | 測試設計與執行 |
-| 自動化工程師 | [姓名] | 自動化測試開發 |
+| Software | Version | Purpose |
+|----------|---------|---------|
+| Operating system | [Version] | Execution environment |
+| Database | [Version] | Data storage |
+| Test framework | [Version] | Automated testing |
+
+### 4.3 Test Data
+
+| Data Type | Description | Source |
+|-----------|-------------|--------|
+| Normal data | Valid input data | Simulated generation |
+| Boundary data | Boundary value data | Manual design |
+| Abnormal data | Invalid input data | Manual design |
+
+### 4.4 Test Tool List
+
+| Tool Name | Version | Purpose | Validation Status |
+|-----------|---------|---------|-------------------|
+| [Tool 1] | [Version] | Unit testing | [Validated/Pending] |
+| [Tool 2] | [Version] | Coverage analysis | [Validated/Pending] |
+| [Tool 3] | [Version] | Defect tracking | [Validated/Pending] |
 
 ---
 
-## 6. 風險評估
+## 5. Test Schedule
 
-### 6.1 測試風險
+### 5.1 Test Phase Planning
 
-| 風險 ID | 風險描述 | 可能性 | 影響 | 緩解措施 |
-|--------|---------|--------|------|---------|
-| RISK-001 | 測試環境不穩定 | 中 | 高 | 備援環境、環境監控 |
-| RISK-002 | 測試資源不足 | 中 | 中 | 優先級排序、外部支援 |
-| RISK-003 | 需求變更頻繁 | 高 | 高 | 變更管理流程 |
-| RISK-004 | 缺陷修復延遲 | 中 | 高 | 缺陷追蹤、每日站會 |
+| Phase | Start Date | End Date | Milestone |
+|-------|------------|----------|-----------|
+| Test planning | [Date] | [Date] | Test plan approved |
+| Test design | [Date] | [Date] | Test cases completed |
+| Unit testing | [Date] | [Date] | Unit testing completed |
+| Integration testing | [Date] | [Date] | Integration testing completed |
+| System testing | [Date] | [Date] | System testing completed |
+| Acceptance testing | [Date] | [Date] | Test closure |
 
-### 6.2 缺陷管理
+### 5.2 Test Resource Allocation
 
-#### 6.2.1 缺陷分類
+| Role | Personnel | Responsibility |
+|------|-----------|----------------|
+| Test Lead | [Name] | Test planning and management |
+| Test Engineer | [Name] | Test design and execution |
+| Automation Engineer | [Name] | Automated test development |
 
-| 嚴重程度 | 定義 | 回應時間 |
-|---------|------|---------|
-| Critical | 系統崩潰、資料遺失、安全漏洞 | 立即 |
-| High | 主要功能無法使用 | 24 小時 |
-| Medium | 功能異常但有替代方案 | 3 天 |
-| Low | 外觀或次要功能問題 | 下一版本 |
+---
 
-#### 6.2.2 缺陷流程
+## 6. Risk Assessment
+
+### 6.1 Test Risks
+
+| Risk ID | Risk Description | Probability | Impact | Mitigation Measures |
+|---------|------------------|-------------|--------|---------------------|
+| RISK-001 | Unstable test environment | Medium | High | Backup environment, environment monitoring |
+| RISK-002 | Insufficient test resources | Medium | Medium | Priority ranking, external support |
+| RISK-003 | Frequent requirement changes | High | High | Change management process |
+| RISK-004 | Defect fix delays | Medium | High | Defect tracking, daily standup |
+
+### 6.2 Defect Management
+
+#### 6.2.1 Defect Classification
+
+| Severity | Definition | Response Time |
+|----------|------------|---------------|
+| Critical | System crash, data loss, security vulnerability | Immediate |
+| High | Major feature unusable | 24 hours |
+| Medium | Feature abnormal but workaround exists | 3 days |
+| Low | Cosmetic or minor feature issue | Next release |
+
+#### 6.2.2 Defect Process
 
 ```
-發現 → 回報 → 確認 → 分派 → 修復 → 驗證 → 結案
+Discovery → Report → Confirm → Assign → Fix → Verify → Close
 ```
 
 ---
 
-## 7. 附錄
+## 7. Appendix
 
-### 7.1 測試案例與需求對照
+### 7.1 Test Case to Requirement Mapping
 
-| 需求 ID | 測試案例 ID | 測試類型 |
-|--------|------------|---------|
-| SRS-001 | STC-001, STC-002 | 功能測試 |
-| SRS-002 | STC-003 | 功能測試 |
-| SRS-NFR-001 | STC-004 | 效能測試 |
+| Requirement ID | Test Case ID | Test Type |
+|----------------|--------------|-----------|
+| SRS-001 | STC-001, STC-002 | Functional |
+| SRS-002 | STC-003 | Functional |
+| SRS-NFR-001 | STC-004 | Performance |
 
-### 7.2 術語定義
+### 7.2 Terminology Definitions
 
-| 術語 | 定義 |
-|-----|------|
-| 覆蓋率 | 測試執行覆蓋的程式碼比例 |
+| Term | Definition |
+|------|------------|
+| Coverage | Proportion of code covered by test execution |
 | MC/DC | Modified Condition/Decision Coverage |
 
-### 7.3 縮寫
+### 7.3 Abbreviations
 
-| 縮寫 | 全稱 |
-|-----|------|
+| Abbreviation | Full Name |
+|--------------|-----------|
 | STP | Software Test Plan |
 | STC | Software Test Case |
 
 ---
 
-## 簽核
+## Sign-off
 
-| 角色 | 姓名 | 簽名 | 日期 |
-|-----|------|------|------|
-| 作者 | | | |
-| 審核者 | | | |
-| 核准者 | | | |
+| Role | Name | Signature | Date |
+|------|------|-----------|------|
+| Author | | | |
+| Reviewer | | | |
+| Approver | | | |

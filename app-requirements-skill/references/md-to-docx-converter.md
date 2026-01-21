@@ -1,27 +1,27 @@
-# MD 轉 DOCX 轉換器
+# MD to DOCX Converter
 
-本文件說明如何將 Markdown 文件轉換為專業格式的 Word (.docx) 文件。
+This document explains how to convert Markdown documents to professionally formatted Word (.docx) files.
 
-**特色功能：**
-- 自動識別 SRS/SWD 需求項目格式，轉換為專業表格式呈現
-- 支援標題、表格、程式碼區塊、內嵌格式
-- **支援 Mermaid 圖表自動渲染為圖片**
-- 自動產生頁首/頁尾
+**Key Features:**
+- Automatically recognizes SRS/SWD requirement item formats and converts them to professional table presentation
+- Supports headings, tables, code blocks, inline formatting
+- **Supports Mermaid diagram auto-rendering to images**
+- Automatically generates headers/footers
 
-## 使用方式
+## Usage
 
-### 1. 安裝依賴
+### 1. Install Dependencies
 
 ```bash
 npm install docx
 npm install -g @mermaid-js/mermaid-cli
 ```
 
-> **注意：** Mermaid CLI (`mmdc`) 需要全域安裝，用於將 Mermaid 代碼渲染為 PNG 圖片。
+> **Note:** Mermaid CLI (`mmdc`) needs to be installed globally for rendering Mermaid code to PNG images.
 
-### 2. 轉換腳本
+### 2. Conversion Script
 
-建立 `md-to-docx.js` 檔案：
+Create `md-to-docx.js` file:
 
 ```javascript
 const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
@@ -34,49 +34,49 @@ const { execSync } = require('child_process');
 const crypto = require('crypto');
 
 // ============================================
-// 字型設定 - 中文使用圓黑體，英文使用 Arial
+// Font Settings - Chinese uses Yuan Gothic, English uses Arial
 // ============================================
-const FONT_CN = '圓黑體';  // 中文字體 (可改為 '微軟正黑體' 或 'Noto Sans TC')
-const FONT_EN = 'Arial';   // 英文字體
-const FONT_CODE = 'Courier New';  // 程式碼字體
+const FONT_CN = 'Yuan Gothic';  // Chinese font (can be changed to 'Microsoft JhengHei' or 'Noto Sans TC')
+const FONT_EN = 'Arial';        // English font
+const FONT_CODE = 'Courier New';  // Code font
 
-// 字型大小設定 (單位: half-points, 24 = 12pt)
+// Font size settings (unit: half-points, 24 = 12pt)
 const FONT_SIZE = {
-  H1: 36,        // 18pt - 主標題
-  H2: 32,        // 16pt - 大章節
-  H3: 28,        // 14pt - 小節
-  H4: 26,        // 13pt - 子節
-  H5: 24,        // 12pt - 細節
-  BODY: 22,      // 11pt - 內文
-  TABLE: 20,     // 10pt - 表格內文
-  TABLE_HEADER: 20, // 10pt - 表格標題 (粗體)
-  SMALL: 18,     // 9pt - 小字
-  FOOTER: 18     // 9pt - 頁尾
+  H1: 36,        // 18pt - Main title
+  H2: 32,        // 16pt - Major section
+  H3: 28,        // 14pt - Subsection
+  H4: 26,        // 13pt - Sub-subsection
+  H5: 24,        // 12pt - Detail
+  BODY: 22,      // 11pt - Body text
+  TABLE: 20,     // 10pt - Table content
+  TABLE_HEADER: 20, // 10pt - Table header (bold)
+  SMALL: 18,     // 9pt - Small text
+  FOOTER: 18     // 9pt - Footer
 };
 
 /**
- * 檢測文字是否包含中文
+ * Detect if text contains Chinese characters
  */
 function containsChinese(text) {
   return /[\u4e00-\u9fff]/.test(text);
 }
 
 /**
- * 取得適合的字體（根據文字內容）
+ * Get appropriate font (based on text content)
  */
 function getFont(text) {
   return containsChinese(text) ? FONT_CN : FONT_EN;
 }
 
 // ============================================
-// Mermaid 圖表渲染器
+// Mermaid Diagram Renderer
 // ============================================
 
 /**
- * 將 Mermaid 代碼渲染為 PNG 圖片
- * @param {string} mermaidCode - Mermaid 圖表代碼
- * @param {string} outputDir - 輸出目錄
- * @returns {string|null} - 圖片路徑或 null (失敗時)
+ * Render Mermaid code to PNG image
+ * @param {string} mermaidCode - Mermaid diagram code
+ * @param {string} outputDir - Output directory
+ * @returns {string|null} - Image path or null (on failure)
  */
 function renderMermaidToPng(mermaidCode, outputDir) {
   const hash = crypto.createHash('md5').update(mermaidCode).digest('hex').substring(0, 8);
@@ -84,21 +84,21 @@ function renderMermaidToPng(mermaidCode, outputDir) {
   const inputFile = path.join(tempDir, `mermaid-${hash}.mmd`);
   const outputFile = path.join(tempDir, `mermaid-${hash}.png`);
 
-  // 建立暫存目錄
+  // Create temp directory
   if (!fs.existsSync(tempDir)) {
     fs.mkdirSync(tempDir, { recursive: true });
   }
 
-  // 如果已存在快取圖片，直接回傳
+  // If cached image exists, return directly
   if (fs.existsSync(outputFile)) {
     return outputFile;
   }
 
-  // 寫入 Mermaid 代碼
+  // Write Mermaid code
   fs.writeFileSync(inputFile, mermaidCode);
 
   try {
-    // 使用 mermaid-cli 渲染
+    // Use mermaid-cli to render
     execSync(`mmdc -i "${inputFile}" -o "${outputFile}" -b transparent -w 800`, {
       stdio: 'pipe',
       timeout: 30000
@@ -108,15 +108,15 @@ function renderMermaidToPng(mermaidCode, outputDir) {
       return outputFile;
     }
   } catch (error) {
-    console.warn(`Mermaid 渲染失敗: ${error.message}`);
+    console.warn(`Mermaid rendering failed: ${error.message}`);
   }
 
   return null;
 }
 
 /**
- * 讀取 PNG 圖片尺寸
- * PNG 檔案格式：前 8 bytes 為簽名，IHDR chunk 包含寬高資訊
+ * Read PNG image dimensions
+ * PNG file format: first 8 bytes are signature, IHDR chunk contains width/height info
  */
 function getPngDimensions(buffer) {
   // PNG signature: 89 50 4E 47 0D 0A 1A 0A
@@ -130,24 +130,24 @@ function getPngDimensions(buffer) {
 }
 
 /**
- * 建立 Mermaid 圖片段落
- * 保持原始比例，最大寬度 450px，避免圖片變形
+ * Create Mermaid image paragraph
+ * Maintain original aspect ratio, max width 450px, prevent image distortion
  */
 function createMermaidImage(imagePath) {
   const imageBuffer = fs.readFileSync(imagePath);
 
-  // 讀取實際圖片尺寸
+  // Read actual image dimensions
   const dimensions = getPngDimensions(imageBuffer);
 
   let displayWidth, displayHeight;
-  const maxWidth = 450;  // 最大寬度限制，保留適當邊距
-  const maxHeight = 500; // 最大高度限制
+  const maxWidth = 450;  // Max width limit, preserve adequate margin
+  const maxHeight = 500; // Max height limit
 
   if (dimensions) {
     const { width, height } = dimensions;
     const aspectRatio = width / height;
 
-    // 根據最大限制計算縮放後的尺寸
+    // Calculate scaled dimensions based on max limits
     if (width > maxWidth) {
       displayWidth = maxWidth;
       displayHeight = Math.round(maxWidth / aspectRatio);
@@ -156,13 +156,13 @@ function createMermaidImage(imagePath) {
       displayHeight = height;
     }
 
-    // 如果高度仍超過限制，再次縮放
+    // If height still exceeds limit, scale again
     if (displayHeight > maxHeight) {
       displayHeight = maxHeight;
       displayWidth = Math.round(maxHeight * aspectRatio);
     }
   } else {
-    // 無法讀取尺寸時使用預設值
+    // Use default values when dimensions cannot be read
     displayWidth = 400;
     displayHeight = 300;
   }
@@ -184,7 +184,7 @@ function createMermaidImage(imagePath) {
 }
 
 /**
- * 清理 Mermaid 暫存檔案
+ * Clean up Mermaid temp files
  */
 function cleanupMermaidTemp(outputDir) {
   const tempDir = path.join(outputDir, '.mermaid-temp');
@@ -194,34 +194,34 @@ function cleanupMermaidTemp(outputDir) {
 }
 
 // ============================================
-// 需求項目表格化轉換器
+// Requirement Item Table Converter
 // ============================================
 
 /**
- * 檢測是否為需求項目標題
- * 支援格式：
- *   - #### SRS-AUTH-001 使用者註冊 (舊格式)
- *   - ##### REQ-FUNC-001 使用者登入 (新格式，空格分隔)
- *   - #### REQ-FUNC-001: 使用者登入 (新格式，冒號分隔)
+ * Detect if line is a requirement item heading
+ * Supported formats:
+ *   - #### SRS-AUTH-001 User Registration (old format)
+ *   - ##### REQ-FUNC-001 User Login (new format, space separated)
+ *   - #### REQ-FUNC-001: User Login (new format, colon separated)
  */
 function isRequirementHeading(line) {
-  // 支援 SRS/SWD/SDD/STC/REQ 前綴，3-5個#
+  // Support SRS/SWD/SDD/STC/REQ prefixes, 3-5 # symbols
   return line.match(/^#{3,5}\s+(SRS|SWD|SDD|STC|REQ)-[A-Z]+-\d+/);
 }
 
 /**
- * 解析需求項目區塊，轉換為表格式結構
- * 支援多種輸入格式：
+ * Parse requirement item block, convert to table structure
+ * Supports multiple input formats:
  *
- * 中文格式：
- *   #### SRS-AUTH-001 使用者註冊
- *   **描述：** 系統必須...
- *   **優先級：** 必要
- *   **驗收標準：**
- *   - AC1: 當使用者首次開啟 App，點選註冊，並系統顯示註冊表單
- *   - AC2: 當使用者填寫完整資訊，點選送出，並系統驗證資料格式並建立帳戶
+ * Chinese format:
+ *   #### SRS-AUTH-001 User Registration
+ *   **Description:** The system must...
+ *   **Priority:** Required
+ *   **Acceptance Criteria:**
+ *   - AC1: Given user opens app for first time, clicks register, Then system displays registration form
+ *   - AC2: Given user fills complete info, clicks submit, Then system validates data format and creates account
  *
- * 英文格式：
+ * English format:
  *   ##### REQ-FUNC-001 User Login
  *   **Statement:** The system shall...
  *   **Rationale:** To ensure...
@@ -229,14 +229,14 @@ function isRequirementHeading(line) {
  *   - AC1: Given the user has valid credentials, When submitting login, Then the system authenticates and redirects to home
  *   **Verification Method:** Test
  *
- * 驗收標準格式對照：
- *   中文：當 [前提條件]，[執行動作]，並 [預期結果]
- *   英文：Given [precondition], When [action], Then [expected result]
+ * Acceptance Criteria format comparison:
+ *   Chinese: Given [precondition], [action], Then [expected result]
+ *   English: Given [precondition], When [action], Then [expected result]
  */
 function parseRequirementBlock(lines, startIndex) {
   const headerLine = lines[startIndex];
 
-  // 嘗試匹配：ID + 空格 + 名稱，或 ID + 冒號 + 名稱
+  // Try to match: ID + space + name, or ID + colon + name
   let match = headerLine.match(/^#{3,5}\s+((SRS|SWD|SDD|STC|REQ)-[A-Z]+-\d+)[:：]?\s*(.+)/);
 
   if (!match) return null;
@@ -247,10 +247,10 @@ function parseRequirementBlock(lines, startIndex) {
   const requirement = {
     id: reqId,
     name: reqName,
-    // 支援中英文欄位
-    description: '',      // 描述 (舊)
-    statement: '',        // Statement (新)
-    rationale: '',        // Rationale (新)
+    // Support Chinese and English fields
+    description: '',      // Description (old)
+    statement: '',        // Statement (new)
+    rationale: '',        // Rationale (new)
     priority: '',
     safetyClass: '',
     verificationMethod: '',
@@ -265,36 +265,36 @@ function parseRequirementBlock(lines, startIndex) {
   while (i < lines.length) {
     const line = lines[i].trim();
 
-    // 遇到下一個標題或分隔線則結束
+    // End when encountering next heading or separator
     if (line.startsWith('#') || line.match(/^-{3,}$/)) {
       break;
     }
 
-    // 解析 **欄位：** 值 或 **欄位:** 值 格式
+    // Parse **Field:** value or **Field:** value format
     const fieldMatch = line.match(/^\*\*(.+?)[:：]\*\*\s*(.*)$/);
 
     if (fieldMatch) {
       const fieldName = fieldMatch[1].trim();
       const fieldValue = fieldMatch[2].trim();
 
-      // 中文欄位
-      if (fieldName === '描述') {
+      // Chinese fields
+      if (fieldName === 'Description' || fieldName === '描述') {
         requirement.description = fieldValue;
         currentField = 'description';
         inAcceptanceCriteria = false;
-      } else if (fieldName === '優先級') {
+      } else if (fieldName === 'Priority' || fieldName === '優先級') {
         requirement.priority = fieldValue;
         currentField = 'priority';
         inAcceptanceCriteria = false;
-      } else if (fieldName === '安全分類') {
+      } else if (fieldName === 'Safety Class' || fieldName === '安全分類') {
         requirement.safetyClass = fieldValue;
         currentField = 'safetyClass';
         inAcceptanceCriteria = false;
-      } else if (fieldName === '驗收標準') {
+      } else if (fieldName === 'Acceptance Criteria' || fieldName === '驗收標準') {
         inAcceptanceCriteria = true;
         currentField = 'acceptanceCriteria';
       }
-      // 英文欄位
+      // English fields
       else if (fieldName === 'Statement') {
         requirement.statement = fieldValue;
         currentField = 'statement';
@@ -303,9 +303,6 @@ function parseRequirementBlock(lines, startIndex) {
         requirement.rationale = fieldValue;
         currentField = 'rationale';
         inAcceptanceCriteria = false;
-      } else if (fieldName === 'Acceptance Criteria') {
-        inAcceptanceCriteria = true;
-        currentField = 'acceptanceCriteria';
       } else if (fieldName === 'Verification Method') {
         requirement.verificationMethod = fieldValue;
         currentField = 'verificationMethod';
@@ -316,10 +313,10 @@ function parseRequirementBlock(lines, startIndex) {
         inAcceptanceCriteria = false;
       }
     } else if (inAcceptanceCriteria && line.startsWith('- ')) {
-      // 驗收標準項目
+      // Acceptance criteria items
       requirement.acceptanceCriteria.push(line.substring(2));
     } else if (line && currentField) {
-      // 延續上一個欄位的內容
+      // Continue previous field content
       if (currentField === 'description') {
         requirement.description += ' ' + line;
       } else if (currentField === 'statement') {
@@ -336,19 +333,19 @@ function parseRequirementBlock(lines, startIndex) {
 }
 
 /**
- * 建立需求項目表格
- * 自動判斷使用中文或英文欄位標籤，並套用適當字體
+ * Create requirement item table
+ * Automatically determine Chinese or English field labels and apply appropriate fonts
  */
 function createRequirementTable(req) {
   const tableBorder = { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' };
   const cellBorders = { top: tableBorder, bottom: tableBorder, left: tableBorder, right: tableBorder };
 
-  const labelWidth = 2200;  // 標籤欄寬度（加寬以容納中文）
-  const valueWidth = 7160;  // 值欄寬度
+  const labelWidth = 2200;  // Label column width (widened for Chinese)
+  const valueWidth = 7160;  // Value column width
 
   const rows = [];
 
-  // 標題列 (合併儲存格效果用背景色區分)
+  // Header row (merged cell effect using background color)
   rows.push(new TableRow({
     children: [
       new TableCell({
@@ -372,7 +369,7 @@ function createRequirementTable(req) {
     ]
   }));
 
-  // 新格式欄位 (Statement/Rationale)
+  // New format fields (Statement/Rationale)
   if (req.statement) {
     rows.push(createFieldRow('Statement', req.statement, labelWidth, valueWidth, cellBorders));
   }
@@ -381,30 +378,30 @@ function createRequirementTable(req) {
     rows.push(createFieldRow('Rationale', req.rationale, labelWidth, valueWidth, cellBorders));
   }
 
-  // 舊格式欄位 (描述)
+  // Old format fields (Description)
   if (req.description) {
-    rows.push(createFieldRow('描述', req.description, labelWidth, valueWidth, cellBorders));
+    rows.push(createFieldRow('Description', req.description, labelWidth, valueWidth, cellBorders));
   }
 
-  // 優先級
+  // Priority
   if (req.priority) {
-    rows.push(createFieldRow('優先級', req.priority, labelWidth, valueWidth, cellBorders));
+    rows.push(createFieldRow('Priority', req.priority, labelWidth, valueWidth, cellBorders));
   }
 
-  // 安全分類
+  // Safety Class
   if (req.safetyClass) {
-    rows.push(createFieldRow('安全分類', req.safetyClass, labelWidth, valueWidth, cellBorders));
+    rows.push(createFieldRow('Safety Class', req.safetyClass, labelWidth, valueWidth, cellBorders));
   }
 
-  // 其他欄位
+  // Other fields
   for (const [key, value] of Object.entries(req.otherFields)) {
     rows.push(createFieldRow(key, value, labelWidth, valueWidth, cellBorders));
   }
 
-  // 驗收標準 (Acceptance Criteria)
+  // Acceptance Criteria
   if (req.acceptanceCriteria.length > 0) {
-    // 判斷使用中文還是英文標籤
-    const acLabel = req.statement ? 'Acceptance Criteria' : '驗收標準';
+    // Determine Chinese or English label
+    const acLabel = req.statement ? 'Acceptance Criteria' : 'Acceptance Criteria';
     const acParagraphs = req.acceptanceCriteria.map(ac =>
       new Paragraph({
         spacing: { after: 80 },
@@ -434,7 +431,7 @@ function createRequirementTable(req) {
     }));
   }
 
-  // Verification Method (新格式)
+  // Verification Method (new format)
   if (req.verificationMethod) {
     rows.push(createFieldRow('Verification', req.verificationMethod, labelWidth, valueWidth, cellBorders));
   }
@@ -472,29 +469,30 @@ function createFieldRow(label, value, labelWidth, valueWidth, cellBorders) {
 }
 
 // ============================================
-// 主要解析函式
+// Main Parser Functions
 // ============================================
 
 /**
- * 檢查是否為「孤立標題群」的第一個標題
- * 當連續多個標題（沒有中間內容）最後接著需求表格時，只在第一個標題前分頁
- * 避免標題群落在頁尾，但又不會每個標題都分頁造成空頁
+ * Check if this is the first heading in an "isolated heading group"
+ * When multiple consecutive headings (with no content between) end with a requirement table,
+ * only page break before the first heading. This prevents heading groups from being split at page end,
+ * but doesn't create page breaks for every heading causing empty pages.
  */
 function shouldBreakBeforeHeading(lines, currentIndex) {
   const currentLine = lines[currentIndex];
 
-  // 檢查前一個非空行是否也是標題
+  // Check if previous non-empty line is also a heading
   let prevIndex = currentIndex - 1;
   while (prevIndex >= 0 && lines[prevIndex].trim() === '') {
     prevIndex--;
   }
 
-  // 如果前面也是標題，則不分頁（讓標題群保持在一起）
+  // If previous is also a heading, don't page break (keep heading group together)
   if (prevIndex >= 0 && lines[prevIndex].startsWith('#')) {
     return false;
   }
 
-  // 往後看，找到這個標題群的結尾
+  // Look ahead to find end of this heading group
   let j = currentIndex + 1;
   let headingCount = 1;
 
@@ -506,19 +504,19 @@ function shouldBreakBeforeHeading(lines, currentIndex) {
       continue;
     }
 
-    // 如果是另一個標題，繼續往後看
+    // If another heading, continue looking ahead
     if (line.startsWith('#') && !isRequirementHeading(lines[j])) {
       headingCount++;
       j++;
       continue;
     }
 
-    // 如果是需求項目或其他內容，停止
+    // If requirement item or other content, stop
     break;
   }
 
-  // 只有當有連續多個標題（標題群）時，才在第一個標題前分頁
-  // 這樣可以避免標題群被分頁切開
+  // Only page break before first heading when there are multiple consecutive headings (heading group)
+  // This prevents heading groups from being split by page breaks
   return headingCount > 1;
 }
 
@@ -536,30 +534,30 @@ function parseMarkdown(content, outputDir = '.') {
   while (i < lines.length) {
     const line = lines[i];
 
-    // 處理程式碼區塊
+    // Handle code blocks
     if (line.startsWith('```')) {
       if (inCodeBlock) {
-        // 結束程式碼區塊
+        // End code block
         if (codeBlockLang === 'mermaid') {
-          // Mermaid 圖表 - 渲染為圖片
+          // Mermaid diagram - render to image
           const mermaidCode = codeBlockContent.join('\n');
           const imagePath = renderMermaidToPng(mermaidCode, outputDir);
           if (imagePath) {
             elements.push(createMermaidImage(imagePath));
           } else {
-            // 渲染失敗時，fallback 為程式碼區塊
-            console.warn('Mermaid 渲染失敗，使用程式碼區塊顯示');
+            // On render failure, fallback to code block
+            console.warn('Mermaid rendering failed, displaying as code block');
             elements.push(createCodeBlock(mermaidCode));
           }
         } else {
-          // 一般程式碼區塊
+          // Regular code block
           elements.push(createCodeBlock(codeBlockContent.join('\n')));
         }
         codeBlockContent = [];
         codeBlockLang = '';
         inCodeBlock = false;
       } else {
-        // 開始程式碼區塊，擷取語言
+        // Start code block, extract language
         codeBlockLang = line.substring(3).trim().toLowerCase();
         inCodeBlock = true;
       }
@@ -573,7 +571,7 @@ function parseMarkdown(content, outputDir = '.') {
       continue;
     }
 
-    // 處理 Markdown 表格
+    // Handle Markdown tables
     if (line.startsWith('|') && line.endsWith('|')) {
       if (!inTable) {
         inTable = true;
@@ -594,36 +592,36 @@ function parseMarkdown(content, outputDir = '.') {
       inTable = false;
     }
 
-    // 檢查是否為需求項目標題 - 轉換為表格式
+    // Check if requirement item heading - convert to table
     if (isRequirementHeading(line)) {
       const result = parseRequirementBlock(lines, i);
       if (result) {
-        elements.push(new Paragraph({ spacing: { before: 240 }, children: [] })); // 間距
+        elements.push(new Paragraph({ spacing: { before: 240 }, children: [] })); // Spacing
         elements.push(createRequirementTable(result.requirement));
-        elements.push(new Paragraph({ spacing: { after: 120 }, children: [] })); // 間距
+        elements.push(new Paragraph({ spacing: { after: 120 }, children: [] })); // Spacing
         i = result.endIndex + 1;
         continue;
       }
     }
 
-    // 標題處理
-    // Heading 1 (# ) - 主標題
+    // Heading handling
+    // Heading 1 (# ) - Main title
     if (line.startsWith('# ') && !line.startsWith('## ')) {
-      elements.push(createHeading(line.substring(2), HeadingLevel.HEADING_1, true)); // 分頁
+      elements.push(createHeading(line.substring(2), HeadingLevel.HEADING_1, true)); // Page break
       i++;
       continue;
     }
-    // Heading 2 (## ) - 大章節，每個大章節前分頁
+    // Heading 2 (## ) - Major section, page break before each major section
     if (line.startsWith('## ')) {
-      // 檢查是否為主要章節（如 "1. Introduction", "2. Product Overview" 等）
+      // Check if main section (e.g., "1. Introduction", "2. Product Overview")
       const isMainSection = line.match(/^##\s+\d+[\.\s]/);
       elements.push(createHeading(line.substring(3), HeadingLevel.HEADING_2, isMainSection));
       i++;
       continue;
     }
-    // Heading 3 (### ) - 小節
+    // Heading 3 (### ) - Subsection
     if (line.startsWith('### ')) {
-      // 檢查標題後是否緊接需求表格或只有空行，若是則在標題前分頁避免標題落單
+      // Check if heading is followed immediately by requirement table or only empty lines, if so page break before to prevent orphaned heading
       const shouldPageBreak = shouldBreakBeforeHeading(lines, i);
       elements.push(createHeading(line.substring(4), HeadingLevel.HEADING_3, shouldPageBreak));
       i++;
@@ -631,7 +629,7 @@ function parseMarkdown(content, outputDir = '.') {
     }
     // Heading 4 (#### )
     if (line.startsWith('#### ')) {
-      // 檢查標題後是否緊接需求表格或只有空行，若是則在標題前分頁避免標題落單
+      // Check if heading is followed immediately by requirement table or only empty lines, if so page break before to prevent orphaned heading
       const shouldPageBreak = shouldBreakBeforeHeading(lines, i);
       elements.push(createHeading(line.substring(5), HeadingLevel.HEADING_4, shouldPageBreak));
       i++;
@@ -644,24 +642,24 @@ function parseMarkdown(content, outputDir = '.') {
       continue;
     }
 
-    // 分隔線
+    // Separator line
     if (line.match(/^-{3,}$/) || line.match(/^\*{3,}$/)) {
       i++;
       continue;
     }
 
-    // 空白行
+    // Empty line
     if (line.trim() === '') {
       i++;
       continue;
     }
 
-    // 一般段落
+    // Regular paragraph
     elements.push(createParagraph(line));
     i++;
   }
 
-  // 關閉未結束的表格
+  // Close unclosed table
   if (inTable && tableHeaders.length > 0) {
     elements.push(createTable(tableHeaders, tableRows));
   }
@@ -674,7 +672,7 @@ function parseTableRow(line) {
 }
 
 /**
- * 根據標題層級取得字型大小
+ * Get font size based on heading level
  */
 function getHeadingSize(level) {
   switch (level) {
@@ -688,10 +686,10 @@ function getHeadingSize(level) {
 }
 
 /**
- * 建立標題段落
- * @param {string} text - 標題文字
- * @param {HeadingLevel} level - 標題層級
- * @param {boolean} pageBreakBefore - 是否在標題前分頁（用於大章節）
+ * Create heading paragraph
+ * @param {string} text - Heading text
+ * @param {HeadingLevel} level - Heading level
+ * @param {boolean} pageBreakBefore - Whether to page break before heading (for major sections)
  */
 function createHeading(text, level, pageBreakBefore = false) {
   const trimmedText = text.trim();
@@ -700,9 +698,9 @@ function createHeading(text, level, pageBreakBefore = false) {
   return new Paragraph({
     heading: level,
     spacing: { before: pageBreakBefore ? 0 : 240, after: 120 },
-    pageBreakBefore: pageBreakBefore,  // 大章節前分頁
-    keepNext: true,  // 標題與下一段落保持在同一頁（避免標題落單）
-    keepLines: true, // 標題本身不拆行
+    pageBreakBefore: pageBreakBefore,  // Page break before major section
+    keepNext: true,  // Keep heading with next paragraph on same page (prevent orphaned heading)
+    keepLines: true, // Don't split heading itself across lines
     children: [new TextRun({ text: trimmedText, bold: true, size: fontSize, font: getFont(trimmedText) })]
   });
 }
@@ -713,9 +711,9 @@ function createParagraph(text) {
 }
 
 /**
- * 解析行內格式（粗體、程式碼）
- * @param {string} text - 原始文字
- * @param {number} fontSize - 字型大小，預設為 BODY 大小
+ * Parse inline formatting (bold, code)
+ * @param {string} text - Raw text
+ * @param {number} fontSize - Font size, defaults to BODY size
  */
 function parseInlineFormatting(text, fontSize = FONT_SIZE.BODY) {
   const runs = [];
@@ -773,12 +771,12 @@ function createCodeBlock(content) {
 }
 
 /**
- * 計算表格欄寬 - 根據內容長度智慧分配
+ * Calculate table column widths - intelligently allocate based on content length
  */
 function calculateColumnWidths(headers, rows, totalWidth = 9360) {
   const numCols = headers.length;
 
-  // 計算每欄最大內容長度
+  // Calculate max content length for each column
   const maxLengths = headers.map((h, i) => {
     let max = h.length;
     rows.forEach(row => {
@@ -791,15 +789,15 @@ function calculateColumnWidths(headers, rows, totalWidth = 9360) {
 
   const totalLength = maxLengths.reduce((a, b) => a + b, 0);
 
-  // 根據內容長度比例分配寬度，但設定最小寬度
-  const minWidth = 1200;  // 最小欄寬
+  // Allocate width based on content length ratio, but set minimum width
+  const minWidth = 1200;  // Minimum column width
   let widths = maxLengths.map(len => Math.max(minWidth, Math.floor((len / totalLength) * totalWidth)));
 
-  // 調整總寬度
+  // Adjust total width
   const currentTotal = widths.reduce((a, b) => a + b, 0);
   if (currentTotal !== totalWidth) {
     const diff = totalWidth - currentTotal;
-    widths[widths.length - 1] += diff;  // 最後一欄吸收差異
+    widths[widths.length - 1] += diff;  // Last column absorbs difference
   }
 
   return widths;
@@ -843,7 +841,7 @@ function createTable(headers, rows) {
 }
 
 /**
- * 解析文件結構，分離封面、目錄、修訂歷史與主要內容
+ * Parse document structure, separate cover, TOC, revision history, and main content
  */
 function parseDocumentStructure(content, outputDir) {
   const lines = content.split('\n');
@@ -861,7 +859,7 @@ function parseDocumentStructure(content, outputDir) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    // 檢測封面資訊（文件開頭到 Table of Contents 之前）
+    // Detect cover info (document start to Table of Contents)
     if (section === 'cover') {
       if (trimmed.startsWith('# ')) {
         structure.coverInfo.title = trimmed.substring(2).trim();
@@ -882,27 +880,27 @@ function parseDocumentStructure(content, outputDir) {
       continue;
     }
 
-    // 檢測目錄區塊
+    // Detect TOC section
     if (section === 'toc') {
       if (trimmed.startsWith('## Revision History') || trimmed.toLowerCase().includes('revision history')) {
         section = 'revision';
         i++;
         continue;
       } else if (trimmed.startsWith('## 1') || trimmed.startsWith('## 1.')) {
-        // 跳過目錄，進入主要內容
+        // Skip TOC, enter main content
         section = 'main';
-        continue;  // 不 i++，讓 main section 處理這行
+        continue;  // Don't i++, let main section handle this line
       }
       structure.tocLines.push(line);
       i++;
       continue;
     }
 
-    // 檢測修訂歷史
+    // Detect revision history
     if (section === 'revision') {
       if (trimmed.startsWith('## 1') || (trimmed.startsWith('## ') && !trimmed.toLowerCase().includes('revision'))) {
         section = 'main';
-        continue;  // 不 i++，讓 main section 處理這行
+        continue;  // Don't i++, let main section handle this line
       }
       if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
         structure.revisionHistory.push(line);
@@ -911,7 +909,7 @@ function parseDocumentStructure(content, outputDir) {
       continue;
     }
 
-    // 主要內容
+    // Main content
     if (section === 'main') {
       structure.mainContent.push(line);
     }
@@ -922,17 +920,17 @@ function parseDocumentStructure(content, outputDir) {
 }
 
 /**
- * 建立封面頁元素
+ * Create cover page elements
  */
 function createCoverPage(coverInfo) {
   const elements = [];
 
-  // 空白間距
+  // Empty spacing
   for (let i = 0; i < 6; i++) {
     elements.push(new Paragraph({ children: [] }));
   }
 
-  // 主標題
+  // Main title
   elements.push(new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { after: 400 },
@@ -944,7 +942,7 @@ function createCoverPage(coverInfo) {
     })]
   }));
 
-  // 副標題
+  // Subtitle
   if (coverInfo.subtitle) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -957,12 +955,12 @@ function createCoverPage(coverInfo) {
     }));
   }
 
-  // 空白間距
+  // Empty spacing
   for (let i = 0; i < 4; i++) {
     elements.push(new Paragraph({ children: [] }));
   }
 
-  // 版本
+  // Version
   if (coverInfo.version) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -971,7 +969,7 @@ function createCoverPage(coverInfo) {
     }));
   }
 
-  // 作者
+  // Author
   if (coverInfo.author) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -980,7 +978,7 @@ function createCoverPage(coverInfo) {
     }));
   }
 
-  // 組織
+  // Organization
   if (coverInfo.organization) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -989,7 +987,7 @@ function createCoverPage(coverInfo) {
     }));
   }
 
-  // 日期
+  // Date
   if (coverInfo.date) {
     elements.push(new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -1002,14 +1000,14 @@ function createCoverPage(coverInfo) {
 }
 
 /**
- * 從主要內容中提取標題結構
+ * Extract heading structure from main content
  */
 function extractHeadings(mainContent) {
   const headings = [];
   const lines = mainContent.split('\n');
 
   for (const line of lines) {
-    // 匹配 ## 到 #### 的標題（不含需求項目標題）
+    // Match ## to #### headings (excluding requirement item headings)
     const h2Match = line.match(/^##\s+(.+)$/);
     const h3Match = line.match(/^###\s+(.+)$/);
     const h4Match = line.match(/^####\s+(.+)$/);
@@ -1027,20 +1025,20 @@ function extractHeadings(mainContent) {
 }
 
 /**
- * 建立目錄頁元素
- * 使用 Word 原生 TOC 功能，開啟文件後需按 F9 或右鍵「更新欄位」以顯示頁碼
+ * Create TOC page elements
+ * Uses Word native TOC feature, need to press F9 or right-click "Update Field" to show page numbers after opening document
  */
 function createTocPage() {
   const elements = [];
 
-  // 目錄標題
+  // TOC title
   elements.push(new Paragraph({
     heading: HeadingLevel.HEADING_1,
     spacing: { after: 300 },
     children: [new TextRun({ text: 'Table of Contents', bold: true, size: FONT_SIZE.H1, font: FONT_EN })]
   }));
 
-  // 使用 Word 原生目錄功能（包含頁碼）
+  // Use Word native TOC feature (includes page numbers)
   elements.push(new TableOfContents('Table of Contents', {
     hyperlink: true,
     headingStyleRange: '1-4',
@@ -1052,15 +1050,15 @@ function createTocPage() {
     ]
   }));
 
-  // 提示訊息
+  // Hint message
   elements.push(new Paragraph({
     spacing: { before: 400 },
     children: [new TextRun({
-      text: '※ 請在 Word 中按 F9 或右鍵選擇「更新欄位」以顯示目錄內容與頁碼',
+      text: '※ Please press F9 in Word or right-click and select "Update Field" to display TOC contents and page numbers',
       italics: true,
       size: FONT_SIZE.SMALL,
       color: '888888',
-      font: FONT_CN
+      font: FONT_EN
     })]
   }));
 
@@ -1068,7 +1066,7 @@ function createTocPage() {
 }
 
 /**
- * 建立修訂歷史頁
+ * Create revision history page
  */
 function createRevisionHistoryPage(revisionLines) {
   const elements = [];
@@ -1080,7 +1078,7 @@ function createRevisionHistoryPage(revisionLines) {
   }));
 
   if (revisionLines.length > 0) {
-    // 解析修訂歷史表格
+    // Parse revision history table
     const headers = [];
     const rows = [];
     let isHeader = true;
@@ -1112,17 +1110,17 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
   const content = fs.readFileSync(inputPath, 'utf8');
   const outputDir = path.dirname(outputPath);
 
-  // 解析文件結構
+  // Parse document structure
   const structure = parseDocumentStructure(content, outputDir);
 
-  // 解析主要內容
+  // Parse main content
   const mainContentText = structure.mainContent.join('\n');
   const mainElements = parseMarkdown(mainContentText, outputDir).flat();
 
-  // 頁面邊距設定
+  // Page margin settings
   const pageMargins = { top: 1440, right: 1440, bottom: 1440, left: 1440 };
 
-  // 建立頁首頁尾
+  // Create headers and footers
   const defaultHeader = new Header({
     children: [new Paragraph({
       alignment: AlignmentType.RIGHT,
@@ -1143,7 +1141,7 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
   });
 
   const doc = new Document({
-    features: { updateFields: true },  // 自動更新目錄
+    features: { updateFields: true },  // Auto-update TOC
     styles: {
       default: { document: { run: { font: FONT_EN, size: 24 } } },
       paragraphStyles: [
@@ -1160,26 +1158,26 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
       ]
     },
     sections: [
-      // Section 1: 封面頁 (無頁首頁尾)
+      // Section 1: Cover page (no header/footer)
       {
         properties: { page: { margin: pageMargins } },
         children: createCoverPage(structure.coverInfo)
       },
-      // Section 2: 目錄頁
+      // Section 2: TOC page
       {
         properties: { page: { margin: pageMargins } },
         headers: { default: defaultHeader },
         footers: { default: defaultFooter },
         children: createTocPage()
       },
-      // Section 3: 修訂歷史頁
+      // Section 3: Revision history page
       {
         properties: { page: { margin: pageMargins } },
         headers: { default: defaultHeader },
         footers: { default: defaultFooter },
         children: createRevisionHistoryPage(structure.revisionHistory)
       },
-      // Section 4: 主要內容
+      // Section 4: Main content
       {
         properties: { page: { margin: pageMargins } },
         headers: { default: defaultHeader },
@@ -1193,19 +1191,19 @@ async function convertMdToDocx(inputPath, outputPath, docTitle) {
   fs.writeFileSync(outputPath, buffer);
   console.log(`Created ${outputPath} (${Math.round(buffer.length/1024)} KB)`);
 
-  // 清理 Mermaid 暫存檔案
+  // Clean up Mermaid temp files
   cleanupMermaidTemp(outputDir);
 }
 
-// 使用範例
+// Usage example
 // convertMdToDocx('SRS-Project-1.0.md', 'SRS-Project-1.0.docx', 'SRS-Project-1.0');
 
 module.exports = { convertMdToDocx, cleanupMermaidTemp };
 ```
 
-### 3. 批次轉換
+### 3. Batch Conversion
 
-建立批次轉換腳本 `convert-all.js`：
+Create batch conversion script `convert-all.js`:
 
 ```javascript
 const { convertMdToDocx } = require('./md-to-docx');
@@ -1236,12 +1234,12 @@ async function convertAll() {
       const docxPath = mdPath.replace('.md', '.docx');
       const docTitle = mdFile.replace('.md', '');
 
-      // 檢查是否需要更新
+      // Check if update needed
       if (fs.existsSync(docxPath)) {
         const mdStat = fs.statSync(mdPath);
         const docxStat = fs.statSync(docxPath);
         if (docxStat.mtime >= mdStat.mtime) {
-          console.log(`Skip ${mdFile} (已同步)`);
+          console.log(`Skip ${mdFile} (in sync)`);
           continue;
         }
       }
@@ -1254,102 +1252,102 @@ async function convertAll() {
 convertAll();
 ```
 
-## 同步狀態檢查
+## Sync Status Check
 
-檢查 MD 與 DOCX 是否同步：
+Check if MD and DOCX are in sync:
 
 ```bash
-# 檢查單一檔案
-ls -la {文件}.md {文件}.docx
+# Check single file
+ls -la {document}.md {document}.docx
 
-# 批次檢查
-find . -name "*.md" -exec sh -c 'docx="${1%.md}.docx"; if [ -f "$docx" ]; then if [ "$1" -nt "$docx" ]; then echo "需更新: $docx"; fi; else echo "缺少: $docx"; fi' _ {} \;
+# Batch check
+find . -name "*.md" -exec sh -c 'docx="${1%.md}.docx"; if [ -f "$docx" ]; then if [ "$1" -nt "$docx" ]; then echo "Needs update: $docx"; fi; else echo "Missing: $docx"; fi' _ {} \;
 ```
 
-## 文件格式規範
+## Document Format Specification
 
-產生的 DOCX 文件包含：
+Generated DOCX documents include:
 
-| 元素 | 格式 |
-|------|------|
-| 標題 1 (H1) | 18pt Bold (中文: 圓黑體, 英文: Arial) |
-| 標題 2 (H2) | 16pt Bold |
-| 標題 3 (H3) | 14pt Bold |
-| 標題 4 (H4) | 13pt Bold |
-| 標題 5 (H5) | 12pt Bold |
-| 內文 | 11pt |
-| 表格內容 | 10pt |
-| 表格標題 | 10pt Bold, 淺藍底 |
-| 程式碼 | Courier New 10pt, 灰底 |
-| 頁首/頁尾 | 9pt |
-| 邊界 | 1 inch (上下左右) |
-| **Mermaid 圖表** | PNG 圖片, 置中, 保持原始比例 (最大寬 450px) |
+| Element | Format |
+|---------|--------|
+| Heading 1 (H1) | 18pt Bold (Chinese: Yuan Gothic, English: Arial) |
+| Heading 2 (H2) | 16pt Bold |
+| Heading 3 (H3) | 14pt Bold |
+| Heading 4 (H4) | 13pt Bold |
+| Heading 5 (H5) | 12pt Bold |
+| Body | 11pt |
+| Table content | 10pt |
+| Table header | 10pt Bold, light blue background |
+| Code | Courier New 10pt, gray background |
+| Header/Footer | 9pt |
+| Margins | 1 inch (all sides) |
+| **Mermaid diagrams** | PNG image, centered, maintain original aspect ratio (max width 450px) |
 
-## Mermaid 圖表支援
+## Mermaid Diagram Support
 
-轉換器會自動將 Markdown 中的 Mermaid 代碼區塊渲染為 PNG 圖片嵌入 DOCX 文件。
+The converter automatically renders Mermaid code blocks in Markdown to PNG images and embeds them in the DOCX file.
 
-### 支援的 Mermaid 圖表類型
+### Supported Mermaid Diagram Types
 
-| 類型 | 範例 |
-|------|------|
-| 流程圖 | `flowchart TD`, `flowchart LR`, `graph TB` |
-| 序列圖 | `sequenceDiagram` |
-| 類別圖 | `classDiagram` |
-| 狀態圖 | `stateDiagram-v2` |
-| 甘特圖 | `gantt` |
-| 圓餅圖 | `pie` |
-| ER 圖 | `erDiagram` |
+| Type | Example |
+|------|---------|
+| Flowchart | `flowchart TD`, `flowchart LR`, `graph TB` |
+| Sequence diagram | `sequenceDiagram` |
+| Class diagram | `classDiagram` |
+| State diagram | `stateDiagram-v2` |
+| Gantt chart | `gantt` |
+| Pie chart | `pie` |
+| ER diagram | `erDiagram` |
 
-### 使用範例
+### Usage Example
 
-在 Markdown 文件中：
+In Markdown file:
 
 ````markdown
 ```mermaid
 flowchart TD
-    A[開始] --> B{條件}
-    B -->|是| C[動作1]
-    B -->|否| D[動作2]
-    C --> E[結束]
+    A[Start] --> B{Condition}
+    B -->|Yes| C[Action 1]
+    B -->|No| D[Action 2]
+    C --> E[End]
     D --> E
 ```
 ````
 
-轉換後會在 DOCX 中顯示為圖片。
+After conversion, it will display as an image in the DOCX.
 
-### 注意事項
+### Notes
 
-1. **依賴安裝**：需要全域安裝 `@mermaid-js/mermaid-cli`
+1. **Dependency Installation**: Need to globally install `@mermaid-js/mermaid-cli`
    ```bash
    npm install -g @mermaid-js/mermaid-cli
    ```
 
-2. **渲染失敗處理**：若 Mermaid 渲染失敗（語法錯誤或環境問題），將 fallback 顯示為程式碼區塊
+2. **Render Failure Handling**: If Mermaid rendering fails (syntax error or environment issues), will fallback to display as code block
 
-3. **暫存檔案**：轉換過程會在輸出目錄建立 `.mermaid-temp` 資料夾，完成後自動清理
+3. **Temp Files**: Conversion process creates `.mermaid-temp` folder in output directory, automatically cleaned up after completion
 
-4. **圖片尺寸**：自動讀取原始尺寸並保持比例，最大寬度 450px、最大高度 500px，避免圖片變形
+4. **Image Size**: Automatically reads original dimensions and maintains aspect ratio, max width 450px, max height 500px, prevents image distortion
 
 ---
 
-## 方案二：Pandoc + SVG（推薦）
+## Alternative: Pandoc + SVG (Recommended)
 
-對於包含大量 Mermaid 圖表的文件，推薦使用 Pandoc 方案，可產生更高品質的向量圖形。
+For documents with many Mermaid diagrams, the Pandoc approach is recommended, which produces higher quality vector graphics.
 
-### 問題：SVG 文字不顯示
+### Issue: SVG Text Not Displaying
 
-Mermaid 預設產生的 SVG 使用 `<foreignObject>` 嵌入 HTML 來渲染文字，但 **Microsoft Word 不支援 foreignObject**，導致圖表中的文字無法顯示。
+Mermaid's default SVG output uses `<foreignObject>` to embed HTML for text rendering, but **Microsoft Word doesn't support foreignObject**, causing text in diagrams to not display.
 
-### 解決方案：PDF→SVG 轉換流程
+### Solution: PDF→SVG Conversion Pipeline
 
-透過 PDF 作為中間格式，可將文字轉換為向量路徑，讓 Word 正確顯示：
+By using PDF as an intermediate format, text is converted to vector paths, allowing Word to display correctly:
 
 ```
 Mermaid Code → PDF (mmdc --pdfFit) → SVG (pdf2svg) → Word Compatible
 ```
 
-### 依賴安裝
+### Dependency Installation
 
 ```bash
 # macOS
@@ -1361,11 +1359,11 @@ sudo apt install pdf2svg
 npm install -g @mermaid-js/mermaid-cli
 ```
 
-### Hybrid 轉換腳本 (convert-hybrid.py)
+### Hybrid Conversion Script (convert-hybrid.py)
 
-此腳本根據圖表類型自動選擇最佳格式：
-- **block-beta** 圖表 → PNG（較好的佈局渲染）
-- **其他圖表** → SVG via PDF（向量文字，可縮放）
+This script automatically selects the best format based on diagram type:
+- **block-beta** diagrams → PNG (better layout rendering)
+- **Other diagrams** → SVG via PDF (vector text, scalable)
 
 ```python
 #!/usr/bin/env python3
@@ -1528,19 +1526,19 @@ def replace_mermaid_with_images(md_file, output_dir, output_md, results):
             return match.group(0)
 
         if not success:
-            return f'```\n[圖表 {idx}: 轉換失敗]\n```'
+            return f'```\n[Diagram {idx}: Conversion failed]\n```'
 
         img_file = f'mermaid-images/diagram_{idx:03d}.{fmt}'
 
         # Check file exists
         full_path = os.path.join(os.path.dirname(md_file), 'mermaid-images', f'diagram_{idx:03d}.{fmt}')
         if not os.path.exists(full_path):
-            return f'```\n[圖表 {idx}: 檔案不存在]\n```'
+            return f'```\n[Diagram {idx}: File not found]\n```'
 
         # Set appropriate width based on format
         if fmt == 'png':
             # PNG wireframes: mobile size (3 inches)
-            return f'![圖表 {idx}]({img_file}){{ width=3in }}'
+            return f'![Diagram {idx}]({img_file}){{ width=3in }}'
         else:
             # SVG diagrams: check aspect ratio and set appropriate size
             try:
@@ -1554,15 +1552,15 @@ def replace_mermaid_with_images(md_file, output_dir, output_md, results):
 
                 if aspect > 2:
                     # Tall diagram: use smaller width to fit page
-                    return f'![圖表 {idx}]({img_file}){{ width=3in }}'
+                    return f'![Diagram {idx}]({img_file}){{ width=3in }}'
                 elif aspect > 1.2:
                     # Medium tall: moderate width
-                    return f'![圖表 {idx}]({img_file}){{ width=4in }}'
+                    return f'![Diagram {idx}]({img_file}){{ width=4in }}'
                 else:
                     # Wide or square: full width
-                    return f'![圖表 {idx}]({img_file}){{ width=5.5in }}'
+                    return f'![Diagram {idx}]({img_file}){{ width=5.5in }}'
             except:
-                return f'![圖表 {idx}]({img_file}){{ width=5in }}'
+                return f'![Diagram {idx}]({img_file}){{ width=5in }}'
 
     modified_content = re.sub(pattern, replace_with_image, content, flags=re.DOTALL)
 
@@ -1649,13 +1647,13 @@ if __name__ == '__main__':
     main()
 ```
 
-### 使用方式
+### Usage
 
 ```bash
-# 轉換單一文件
+# Convert single document
 python convert-hybrid.py SDD-Project-1.0.md
 
-# 輸出：
+# Output:
 #   mermaid-images/diagram_001.svg
 #   mermaid-images/diagram_002.png
 #   ...
@@ -1664,24 +1662,24 @@ python convert-hybrid.py SDD-Project-1.0.md
 
 ---
 
-## Mermaid 圖表最佳實踐
+## Mermaid Diagram Best Practices
 
-### 1. 避免使用 ASCII Art
+### 1. Avoid ASCII Art
 
-**不要使用純文字 ASCII 圖表：**
+**Don't use plain text ASCII diagrams:**
 ```
 ┌─────────────┐     ┌─────────────┐
 │   State A   │────>│   State B   │
 └─────────────┘     └─────────────┘
 ```
 
-**改用 Mermaid 語法：**
+**Use Mermaid syntax instead:**
 ```mermaid
 stateDiagram-v2
     StateA --> StateB
 ```
 
-### 2. 狀態機使用 stateDiagram-v2
+### 2. Use stateDiagram-v2 for State Machines
 
 ```mermaid
 stateDiagram-v2
@@ -1702,9 +1700,9 @@ stateDiagram-v2
     }
 ```
 
-### 3. Tab 導航結構使用水平布局
+### 3. Use Horizontal Layout for Tab Navigation
 
-**避免垂直拉長：**
+**Avoid vertical stretching:**
 ```mermaid
 flowchart LR
     subgraph MainTabNavigator["Main Tab Navigator"]
@@ -1717,7 +1715,7 @@ flowchart LR
     end
 ```
 
-### 4. Block-Beta Wireframe 最佳實踐
+### 4. Block-Beta Wireframe Best Practices
 
 ```mermaid
 block-beta
@@ -1742,46 +1740,46 @@ block-beta
     end
 ```
 
-### 5. 圖表寬度建議
+### 5. Recommended Diagram Widths
 
-| 圖表類型 | 建議寬度 | 說明 |
-|---------|---------|------|
-| block-beta (wireframe) | 3 inches | 模擬手機螢幕寬度 |
-| 高瘦圖表 (aspect > 2) | 3 inches | 避免過寬導致截斷 |
-| 中等圖表 (aspect 1.2-2) | 4 inches | 平衡可讀性 |
-| 寬圖表 (aspect < 1.2) | 5.5 inches | 利用頁面寬度 |
+| Diagram Type | Recommended Width | Description |
+|--------------|-------------------|-------------|
+| block-beta (wireframe) | 3 inches | Simulates mobile screen width |
+| Tall diagram (aspect > 2) | 3 inches | Prevents excessive width causing truncation |
+| Medium diagram (aspect 1.2-2) | 4 inches | Balances readability |
+| Wide diagram (aspect < 1.2) | 5.5 inches | Utilizes page width |
 
 ---
 
-## 常見問題排解
+## Troubleshooting
 
-### Q1: SVG 在 Word 中顯示空白
+### Q1: SVG Displays Blank in Word
 
-**原因：** Mermaid 預設使用 `<foreignObject>` 渲染文字，Word 不支援。
+**Cause:** Mermaid defaults to using `<foreignObject>` for text rendering, which Word doesn't support.
 
-**解決：** 使用 PDF→SVG 轉換流程（見上方 convert-hybrid.py）。
+**Solution:** Use PDF→SVG conversion pipeline (see convert-hybrid.py above).
 
-### Q2: 圖表被裁切或拉伸
+### Q2: Diagram Gets Cropped or Stretched
 
-**原因：** 圖表太高或太寬，超出頁面範圍。
+**Cause:** Diagram is too tall or wide, exceeding page bounds.
 
-**解決：**
-1. 在 Pandoc image syntax 中指定適當寬度
-2. 使用 `--pdfFit` 參數讓 mmdc 自動調整 PDF 大小
-3. 對於高瘦圖表，使用較小寬度（3-4 inches）
+**Solution:**
+1. Specify appropriate width in Pandoc image syntax
+2. Use `--pdfFit` parameter to let mmdc auto-adjust PDF size
+3. For tall diagrams, use smaller width (3-4 inches)
 
-### Q3: macOS 無法開啟 DOCX（quarantine 警告）
+### Q3: macOS Cannot Open DOCX (Quarantine Warning)
 
-**解決：**
+**Solution:**
 ```bash
 xattr -d com.apple.quarantine <file>.docx
 ```
 
-### Q4: block-beta 圖表佈局異常
+### Q4: block-beta Diagram Layout Issues
 
-**原因：** block-beta 對 columns 設定敏感。
+**Cause:** block-beta is sensitive to columns settings.
 
-**解決：**
-1. 確保每個 block 的 columns 設定一致
-2. 避免在 header 使用過多 columns（建議 3-5）
-3. 使用 PNG 格式輸出 block-beta 圖表
+**Solution:**
+1. Ensure columns settings are consistent within each block
+2. Avoid using too many columns in header (recommend 3-5)
+3. Use PNG format for block-beta diagrams

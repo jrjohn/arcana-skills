@@ -1,178 +1,178 @@
-# 教育學習類 App 追加需求 (REQ-EDU-*)
+# Education/Learning App Additional Requirements (REQ-EDU-*)
 
-本文件定義教育學習類 App 的追加需求模組，與 `standard-app-requirements.md` 配合使用。
-適用於：語言學習、單字學習、測驗練習、課程學習、技能培訓等 App 類型。
-
----
-
-## 觸發關鍵字
-
-當用戶描述中包含以下關鍵字時，自動載入本需求模組：
-
-- 學習、教育、教學、課程
-- 單字、詞彙、字庫、題庫
-- 測驗、練習、測試、考試
-- 發音、聽力、拼寫、拼音
-- 家長、教師、學生、兒童
+This document defines additional requirements modules for Education/Learning Apps, used in conjunction with `standard-app-requirements.md`.
+Applicable to: Language learning, Vocabulary learning, Quiz practice, Course learning, Skill training, and similar App types.
 
 ---
 
-## 內容管理模組 (REQ-EDU-CONTENT-*)
+## Trigger Keywords
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-EDU-CONTENT-001 | 字庫/題庫建立 | 使用者可建立、編輯、刪除字庫或題庫 | P0 |
-| REQ-EDU-CONTENT-002 | 逐字新增 | 支援單筆內容新增，含必要欄位驗證 | P0 |
-| REQ-EDU-CONTENT-003 | 批次匯入 | 支援 MD/Excel/CSV 格式批次匯入內容 | P0 |
-| REQ-EDU-CONTENT-004 | 照片 OCR 新增 | 透過相機拍照或相簿選取，OCR 識別文字後新增 | P1 |
-| REQ-EDU-CONTENT-005 | 圈選劃詞新增 | 在照片上圈選或劃詞，自動擷取並新增 | P1 |
-| REQ-EDU-CONTENT-006 | 內容匯出 | 支援匯出為 MD/Excel/CSV 格式 | P1 |
-| REQ-EDU-CONTENT-007 | 字庫合併 | 將多個字庫合併為一個 | P1 |
-| REQ-EDU-CONTENT-008 | 字庫分群 | 依照書籤、錯誤頻率、自訂條件分群 | P1 |
-| REQ-EDU-CONTENT-009 | 字庫公開分享 | 使用者可選擇公開字庫供他人載入 | P2 |
-| REQ-EDU-CONTENT-010 | 字庫載入獨立 | 載入他人字庫時，使用者屬性獨立，不影響原作者 | P1 |
+When user descriptions contain the following keywords, automatically load this requirements module:
+
+- Learning, Education, Teaching, Course
+- Vocabulary, Words, Word bank, Question bank
+- Quiz, Practice, Test, Exam
+- Pronunciation, Listening, Spelling, Phonics
+- Parent, Teacher, Student, Child
 
 ---
 
-## 例句管理模組 (REQ-EDU-SENTENCE-*)
+## Content Management Module (REQ-EDU-CONTENT-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-EDU-SENTENCE-001 | 手動輸入例句 | 家長/教師可手動輸入例句 | P0 |
-| REQ-EDU-SENTENCE-002 | AI 自動生成例句 | 系統自動產生生活化且好記的例句 | P1 |
-| REQ-EDU-SENTENCE-003 | AI 超時處理 | AI 生成設置響應時間（如 5 秒），超時使用預設例句或提示重試 | P0 |
-| REQ-EDU-SENTENCE-004 | AI 失效應急 | 網路異常時提供離線備用例句，確保流暢度 | P1 |
-| REQ-EDU-SENTENCE-005 | 例句更新選項 | 例句產生後可選擇保留或重新生成 | P1 |
-| REQ-EDU-SENTENCE-006 | 中英對照 | 例句顯示中英對照 | P0 |
-| REQ-EDU-SENTENCE-007 | 例句發音 | 例句支援語音播放 | P0 |
-| REQ-EDU-SENTENCE-008 | 發音語速調整 | 例句發音語速可調整（放慢/正常/加速） | P1 |
-
----
-
-## 學習功能模組 (REQ-EDU-LEARN-*)
-
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-EDU-LEARN-001 | 聽力測驗 | 播放語音，使用者選擇或輸入對應內容 | P0 |
-| REQ-EDU-LEARN-002 | 聽力語音類型 | 使用美國腔自然人聲 (TTS) | P0 |
-| REQ-EDU-LEARN-003 | 聽力語速調整 | 語速可調整（0.5x ~ 2.0x） | P1 |
-| REQ-EDU-LEARN-004 | 發音測驗 | 使用者朗讀，系統進行語音識別比對 | P0 |
-| REQ-EDU-LEARN-005 | 發音容錯 | 發音比對允許些許程度的失誤 | P1 |
-| REQ-EDU-LEARN-006 | 發音偏差顯示 | 正確與偏差部分以不同顏色標示（如綠色/紅色） | P1 |
-| REQ-EDU-LEARN-007 | 拼寫測驗 | 使用者依據提示拼寫單字 | P0 |
-| REQ-EDU-LEARN-008 | 例句填空 | 在例句中填入正確單字 | P1 |
-| REQ-EDU-LEARN-009 | 配對測驗 | 將單字與定義/圖片配對 | P1 |
-| REQ-EDU-LEARN-010 | 測驗模式切換 | 可在各測驗模式間自由切換 | P1 |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-EDU-CONTENT-001 | Vocabulary/Question Bank Creation | Users can create, edit, and delete vocabulary or question banks | P0 |
+| REQ-EDU-CONTENT-002 | Single Entry Addition | Support single entry addition with required field validation | P0 |
+| REQ-EDU-CONTENT-003 | Batch Import | Support batch import in MD/Excel/CSV formats | P0 |
+| REQ-EDU-CONTENT-004 | Photo OCR Addition | Add content via camera or gallery with OCR text recognition | P1 |
+| REQ-EDU-CONTENT-005 | Selection/Highlight Addition | Select or highlight text in photos for automatic extraction and addition | P1 |
+| REQ-EDU-CONTENT-006 | Content Export | Support export to MD/Excel/CSV formats | P1 |
+| REQ-EDU-CONTENT-007 | Vocabulary Merge | Merge multiple vocabularies into one | P1 |
+| REQ-EDU-CONTENT-008 | Vocabulary Grouping | Group by bookmarks, error frequency, or custom conditions | P1 |
+| REQ-EDU-CONTENT-009 | Public Vocabulary Sharing | Users can choose to make vocabulary public for others to load | P2 |
+| REQ-EDU-CONTENT-010 | Independent Vocabulary Loading | When loading others' vocabulary, user attributes are independent, not affecting original author | P1 |
 
 ---
 
-## 進度追蹤模組 (REQ-EDU-PROGRESS-*)
+## Sentence Management Module (REQ-EDU-SENTENCE-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-EDU-PROGRESS-001 | 書籤標記 | 使用者可對內容加上書籤標記 | P0 |
-| REQ-EDU-PROGRESS-002 | 錯誤頻率追蹤 | 系統記錄每個內容的錯誤次數與頻率 | P0 |
-| REQ-EDU-PROGRESS-003 | 學習統計 | 顯示學習時間、完成數量、正確率等統計 | P1 |
-| REQ-EDU-PROGRESS-004 | 進度報表 | 提供視覺化進度報表（圖表） | P1 |
-| REQ-EDU-PROGRESS-005 | 跨平台同步 | 學習進度在 iOS/iPad/MacOS 間同步 | P1 |
-| REQ-EDU-PROGRESS-006 | 離線學習 | 支援離線模式，連線後同步進度 | P2 |
-
----
-
-## 家長/教師參與模組 (REQ-EDU-PARENT-*)
-
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-EDU-PARENT-001 | 多角色登入 | 支援學生、家長、教師等角色登入 | P0 |
-| REQ-EDU-PARENT-002 | 角色權限區分 | 不同角色有不同操作權限 | P0 |
-| REQ-EDU-PARENT-003 | 家長儀表板 | 家長可查看孩子學習進度和統計 | P1 |
-| REQ-EDU-PARENT-004 | 字庫指派 | 家長/教師可指派字庫給學生 | P1 |
-| REQ-EDU-PARENT-005 | 學習進度報告 | 家長可接收週期性學習報告 | P2 |
-| REQ-EDU-PARENT-006 | 學習提醒設定 | 家長可設定學習提醒時間 | P2 |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-EDU-SENTENCE-001 | Manual Sentence Input | Parents/Teachers can manually input example sentences | P0 |
+| REQ-EDU-SENTENCE-002 | AI Auto-Generate Sentences | System automatically generates life-relevant and memorable sentences | P1 |
+| REQ-EDU-SENTENCE-003 | AI Timeout Handling | Set AI generation response time (e.g., 5 seconds), use default sentence or prompt retry on timeout | P0 |
+| REQ-EDU-SENTENCE-004 | AI Failure Fallback | Provide offline backup sentences when network is abnormal to ensure fluency | P1 |
+| REQ-EDU-SENTENCE-005 | Sentence Update Options | After sentence generation, option to keep or regenerate | P1 |
+| REQ-EDU-SENTENCE-006 | Bilingual Display | Sentences display bilingual (e.g., English-Chinese) translation | P0 |
+| REQ-EDU-SENTENCE-007 | Sentence Pronunciation | Sentences support audio playback | P0 |
+| REQ-EDU-SENTENCE-008 | Pronunciation Speed Adjustment | Sentence pronunciation speed adjustable (slow/normal/fast) | P1 |
 
 ---
 
-## 用戶黏著度模組 (REQ-EDU-ENGAGE-*)
+## Learning Features Module (REQ-EDU-LEARN-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-EDU-ENGAGE-001 | 學習獎勵機制 | 完成學習任務獲得獎勵（徽章/積分） | P1 |
-| REQ-EDU-ENGAGE-002 | 連續學習追蹤 | 追蹤並顯示連續學習天數 | P1 |
-| REQ-EDU-ENGAGE-003 | 每日目標 | 設定每日學習目標並追蹤完成度 | P1 |
-| REQ-EDU-ENGAGE-004 | 學習提醒通知 | 推播通知提醒使用者學習 | P1 |
-| REQ-EDU-ENGAGE-005 | 成就系統 | 達成特定里程碑解鎖成就 | P2 |
-
----
-
-## 使用複雜度控制 (REQ-EDU-UX-*)
-
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-EDU-UX-001 | 簡化介面 | 針對目標年齡層優化介面複雜度 | P0 |
-| REQ-EDU-UX-002 | 大按鈕設計 | 國小學童適用的大型觸控目標 | P0 |
-| REQ-EDU-UX-003 | 清晰視覺回饋 | 操作結果有明顯視覺/聲音回饋 | P1 |
-| REQ-EDU-UX-004 | 統一設定入口 | 所有設定集中於統一的參數設定鈕 | P1 |
-| REQ-EDU-UX-005 | 操作引導 | 首次使用時提供操作引導 | P1 |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-EDU-LEARN-001 | Listening Test | Play audio, user selects or inputs corresponding content | P0 |
+| REQ-EDU-LEARN-002 | Listening Voice Type | Use natural American accent voice (TTS) | P0 |
+| REQ-EDU-LEARN-003 | Listening Speed Adjustment | Speed adjustable (0.5x ~ 2.0x) | P1 |
+| REQ-EDU-LEARN-004 | Pronunciation Test | User reads aloud, system performs speech recognition comparison | P0 |
+| REQ-EDU-LEARN-005 | Pronunciation Tolerance | Pronunciation comparison allows some degree of error | P1 |
+| REQ-EDU-LEARN-006 | Pronunciation Deviation Display | Correct and deviated parts shown in different colors (e.g., green/red) | P1 |
+| REQ-EDU-LEARN-007 | Spelling Test | User spells words based on prompts | P0 |
+| REQ-EDU-LEARN-008 | Sentence Fill-in-Blank | Fill in correct words in sentences | P1 |
+| REQ-EDU-LEARN-009 | Matching Test | Match words with definitions/images | P1 |
+| REQ-EDU-LEARN-010 | Test Mode Switching | Freely switch between test modes | P1 |
 
 ---
 
-## 需求數量估算
+## Progress Tracking Module (REQ-EDU-PROGRESS-*)
 
-| 模組 | P0 | P1 | P2 | 小計 |
-|------|----|----|----|----|
-| 內容管理 | 3 | 6 | 1 | 10 |
-| 例句管理 | 4 | 4 | 0 | 8 |
-| 學習功能 | 4 | 6 | 0 | 10 |
-| 進度追蹤 | 2 | 3 | 1 | 6 |
-| 家長/教師 | 2 | 2 | 2 | 6 |
-| 用戶黏著度 | 0 | 4 | 1 | 5 |
-| 使用複雜度 | 2 | 3 | 0 | 5 |
-| **總計** | **17** | **28** | **5** | **50** |
-
-加上 `standard-app-requirements.md` 的通用需求（約 40-60 個），
-教育學習類 App 總需求預估：**90-110 個需求**
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-EDU-PROGRESS-001 | Bookmark Marking | Users can bookmark content | P0 |
+| REQ-EDU-PROGRESS-002 | Error Frequency Tracking | System records error count and frequency for each item | P0 |
+| REQ-EDU-PROGRESS-003 | Learning Statistics | Display study time, completion count, accuracy rate, etc. | P1 |
+| REQ-EDU-PROGRESS-004 | Progress Reports | Provide visual progress reports (charts) | P1 |
+| REQ-EDU-PROGRESS-005 | Cross-Platform Sync | Learning progress syncs across iOS/iPad/MacOS | P1 |
+| REQ-EDU-PROGRESS-006 | Offline Learning | Support offline mode, sync progress when connected | P2 |
 
 ---
 
-## 與其他模組整合
+## Parent/Teacher Participation Module (REQ-EDU-PARENT-*)
 
-本需求模組需與以下模組整合使用：
-
-| 模組 | 來源 | 說明 |
-|------|------|------|
-| 認證 (AUTH) | standard-app-requirements.md | 多角色登入整合 |
-| 設定 (SETTING) | standard-app-requirements.md | 統一設定入口 |
-| 通知 (NOTIFY) | standard-app-requirements.md | 學習提醒通知 |
-| 同步 (SYNC) | standard-app-requirements.md | 跨平台進度同步 |
-
----
-
-## 畫面清單預估 (SCR-EDU-*)
-
-| 畫面類型 | 預估數量 | 說明 |
-|----------|---------|------|
-| 字庫管理 | 5-8 | 列表、新增、編輯、匯入、匯出等 |
-| 學習模式 | 5-8 | 聽力、發音、拼寫、填空、配對 |
-| 進度統計 | 3-5 | 統計總覽、報表詳情、成就等 |
-| 家長功能 | 3-5 | 儀表板、指派、報告等 |
-| **總計** | **16-26** | |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-EDU-PARENT-001 | Multi-Role Login | Support student, parent, teacher role login | P0 |
+| REQ-EDU-PARENT-002 | Role Permission Differentiation | Different roles have different operation permissions | P0 |
+| REQ-EDU-PARENT-003 | Parent Dashboard | Parents can view child's learning progress and statistics | P1 |
+| REQ-EDU-PARENT-004 | Vocabulary Assignment | Parents/Teachers can assign vocabulary to students | P1 |
+| REQ-EDU-PARENT-005 | Learning Progress Reports | Parents can receive periodic learning reports | P2 |
+| REQ-EDU-PARENT-006 | Learning Reminder Settings | Parents can set learning reminder times | P2 |
 
 ---
 
-## 技術考量
+## User Engagement Module (REQ-EDU-ENGAGE-*)
 
-### 語音識別 (發音測驗)
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-EDU-ENGAGE-001 | Learning Reward Mechanism | Earn rewards (badges/points) for completing learning tasks | P1 |
+| REQ-EDU-ENGAGE-002 | Streak Tracking | Track and display consecutive learning days | P1 |
+| REQ-EDU-ENGAGE-003 | Daily Goals | Set daily learning goals and track completion | P1 |
+| REQ-EDU-ENGAGE-004 | Learning Reminder Notifications | Push notifications to remind users to learn | P1 |
+| REQ-EDU-ENGAGE-005 | Achievement System | Unlock achievements upon reaching specific milestones | P2 |
+
+---
+
+## UX Complexity Control (REQ-EDU-UX-*)
+
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-EDU-UX-001 | Simplified Interface | Optimize interface complexity for target age group | P0 |
+| REQ-EDU-UX-002 | Large Button Design | Large touch targets suitable for elementary students | P0 |
+| REQ-EDU-UX-003 | Clear Visual Feedback | Operations have clear visual/audio feedback | P1 |
+| REQ-EDU-UX-004 | Unified Settings Entry | All settings centralized in one settings button | P1 |
+| REQ-EDU-UX-005 | Operation Guidance | Provide operation guidance on first use | P1 |
+
+---
+
+## Requirements Count Estimate
+
+| Module | P0 | P1 | P2 | Subtotal |
+|--------|----|----|----|----|
+| Content Management | 3 | 6 | 1 | 10 |
+| Sentence Management | 4 | 4 | 0 | 8 |
+| Learning Features | 4 | 6 | 0 | 10 |
+| Progress Tracking | 2 | 3 | 1 | 6 |
+| Parent/Teacher | 2 | 2 | 2 | 6 |
+| User Engagement | 0 | 4 | 1 | 5 |
+| UX Complexity | 2 | 3 | 0 | 5 |
+| **Total** | **17** | **28** | **5** | **50** |
+
+Plus generic requirements from `standard-app-requirements.md` (approximately 40-60),
+Education/Learning App total requirements estimate: **90-110 requirements**
+
+---
+
+## Integration with Other Modules
+
+This requirements module needs to integrate with the following modules:
+
+| Module | Source | Description |
+|--------|--------|-------------|
+| Authentication (AUTH) | standard-app-requirements.md | Multi-role login integration |
+| Settings (SETTING) | standard-app-requirements.md | Unified settings entry |
+| Notification (NOTIFY) | standard-app-requirements.md | Learning reminder notifications |
+| Sync (SYNC) | standard-app-requirements.md | Cross-platform progress sync |
+
+---
+
+## Screen List Estimate (SCR-EDU-*)
+
+| Screen Type | Estimated Count | Description |
+|-------------|-----------------|-------------|
+| Vocabulary Management | 5-8 | List, Add, Edit, Import, Export, etc. |
+| Learning Modes | 5-8 | Listening, Pronunciation, Spelling, Fill-in, Matching |
+| Progress Statistics | 3-5 | Statistics overview, Report details, Achievements, etc. |
+| Parent Features | 3-5 | Dashboard, Assignment, Reports, etc. |
+| **Total** | **16-26** | |
+
+---
+
+## Technical Considerations
+
+### Speech Recognition (Pronunciation Test)
 - iOS: Speech Framework
-- 第三方: Azure Speech / Google Speech-to-Text
+- Third-party: Azure Speech / Google Speech-to-Text
 
-### 文字轉語音 (聽力測驗)
-- iOS: AVSpeechSynthesizer (美國腔)
-- 第三方: Amazon Polly / Google TTS
+### Text-to-Speech (Listening Test)
+- iOS: AVSpeechSynthesizer (American accent)
+- Third-party: Amazon Polly / Google TTS
 
-### OCR 識別 (照片新增)
+### OCR Recognition (Photo Addition)
 - iOS: Vision Framework
-- 第三方: Google ML Kit / Azure Computer Vision
+- Third-party: Google ML Kit / Azure Computer Vision
 
-### AI 例句生成
+### AI Sentence Generation
 - OpenAI API / Claude API
-- 超時處理: 5 秒 timeout + 本地快取例句
+- Timeout handling: 5 second timeout + local cached sentences

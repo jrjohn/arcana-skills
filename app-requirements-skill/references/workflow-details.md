@@ -1,99 +1,100 @@
-# 工作流程詳細說明
+# Workflow Details
 
-本文件包含 app-requirements-skill 的詳細工作流程說明。
+This document contains the detailed workflow description for app-requirements-skill.
 
-## 🧠 心理學自動套用流程
+## 🧠 Psychology Auto-Application Flow
 
-### Step 1: 讀取心理學指南
+### Step 1: Read Psychology Guidelines
 
-執行任何文件操作前，必須先讀取以下檔案：
+Before executing any document operation, the following files must be read first:
 
 ```bash
-# 1. 設計心理學
+# 1. Design Psychology
 cat ~/.claude/skills/app-requirements-skill/references/design-psychology.md
 
-# 2. 認知心理學
+# 2. Cognitive Psychology
 cat ~/.claude/skills/app-requirements-skill/references/cognitive-psychology.md
 
-# 3. 文件編排心理學
+# 3. Document Layout Psychology
 cat ~/.claude/skills/app-requirements-skill/references/document-layout-psychology.md
 ```
 
-### Step 2: 根據任務類型套用心理學
+### Step 2: Apply Psychology Based on Task Type
 
-| 任務類型 | 設計心理學 | 認知心理學 | 文件編排心理學 |
-|---------|:----------:|:----------:|:--------------:|
-| 產出/修改 SRS | ✅ | ✅ | ✅ |
-| 產出/修改 SDD | ✅ | ✅ | ✅ |
-| 產出/修改 SWD | - | ✅ | ✅ |
-| 產出/修改 STP/STC | - | - | ✅ |
-| 檢視/審查文件 | ✅ | ✅ | ✅ |
-| 產生 DOCX | - | - | ✅ |
+| Task Type | Design Psychology | Cognitive Psychology | Document Layout Psychology |
+|-----------|:-----------------:|:--------------------:|:--------------------------:|
+| Create/Modify SRS | ✅ | ✅ | ✅ |
+| Create/Modify SDD | ✅ | ✅ | ✅ |
+| Create/Modify SWD | - | ✅ | ✅ |
+| Create/Modify STP/STC | - | - | ✅ |
+| Review/Audit Documents | ✅ | ✅ | ✅ |
+| Generate DOCX | - | - | ✅ |
 
-### Step 3: 輸出心理學檢視報告
+### Step 3: Output Psychology Compliance Report
 
 ```markdown
-## 心理學符合度檢視
+## Psychology Compliance Review
 
-### 設計心理學 ✅/⚠️/❌
-- 認知負荷：[評估]
-- 漸進式揭露：[評估]
-- Fitts' Law：[評估]
+### Design Psychology ✅/⚠️/❌
+- Cognitive Load: [Assessment]
+- Progressive Disclosure: [Assessment]
+- Fitts' Law: [Assessment]
 
-### 認知心理學 ✅/⚠️/❌
-- 心智模型：[評估]
-- 工作記憶：[評估]
-- 錯誤預防：[評估]
+### Cognitive Psychology ✅/⚠️/❌
+- Mental Model: [Assessment]
+- Working Memory: [Assessment]
+- Error Prevention: [Assessment]
 
-### 文件編排心理學 ✅/⚠️/❌
-- 讀者角色分析：[評估]
-- F 型排版：[評估]
-- 表格可讀性：[評估]
+### Document Layout Psychology ✅/⚠️/❌
+- Reader Role Analysis: [Assessment]
+- F-Pattern Layout: [Assessment]
+- Table Readability: [Assessment]
 ```
 
 ---
 
-## 完整工作流程
+## Complete Workflow
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                    醫療軟體開發文件工作流程                        │
+│                Medical Software Development Workflow            │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                │
-│  第一階段：需求收集                                               │
+│  Phase 1: Requirements Gathering                               │
 │  ┌──────────────────────────────────────────────────────────┐ │
-│  │ 1.1 專案願景訪談    → 產出：Project Vision Statement      │ │
-│  │ 1.2 利害關係人分析   → 產出：Stakeholder Analysis         │ │
-│  │ 1.3 功能需求收集    → 產出：Functional Requirements       │ │
-│  │ 1.4 非功能需求分析   → 產出：Non-Functional Requirements  │ │
-│  │ 1.5 軟體安全分類    → 產出：Safety Classification         │ │
+│  │ 1.1 Project Vision Interview → Output: Project Vision    │ │
+│  │ 1.2 Stakeholder Analysis    → Output: Stakeholder Analysis│ │
+│  │ 1.3 Functional Requirements → Output: Functional Reqs    │ │
+│  │ 1.4 Non-Functional Analysis → Output: Non-Functional Reqs│ │
+│  │ 1.5 Software Safety Class   → Output: Safety Classification│ │
 │  └──────────────────────────────────────────────────────────┘ │
 │                           ↓                                    │
-│  第二階段：文件產出                                               │
+│  Phase 2: Document Generation                                  │
 │  ┌──────────────────────────────────────────────────────────┐ │
-│  │ 2.1 SRS 軟體需求規格書  (+ 設計心理學 + 認知心理學)         │ │
-│  │ 2.2 SDD 軟體設計規格書  (+ UI/UX 整合 + AI 資產)          │ │
-│  │ 2.3 SWD 軟體詳細設計書                                    │ │
-│  │ 2.4 STP 軟體測試計畫                                      │ │
-│  │ 2.5 STC 軟體測試案例                                      │ │
-│  │ 2.6 SVV 軟體驗證確認報告                                  │ │
-│  │ 2.7 RTM 需求追溯矩陣   (100% 覆蓋率驗證)                  │ │
+│  │ 2.1 SRS Software Requirements Spec (+ Design/Cognitive   │ │
+│  │     Psychology)                                          │ │
+│  │ 2.2 SDD Software Design Spec (+ UI/UX + AI Assets)      │ │
+│  │ 2.3 SWD Software Detailed Design                        │ │
+│  │ 2.4 STP Software Test Plan                              │ │
+│  │ 2.5 STC Software Test Cases                             │ │
+│  │ 2.6 SVV Software Verification & Validation Report       │ │
+│  │ 2.7 RTM Requirements Traceability Matrix (100% coverage)│ │
 │  └──────────────────────────────────────────────────────────┘ │
 │                           ↓                                    │
-│  第三階段：UI Flow 產生 (自動觸發)                                │
+│  Phase 3: UI Flow Generation (Auto-triggered)                  │
 │  ┌──────────────────────────────────────────────────────────┐ │
-│  │ 3.1 啟用 app-uiux-designer.skill                         │ │
-│  │ 3.2 產生 HTML 互動原型                                    │ │
-│  │ 3.3 產生 UI 截圖 (Puppeteer)                             │ │
-│  │ 3.4 回補 SDD (UI 原型 + 圖片)                            │ │
-│  │ 3.5 回補 SRS (Screen References + Inferred Requirements) │ │
+│  │ 3.1 Enable app-uiux-designer.skill                      │ │
+│  │ 3.2 Generate HTML Interactive Prototype                  │ │
+│  │ 3.3 Generate UI Screenshots (Puppeteer)                 │ │
+│  │ 3.4 Backfill SDD (UI Prototype + Images)                │ │
+│  │ 3.5 Backfill SRS (Screen References + Inferred Reqs)    │ │
 │  └──────────────────────────────────────────────────────────┘ │
 │                           ↓                                    │
-│  第四階段：DOCX 產生                                             │
+│  Phase 4: DOCX Generation                                      │
 │  ┌──────────────────────────────────────────────────────────┐ │
-│  │ 4.1 移除 MD 手動編號                                      │ │
-│  │ 4.2 執行 md-to-docx.js 轉換                              │ │
-│  │ 4.3 驗證圖片嵌入                                          │ │
+│  │ 4.1 Remove MD Manual Numbering                          │ │
+│  │ 4.2 Execute md-to-docx.js Conversion                    │ │
+│  │ 4.3 Verify Image Embedding                              │ │
 │  └──────────────────────────────────────────────────────────┘ │
 │                                                                │
 └────────────────────────────────────────────────────────────────┘
@@ -101,105 +102,105 @@ cat ~/.claude/skills/app-requirements-skill/references/document-layout-psycholog
 
 ---
 
-## 階段 1.1：專案願景訪談
+## Phase 1.1: Project Vision Interview
 
-### 訪談問題範本
+### Interview Question Template
 
-| 類別 | 問題 |
-|------|------|
-| 產品願景 | 這個產品要解決什麼問題？ |
-| 目標用戶 | 主要使用者是誰？ |
-| 成功指標 | 如何衡量產品成功？ |
-| 技術限制 | 有哪些技術或法規限制？ |
-
----
-
-## 階段 1.2：利害關係人分析
-
-### 利害關係人矩陣
-
-| 角色 | 關注點 | 影響力 | 溝通頻率 |
-|------|--------|--------|---------|
-| 產品負責人 | 功能優先順序 | 高 | 每日 |
-| 法規專員 | IEC 62304 合規 | 高 | 每週 |
-| 臨床專家 | 臨床使用情境 | 中 | 雙週 |
-| IT 人員 | 系統整合 | 中 | 需求時 |
+| Category | Question |
+|----------|----------|
+| Product Vision | What problem does this product solve? |
+| Target Users | Who are the primary users? |
+| Success Metrics | How do we measure product success? |
+| Technical Constraints | What technical or regulatory constraints exist? |
 
 ---
 
-## 階段 1.5：軟體安全分類評估
+## Phase 1.2: Stakeholder Analysis
 
-### IEC 62304 軟體安全分類
+### Stakeholder Matrix
 
-| 分類 | 定義 | 文件要求 |
-|------|------|---------|
-| Class A | 不會造成傷害 | 基本文件 |
-| Class B | 可能造成非嚴重傷害 | 完整文件 + 風險分析 |
-| Class C | 可能造成死亡或嚴重傷害 | 完整文件 + 風險分析 + 詳細追溯 |
+| Role | Concerns | Influence | Communication Frequency |
+|------|----------|-----------|------------------------|
+| Product Owner | Feature Priority | High | Daily |
+| Regulatory Specialist | IEC 62304 Compliance | High | Weekly |
+| Clinical Expert | Clinical Use Scenarios | Medium | Biweekly |
+| IT Personnel | System Integration | Medium | As Needed |
 
 ---
 
-## ID 編號系統
+## Phase 1.5: Software Safety Classification Assessment
 
-### 文件 ID 格式
+### IEC 62304 Software Safety Classification
 
-| 文件類型 | ID 格式 | 範例 |
-|---------|--------|------|
-| SRS 需求 | REQ-{MODULE}-{NNN} | REQ-AUTH-001 |
-| SDD 設計 | SDD-{MODULE}-{NNN} | SDD-AUTH-001 |
-| SDD 畫面 | SCR-{MODULE}-{NNN} | SCR-AUTH-001-login |
-| SWD 元件 | SWD-{MODULE}-{NNN} | SWD-AUTH-001 |
-| STC 測試 | STC-{REQ-ID} | STC-REQ-AUTH-001 |
+| Class | Definition | Documentation Requirements |
+|-------|------------|---------------------------|
+| Class A | No harm possible | Basic documentation |
+| Class B | May cause non-serious injury | Complete documentation + Risk analysis |
+| Class C | May cause death or serious injury | Complete documentation + Risk analysis + Detailed traceability |
 
-### 模組代碼
+---
 
-| 代碼 | 模組名稱 |
-|------|---------|
-| AUTH | 認證模組 |
+## ID Numbering System
+
+### Document ID Format
+
+| Document Type | ID Format | Example |
+|---------------|-----------|---------|
+| SRS Requirement | REQ-{MODULE}-{NNN} | REQ-AUTH-001 |
+| SDD Design | SDD-{MODULE}-{NNN} | SDD-AUTH-001 |
+| SDD Screen | SCR-{MODULE}-{NNN} | SCR-AUTH-001-login |
+| SWD Component | SWD-{MODULE}-{NNN} | SWD-AUTH-001 |
+| STC Test | STC-{REQ-ID} | STC-REQ-AUTH-001 |
+
+### Module Codes
+
+| Code | Module Name |
+|------|-------------|
+| AUTH | Authentication Module |
 | DASH | Dashboard |
-| TRAIN | 訓練模組 |
-| REPORT | 報告模組 |
-| SETTING | 設定模組 |
-| DEVICE | 設備模組 |
-| VOCAB | 字庫模組 |
+| TRAIN | Training Module |
+| REPORT | Report Module |
+| SETTING | Settings Module |
+| DEVICE | Device Module |
+| VOCAB | Vocabulary Module |
 
 ---
 
-## MD 轉 DOCX 同步產生
+## MD to DOCX Simultaneous Generation
 
-### 轉換器 (md-to-docx.js)
+### Converter (md-to-docx.js)
 
-**位置：** `~/.claude/skills/app-requirements-skill/md-to-docx.js`
+**Location:** `~/.claude/skills/app-requirements-skill/md-to-docx.js`
 
 ```bash
-# 安裝依賴 (首次使用)
+# Install dependencies (first time use)
 cd ~/.claude/skills/app-requirements-skill
 npm install docx
-npm install -g @mermaid-js/mermaid-cli  # 若需渲染 Mermaid 圖表
+npm install -g @mermaid-js/mermaid-cli  # If Mermaid diagram rendering is needed
 
-# 轉換文件
+# Convert documents
 node ~/.claude/skills/app-requirements-skill/md-to-docx.js <input.md>
 
-# 範例
+# Examples
 node ~/.claude/skills/app-requirements-skill/md-to-docx.js SRS-VocabKids-1.0.md
 node ~/.claude/skills/app-requirements-skill/md-to-docx.js SDD-VocabKids-1.0.md
 ```
 
-### 轉換器功能
+### Converter Features
 
-- ✅ 自動解析 Markdown 文件結構（支援中英文標題）
-- ✅ 自動渲染 Mermaid 圖表為 SVG
-- ✅ SVG 圖片自動嵌入 DOCX 並置中顯示
-- ✅ 支援表格、程式碼區塊、標題階層
-- ✅ 自動產生封面、目錄、頁首頁尾
-- ✅ 標題自動編號 (1., 1.1, 1.1.1 等)
-- ✅ 程式碼區塊格式化：行號、斑馬紋背景
-- ✅ 語法高亮：基於 VSCode Light+ 配色
-- ✅ 本地圖片嵌入：支援 PNG/JPEG
+- ✅ Auto-parse Markdown document structure (supports English and Chinese titles)
+- ✅ Auto-render Mermaid diagrams to SVG
+- ✅ SVG images auto-embedded in DOCX and centered
+- ✅ Support for tables, code blocks, heading hierarchy
+- ✅ Auto-generate cover, table of contents, headers and footers
+- ✅ Auto heading numbering (1., 1.1, 1.1.1, etc.)
+- ✅ Code block formatting: line numbers, zebra stripe background
+- ✅ Syntax highlighting: based on VSCode Light+ color scheme
+- ✅ Local image embedding: supports PNG/JPEG
 
 ---
 
-## 專案目錄結構
+## Project Directory Structure
 
 ```
 📁 {project-name}/

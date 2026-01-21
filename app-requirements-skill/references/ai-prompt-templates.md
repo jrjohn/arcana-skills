@@ -1,19 +1,19 @@
-# AI Prompt 範本庫
+# AI Prompt Template Library
 
-完整的 AI 圖像產生 Prompt 範本，適用於 Midjourney、DALL-E、Stable Diffusion 等工具。
+Complete AI image generation prompt templates for tools like Midjourney, DALL-E, Stable Diffusion, etc.
 
-## 目錄
+## Table of Contents
 1. [App Icon Prompts](#app-icon-prompts)
-2. [UI 畫面 Prompts](#ui-畫面-prompts)
-3. [插圖 Prompts](#插圖-prompts)
-4. [背景圖 Prompts](#背景圖-prompts)
-5. [Prompt 結構指南](#prompt-結構指南)
+2. [UI Screen Prompts](#ui-screen-prompts)
+3. [Illustration Prompts](#illustration-prompts)
+4. [Background Prompts](#background-prompts)
+5. [Prompt Structure Guide](#prompt-structure-guide)
 
 ---
 
 ## App Icon Prompts
 
-### 醫療健康類
+### Medical Healthcare
 
 ```
 Professional medical healthcare app icon,
@@ -50,7 +50,7 @@ no text,
 1024x1024
 ```
 
-### 健身運動類
+### Fitness & Sports
 
 ```
 Fitness tracking app icon,
@@ -62,7 +62,7 @@ no text,
 1024x1024
 ```
 
-### 金融商業類
+### Finance & Business
 
 ```
 Finance banking app icon,
@@ -74,7 +74,7 @@ no text,
 1024x1024
 ```
 
-### 教育學習類
+### Education & Learning
 
 ```
 Educational learning app icon,
@@ -88,9 +88,9 @@ no text,
 
 ---
 
-## UI 畫面 Prompts
+## UI Screen Prompts
 
-### 登入畫面
+### Login Screen
 
 ```
 Mobile app login screen UI/UX design,
@@ -106,7 +106,7 @@ iPhone 14 Pro frame,
 high fidelity mockup
 ```
 
-### 儀表板 Dashboard
+### Dashboard
 
 ```
 Mobile dashboard home screen design,
@@ -121,7 +121,7 @@ Material Design style,
 realistic UI mockup
 ```
 
-### 資料列表
+### Data List
 
 ```
 Mobile list view screen design,
@@ -135,7 +135,7 @@ white background with subtle dividers,
 iOS style
 ```
 
-### 詳細資料頁
+### Detail Page
 
 ```
 Mobile detail screen UI design,
@@ -150,9 +150,9 @@ modern healthcare app aesthetic
 
 ---
 
-## 插圖 Prompts
+## Illustration Prompts
 
-### 空狀態插圖
+### Empty State Illustrations
 
 ```
 Flat illustration for empty state,
@@ -175,7 +175,7 @@ vector style,
 transparent background
 ```
 
-### 成功狀態插圖
+### Success State Illustrations
 
 ```
 Celebration illustration,
@@ -187,7 +187,7 @@ transparent background,
 300x300 size
 ```
 
-### 錯誤狀態插圖
+### Error State Illustrations
 
 ```
 Error state illustration,
@@ -200,7 +200,7 @@ transparent background,
 400x400
 ```
 
-### Onboarding 插圖
+### Onboarding Illustrations
 
 ```
 Mobile app onboarding illustration,
@@ -225,9 +225,9 @@ tech-forward illustration style,
 
 ---
 
-## 背景圖 Prompts
+## Background Prompts
 
-### 登入背景
+### Login Background
 
 ```
 Abstract gradient background for mobile app,
@@ -239,7 +239,7 @@ professional and calming,
 can have UI elements overlaid
 ```
 
-### 儀表板背景
+### Dashboard Background
 
 ```
 Subtle pattern background,
@@ -251,7 +251,7 @@ tileable seamless pattern,
 professional aesthetic
 ```
 
-### 專業醫療背景
+### Professional Medical Background
 
 ```
 Healthcare medical background image,
@@ -265,26 +265,26 @@ can overlay text and UI,
 
 ---
 
-## Prompt 結構指南
+## Prompt Structure Guide
 
-### 基本結構
-
-```
-[主體描述], [風格描述], [顏色描述], [技術規格]
-```
-
-### 詳細結構
+### Basic Structure
 
 ```
-[What] 什麼東西
-[Style] 什麼風格
-[Color] 什麼顏色
-[Mood] 什麼氛圍
-[Technical] 技術規格
-[Negative] 排除什麼
+[Subject description], [Style description], [Color description], [Technical specs]
 ```
 
-### 範例拆解
+### Detailed Structure
+
+```
+[What] Subject/object
+[Style] Design style
+[Color] Color scheme
+[Mood] Atmosphere/feeling
+[Technical] Technical specifications
+[Negative] What to exclude
+```
+
+### Example Breakdown
 
 ```
 Professional medical healthcare app icon,     ← What
@@ -297,38 +297,38 @@ no text no letters no words                    ← Negative
 
 ---
 
-## 工具特定語法
+## Tool-Specific Syntax
 
 ### Midjourney
 
 ```
-/imagine prompt: [你的 prompt] --ar 1:1 --v 6 --style raw
+/imagine prompt: [your prompt] --ar 1:1 --v 6 --style raw
 
-參數說明:
---ar 1:1    長寬比 (1:1 正方形, 16:9 橫式)
---v 6       版本 6
---style raw 較少 AI 風格化
---no text   排除文字
---q 2       高品質
+Parameters:
+--ar 1:1    Aspect ratio (1:1 square, 16:9 landscape)
+--v 6       Version 6
+--style raw Less AI stylization
+--no text   Exclude text
+--q 2       High quality
 ```
 
 ### DALL-E 3
 
 ```
-直接描述即可，DALL-E 3 理解自然語言
-建議加上:
-- 明確的尺寸: "1024x1024"
-- 排除項目: "no text, no watermarks"
-- 風格指定: "flat design", "vector style"
+Direct description works well, DALL-E 3 understands natural language
+Recommended additions:
+- Explicit size: "1024x1024"
+- Exclusions: "no text, no watermarks"
+- Style specification: "flat design", "vector style"
 ```
 
 ### Stable Diffusion
 
 ```
-Prompt: [正面描述]
+Prompt: [positive description]
 Negative Prompt: text, letters, words, watermark, signature, blurry, low quality
 
-建議參數:
+Recommended parameters:
 - Steps: 30-50
 - CFG Scale: 7-12
 - Sampler: DPM++ 2M Karras
@@ -336,9 +336,9 @@ Negative Prompt: text, letters, words, watermark, signature, blurry, low quality
 
 ---
 
-## 醫療專用 Prompt 庫
+## Medical-Specific Prompt Library
 
-### 臨床圖標
+### Clinical Icons
 
 ```
 Medical vital signs icon set,
@@ -351,7 +351,7 @@ medical dashboard icons,
 transparent background
 ```
 
-### 科別圖標
+### Department Icons
 
 ```
 Medical specialty icons set,
@@ -364,11 +364,11 @@ medical blue color,
 32x32 each
 ```
 
-### 醫療裝置
+### Medical Devices
 
 ```
 Medical device illustration,
-[血壓計/血糖機/體溫計/血氧機],
+[blood pressure monitor/glucometer/thermometer/pulse oximeter],
 isometric 3D style,
 soft shadows,
 white background,
@@ -378,29 +378,29 @@ product illustration style,
 
 ---
 
-## Prompt 最佳實踐
+## Prompt Best Practices
 
 ### DO ✓
 
-1. **具體描述** - "heart with pulse line" 而非 "heart"
-2. **指定顏色** - 使用 hex code "#2196F3"
-3. **指定尺寸** - "1024x1024 resolution"
-4. **指定風格** - "flat design", "Material Design"
-5. **排除文字** - "no text, no letters"
-6. **指定用途** - "for iOS and Android app stores"
+1. **Be specific** - "heart with pulse line" instead of "heart"
+2. **Specify colors** - Use hex codes "#2196F3"
+3. **Specify size** - "1024x1024 resolution"
+4. **Specify style** - "flat design", "Material Design"
+5. **Exclude text** - "no text, no letters"
+6. **Specify purpose** - "for iOS and Android app stores"
 
 ### DON'T ✗
 
-1. 模糊描述 - "a nice icon"
-2. 過多元素 - 一次描述太多東西
-3. 矛盾指令 - "minimal but detailed"
-4. 忽略尺寸 - 讓 AI 自行決定
-5. 要求文字 - App Icon 不應有文字
+1. Vague descriptions - "a nice icon"
+2. Too many elements - describing too many things at once
+3. Contradicting instructions - "minimal but detailed"
+4. Ignoring size - letting AI decide
+5. Requesting text - App Icons should not have text
 
-### 迭代優化
+### Iterative Optimization
 
-1. 先產生基礎版本
-2. 觀察結果，調整 prompt
-3. 增加/減少細節
-4. 調整風格關鍵字
-5. 嘗試不同工具比較結果
+1. Generate basic version first
+2. Observe results, adjust prompt
+3. Add/reduce details
+4. Adjust style keywords
+5. Try different tools and compare results

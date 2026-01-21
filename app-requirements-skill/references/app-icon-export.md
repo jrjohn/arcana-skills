@@ -1,10 +1,10 @@
-# App Icon 匯出指南
+# App Icon Export Guide
 
-## 從 AI 產生到完整資產
+## From AI Generation to Complete Assets
 
-### 步驟 1：AI 產生 1024x1024 原圖
+### Step 1: AI Generate 1024x1024 Original Image
 
-使用以下 Prompt 產生基礎圖：
+Use the following prompt to generate the base image:
 
 ```
 Professional mobile app icon for medical healthcare application,
@@ -19,44 +19,44 @@ centered composition,
 suitable for both iOS and Android app stores
 ```
 
-**Prompt 調整建議：**
-- 更換 `heart with pulse line` 為您的主要元素
-- 更換顏色代碼為品牌色
-- 保持 "no text" 和 "1024x1024" 不變
+**Prompt Adjustment Tips:**
+- Replace `heart with pulse line` with your main element
+- Replace color codes with your brand colors
+- Keep "no text" and "1024x1024" unchanged
 
-### 步驟 2：後製處理
+### Step 2: Post-Processing
 
-**建議軟體：**
-- Figma (免費)
+**Recommended Software:**
+- Figma (free)
 - Photoshop
 - Affinity Designer
 
-**處理項目：**
-1. 確認尺寸為 1024x1024 px
-2. 確認 RGB 色彩模式
-3. iOS: 移除透明背景 (App Store 不接受)
-4. Android: 可保留透明背景
+**Processing Tasks:**
+1. Confirm size is 1024x1024 px
+2. Confirm RGB color mode
+3. iOS: Remove transparent background (App Store doesn't accept)
+4. Android: Can keep transparent background
 
-### 步驟 3：匯出各尺寸
+### Step 3: Export All Sizes
 
 ---
 
-## Python 匯出腳本
+## Python Export Script
 
-### 完整腳本
+### Complete Script
 
 ```python
 #!/usr/bin/env python3
 """
-App Icon 匯出腳本
-從 1024x1024 原圖產生 Android 和 iOS 所有尺寸
+App Icon Export Script
+Generates all Android and iOS sizes from 1024x1024 source
 """
 
 from PIL import Image
 import os
 import json
 
-# Android 尺寸配置
+# Android size configuration
 ANDROID_SIZES = {
     'mipmap-mdpi': 48,
     'mipmap-hdpi': 72,
@@ -65,7 +65,7 @@ ANDROID_SIZES = {
     'mipmap-xxxhdpi': 192,
 }
 
-# Android Adaptive Icon 尺寸
+# Android Adaptive Icon sizes
 ANDROID_ADAPTIVE_SIZES = {
     'mipmap-mdpi': 108,
     'mipmap-hdpi': 162,
@@ -74,7 +74,7 @@ ANDROID_ADAPTIVE_SIZES = {
     'mipmap-xxxhdpi': 432,
 }
 
-# iOS 尺寸配置
+# iOS size configuration
 IOS_SIZES = {
     'Icon-20@2x': 40,
     'Icon-20@3x': 60,
@@ -91,11 +91,11 @@ IOS_SIZES = {
 }
 
 def resize_image(img, size):
-    """調整圖片尺寸，使用高品質縮放"""
+    """Resize image using high-quality scaling"""
     return img.resize((size, size), Image.LANCZOS)
 
 def export_android(source_img, output_dir):
-    """匯出 Android 資源"""
+    """Export Android resources"""
     android_dir = os.path.join(output_dir, 'android')
 
     for folder, size in ANDROID_SIZES.items():
@@ -110,7 +110,7 @@ def export_android(source_img, output_dir):
         )
         print(f"  ✓ {folder}/ic_launcher.png ({size}x{size})")
 
-    # Play Store 圖標
+    # Play Store icon
     playstore_dir = os.path.join(android_dir, 'playstore')
     os.makedirs(playstore_dir, exist_ok=True)
     resized = resize_image(source_img, 512)
@@ -122,14 +122,14 @@ def export_android(source_img, output_dir):
     print(f"  ✓ playstore/ic_launcher-512.png (512x512)")
 
 def export_android_adaptive(foreground_img, background_color, output_dir):
-    """匯出 Android Adaptive Icon 資源"""
+    """Export Android Adaptive Icon resources"""
     android_dir = os.path.join(output_dir, 'android')
 
     for folder, size in ANDROID_ADAPTIVE_SIZES.items():
         folder_path = os.path.join(android_dir, folder)
         os.makedirs(folder_path, exist_ok=True)
 
-        # 前景
+        # Foreground
         resized = resize_image(foreground_img, size)
         resized.save(
             os.path.join(folder_path, 'ic_launcher_foreground.png'),
@@ -137,7 +137,7 @@ def export_android_adaptive(foreground_img, background_color, output_dir):
             optimize=True
         )
 
-        # 背景 (純色)
+        # Background (solid color)
         bg = Image.new('RGB', (size, size), background_color)
         bg.save(
             os.path.join(folder_path, 'ic_launcher_background.png'),
@@ -148,11 +148,11 @@ def export_android_adaptive(foreground_img, background_color, output_dir):
         print(f"  ✓ {folder}/ic_launcher_foreground.png ({size}x{size})")
 
 def export_ios(source_img, output_dir):
-    """匯出 iOS 資源"""
+    """Export iOS resources"""
     ios_dir = os.path.join(output_dir, 'ios', 'AppIcon.appiconset')
     os.makedirs(ios_dir, exist_ok=True)
 
-    # 移除透明背景 (iOS 要求)
+    # Remove transparent background (iOS requirement)
     if source_img.mode == 'RGBA':
         background = Image.new('RGB', source_img.size, (255, 255, 255))
         background.paste(source_img, mask=source_img.split()[3])
@@ -170,7 +170,7 @@ def export_ios(source_img, output_dir):
         )
         print(f"  ✓ {filename} ({size}x{size})")
 
-        # 準備 Contents.json 資訊
+        # Prepare Contents.json info
         if '@' in name:
             base_name = name.split('@')[0].replace('Icon-', '')
             scale = name.split('@')[1]
@@ -185,7 +185,7 @@ def export_ios(source_img, output_dir):
             "scale": scale
         })
 
-    # 產生 Contents.json
+    # Generate Contents.json
     contents = {
         "images": [
             {"size": "20x20", "idiom": "iphone", "scale": "2x", "filename": "Icon-20@2x.png"},
@@ -209,32 +209,32 @@ def export_ios(source_img, output_dir):
     print(f"  ✓ Contents.json")
 
 def main(source_path, output_dir):
-    """主程式"""
-    print(f"\n📱 App Icon 匯出工具")
-    print(f"來源: {source_path}")
-    print(f"輸出: {output_dir}\n")
+    """Main function"""
+    print(f"\n📱 App Icon Export Tool")
+    print(f"Source: {source_path}")
+    print(f"Output: {output_dir}\n")
 
-    # 讀取原圖
+    # Read source image
     img = Image.open(source_path)
     if img.size != (1024, 1024):
-        print(f"⚠️  來源圖片尺寸為 {img.size}，將調整為 1024x1024")
+        print(f"⚠️  Source image size is {img.size}, resizing to 1024x1024")
         img = resize_image(img, 1024)
 
-    # 匯出 Android
+    # Export Android
     print("🤖 Android:")
     export_android(img, output_dir)
 
-    # 匯出 iOS
+    # Export iOS
     print("\n🍎 iOS:")
     export_ios(img, output_dir)
 
-    print(f"\n✅ 完成！資源已匯出到: {output_dir}")
+    print(f"\n✅ Complete! Assets exported to: {output_dir}")
 
 if __name__ == '__main__':
     import sys
     if len(sys.argv) < 2:
-        print("用法: python app_icon_export.py <source_image> [output_dir]")
-        print("範例: python app_icon_export.py app-icon-1024.png ./app-icons")
+        print("Usage: python app_icon_export.py <source_image> [output_dir]")
+        print("Example: python app_icon_export.py app-icon-1024.png ./app-icons")
         sys.exit(1)
 
     source = sys.argv[1]
@@ -242,59 +242,59 @@ if __name__ == '__main__':
     main(source, output)
 ```
 
-### 使用方式
+### Usage
 
 ```bash
-# 安裝依賴
+# Install dependencies
 pip install Pillow
 
-# 執行匯出
+# Run export
 python app_icon_export.py app-icon-1024.png ./03-assets/app-icons
 ```
 
 ---
 
-## 線上工具替代方案
+## Online Tool Alternatives
 
-如果不想使用腳本，可使用以下線上工具：
+If you don't want to use scripts, use these online tools:
 
-| 工具 | 網址 | 特點 |
-|------|------|------|
-| App Icon Generator | appicon.co | 免費、簡單 |
-| MakeAppIcon | makeappicon.com | 專業、多格式 |
-| Icon Kitchen | icon.kitchen | Google 官方 |
-| Figma Plugin | Figma 內搜尋 | 直接在設計軟體內 |
+| Tool | URL | Features |
+|------|-----|----------|
+| App Icon Generator | appicon.co | Free, simple |
+| MakeAppIcon | makeappicon.com | Professional, multi-format |
+| Icon Kitchen | icon.kitchen | Google official |
+| Figma Plugin | Search in Figma | Direct in design software |
 
 ---
 
-## 檢核清單
+## Checklist
 
-### 產生前檢查
+### Pre-Generation Check
 
-- [ ] 原圖為 1024x1024 px
-- [ ] RGB 色彩模式
-- [ ] 主要元素置中
-- [ ] 無文字或字母
-- [ ] 圖示在小尺寸仍可辨識
+- [ ] Source image is 1024x1024 px
+- [ ] RGB color mode
+- [ ] Main elements centered
+- [ ] No text or letters
+- [ ] Icon recognizable at small sizes
 
-### 匯出後檢查
+### Post-Export Check
 
 **Android:**
-- [ ] mipmap-mdpi (48x48) 已產生
-- [ ] mipmap-hdpi (72x72) 已產生
-- [ ] mipmap-xhdpi (96x96) 已產生
-- [ ] mipmap-xxhdpi (144x144) 已產生
-- [ ] mipmap-xxxhdpi (192x192) 已產生
-- [ ] Play Store 512x512 已產生
+- [ ] mipmap-mdpi (48x48) generated
+- [ ] mipmap-hdpi (72x72) generated
+- [ ] mipmap-xhdpi (96x96) generated
+- [ ] mipmap-xxhdpi (144x144) generated
+- [ ] mipmap-xxxhdpi (192x192) generated
+- [ ] Play Store 512x512 generated
 
 **iOS:**
-- [ ] 所有 @2x, @3x 已產生
-- [ ] Icon-1024.png 已產生 (無透明)
-- [ ] Contents.json 已建立
+- [ ] All @2x, @3x generated
+- [ ] Icon-1024.png generated (no transparency)
+- [ ] Contents.json created
 
-### 實機測試
+### Device Testing
 
-- [ ] Android 模擬器顯示正常
-- [ ] iOS 模擬器顯示正常
-- [ ] 深色模式下可見
-- [ ] 淺色模式下可見
+- [ ] Android emulator displays correctly
+- [ ] iOS simulator displays correctly
+- [ ] Visible in dark mode
+- [ ] Visible in light mode

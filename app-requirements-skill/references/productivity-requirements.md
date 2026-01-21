@@ -1,152 +1,152 @@
-# 生產力工具類 App 追加需求 (REQ-PROD-*)
+# Productivity App Additional Requirements (REQ-PROD-*)
 
-本文件定義生產力工具類 App 的追加需求模組，與 `standard-app-requirements.md` 配合使用。
-適用於：筆記應用、待辦事項、專案管理、時間管理、文件編輯等 App 類型。
-
----
-
-## 觸發關鍵字
-
-當用戶描述中包含以下關鍵字時，自動載入本需求模組：
-
-- 筆記、記事、備忘錄
-- 待辦、任務、清單
-- 專案、項目、管理
-- 日程、行事曆、排程
-- 文件、編輯、協作
+This document defines additional requirements modules for Productivity Apps, used in conjunction with `standard-app-requirements.md`.
+Applicable to: Note-taking apps, to-do lists, project management, time management, document editing, and similar App types.
 
 ---
 
-## 筆記管理模組 (REQ-PROD-NOTE-*)
+## Trigger Keywords
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-PROD-NOTE-001 | 新增筆記 | 建立新筆記 | P0 |
-| REQ-PROD-NOTE-002 | 編輯筆記 | 編輯筆記內容 | P0 |
-| REQ-PROD-NOTE-003 | 刪除筆記 | 刪除筆記（支援回收站） | P0 |
-| REQ-PROD-NOTE-004 | 筆記列表 | 列表/網格方式查看筆記 | P0 |
-| REQ-PROD-NOTE-005 | 筆記搜尋 | 全文搜尋筆記內容 | P0 |
-| REQ-PROD-NOTE-006 | 富文本編輯 | 支援格式化文字（粗體、斜體、列表等） | P1 |
-| REQ-PROD-NOTE-007 | 圖片插入 | 在筆記中插入圖片 | P1 |
-| REQ-PROD-NOTE-008 | 手寫筆記 | 支援 Apple Pencil 手寫 | P2 |
-| REQ-PROD-NOTE-009 | 語音筆記 | 錄音並轉文字 | P2 |
-| REQ-PROD-NOTE-010 | 筆記範本 | 使用預設範本建立筆記 | P2 |
+When user descriptions contain the following keywords, automatically load this requirements module:
+
+- Notes, memo, journal
+- To-do, tasks, lists
+- Projects, management
+- Schedule, calendar, agenda
+- Documents, editing, collaboration
 
 ---
 
-## 資料夾/標籤模組 (REQ-PROD-ORG-*)
+## Note Management Module (REQ-PROD-NOTE-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-PROD-ORG-001 | 資料夾建立 | 建立資料夾組織筆記 | P0 |
-| REQ-PROD-ORG-002 | 資料夾管理 | 重新命名、移動、刪除資料夾 | P0 |
-| REQ-PROD-ORG-003 | 標籤系統 | 為筆記/任務添加標籤 | P1 |
-| REQ-PROD-ORG-004 | 標籤篩選 | 依標籤篩選內容 | P1 |
-| REQ-PROD-ORG-005 | 星號標記 | 標記重要項目 | P1 |
-| REQ-PROD-ORG-006 | 排序選項 | 依日期、名稱、修改時間排序 | P1 |
-
----
-
-## 待辦任務模組 (REQ-PROD-TASK-*)
-
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-PROD-TASK-001 | 新增任務 | 建立待辦任務 | P0 |
-| REQ-PROD-TASK-002 | 完成標記 | 標記任務為已完成 | P0 |
-| REQ-PROD-TASK-003 | 任務列表 | 查看所有任務 | P0 |
-| REQ-PROD-TASK-004 | 截止日期 | 設定任務截止日期 | P0 |
-| REQ-PROD-TASK-005 | 優先級設定 | 設定任務優先級（高/中/低） | P1 |
-| REQ-PROD-TASK-006 | 子任務 | 建立子任務/檢查項目 | P1 |
-| REQ-PROD-TASK-007 | 重複任務 | 設定週期性重複任務 | P1 |
-| REQ-PROD-TASK-008 | 任務提醒 | 設定任務提醒通知 | P0 |
-| REQ-PROD-TASK-009 | 任務分類 | 依清單/專案分類任務 | P1 |
-| REQ-PROD-TASK-010 | 任務附件 | 為任務添加附件 | P2 |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-PROD-NOTE-001 | Create Note | Create new note | P0 |
+| REQ-PROD-NOTE-002 | Edit Note | Edit note content | P0 |
+| REQ-PROD-NOTE-003 | Delete Note | Delete note (support trash) | P0 |
+| REQ-PROD-NOTE-004 | Note List | View notes in list/grid format | P0 |
+| REQ-PROD-NOTE-005 | Note Search | Full-text search note content | P0 |
+| REQ-PROD-NOTE-006 | Rich Text Editing | Support formatted text (bold, italic, lists, etc.) | P1 |
+| REQ-PROD-NOTE-007 | Image Insert | Insert images in notes | P1 |
+| REQ-PROD-NOTE-008 | Handwritten Notes | Support Apple Pencil handwriting | P2 |
+| REQ-PROD-NOTE-009 | Voice Notes | Record audio and transcribe to text | P2 |
+| REQ-PROD-NOTE-010 | Note Templates | Create notes using preset templates | P2 |
 
 ---
 
-## 日程行事曆模組 (REQ-PROD-CAL-*)
+## Folder/Tag Module (REQ-PROD-ORG-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-PROD-CAL-001 | 日曆視圖 | 月/週/日曆視圖 | P0 |
-| REQ-PROD-CAL-002 | 新增事件 | 建立日曆事件 | P0 |
-| REQ-PROD-CAL-003 | 事件編輯 | 編輯事件詳情 | P0 |
-| REQ-PROD-CAL-004 | 事件提醒 | 設定事件提醒 | P0 |
-| REQ-PROD-CAL-005 | 重複事件 | 設定週期性事件 | P1 |
-| REQ-PROD-CAL-006 | 系統日曆整合 | 與 iOS 日曆同步 | P1 |
-| REQ-PROD-CAL-007 | 多日曆管理 | 管理多個日曆 | P2 |
-
----
-
-## 同步備份模組 (REQ-PROD-SYNC-*)
-
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-PROD-SYNC-001 | iCloud 同步 | 資料同步至 iCloud | P0 |
-| REQ-PROD-SYNC-002 | 跨裝置同步 | iPhone/iPad/Mac 資料同步 | P0 |
-| REQ-PROD-SYNC-003 | 離線存取 | 離線時可存取資料 | P0 |
-| REQ-PROD-SYNC-004 | 衝突處理 | 同步衝突解決機制 | P1 |
-| REQ-PROD-SYNC-005 | 版本歷史 | 查看/還原歷史版本 | P2 |
-| REQ-PROD-SYNC-006 | 匯出備份 | 匯出資料備份 | P1 |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-PROD-ORG-001 | Folder Creation | Create folders to organize notes | P0 |
+| REQ-PROD-ORG-002 | Folder Management | Rename, move, delete folders | P0 |
+| REQ-PROD-ORG-003 | Tag System | Add tags to notes/tasks | P1 |
+| REQ-PROD-ORG-004 | Tag Filtering | Filter content by tags | P1 |
+| REQ-PROD-ORG-005 | Star Marking | Mark important items | P1 |
+| REQ-PROD-ORG-006 | Sort Options | Sort by date, name, modified time | P1 |
 
 ---
 
-## 小工具模組 (REQ-PROD-WIDGET-*)
+## Task Module (REQ-PROD-TASK-*)
 
-| ID | 需求 | 描述 | 優先級 |
-|----|------|------|--------|
-| REQ-PROD-WIDGET-001 | 桌面小工具 | iOS 桌面小工具顯示 | P1 |
-| REQ-PROD-WIDGET-002 | 快速新增 | 小工具快速新增項目 | P1 |
-| REQ-PROD-WIDGET-003 | 今日任務 | 小工具顯示今日任務 | P1 |
-| REQ-PROD-WIDGET-004 | 快速筆記 | 小工具快速記事 | P2 |
-
----
-
-## 需求數量估算
-
-| 模組 | P0 | P1 | P2 | 小計 |
-|------|----|----|----|----|
-| 筆記管理 | 5 | 2 | 3 | 10 |
-| 資料夾/標籤 | 2 | 4 | 0 | 6 |
-| 待辦任務 | 4 | 5 | 1 | 10 |
-| 日程行事曆 | 4 | 2 | 1 | 7 |
-| 同步備份 | 3 | 2 | 1 | 6 |
-| 小工具 | 0 | 3 | 1 | 4 |
-| **總計** | **18** | **18** | **7** | **43** |
-
-加上 `standard-app-requirements.md` 的通用需求（約 40-60 個），
-生產力工具類 App 總需求預估：**83-103 個需求**
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-PROD-TASK-001 | Create Task | Create to-do task | P0 |
+| REQ-PROD-TASK-002 | Complete Marking | Mark task as completed | P0 |
+| REQ-PROD-TASK-003 | Task List | View all tasks | P0 |
+| REQ-PROD-TASK-004 | Due Date | Set task due date | P0 |
+| REQ-PROD-TASK-005 | Priority Setting | Set task priority (high/medium/low) | P1 |
+| REQ-PROD-TASK-006 | Subtasks | Create subtasks/checklist items | P1 |
+| REQ-PROD-TASK-007 | Recurring Tasks | Set periodic recurring tasks | P1 |
+| REQ-PROD-TASK-008 | Task Reminders | Set task reminder notifications | P0 |
+| REQ-PROD-TASK-009 | Task Categories | Categorize tasks by list/project | P1 |
+| REQ-PROD-TASK-010 | Task Attachments | Add attachments to tasks | P2 |
 
 ---
 
-## 畫面清單預估 (SCR-PROD-*)
+## Calendar Module (REQ-PROD-CAL-*)
 
-| 畫面類型 | 預估數量 | 說明 |
-|----------|---------|------|
-| 筆記功能 | 4-6 | 列表、編輯、搜尋、詳情 |
-| 任務功能 | 3-5 | 列表、新增、詳情 |
-| 日曆功能 | 3-4 | 月/週/日視圖、事件 |
-| 組織管理 | 2-3 | 資料夾、標籤 |
-| 設定同步 | 2-3 | 同步、備份、設定 |
-| **總計** | **14-21** | |
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-PROD-CAL-001 | Calendar Views | Month/week/day calendar views | P0 |
+| REQ-PROD-CAL-002 | Create Event | Create calendar event | P0 |
+| REQ-PROD-CAL-003 | Event Editing | Edit event details | P0 |
+| REQ-PROD-CAL-004 | Event Reminders | Set event reminders | P0 |
+| REQ-PROD-CAL-005 | Recurring Events | Set periodic events | P1 |
+| REQ-PROD-CAL-006 | System Calendar Integration | Sync with iOS Calendar | P1 |
+| REQ-PROD-CAL-007 | Multiple Calendars | Manage multiple calendars | P2 |
 
 ---
 
-## 技術考量
+## Sync & Backup Module (REQ-PROD-SYNC-*)
 
-### 資料同步
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-PROD-SYNC-001 | iCloud Sync | Sync data to iCloud | P0 |
+| REQ-PROD-SYNC-002 | Cross-device Sync | iPhone/iPad/Mac data sync | P0 |
+| REQ-PROD-SYNC-003 | Offline Access | Access data when offline | P0 |
+| REQ-PROD-SYNC-004 | Conflict Resolution | Sync conflict resolution mechanism | P1 |
+| REQ-PROD-SYNC-005 | Version History | View/restore historical versions | P2 |
+| REQ-PROD-SYNC-006 | Export Backup | Export data backup | P1 |
+
+---
+
+## Widget Module (REQ-PROD-WIDGET-*)
+
+| ID | Requirement | Description | Priority |
+|----|-------------|-------------|----------|
+| REQ-PROD-WIDGET-001 | Home Screen Widget | iOS home screen widget display | P1 |
+| REQ-PROD-WIDGET-002 | Quick Add | Quick add items from widget | P1 |
+| REQ-PROD-WIDGET-003 | Today's Tasks | Display today's tasks in widget | P1 |
+| REQ-PROD-WIDGET-004 | Quick Note | Quick memo from widget | P2 |
+
+---
+
+## Requirements Count Estimate
+
+| Module | P0 | P1 | P2 | Subtotal |
+|--------|----|----|----|----|
+| Note Management | 5 | 2 | 3 | 10 |
+| Folder/Tag | 2 | 4 | 0 | 6 |
+| Tasks | 4 | 5 | 1 | 10 |
+| Calendar | 4 | 2 | 1 | 7 |
+| Sync & Backup | 3 | 2 | 1 | 6 |
+| Widgets | 0 | 3 | 1 | 4 |
+| **Total** | **18** | **18** | **7** | **43** |
+
+Plus generic requirements from `standard-app-requirements.md` (approximately 40-60),
+Productivity App total requirements estimate: **83-103 requirements**
+
+---
+
+## Screen List Estimate (SCR-PROD-*)
+
+| Screen Type | Estimated Count | Description |
+|-------------|-----------------|-------------|
+| Note Features | 4-6 | List, edit, search, details |
+| Task Features | 3-5 | List, add, details |
+| Calendar Features | 3-4 | Month/week/day views, events |
+| Organization | 2-3 | Folders, tags |
+| Settings & Sync | 2-3 | Sync, backup, settings |
+| **Total** | **14-21** | |
+
+---
+
+## Technical Considerations
+
+### Data Sync
 - CloudKit (iCloud)
 - Core Data + NSPersistentCloudKitContainer
-- 衝突解決策略
+- Conflict resolution strategies
 
-### 富文本編輯
+### Rich Text Editing
 - NSAttributedString
-- 第三方: Quill / Markdown 編輯器
+- Third-party: Quill / Markdown editors
 
-### 小工具
+### Widgets
 - WidgetKit
-- App Groups 資料共享
+- App Groups data sharing
 
-### 效能優化
-- 大量筆記的延遲載入
-- 全文搜尋索引 (Core Data + NSFetchedResultsController)
+### Performance Optimization
+- Lazy loading for large note collections
+- Full-text search indexing (Core Data + NSFetchedResultsController)

@@ -1,227 +1,227 @@
-# SETTING 模組模板 (Setting Module Template)
+# SETTING Module Template (Settings Module)
 
-設定模組的標準畫面定義，提供完整的系統設定功能架構。
-
----
-
-## 模組概述
-
-| 項目 | 值 |
-|------|-----|
-| 模組代碼 | SETTING |
-| 必要性 | **必要** |
-| 最少畫面數 | 4 |
-| 完整畫面數 | 18 |
-| 相關需求 | REQ-SETTING-* |
+Standard screen definitions for the Settings module, providing a complete system settings functionality framework.
 
 ---
 
-## 標準畫面清單
+## Module Overview
 
-### 必要畫面（4 個）
-
-| 畫面 ID | 名稱 | 必要性 | 優先級 |
-|---------|------|--------|--------|
-| SCR-SETTING-001-main | 設定主頁 | **必要** | P0 |
-| SCR-SETTING-002-account | 帳戶設定 | **必要** | P0 |
-| SCR-SETTING-003-privacy | 隱私設定 | **必要** | P0 |
-| SCR-SETTING-004-about | 關於 | **必要** | P0 |
-
-### 選配畫面（14 個）
-
-| 畫面 ID | 名稱 | 必要性 | 優先級 | 說明 |
-|---------|------|--------|--------|------|
-| SCR-SETTING-005-notification | 通知設定 | 選配 | P1 | 推播通知偏好 |
-| SCR-SETTING-006-language | 語言設定 | 選配 | P1 | 多語系支援 |
-| SCR-SETTING-007-theme | 主題設定 | 選配 | P1 | 明亮/深色模式 |
-| SCR-SETTING-008-sound | 音效設定 | 選配 | P2 | 音效/音量控制 |
-| SCR-SETTING-009-display | 顯示設定 | 選配 | P2 | 字體大小等 |
-| SCR-SETTING-010-sync | 同步設定 | 選配 | P1 | 雲端同步選項 |
-| SCR-SETTING-011-help | 幫助中心 | 選配 | P1 | FAQ/客服 |
-| SCR-SETTING-012-feedback | 意見回饋 | 選配 | P2 | 用戶反饋 |
-| SCR-SETTING-013-terms | 使用條款 | 選配 | P1 | 法律文件 |
-| SCR-SETTING-014-privacy-policy | 隱私政策 | 選配 | P1 | 法律文件 |
-| SCR-SETTING-015-licenses | 授權資訊 | 選配 | P2 | 開源授權 |
-| SCR-SETTING-016-password | 密碼變更 | 選配 | P1 | 密碼修改 |
-| SCR-SETTING-017-delete-account | 刪除帳戶 | 選配 | P1 | 帳戶刪除 |
-| SCR-SETTING-018-logout-confirm | 登出確認 | 選配 | P1 | 登出對話框 |
+| Item | Value |
+|------|-------|
+| Module Code | SETTING |
+| Necessity | **Required** |
+| Minimum Screens | 4 |
+| Complete Screens | 18 |
+| Related Requirements | REQ-SETTING-* |
 
 ---
 
-## 畫面詳細設計
+## Standard Screen List
 
-### SCR-SETTING-001-main: 設定主頁 ⚠️ 必要
+### Required Screens (4)
 
-**必要性：** **必要**
+| Screen ID | Name | Necessity | Priority |
+|-----------|------|-----------|----------|
+| SCR-SETTING-001-main | Settings Main | **Required** | P0 |
+| SCR-SETTING-002-account | Account Settings | **Required** | P0 |
+| SCR-SETTING-003-privacy | Privacy Settings | **Required** | P0 |
+| SCR-SETTING-004-about | About | **Required** | P0 |
 
-**畫面說明：**
-設定功能的入口頁面，以分組方式呈現所有設定選項。
+### Optional Screens (14)
 
-**UI 元件：**
+| Screen ID | Name | Necessity | Priority | Description |
+|-----------|------|-----------|----------|-------------|
+| SCR-SETTING-005-notification | Notification Settings | Optional | P1 | Push notification preferences |
+| SCR-SETTING-006-language | Language Settings | Optional | P1 | Multi-language support |
+| SCR-SETTING-007-theme | Theme Settings | Optional | P1 | Light/Dark mode |
+| SCR-SETTING-008-sound | Sound Settings | Optional | P2 | Sound effects/Volume control |
+| SCR-SETTING-009-display | Display Settings | Optional | P2 | Font size, etc. |
+| SCR-SETTING-010-sync | Sync Settings | Optional | P1 | Cloud sync options |
+| SCR-SETTING-011-help | Help Center | Optional | P1 | FAQ/Support |
+| SCR-SETTING-012-feedback | Feedback | Optional | P2 | User feedback |
+| SCR-SETTING-013-terms | Terms of Service | Optional | P1 | Legal document |
+| SCR-SETTING-014-privacy-policy | Privacy Policy | Optional | P1 | Legal document |
+| SCR-SETTING-015-licenses | License Information | Optional | P2 | Open source licenses |
+| SCR-SETTING-016-password | Password Change | Optional | P1 | Password modification |
+| SCR-SETTING-017-delete-account | Delete Account | Optional | P1 | Account deletion |
+| SCR-SETTING-018-logout-confirm | Logout Confirmation | Optional | P1 | Logout dialog |
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| header | Header | 標題「設定」 |
-| section_account | Section | 帳戶區塊 |
-| cell_profile | Cell | 個人檔案 |
-| cell_account | Cell | 帳戶設定 |
-| section_preferences | Section | 偏好設定區塊 |
-| cell_notification | Cell | 通知設定 |
-| cell_language | Cell | 語言設定 |
-| cell_theme | Cell | 主題設定 |
-| section_support | Section | 支援區塊 |
-| cell_help | Cell | 幫助中心 |
-| cell_feedback | Cell | 意見回饋 |
-| section_about | Section | 關於區塊 |
-| cell_about | Cell | 關於 |
-| cell_terms | Cell | 使用條款 |
-| cell_privacy | Cell | 隱私政策 |
-| btn_logout | Button | 登出按鈕 |
+---
 
-**Button Navigation：**
+## Detailed Screen Design
+
+### SCR-SETTING-001-main: Settings Main ⚠️ Required
+
+**Necessity:** **Required**
+
+**Screen Description:**
+Entry page for settings functionality, presenting all settings options in grouped sections.
+
+**UI Components:**
+
+| Component | Type | Description |
+|-----------|------|-------------|
+| header | Header | Title "Settings" |
+| section_account | Section | Account section |
+| cell_profile | Cell | Profile |
+| cell_account | Cell | Account Settings |
+| section_preferences | Section | Preferences section |
+| cell_notification | Cell | Notification Settings |
+| cell_language | Cell | Language Settings |
+| cell_theme | Cell | Theme Settings |
+| section_support | Section | Support section |
+| cell_help | Cell | Help Center |
+| cell_feedback | Cell | Feedback |
+| section_about | Section | About section |
+| cell_about | Cell | About |
+| cell_terms | Cell | Terms of Service |
+| cell_privacy | Cell | Privacy Policy |
+| btn_logout | Button | Logout button |
+
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| cell_profile | 個人檔案 | Cell | SCR-PROFILE-001-view | - |
-| cell_account | 帳戶設定 | Cell | SCR-SETTING-002-account | - |
-| cell_notification | 通知設定 | Cell | SCR-SETTING-005-notification | - |
-| cell_language | 語言設定 | Cell | SCR-SETTING-006-language | - |
-| cell_theme | 主題設定 | Cell | SCR-SETTING-007-theme | - |
-| cell_help | 幫助中心 | Cell | SCR-SETTING-011-help | - |
-| cell_feedback | 意見回饋 | Cell | SCR-SETTING-012-feedback | - |
-| cell_about | 關於 | Cell | SCR-SETTING-004-about | - |
-| cell_terms | 使用條款 | Cell | SCR-SETTING-013-terms | - |
-| cell_privacy | 隱私政策 | Cell | SCR-SETTING-014-privacy-policy | - |
-| btn_logout | 登出 | Button | SCR-SETTING-018-logout-confirm | - |
+| cell_profile | Profile | Cell | SCR-PROFILE-001-view | - |
+| cell_account | Account Settings | Cell | SCR-SETTING-002-account | - |
+| cell_notification | Notification Settings | Cell | SCR-SETTING-005-notification | - |
+| cell_language | Language Settings | Cell | SCR-SETTING-006-language | - |
+| cell_theme | Theme Settings | Cell | SCR-SETTING-007-theme | - |
+| cell_help | Help Center | Cell | SCR-SETTING-011-help | - |
+| cell_feedback | Feedback | Cell | SCR-SETTING-012-feedback | - |
+| cell_about | About | Cell | SCR-SETTING-004-about | - |
+| cell_terms | Terms of Service | Cell | SCR-SETTING-013-terms | - |
+| cell_privacy | Privacy Policy | Cell | SCR-SETTING-014-privacy-policy | - |
+| btn_logout | Logout | Button | SCR-SETTING-018-logout-confirm | - |
 
 ---
 
-### SCR-SETTING-002-account: 帳戶設定 ⚠️ 必要
+### SCR-SETTING-002-account: Account Settings ⚠️ Required
 
-**必要性：** **必要**
+**Necessity:** **Required**
 
-**畫面說明：**
-帳戶相關設定，包含 Email、密碼、連結帳號等。
+**Screen Description:**
+Account-related settings including Email, password, linked accounts, etc.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| cell_email | Cell | Email（顯示目前 Email） |
-| cell_password | Cell | 密碼變更 |
-| cell_linked_accounts | Cell | 已連結帳號 |
-| cell_delete_account | Cell | 刪除帳戶 |
-| btn_back | Button | 返回 |
+| Component | Type | Description |
+|-----------|------|-------------|
+| cell_email | Cell | Email (display current email) |
+| cell_password | Cell | Password Change |
+| cell_linked_accounts | Cell | Linked Accounts |
+| cell_delete_account | Cell | Delete Account |
+| btn_back | Button | Back |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| cell_password | 密碼變更 | Cell | SCR-SETTING-016-password | - |
-| cell_delete_account | 刪除帳戶 | Cell | SCR-SETTING-017-delete-account | - |
-| btn_back | 返回 | Button | history.back() | - |
+| cell_password | Password Change | Cell | SCR-SETTING-016-password | - |
+| cell_delete_account | Delete Account | Cell | SCR-SETTING-017-delete-account | - |
+| btn_back | Back | Button | history.back() | - |
 
 ---
 
-### SCR-SETTING-003-privacy: 隱私設定 ⚠️ 必要
+### SCR-SETTING-003-privacy: Privacy Settings ⚠️ Required
 
-**必要性：** **必要**
+**Necessity:** **Required**
 
-**畫面說明：**
-隱私相關設定，包含資料分享、追蹤、可見性等。
+**Screen Description:**
+Privacy-related settings including data sharing, tracking, visibility, etc.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
-| toggle_analytics | Toggle | 分析數據收集 |
-| toggle_personalization | Toggle | 個人化推薦 |
-| toggle_profile_visibility | Toggle | 公開個人檔案 |
-| cell_data_download | Cell | 下載我的資料 |
-| cell_privacy_policy | Cell | 隱私政策 |
-| btn_back | Button | 返回 |
+| Component | Type | Description |
+|-----------|------|-------------|
+| toggle_analytics | Toggle | Analytics data collection |
+| toggle_personalization | Toggle | Personalized recommendations |
+| toggle_profile_visibility | Toggle | Public profile |
+| cell_data_download | Cell | Download my data |
+| cell_privacy_policy | Cell | Privacy Policy |
+| btn_back | Button | Back |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| cell_privacy_policy | 隱私政策 | Cell | SCR-SETTING-014-privacy-policy | - |
-| btn_back | 返回 | Button | history.back() | - |
+| cell_privacy_policy | Privacy Policy | Cell | SCR-SETTING-014-privacy-policy | - |
+| btn_back | Back | Button | history.back() | - |
 
 ---
 
-### SCR-SETTING-004-about: 關於 ⚠️ 必要
+### SCR-SETTING-004-about: About ⚠️ Required
 
-**必要性：** **必要**
+**Necessity:** **Required**
 
-**畫面說明：**
-App 資訊頁面，包含版本號、開發團隊、法律資訊等。
+**Screen Description:**
+App information page including version number, development team, legal information, etc.
 
-**UI 元件：**
+**UI Components:**
 
-| 元件 | 類型 | 說明 |
-|------|------|------|
+| Component | Type | Description |
+|-----------|------|-------------|
 | img_logo | Image | App Logo |
-| lbl_app_name | Text | App 名稱 |
-| lbl_version | Text | 版本號 |
-| cell_terms | Cell | 使用條款 |
-| cell_privacy | Cell | 隱私政策 |
-| cell_licenses | Cell | 授權資訊 |
-| lbl_copyright | Text | 版權聲明 |
-| btn_back | Button | 返回 |
+| lbl_app_name | Text | App Name |
+| lbl_version | Text | Version Number |
+| cell_terms | Cell | Terms of Service |
+| cell_privacy | Cell | Privacy Policy |
+| cell_licenses | Cell | License Information |
+| lbl_copyright | Text | Copyright notice |
+| btn_back | Button | Back |
 
-**Button Navigation：**
+**Button Navigation:**
 
 | Element ID | Element Text | Type | Target Screen | Condition |
 |------------|--------------|------|---------------|-----------|
-| cell_terms | 使用條款 | Cell | SCR-SETTING-013-terms | - |
-| cell_privacy | 隱私政策 | Cell | SCR-SETTING-014-privacy-policy | - |
-| cell_licenses | 授權資訊 | Cell | SCR-SETTING-015-licenses | - |
-| btn_back | 返回 | Button | history.back() | - |
+| cell_terms | Terms of Service | Cell | SCR-SETTING-013-terms | - |
+| cell_privacy | Privacy Policy | Cell | SCR-SETTING-014-privacy-policy | - |
+| cell_licenses | License Information | Cell | SCR-SETTING-015-licenses | - |
+| btn_back | Back | Button | history.back() | - |
 
 ---
 
-## 設定分組建議
+## Settings Grouping Recommendations
 
-### 標準分組結構
+### Standard Grouping Structure
 
 ```
-設定主頁
-├── 👤 帳戶
-│   ├── 個人檔案
-│   └── 帳戶設定
-├── ⚙️ 偏好設定
-│   ├── 通知設定
-│   ├── 語言設定
-│   ├── 主題設定
-│   └── 音效設定
-├── 🔒 隱私與安全
-│   ├── 隱私設定
-│   └── 安全設定
-├── ❓ 支援
-│   ├── 幫助中心
-│   └── 意見回饋
-├── ℹ️ 關於
-│   ├── 關於
-│   ├── 使用條款
-│   └── 隱私政策
-└── 🚪 登出
+Settings Main
+├── 👤 Account
+│   ├── Profile
+│   └── Account Settings
+├── ⚙️ Preferences
+│   ├── Notification Settings
+│   ├── Language Settings
+│   ├── Theme Settings
+│   └── Sound Settings
+├── 🔒 Privacy & Security
+│   ├── Privacy Settings
+│   └── Security Settings
+├── ❓ Support
+│   ├── Help Center
+│   └── Feedback
+├── ℹ️ About
+│   ├── About
+│   ├── Terms of Service
+│   └── Privacy Policy
+└── 🚪 Logout
 ```
 
 ---
 
-## App 類型特定設定
+## App Type Specific Settings
 
-| App 類型 | 建議增加的設定 |
-|----------|----------------|
-| 教育類 | 學習提醒、每日目標、語音語速 |
-| 電商類 | 付款方式、收貨地址、訂單通知 |
-| 社群類 | 誰可以看我、封鎖名單、標記設定 |
-| 醫療類 | 健康資料同步、緊急聯絡人、資料加密 |
-| 生產力類 | 同步設定、備份設定、快捷鍵 |
+| App Type | Recommended Additional Settings |
+|----------|--------------------------------|
+| Education | Learning reminders, Daily goals, Voice speed |
+| E-commerce | Payment methods, Shipping addresses, Order notifications |
+| Social | Who can see me, Block list, Tag settings |
+| Healthcare | Health data sync, Emergency contacts, Data encryption |
+| Productivity | Sync settings, Backup settings, Shortcuts |
 
 ---
 
-## 參考來源
+## Reference Source
 
-本模板基於 VocabMaster 專案的 SETTING 模組設計（18 個畫面）。
+This template is based on the SETTING module design from the VocabMaster project (18 screens).

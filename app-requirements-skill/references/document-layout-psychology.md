@@ -1,291 +1,291 @@
-# 技術文件編排心理學 (Document Layout Psychology)
+# Technical Document Layout Psychology
 
-本文件定義 IEC 62304 技術文件 (SRS/SDD/SWD/STP/STC/SVV/RTM) 的編排原則，
-確保文件易於閱讀、理解與使用，提升不同角色讀者的開發效率。
+This document defines layout principles for IEC 62304 technical documents (SRS/SDD/SWD/STP/STC/SVV/RTM),
+ensuring documents are easy to read, understand, and use, improving development efficiency across different reader roles.
 
-## 核心理念
+## Core Concepts
 
-技術文件不僅是記錄需求與設計的載體，更是團隊溝通的媒介。
-良好的文件編排應考量：
+Technical documents are not just carriers for recording requirements and designs, but also communication media for the team.
+Good document layout should consider:
 
-1. **讀者多樣性**：SA/SD/PG/QA/RA 各有不同閱讀目的
-2. **認知負荷**：避免資訊過載，漸進式揭露
-3. **閱讀效率**：支援快速查找與深入閱讀兩種模式
-4. **可追溯性**：ID 系統清晰，追溯鏈完整
-
----
-
-## 1. 讀者角色分析 (Reader Role Analysis)
-
-### 1.1 各角色閱讀特徵
-
-| 角色 | 縮寫 | 閱讀目的 | 主要關注文件/章節 | 閱讀模式 |
-|------|------|---------|------------------|---------|
-| **系統分析師** | SA | 確認需求完整性 | SRS 全文、訪談紀錄 | 全面閱讀 |
-| **系統設計師** | SD | 理解架構與模式 | SRS 功能需求、SDD 架構 | 結構化閱讀 |
-| **程式設計師** | PG | 實作細節、API | SDD 模組設計、SWD 類別 | 跳躍式查閱 |
-| **品質工程師** | QA | 測試案例、驗證 | SRS AC、STC、SVV | 追溯式閱讀 |
-| **法規專員** | RA | 合規證據、追溯 | RTM、SVV、所有文件封面 | 稽核式檢查 |
-
-### 1.2 閱讀模式說明
-
-| 閱讀模式 | 說明 | 文件編排支援 |
-|---------|------|------------|
-| **全面閱讀** | 從頭到尾閱讀 | 邏輯章節順序、清楚目錄 |
-| **結構化閱讀** | 按架構層級閱讀 | 明確層級、模組化組織 |
-| **跳躍式查閱** | 快速找到特定資訊 | 清晰 ID、可搜尋表格 |
-| **追溯式閱讀** | 從需求追蹤到測試 | 追溯 ID、超連結 |
-| **稽核式檢查** | 驗證完整性與合規 | 總覽表、統計摘要 |
+1. **Reader Diversity**: SA/SD/PG/QA/RA each have different reading purposes
+2. **Cognitive Load**: Avoid information overload, progressive disclosure
+3. **Reading Efficiency**: Support both quick lookup and deep reading modes
+4. **Traceability**: Clear ID system, complete traceability chain
 
 ---
 
-## 2. 文件閱讀流程設計
+## 1. Reader Role Analysis
 
-### 2.1 文件閱讀順序
+### 1.1 Reading Characteristics by Role
+
+| Role | Abbr | Reading Purpose | Main Focus Documents/Sections | Reading Mode |
+|------|------|-----------------|------------------------------|--------------|
+| **System Analyst** | SA | Confirm requirement completeness | Full SRS, interview records | Comprehensive reading |
+| **System Designer** | SD | Understand architecture and patterns | SRS functional requirements, SDD architecture | Structured reading |
+| **Programmer** | PG | Implementation details, API | SDD module design, SWD classes | Jump-style lookup |
+| **Quality Engineer** | QA | Test cases, verification | SRS AC, STC, SVV | Traceability reading |
+| **Regulatory Specialist** | RA | Compliance evidence, traceability | RTM, SVV, all document covers | Audit-style checking |
+
+### 1.2 Reading Mode Descriptions
+
+| Reading Mode | Description | Document Layout Support |
+|--------------|-------------|------------------------|
+| **Comprehensive Reading** | Read from start to finish | Logical chapter order, clear TOC |
+| **Structured Reading** | Read by architecture levels | Clear hierarchy, modular organization |
+| **Jump-style Lookup** | Quickly find specific info | Clear IDs, searchable tables |
+| **Traceability Reading** | Track from requirements to tests | Traceability IDs, hyperlinks |
+| **Audit-style Checking** | Verify completeness and compliance | Overview tables, statistical summaries |
+
+---
+
+## 2. Document Reading Flow Design
+
+### 2.1 Document Reading Order
 
 ```
-典型開發團隊閱讀路徑：
+Typical Development Team Reading Paths:
 
-SA 閱讀路徑：
-訪談紀錄 → SRS 全文 → RTM (驗證完整)
+SA Reading Path:
+Interview Records → Full SRS → RTM (verify completeness)
 
-SD 閱讀路徑：
-SRS (功能需求) → SDD (架構設計) → SDD (模組設計)
+SD Reading Path:
+SRS (Functional Requirements) → SDD (Architecture Design) → SDD (Module Design)
 
-PG 閱讀路徑：
-SDD (模組總覽) → SDD (詳細設計) → SWD (類別設計) → API 規格
+PG Reading Path:
+SDD (Module Overview) → SDD (Detailed Design) → SWD (Class Design) → API Specs
 
-QA 閱讀路徑：
-SRS (AC) → STC (測試案例) → SVV (驗證結果) → RTM (追溯驗證)
+QA Reading Path:
+SRS (AC) → STC (Test Cases) → SVV (Verification Results) → RTM (Trace Verification)
 
-RA 閱讀路徑：
-RTM → 所有文件封面 → SVV → 抽查各文件
+RA Reading Path:
+RTM → All Document Covers → SVV → Spot Check Documents
 ```
 
-### 2.2 單一文件閱讀流程
+### 2.2 Single Document Reading Flow
 
 ```
-讀者閱讀單一文件時的心智模型：
+Reader's mental model when reading a single document:
 
-1. 封面/目錄 ─→ 建立整體認知 (這份文件在講什麼？)
+1. Cover/TOC ──→ Build overall cognition (What is this document about?)
        │
        ▼
-2. 簡介/總覽 ─→ 理解上下文 (為什麼需要這份文件？)
+2. Introduction/Overview ──→ Understand context (Why is this document needed?)
        │
        ▼
-3. 總覽表格 ──→ 掌握全貌 (有哪些項目？多少項目？)
+3. Overview Tables ──→ Grasp full picture (What items? How many?)
        │
        ▼
-4. 詳細內容 ──→ 深入理解 (各項目的細節)
+4. Detailed Content ──→ Deep understanding (Details of each item)
        │
        ▼
-5. 追溯/附錄 ─→ 驗證完整 (是否涵蓋所有？)
+5. Traceability/Appendix ──→ Verify completeness (Is everything covered?)
 ```
 
 ---
 
-## 3. 文件編排核心原則
+## 3. Core Document Layout Principles
 
-### 3.1 F 型閱讀模式 (F-Pattern Reading)
+### 3.1 F-Pattern Reading
 
-使用者閱讀網頁/文件時，視線呈 F 型移動：
-- 先橫向掃描頂部
-- 向下移動，再橫向掃描
-- 沿左側垂直向下掃描
+Users' eyes move in an F-pattern when reading web pages/documents:
+- First scan horizontally across the top
+- Move down, then scan horizontally again
+- Scan vertically down the left side
 
-**編排應用：**
+**Layout Application:**
 
-| 位置 | 應放置內容 | 範例 |
-|------|----------|------|
-| 左上角 | 最重要的識別資訊 | 文件標題、ID |
-| 頂部橫向 | 關鍵摘要資訊 | 版本、日期、狀態 |
-| 左側垂直 | 導航元素 | 章節標題、ID 欄位 |
+| Position | Content to Place | Example |
+|----------|-----------------|---------|
+| Top-left | Most important identification | Document title, ID |
+| Top horizontal | Key summary info | Version, date, status |
+| Left vertical | Navigation elements | Chapter titles, ID columns |
 
-### 3.2 視覺層級 (Visual Hierarchy)
+### 3.2 Visual Hierarchy
 
 ```
-H1 (18pt) ─────────────── 文件標題
+H1 (18pt) ─────────────── Document Title
     │
-    ├── H2 (16pt) ──────── 大章節
+    ├── H2 (16pt) ──────── Major Chapter
     │       │
-    │       ├── H3 (14pt) ─ 小節
+    │       ├── H3 (14pt) ─ Section
     │       │       │
-    │       │       └── H4 (13pt) ─ 子節
+    │       │       └── H4 (13pt) ─ Subsection
     │       │               │
-    │       │               └── 內文 (11pt)
+    │       │               └── Body (11pt)
     │       │
-    │       └── 表格 (11pt)
+    │       └── Table (11pt)
     │
-    └── 頁尾 (9pt)
+    └── Footer (9pt)
 ```
 
-### 3.3 漸進式揭露 (Progressive Disclosure)
+### 3.3 Progressive Disclosure
 
-**原則：** 先總覽，後詳細
+**Principle:** Overview first, details later
 
 ```markdown
-## 3. 模組設計
+## 3. Module Design
 
-### 模組總覽表 ← 第一層：讀者先掌握全貌
+### Module Overview Table ← Layer 1: Reader grasps full picture first
 
-| 模組 | 設計 ID 數 | 對應需求數 | 說明 |
-|------|----------|----------|------|
-| AUTH | 5 | 7 | 認證模組 |
-| TRAIN | 8 | 12 | 訓練模組 |
+| Module | Design ID Count | Related Req Count | Description |
+|--------|-----------------|-------------------|-------------|
+| AUTH | 5 | 7 | Authentication module |
+| TRAIN | 8 | 12 | Training module |
 
-### 3.1 認證模組 (AUTH) ← 第二層：模組總覽
+### 3.1 Authentication Module (AUTH) ← Layer 2: Module overview
 
-| 設計 ID | 名稱 | 對應需求 |
-|---------|------|---------|
+| Design ID | Name | Related Requirement |
+|-----------|------|---------------------|
 | SDD-AUTH-001 | ... | REQ-AUTH-001 |
 
-#### 3.1.1 認證架構設計 ← 第三層：詳細內容
+#### 3.1.1 Authentication Architecture Design ← Layer 3: Detailed content
 
-[詳細設計內容]
+[Detailed design content]
 ```
 
-### 3.4 分塊呈現 (Chunking)
+### 3.4 Chunking
 
-**Miller's Law:** 人類短期記憶容量約 7±2 (現代研究：4±1) 項目
+**Miller's Law:** Human short-term memory capacity is about 7±2 (modern research: 4±1) items
 
-| 應用場景 | 建議數量 | 編排方式 |
-|---------|---------|---------|
-| 章節數 | 5-7 章 | 超過則分成子文件 |
-| 表格欄數 | ≤7 欄 | 超過則拆分表格 |
-| 列表項目 | 3-5 項 | 超過則分組 |
-| 步驟數 | ≤5 步 | 超過則分階段 |
+| Application Scenario | Recommended Quantity | Layout Method |
+|---------------------|---------------------|---------------|
+| Chapter count | 5-7 chapters | Split into sub-documents if more |
+| Table columns | ≤7 columns | Split tables if more |
+| List items | 3-5 items | Group if more |
+| Steps | ≤5 steps | Divide into phases if more |
 
-### 3.5 一致性 (Consistency)
+### 3.5 Consistency
 
-**統一的格式規範：**
+**Unified Format Specifications:**
 
-| 項目 | 規範 |
-|------|------|
-| ID 格式 | `{文件}-{模組}-{三位數}` |
-| 日期格式 | YYYY-MM-DD |
-| 版本格式 | X.Y (主版本.次版本) |
-| 術語 | 統一術語表 |
-| 表格欄位 | 固定欄位順序 |
+| Item | Specification |
+|------|---------------|
+| ID format | `{Document}-{Module}-{Three digits}` |
+| Date format | YYYY-MM-DD |
+| Version format | X.Y (Major.Minor) |
+| Terminology | Unified glossary |
+| Table columns | Fixed column order |
 
 ---
 
-## 4. SRS 文件編排指南
+## 4. SRS Document Layout Guide
 
-### 4.1 章節結構
+### 4.1 Chapter Structure
 
 ```
-SRS 標準結構 (針對不同讀者優化)
+SRS Standard Structure (Optimized for Different Readers)
 
-## 1. 簡介 ← SA/SD/RA: 建立上下文
-   - 文件目的
-   - 範圍
-   - 術語定義
+## 1. Introduction ← SA/SD/RA: Build context
+   - Document purpose
+   - Scope
+   - Terminology definitions
 
-## 2. 總體描述 ← SA/SD: 理解系統全貌
-   - 產品觀點 (上下文圖)
-   - 使用者特徵 (角色表)
-   - 約束與假設
+## 2. Overall Description ← SA/SD: Understand system overview
+   - Product perspective (context diagram)
+   - User characteristics (role table)
+   - Constraints and assumptions
 
-## 3. 功能需求 ← SD/PG: 實作依據
-   ### 3.1 模組總覽表 ← 先掌握全貌
-   ### 3.2 模組 A
-       #### REQ-A-001 ← 詳細需求
-   ### 3.3 模組 B
+## 3. Functional Requirements ← SD/PG: Implementation basis
+   ### 3.1 Module Overview Table ← Grasp full picture first
+   ### 3.2 Module A
+       #### REQ-A-001 ← Detailed requirement
+   ### 3.3 Module B
        #### REQ-B-001
 
-## 4. 非功能需求 ← SD/QA: 品質指標
-   - 效能需求 (量化)
-   - 安全需求
-   - 可用性需求
+## 4. Non-Functional Requirements ← SD/QA: Quality metrics
+   - Performance requirements (quantified)
+   - Security requirements
+   - Usability requirements
 
-## 5. 附錄 ← RA: 追溯驗證
-   - 術語表
-   - 縮寫表
+## 5. Appendix ← RA: Traceability verification
+   - Glossary
+   - Abbreviations
 ```
 
-### 4.2 需求項目編排
+### 4.2 Requirement Item Layout
 
 ```markdown
-##### REQ-AUTH-001 使用者登入 ← ID + 名稱 (快速識別)
+##### REQ-AUTH-001 User Login ← ID + Name (quick identification)
 
-**Statement:** ← 一句話描述
-系統應提供使用者登入功能，支援 Email 與第三方登入。
+**Statement:** ← One-sentence description
+The system shall provide user login functionality, supporting Email and third-party login.
 
-**Rationale:** ← 為什麼需要 (含心理學依據)
-- **安全性**：確保只有授權使用者可存取系統
-- **便利性**：第三方登入減少記憶負擔 (認知負荷理論)
+**Rationale:** ← Why needed (including psychology basis)
+- **Security**: Ensure only authorized users can access the system
+- **Convenience**: Third-party login reduces memory burden (Cognitive Load Theory)
 
-**Acceptance Criteria:** ← 驗收標準 (QA 關注)
-- AC1: 當 使用者輸入正確帳密，點擊登入，並系統導向首頁
-- AC2: 當 連續 5 次登入失敗，並系統鎖定帳戶 15 分鐘 - 錯誤預防
+**Acceptance Criteria:** ← Acceptance standards (QA focus)
+- AC1: When user enters correct credentials and clicks login, system navigates to home
+- AC2: When 5 consecutive login failures occur, system locks account for 15 minutes - Error Prevention
 
-**Verification Method:** Test ← 驗證方式
+**Verification Method:** Test ← Verification method
 
-**Trace:** ← 追溯資訊 (RA 關注)
+**Trace:** ← Traceability info (RA focus)
 - SDD: SDD-AUTH-001
 - STC: STC-AUTH-001
 ```
 
-### 4.3 Rationale 心理學標註
+### 4.3 Rationale Psychology Annotations
 
-| 心理學原則 | 標註格式 | 使用時機 |
-|-----------|---------|---------|
-| 認知負荷 | **認知負荷理論**：... | 資訊呈現、步驟設計 |
-| 工作記憶 | **工作記憶限制**：... | 步驟數、選項數 |
-| F 型閱讀 | **F 型閱讀**：... | 資訊位置 |
-| Fitts' Law | **Fitts' Law**：... | 按鈕尺寸、位置 |
-| Hick's Law | **Hick's Law**：... | 選項數量 |
-| 錯誤預防 | **錯誤預防**：... | 防呆設計 |
-| 漸進揭露 | **漸進式揭露**：... | 流程設計 |
-| 空間定向 | **空間定向**：... | 導航設計 |
+| Psychology Principle | Annotation Format | When to Use |
+|---------------------|-------------------|-------------|
+| Cognitive Load | **Cognitive Load Theory**: ... | Information presentation, step design |
+| Working Memory | **Working Memory Limit**: ... | Step count, option count |
+| F-Pattern | **F-Pattern Reading**: ... | Information position |
+| Fitts' Law | **Fitts' Law**: ... | Button size, position |
+| Hick's Law | **Hick's Law**: ... | Option quantity |
+| Error Prevention | **Error Prevention**: ... | Fail-safe design |
+| Progressive Disclosure | **Progressive Disclosure**: ... | Flow design |
+| Spatial Orientation | **Spatial Orientation**: ... | Navigation design |
 
 ---
 
-## 5. SDD 文件編排指南
+## 5. SDD Document Layout Guide
 
-### 5.1 章節結構
+### 5.1 Chapter Structure
 
 ```
-SDD 標準結構 (SD/PG 優化)
+SDD Standard Structure (SD/PG Optimized)
 
-## 1. 簡介 ← SD: 設計原則
-   - 設計原則 (含心理學原則)
-   - 架構概述
+## 1. Introduction ← SD: Design principles
+   - Design principles (including psychology principles)
+   - Architecture overview
 
-## 2. 系統架構 ← SD: 整體架構
-   - 分層架構圖 (Mermaid)
-   - 技術選型表
+## 2. System Architecture ← SD: Overall architecture
+   - Layered architecture diagram (Mermaid)
+   - Technology selection table
 
-## 3. 模組設計 ← PG: 實作參考
-   ### 3.1 模組總覽 ← 先掌握全貌
-   ### 3.2 認證模組 (AUTH)
-       #### 3.2.1 架構設計 ← 模組層級架構
-       #### 3.2.2 畫面設計 ← UI 實作參考
+## 3. Module Design ← PG: Implementation reference
+   ### 3.1 Module Overview ← Grasp full picture first
+   ### 3.2 Authentication Module (AUTH)
+       #### 3.2.1 Architecture Design ← Module-level architecture
+       #### 3.2.2 Screen Design ← UI implementation reference
 
-## 4. 資料設計 ← PG: 資料庫
-   - ER 圖
-   - Entity 定義
+## 4. Data Design ← PG: Database
+   - ER diagram
+   - Entity definitions
 
-## 5. 介面設計 ← PG: API 規格
-   - API 規格 (後端)
-   - UI 畫面 (前端)
+## 5. Interface Design ← PG: API specs
+   - API specifications (backend)
+   - UI screens (frontend)
 ```
 
-### 5.2 模組內部編排
+### 5.2 Module Internal Layout
 
 ```markdown
-### 3.2 認證模組 (AUTH)
+### 3.2 Authentication Module (AUTH)
 
-| 設計 ID | 名稱 | 對應需求 | 對應畫面 | 說明 |
-|---------|------|---------|----------|------|
-| SDD-AUTH-001 | 認證架構 | REQ-AUTH-001~003 | SCR-AUTH-001 | 認證流程 |
-| SDD-AUTH-002 | Token 管理 | REQ-AUTH-002 | - | JWT 處理 |
+| Design ID | Name | Related Requirements | Related Screens | Description |
+|-----------|------|---------------------|-----------------|-------------|
+| SDD-AUTH-001 | Auth Architecture | REQ-AUTH-001~003 | SCR-AUTH-001 | Auth flow |
+| SDD-AUTH-002 | Token Management | REQ-AUTH-002 | - | JWT handling |
 
-↑ 總覽表：讓 PG 快速掌握模組全貌
+↑ Overview table: Lets PG quickly grasp module overview
 
-#### 3.2.1 認證架構設計
+#### 3.2.1 Authentication Architecture Design
 
-**狀態機設計**
+**State Machine Design**
 
 ```mermaid
 stateDiagram-v2
@@ -294,9 +294,9 @@ stateDiagram-v2
     Login --> Dashboard
 ```
 
-↑ 圖表：視覺化複雜邏輯
+↑ Diagram: Visualize complex logic
 
-**服務介面**
+**Service Interface**
 
 ```dart
 abstract class AuthService {
@@ -304,17 +304,17 @@ abstract class AuthService {
 }
 ```
 
-↑ 程式碼：PG 直接參考
+↑ Code: PG direct reference
 
-#### 3.2.2 畫面設計：SCR-AUTH-001 登入畫面
+#### 3.2.2 Screen Design: SCR-AUTH-001 Login Screen
 
-| 項目 | 內容 |
-|------|------|
-| 畫面 ID | SCR-AUTH-001 |
-| 對應設計 | SDD-AUTH-001 |
-| 對應需求 | REQ-AUTH-001 |
+| Item | Content |
+|------|---------|
+| Screen ID | SCR-AUTH-001 |
+| Related Design | SDD-AUTH-001 |
+| Related Requirements | REQ-AUTH-001 |
 
-↑ 屬性表：快速查閱
+↑ Property table: Quick lookup
 
 **Wireframe**
 
@@ -323,59 +323,59 @@ block-beta
     ...
 ```
 
-↑ Wireframe：UI 結構參考
+↑ Wireframe: UI structure reference
 ```
 
 ---
 
-## 6. SWD 文件編排指南
+## 6. SWD Document Layout Guide
 
-### 6.1 PG 導向編排
+### 6.1 PG-Oriented Layout
 
 ```
-SWD 標準結構 (PG 優化)
+SWD Standard Structure (PG Optimized)
 
-## 1. 模組總覽 ← 快速定位
+## 1. Module Overview ← Quick positioning
 
-| 模組 | 類別數 | 主要職責 |
-|------|--------|---------|
-| Auth | 5 | 認證邏輯 |
+| Module | Class Count | Main Responsibility |
+|--------|-------------|---------------------|
+| Auth | 5 | Authentication logic |
 
-## 2. 認證模組 (AUTH)
-   ### 2.1 類別總覽表 ← 先列出所有類別
-   ### 2.2 AuthService 類別 ← 詳細設計
-       - 類別圖
-       - 方法簽名
-       - 邏輯說明
-       - 程式碼範例
+## 2. Authentication Module (AUTH)
+   ### 2.1 Class Overview Table ← List all classes first
+   ### 2.2 AuthService Class ← Detailed design
+       - Class diagram
+       - Method signatures
+       - Logic explanation
+       - Code examples
 ```
 
-### 6.2 類別設計編排
+### 6.2 Class Design Layout
 
 ```markdown
-### 2.2 AuthService 類別
+### 2.2 AuthService Class
 
-**類別資訊**
+**Class Info**
 
-| 項目 | 內容 |
-|------|------|
-| 類別名稱 | AuthService |
-| 職責 | 處理使用者認證邏輯 |
-| 對應設計 | SDD-AUTH-001 |
-| 依賴 | UserRepository, TokenManager |
+| Item | Content |
+|------|---------|
+| Class Name | AuthService |
+| Responsibility | Handle user authentication logic |
+| Related Design | SDD-AUTH-001 |
+| Dependencies | UserRepository, TokenManager |
 
-**方法總覽** ← PG 快速查閱 API
+**Method Overview** ← PG quick API lookup
 
-| 方法 | 參數 | 回傳 | 說明 |
-|------|------|------|------|
-| login | email, password | Result<User> | 使用者登入 |
-| logout | - | void | 登出 |
+| Method | Parameters | Return | Description |
+|--------|------------|--------|-------------|
+| login | email, password | Result<User> | User login |
+| logout | - | void | Logout |
 
-**方法詳細設計**
+**Method Detailed Design**
 
 #### login(email: String, password: String): Result<User>
 
-**邏輯流程：**
+**Logic Flow:**
 
 ```mermaid
 sequenceDiagram
@@ -384,141 +384,141 @@ sequenceDiagram
     ...
 ```
 
-**程式碼範例：**
+**Code Example:**
 
 ```dart
 Future<Result<User>> login(String email, String password) async {
-  // 實作邏輯
+  // Implementation logic
 }
 ```
 ```
 
 ---
 
-## 7. 表格設計可讀性
+## 7. Table Readability Design
 
-### 7.1 表格編排原則
+### 7.1 Table Layout Principles
 
-| 原則 | 說明 | 實作方式 |
-|------|------|---------|
-| **欄位順序** | ID → 名稱 → 詳細 → 追溯 | 符合 F 型閱讀 |
-| **欄寬比例** | ID 固定窄，說明可變寬 | 根據內容調整 |
-| **表頭樣式** | 粗體、背景色 | 區分表頭與內容 |
-| **斑馬條紋** | 大表格交替背景色 | 提升可讀性 |
-| **欄數限制** | ≤7 欄 | 避免水平滾動 |
-| **ID 不換行** | ID 欄位保持單行 | 確保可複製 |
+| Principle | Description | Implementation |
+|-----------|-------------|----------------|
+| **Column Order** | ID → Name → Details → Traceability | Follows F-pattern |
+| **Column Width** | ID fixed narrow, description variable | Adjust based on content |
+| **Header Style** | Bold, background color | Distinguish header from content |
+| **Zebra Striping** | Alternating background for large tables | Improve readability |
+| **Column Limit** | ≤7 columns | Avoid horizontal scrolling |
+| **ID No Wrap** | ID column stays single line | Ensure copyable |
 
-### 7.2 常用表格格式
+### 7.2 Common Table Formats
 
-**需求總覽表：**
+**Requirements Overview Table:**
 
-| 需求 ID | 需求名稱 | 優先級 | 狀態 |
-|---------|---------|--------|------|
+| Requirement ID | Requirement Name | Priority | Status |
+|----------------|------------------|----------|--------|
 
-**設計追溯表：**
+**Design Traceability Table:**
 
-| 設計 ID | 名稱 | 對應需求 | 對應畫面 | 說明 |
-|---------|------|---------|----------|------|
+| Design ID | Name | Related Requirements | Related Screens | Description |
+|-----------|------|---------------------|-----------------|-------------|
 
-**測試追溯表：**
+**Test Traceability Table:**
 
-| 測試 ID | 測試名稱 | 對應需求 | 結果 |
-|---------|---------|---------|------|
+| Test ID | Test Name | Related Requirements | Result |
+|---------|-----------|---------------------|--------|
 
 ---
 
-## 8. 圖表可讀性
+## 8. Diagram Readability
 
-### 8.1 Mermaid 圖表方向
+### 8.1 Mermaid Diagram Direction
 
-| 圖表類型 | 建議方向 | 原因 |
-|---------|---------|------|
-| 流程圖 | TB (上到下) | 符合閱讀習慣 |
-| 架構圖 | TB | 分層清晰 |
-| 序列圖 | 分組 box | 減少橫向寬度 |
-| 狀態圖 | TB + 分組 | 避免過寬 |
-| 類別圖 | TB + namespace | 邏輯分組 |
-| ER 圖 | 自動 | ER 圖會自動調整 |
+| Diagram Type | Recommended Direction | Reason |
+|--------------|----------------------|--------|
+| Flowchart | TB (Top-Bottom) | Matches reading habits |
+| Architecture Diagram | TB | Clear layering |
+| Sequence Diagram | box grouping | Reduce horizontal width |
+| State Diagram | TB + grouping | Avoid being too wide |
+| Class Diagram | TB + namespace | Logical grouping |
+| ER Diagram | Auto | ER diagrams auto-adjust |
 
-### 8.2 圖表尺寸指南
+### 8.2 Diagram Size Guide
 
-| 用途 | 渲染尺寸 | 顯示最大寬度 | 說明 |
-|------|---------|-------------|------|
-| UI Wireframe | 800px | 500px | 適合手機畫面 |
-| 流程圖/架構圖 | 1200px | 600px | 適合 A4 |
-| 序列圖 | 1200px | 600px | 適合 A4 |
-| ER 圖 | 1200px | 600px | 適合 A4 |
+| Usage | Render Size | Max Display Width | Description |
+|-------|-------------|-------------------|-------------|
+| UI Wireframe | 800px | 500px | Suitable for mobile screens |
+| Flowchart/Architecture | 1200px | 600px | Suitable for A4 |
+| Sequence Diagram | 1200px | 600px | Suitable for A4 |
+| ER Diagram | 1200px | 600px | Suitable for A4 |
 
-### 8.3 圖表標題規範
+### 8.3 Diagram Title Standards
 
 ```markdown
-**圖 3.1：認證流程狀態機**
+**Figure 3.1: Authentication Flow State Machine**
 
 ```mermaid
 stateDiagram-v2
     ...
 ```
 
-↑ 圖表標題放在圖表上方，包含編號
+↑ Diagram title placed above the diagram, includes number
 ```
 
 ---
 
-## 9. 文件編排檢查清單
+## 9. Document Layout Checklist
 
-### 9.1 結構檢查
+### 9.1 Structure Check
 
-| 檢查項目 | 通過標準 | 備註 |
-|---------|---------|------|
-| 封面完整？ | 包含標題、版本、日期、作者 | |
-| 目錄存在？ | 列出所有主要章節 | |
-| 簡介章節？ | 說明文件目的與範圍 | |
-| 總覽表格？ | 每大章有總覽表 | 漸進式揭露 |
-| 層級正確？ | H1→H2→H3 遞進 | 視覺層級 |
+| Check Item | Pass Criteria | Notes |
+|------------|---------------|-------|
+| Cover complete? | Includes title, version, date, author | |
+| TOC exists? | Lists all major chapters | |
+| Introduction chapter? | Explains document purpose and scope | |
+| Overview tables? | Each major chapter has overview table | Progressive disclosure |
+| Hierarchy correct? | H1→H2→H3 progression | Visual hierarchy |
 
-### 9.2 格式檢查
+### 9.2 Format Check
 
-| 檢查項目 | 通過標準 | 備註 |
-|---------|---------|------|
-| ID 格式統一？ | `{DOC}-{MOD}-{NNN}` | |
-| ID 不換行？ | 單行顯示 | |
-| 日期格式？ | YYYY-MM-DD | |
-| 表格欄位順序？ | ID 在首欄 | F 型閱讀 |
-| 表格欄數？ | ≤7 欄 | |
-| 圖表方向？ | TB 優先 | |
+| Check Item | Pass Criteria | Notes |
+|------------|---------------|-------|
+| ID format unified? | `{DOC}-{MOD}-{NNN}` | |
+| IDs no wrap? | Single line display | |
+| Date format? | YYYY-MM-DD | |
+| Table column order? | ID in first column | F-pattern |
+| Table column count? | ≤7 columns | |
+| Diagram direction? | TB preferred | |
 
-### 9.3 追溯檢查
+### 9.3 Traceability Check
 
-| 檢查項目 | 通過標準 | 備註 |
-|---------|---------|------|
-| 追溯 ID 存在？ | 每項目有追溯欄位 | |
-| 追溯 ID 正確？ | 可對應到目標文件 | |
-| 追溯 100%？ | RTM 顯示全部覆蓋 | |
+| Check Item | Pass Criteria | Notes |
+|------------|---------------|-------|
+| Traceability ID exists? | Each item has traceability field | |
+| Traceability ID correct? | Can map to target document | |
+| 100% traceability? | RTM shows full coverage | |
 
-### 9.4 可讀性檢查
+### 9.4 Readability Check
 
-| 檢查項目 | 通過標準 | 備註 |
-|---------|---------|------|
-| 術語一致？ | 統一用詞 | |
-| 句子長度？ | 單句 ≤50 字 | |
-| 段落長度？ | 單段 ≤5 句 | |
-| 重點標示？ | 關鍵字粗體 | |
-| 圖表清晰？ | 文字可讀、不過小 | |
+| Check Item | Pass Criteria | Notes |
+|------------|---------------|-------|
+| Consistent terminology? | Unified wording | |
+| Sentence length? | Single sentence ≤50 chars | |
+| Paragraph length? | Single paragraph ≤5 sentences | |
+| Key points marked? | Keywords bolded | |
+| Diagrams clear? | Text readable, not too small | |
 
 ---
 
-## 10. 參考資源
+## 10. Reference Resources
 
-### 學術文獻
+### Academic Literature
 - Nielsen, J. (2006). F-Shaped Pattern For Reading Web Content
 - Miller, G. A. (1956). The Magical Number Seven, Plus or Minus Two
 - Krug, S. (2014). Don't Make Me Think, Revisited
 
-### 相關標準
+### Related Standards
 - IEC 62304:2015 - Medical Device Software Life Cycle
 - IEEE 1016:2009 - Software Design Description
 - IEEE 830:1998 - Software Requirements Specification
 
-### 相關 Skill 文件
-- [design-psychology.md](design-psychology.md) - 設計心理學原則
-- [cognitive-psychology.md](cognitive-psychology.md) - 認知心理學原則
+### Related Skill Documents
+- [design-psychology.md](design-psychology.md) - Design Psychology Principles
+- [cognitive-psychology.md](cognitive-psychology.md) - Cognitive Psychology Principles
