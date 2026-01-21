@@ -1,31 +1,71 @@
 {
   "skill": "app-uiux-designer",
-  "version": "2.0-cor",
+  "version": "2.1-cor-afp",
   "architecture": "chain-of-repository",
-  "current_process": "06-screenshot",
-  "started_at": "2026-01-13T00:00:00Z",
-  "updated_at": "2026-01-13T12:30:00Z",
+  "current_process": null,
+  "started_at": null,
+  "updated_at": null,
   "project": {
-    "name": "VocabKids",
-    "path": "/Users/jrjohn/Documents/projects/claude10/VocabKids",
-    "ui_flow_path": "/Users/jrjohn/Documents/projects/claude10/VocabKids/04-ui-flow"
+    "name": "{{PROJECT_NAME}}",
+    "path": "{{PROJECT_PATH}}",
+    "ui_flow_path": "{{PROJECT_PATH}}/04-ui-flow"
   },
   "progress": {
-    "00-init": "completed",
-    "01-discovery": "completed",
-    "02-planning": "completed",
-    "03-generation": "completed",
-    "04-validation": "completed",
-    "05-diagram": "completed",
-    "06-screenshot": "in_progress",
+    "00-init": "pending",
+    "03-generation": "pending",
+    "04-validation": "pending",
+    "05-diagram": "pending",
+    "06-screenshot": "pending",
     "07-feedback": "pending",
     "08-finalize": "pending"
   },
+  "validation_state": {
+    "00-init": {
+      "passed": false,
+      "timestamp": null,
+      "checks": []
+    },
+    "03-generation": {
+      "passed": false,
+      "timestamp": null,
+      "checks": []
+    },
+    "04-validation": {
+      "passed": false,
+      "timestamp": null,
+      "checks": []
+    },
+    "05-diagram": {
+      "passed": false,
+      "timestamp": null,
+      "checks": []
+    },
+    "06-screenshot": {
+      "passed": false,
+      "timestamp": null,
+      "checks": []
+    },
+    "07-feedback": {
+      "passed": false,
+      "timestamp": null,
+      "checks": []
+    },
+    "08-finalize": {
+      "passed": false,
+      "timestamp": null,
+      "checks": []
+    }
+  },
+  "recovery_hints": {
+    "last_action": null,
+    "pending_fixes": [],
+    "files_modified": []
+  },
   "context": {
     "loaded_files": [],
-    "screens_completed": 37,
-    "screens_total": 37,
-    "last_action": "05-diagram completed - ui-flow-diagram.html and index.html updated with all 36 screens"
+    "screens_completed": 0,
+    "screens_total": 0,
+    "modules": []
   },
-  "notes": "05-diagram completed. ui-flow-diagram.html now includes all 36 VocabKids screens with iframe live previews and connection arrows. index.html updated with all screens. Ready for 06-screenshot."
+  "notes": ""
 }

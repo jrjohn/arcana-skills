@@ -264,8 +264,6 @@ iPhone 版本的畫面會在 **03-generation** 或 **06-screenshot** 階段處�
 
 ## 下一節點
 
-→ `process/01-discovery/README.md` (主題探索)
+→ `process/03-generation/README.md` (HTML 畫面生成)
 
-或者，若已有 SDD 中的 UI 需求：
-
-→ `process/02-planning/README.md` (畫面規劃)
+> ⚠️ **注意**: 01-discovery 和 02-planning 已由 `app-requirements-skill` 完成，本 Skill 直接從 00-init 進入 03-generation。

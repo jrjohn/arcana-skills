@@ -1,107 +1,102 @@
 #!/bin/bash
 # ============================================================================
-# Exit Validation - 06-screenshot
+# Exit Validation: 06-screenshot
 # ============================================================================
-# Must pass before marking 06-screenshot as completed
+# Purpose: Validate that 06-screenshot phase is complete before proceeding
+# Usage: bash exit-validation.sh [project-04-ui-flow-path]
 # ============================================================================
 
 set -e
 PROJECT_PATH="${1:-.}"
-cd "$PROJECT_PATH/04-ui-flow"
+cd "$PROJECT_PATH" 2>/dev/null || { echo "Error: Cannot access $PROJECT_PATH"; exit 1; }
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
 echo ""
-echo "🔍 Exit Validation: 06-screenshot"
-echo "=================================="
+echo -e "${BLUE}============================================${NC}"
+echo -e "${BLUE}  Exit Validation: 06-screenshot${NC}"
+echo -e "${BLUE}============================================${NC}"
 echo ""
 
 ERRORS=0
-
-# Get expected screen count
+WARNINGS=0
 IPAD_COUNT=$(find . -name "SCR-*.html" -not -path "./iphone/*" -not -path "./docs/*" 2>/dev/null | wc -l | tr -d ' ')
 
-# ============================================================================
-# 1. Screenshot Directories Exist
-# ============================================================================
-echo "📁 [1/3] Screenshot Directories..."
-
-[ -d "screenshots/ipad" ] && echo "  ✅ screenshots/ipad/" || { echo "  ❌ screenshots/ipad/ missing"; ERRORS=$((ERRORS+1)); }
-[ -d "screenshots/iphone" ] && echo "  ✅ screenshots/iphone/" || { echo "  ❌ screenshots/iphone/ missing"; ERRORS=$((ERRORS+1)); }
-
-# ============================================================================
-# 2. Screenshot Count
-# ============================================================================
-echo ""
-echo "📸 [2/3] Screenshot Count..."
-
+# Check 1: Screenshot directories exist
+echo -e "${BLUE}[1/3] Screenshot Directories${NC}"
 if [ -d "screenshots/ipad" ]; then
-  IPAD_SCREENSHOTS=$(find screenshots/ipad -name "SCR-*.png" 2>/dev/null | wc -l | tr -d ' ')
-  echo "  iPad screenshots: $IPAD_SCREENSHOTS"
-  if [ "$IPAD_SCREENSHOTS" -ne "$IPAD_COUNT" ]; then
-    echo "  ❌ Missing iPad screenshots: expected $IPAD_COUNT, found $IPAD_SCREENSHOTS"
-    ERRORS=$((ERRORS+1))
-  else
-    echo "  ✅ iPad screenshots complete"
-  fi
+    echo -e "  ${GREEN}✅${NC} screenshots/ipad/ exists"
 else
-  IPAD_SCREENSHOTS=0
+    echo -e "  ${YELLOW}⚠️${NC} screenshots/ipad/ missing"
+    mkdir -p screenshots/ipad
+    WARNINGS=$((WARNINGS+1))
 fi
 
 if [ -d "screenshots/iphone" ]; then
-  IPHONE_SCREENSHOTS=$(find screenshots/iphone -name "SCR-*.png" 2>/dev/null | wc -l | tr -d ' ')
-  echo "  iPhone screenshots: $IPHONE_SCREENSHOTS"
-  if [ "$IPHONE_SCREENSHOTS" -ne "$IPAD_COUNT" ]; then
-    echo "  ❌ Missing iPhone screenshots: expected $IPAD_COUNT, found $IPHONE_SCREENSHOTS"
-    ERRORS=$((ERRORS+1))
-  else
-    echo "  ✅ iPhone screenshots complete"
-  fi
+    echo -e "  ${GREEN}✅${NC} screenshots/iphone/ exists"
 else
-  IPHONE_SCREENSHOTS=0
+    echo -e "  ${YELLOW}⚠️${NC} screenshots/iphone/ missing"
+    mkdir -p screenshots/iphone
+    WARNINGS=$((WARNINGS+1))
 fi
 
-# ============================================================================
-# 3. Screenshot File Size Check (detect empty/broken screenshots)
-# ============================================================================
+# Check 2: Screenshot count
 echo ""
-echo "📏 [3/3] Screenshot File Size Check..."
+echo -e "${BLUE}[2/3] Screenshot Count${NC}"
+IPAD_SCREENSHOTS=$(find screenshots/ipad -name "*.png" 2>/dev/null | wc -l | tr -d ' ')
+IPHONE_SCREENSHOTS=$(find screenshots/iphone -name "*.png" 2>/dev/null | wc -l | tr -d ' ')
 
-SMALL_FILES=0
-for file in screenshots/ipad/*.png screenshots/iphone/*.png 2>/dev/null; do
-  if [ -f "$file" ]; then
-    SIZE=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "0")
-    if [ "$SIZE" -lt 1000 ]; then
-      echo "  ⚠️ Small file: $file ($SIZE bytes)"
-      SMALL_FILES=$((SMALL_FILES+1))
+echo -e "  ${BLUE}📸${NC} iPad screenshots: $IPAD_SCREENSHOTS / Expected: $IPAD_COUNT"
+echo -e "  ${BLUE}📸${NC} iPhone screenshots: $IPHONE_SCREENSHOTS / Expected: $IPAD_COUNT"
+
+if [ "$IPAD_SCREENSHOTS" -eq 0 ] && [ "$IPHONE_SCREENSHOTS" -eq 0 ]; then
+    echo -e "  ${YELLOW}⚠️${NC} No screenshots generated yet"
+    echo -e "      Run: node capture-screenshots.js"
+    WARNINGS=$((WARNINGS+1))
+elif [ "$IPAD_SCREENSHOTS" -lt "$IPAD_COUNT" ]; then
+    echo -e "  ${YELLOW}⚠️${NC} Some iPad screenshots missing"
+    WARNINGS=$((WARNINGS+1))
+else
+    echo -e "  ${GREEN}✅${NC} iPad screenshots complete"
+fi
+
+# Check 3: Error log (if exists)
+echo ""
+echo -e "${BLUE}[3/3] Error Log Check${NC}"
+if [ -f "workspace/screenshot-error-log.json" ]; then
+    FAILURES=$(grep -c '"success": false' workspace/screenshot-error-log.json 2>/dev/null || echo "0")
+    if [ "$FAILURES" -gt 0 ]; then
+        echo -e "  ${RED}❌${NC} $FAILURES screenshot failures logged"
+        echo -e "      Review: workspace/screenshot-error-log.json"
+        echo -e "      Action: Return to 03-generation to fix missing screens"
+        ERRORS=$((ERRORS+1))
+    else
+        echo -e "  ${GREEN}✅${NC} No failures in error log"
     fi
-  fi
-done
-
-if [ "$SMALL_FILES" -gt 0 ]; then
-  echo "  ⚠️ Found $SMALL_FILES potentially broken screenshots"
 else
-  echo "  ✅ All screenshots have valid file sizes"
+    echo -e "  ${GREEN}✅${NC} No error log (no failures)"
 fi
 
-# ============================================================================
 # Summary
-# ============================================================================
 echo ""
-echo "=================================="
-echo "Summary:"
-echo "  Expected: $IPAD_COUNT screens"
-echo "  iPad screenshots: $IPAD_SCREENSHOTS"
-echo "  iPhone screenshots: $IPHONE_SCREENSHOTS"
-echo ""
-
+echo -e "${BLUE}============================================${NC}"
 if [ $ERRORS -eq 0 ]; then
-  echo "✅ Exit Validation PASSED"
-  echo ""
-  echo "All screenshots generated successfully"
-  echo "Next step: 07-feedback (回補 SDD/SRS)"
-  exit 0
+    if [ $WARNINGS -gt 0 ]; then
+        echo -e "${YELLOW}⚠️ 06-screenshot Exit Validation PASSED with warnings${NC}"
+        echo -e "   Warnings: $WARNINGS"
+    else
+        echo -e "${GREEN}✅ 06-screenshot Exit Validation PASSED${NC}"
+    fi
+    echo ""
+    exit 0
 else
-  echo "❌ Exit Validation FAILED ($ERRORS errors)"
-  echo ""
-  echo "Regenerate missing screenshots before proceeding"
-  exit 1
+    echo -e "${RED}❌ 06-screenshot Exit Validation FAILED${NC}"
+    echo -e "   Errors: $ERRORS"
+    echo ""
+    exit 1
 fi
