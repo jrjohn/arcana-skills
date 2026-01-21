@@ -104,6 +104,67 @@ class PostGenerationGate {
     return true;
   }
 
+  // Check for unreplaced template placeholders like {{VARIABLE}}
+  checkUnreplacedPlaceholders() {
+    this.log(`${colors.bold}🔍 檢查未替換的模板變數...${colors.reset}`);
+
+    const filesToCheck = [
+      'index.html',
+      'device-preview.html',
+      'docs/ui-flow-diagram-ipad.html',
+      'docs/ui-flow-diagram-iphone.html'
+    ];
+
+    const placeholderPattern = /\{\{[A-Z_]+\}\}/g;
+    const issues = [];
+
+    for (const file of filesToCheck) {
+      const filePath = path.join(this.projectPath, file);
+      if (!fs.existsSync(filePath)) continue;
+
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const matches = content.match(placeholderPattern);
+
+        if (matches && matches.length > 0) {
+          // Get unique placeholders
+          const uniquePlaceholders = [...new Set(matches)];
+          issues.push({
+            file,
+            placeholders: uniquePlaceholders,
+            count: matches.length
+          });
+          this.log(`${colors.red}   ❌ ${file}: 發現 ${matches.length} 個未替換變數${colors.reset}`);
+          uniquePlaceholders.forEach(p => {
+            this.log(`${colors.red}      • ${p}${colors.reset}`);
+          });
+        } else {
+          this.log(`${colors.green}   ✅ ${file}${colors.reset}`);
+        }
+      } catch (err) {
+        this.log(`${colors.yellow}   ⚠️ ${file}: 無法讀取 - ${err.message}${colors.reset}`);
+      }
+    }
+
+    if (issues.length > 0) {
+      this.passed = false;
+      this.validationResults.push({
+        name: 'Unreplaced Placeholders Check',
+        success: false,
+        issues
+      });
+      this.log('');
+      this.log(`${colors.yellow}   💡 提示: 請確保所有 {{VARIABLE}} 都已替換為實際值${colors.reset}`);
+      this.log(`${colors.yellow}      常見變數: {{PROJECT_NAME}}, {{FIRST_SCREEN_PATH}}, {{TOTAL_SCREENS}}${colors.reset}`);
+      this.log('');
+      return false;
+    }
+
+    this.validationResults.push({ name: 'Unreplaced Placeholders Check', success: true });
+    this.log('');
+    return true;
+  }
+
   // Update current-process.json based on result
   updateProcessStatus(success) {
     const processFile = path.join(this.projectPath, 'workspace/current-process.json');
@@ -178,7 +239,10 @@ class PostGenerationGate {
       return false;
     }
 
-    // Step 2: Run iframe src validation
+    // Step 2: Check for unreplaced template placeholders
+    this.checkUnreplacedPlaceholders();
+
+    // Step 3: Run iframe src validation
     const iframeSrcScript = path.join(this.skillDir, 'templates/ui-flow/validate-iframe-src.js');
     if (fs.existsSync(iframeSrcScript)) {
       this.runValidation('iframe src Path Validation', iframeSrcScript, [this.projectPath]);
@@ -186,20 +250,20 @@ class PostGenerationGate {
       this.log(`${colors.yellow}⚠️ validate-iframe-src.js 不存在${colors.reset}`);
     }
 
-    // Step 3: Run consistency validation
+    // Step 4: Run consistency validation
     const consistencyScript = path.join(this.skillDir, 'templates/ui-flow/validate-consistency.js');
     if (fs.existsSync(consistencyScript)) {
       this.runValidation('Consistency Validation', consistencyScript, [this.projectPath]);
     }
 
-    // Step 4: Run navigation validation (optional, may not exist)
+    // Step 5: Run navigation validation (optional, may not exist)
     const navigationScript = path.join(this.skillDir, 'templates/ui-flow/validate-navigation.js');
     if (fs.existsSync(navigationScript)) {
       // Navigation validation requires screen files, run it
       this.runValidation('Navigation Validation', navigationScript, [this.projectPath]);
     }
 
-    // Step 5: Run index.html data validation (UI/UX 覆蓋率, 模組圖例, 模組卡片數量)
+    // Step 6: Run index.html data validation (UI/UX 覆蓋率, 模組圖例, 模組卡片數量)
     const indexDataScript = path.join(this.skillDir, 'templates/ui-flow/validate-index-data.js');
     if (fs.existsSync(indexDataScript)) {
       this.runValidation('index.html Data Validation', indexDataScript, [this.projectPath]);
