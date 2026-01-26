@@ -339,6 +339,37 @@ class ConsistencyValidator {
     }
   }
 
+  // 6. Diagram No Legend Validation (模組圖例不應出現在 Diagram 內)
+  validateDiagramNoLegend() {
+    const category = 'Diagram No Legend';
+
+    const diagramFiles = [
+      'docs/ui-flow-diagram.html',
+      'docs/ui-flow-diagram-ipad.html',
+      'docs/ui-flow-diagram-iphone.html'
+    ];
+
+    for (const file of diagramFiles) {
+      const filePath = path.join(this.projectPath, file);
+      if (!fs.existsSync(filePath)) continue;
+
+      const content = fs.readFileSync(filePath, 'utf8');
+
+      // Check for legend sidebar patterns
+      const hasLegendDiv = content.includes('<div class="legend">') || content.includes('class="legend"');
+      const hasLegendItem = content.includes('legend-item') || content.includes('legend-color');
+      const hasModuleCounts = /AUTH\s*\(\d+\)|HOME\s*\(\d+\)|VOCAB\s*\(\d+\)/i.test(content);
+
+      if (hasLegendDiv || hasLegendItem) {
+        this.fail(category, `${file} 包含模組圖例 (legend div) - 應移除，由 index.html 提供`);
+      } else if (hasModuleCounts) {
+        this.warn(category, `${file} 可能包含模組計數 - 請確認是否為重複的圖例`);
+      } else {
+        this.pass(category, `${file} 無重複模組圖例`);
+      }
+    }
+  }
+
   // Run all validations
   async validate() {
     console.log();
@@ -355,6 +386,7 @@ class ConsistencyValidator {
     this.validateRequiredElements();
     this.validateFunctionBehavior();
     this.validateCSSConsistency();
+    this.validateDiagramNoLegend();
 
     // Generate report
     this.generateReport();

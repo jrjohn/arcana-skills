@@ -196,12 +196,27 @@ class IndexDataValidator {
       this.fail(`iPad 總數不符: index.html 顯示 ${this.indexData.ipadTotal}, 實際 ${this.actualData.ipadTotal}`);
     }
 
-    // 2. Validate iPhone total
+    // 2. Validate iPhone total (supports responsive design)
     console.log(`${colors.dim}2. iPhone 總數${colors.reset}`);
-    if (this.indexData.iphoneTotal === this.actualData.iphoneTotal) {
-      this.pass(`iPhone 總數正確: ${this.actualData.iphoneTotal}`);
-    } else {
-      this.fail(`iPhone 總數不符: index.html 顯示 ${this.indexData.iphoneTotal}, 實際 ${this.actualData.iphoneTotal}`);
+    // Case 1: Actual iPhone files exist - must match
+    if (this.actualData.iphoneTotal > 0) {
+      if (this.indexData.iphoneTotal === this.actualData.iphoneTotal) {
+        this.pass(`iPhone 總數正確: ${this.actualData.iphoneTotal}`);
+      } else {
+        this.fail(`iPhone 總數不符: index.html 顯示 ${this.indexData.iphoneTotal}, 實際 ${this.actualData.iphoneTotal}`);
+      }
+    }
+    // Case 2: No iPhone files (responsive design) - can show 0 or iPad count
+    else {
+      if (this.indexData.iphoneTotal === 0) {
+        // Showing 0 is technically correct but misleading
+        this.warn(`iPhone 顯示 0 - 若使用響應式設計，建議顯示 ${this.actualData.ipadTotal} (與 iPad 相同)`);
+      } else if (this.indexData.iphoneTotal === this.actualData.ipadTotal) {
+        // Showing iPad count for responsive design - good!
+        this.pass(`iPhone 總數正確: ${this.indexData.iphoneTotal} (響應式設計，與 iPad 相同)`);
+      } else {
+        this.fail(`iPhone 總數不符: index.html 顯示 ${this.indexData.iphoneTotal}, 預期 0 或 ${this.actualData.ipadTotal}`);
+      }
     }
 
     // 3. Validate coverage
@@ -221,6 +236,11 @@ class IndexDataValidator {
       const displayed = this.indexData.modules[mod.id];
 
       if (displayed === -1) {
+        // Skip modules with 0 screens - they don't need to be in the legend
+        if (actual === 0) {
+          // Module has 0 screens and is not in legend - this is OK
+          continue;
+        }
         this.warn(`${mod.id}: 未在模組圖例中找到`);
         moduleErrors++;
       } else if (displayed === actual) {
