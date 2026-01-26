@@ -255,6 +255,9 @@ function extractClickableElements(htmlContent, filePath) {
     // 跳過已有 onclick 的元素
     if (openTag.includes('onclick=')) continue;
 
+    // 跳過裝飾性元素 (aria-hidden, role="presentation", pointer-events-none)
+    if (openTag.includes('aria-hidden="true"') || openTag.includes('role="presentation"') || openTag.includes('pointer-events-none')) continue;
+
     // 跳過容器 div (通常有 flex, w-full, h-full 等 class)
     if (openTag.includes('flex-col') || openTag.includes('w-full') || openTag.includes('h-full')) continue;
 
@@ -267,6 +270,10 @@ function extractClickableElements(htmlContent, filePath) {
     const hasXIcon = element.includes('M6 18L18 6') || element.includes('M6 6l12 12') ||
         element.includes('✕') || element.includes('✖');
     const hasMultiplySign = element.includes('×') && !element.match(/×\d/);
+
+    // 跳過裝飾性 X 圖標 (有 aria-hidden, role="presentation", 或 pointer-events-none)
+    if (element.includes('aria-hidden="true"') || element.includes('role="presentation"') || element.includes('pointer-events-none')) continue;
+
     if (hasXIcon || (element.includes('×') && hasMultiplySign)) {
       elements.push({
         type: 'close-icon-no-onclick',
