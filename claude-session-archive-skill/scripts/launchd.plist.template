@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template for ~/Library/LaunchAgents/com.<USERNAME>.claude-archive.plist
+  Replace <USERNAME> with your macOS short username (output of `whoami`).
+  Then:
+    launchctl load ~/Library/LaunchAgents/com.<USERNAME>.claude-archive.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.<USERNAME>.claude-archive</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/<USERNAME>/claude-archive/build.py</string>
+  </array>
+  <key>StartInterval</key><integer>900</integer>     <!-- every 15 minutes -->
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/<USERNAME>/claude-archive/build.log</string>
+  <key>StandardErrorPath</key><string>/Users/<USERNAME>/claude-archive/build.err</string>
+</dict>
+</plist>

@@ -1,0 +1,14 @@
+-- ~/.sqliterc — auto-loaded by every sqlite3 CLI invocation
+-- Tuned for ~/claude-archive/sessions.db on 32GB Mac
+
+.output /dev/null
+PRAGMA cache_size  = -524288;     -- 512MB page cache
+PRAGMA mmap_size   = 536870912;   -- 512MB memory-mapped I/O
+PRAGMA temp_store  = MEMORY;
+PRAGMA journal_mode= WAL;
+PRAGMA synchronous = NORMAL;
+.output stdout
+
+-- Display defaults
+.headers on
+.mode column

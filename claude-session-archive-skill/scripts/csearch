@@ -1,0 +1,23 @@
+#!/bin/bash
+# csearch <fts5-query> [project-suffix] — quick full-text across session archive
+# examples:
+#   csearch ZyXEL
+#   csearch '"auto-power-down"' network
+#   csearch 'Sophos AND SEDService' network
+DB=~/claude-archive/sessions.db
+Q="${1:?usage: csearch <fts-query> [project-suffix]}"
+PROJ="${2:-}"
+PROJ_FILTER=""
+[ -n "$PROJ" ] && PROJ_FILTER="AND project LIKE '%$PROJ%'"
+
+sqlite3 -column -header "$DB" <<SQL
+SELECT substr(session_id,1,8) AS session,
+       substr(ts,1,19) AS ts,
+       tool_name,
+       substr(content,1,180) AS snippet
+FROM msg
+WHERE rowid IN (SELECT rowid FROM msg_fts WHERE content MATCH '$Q')
+  $PROJ_FILTER
+ORDER BY ts DESC
+LIMIT 20
+SQL

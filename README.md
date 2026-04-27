@@ -87,6 +87,7 @@ cd arcana-skills
 | Skill | Description |
 |-------|-------------|
 | `doc-indexer-skill` | Document indexing and full-text search tool (Apache Tika + Lucene, PDF/Word/Excel/OCR support, Chinese tokenization) |
+| `claude-session-archive-skill` | Permanent local SQLite FTS5 archive of every Claude Code session (`~/claude-archive/sessions.db`) — cross-session full-text recall via `csearch`, auto-ingested every 15 min via launchd, with SQLite tuning and FTS5 syntax helpers |
 
 ## Uninstallation
 

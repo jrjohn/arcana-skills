@@ -49,6 +49,7 @@ $Skills = @(
     "app-requirements-skill"
     "app-uiux-designer.skill"
     "doc-indexer-skill"
+    "claude-session-archive-skill"
 )
 
 # Config paths
