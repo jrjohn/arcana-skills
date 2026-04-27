@@ -48,7 +48,9 @@ claude-session-archive-skill/
     ├── embed.py                      # OPTIONAL: Ollama embedding helper
     ├── vsearch.py                    # OPTIONAL: semantic search core
     ├── vsearch                       # OPTIONAL: bash wrapper (~/bin/vsearch)
-    └── install-semantic.sh           # OPTIONAL: one-shot semantic stack installer
+    ├── install-semantic.sh           # OPTIONAL: one-shot installer (native binary)
+    ├── install-semantic-docker.sh    # OPTIONAL: one-shot installer (Docker container)
+    └── ollama.plist.template         # OPTIONAL: launchd auto-start (native mode)
 ```
 
 ## Quick install (base)
@@ -83,12 +85,18 @@ For details, see `references/installation-guide.md`.
 
 ## Optional: add semantic search
 
+Two install paths — pick one:
+
 ```bash
-# One-shot installer: Ollama binary + nomic-embed-text model + venv + scripts + backfill
+# Native binary (default; ~20ms/call on Apple Silicon Metal)
 ./scripts/install-semantic.sh
+
+# Docker container (cross-platform; ~80ms/call on macOS without Metal,
+#                   GPU-accelerated on Linux with NVIDIA + OLLAMA_GPU=all)
+./scripts/install-semantic-docker.sh
 ```
 
-After install completes (~30-90 min for 100k rows on Apple Silicon), `vsearch` is ready. See `references/semantic-search.md` for details and trade-offs.
+After install completes (~1 hr native / ~3-5 hr Docker on macOS for 100k rows), `vsearch` is ready. See `references/semantic-search.md` for details and trade-offs.
 
 ## Privacy
 

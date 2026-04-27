@@ -178,7 +178,10 @@ claude-session-archive-skill/
     ├── launchd.plist.template        # → ~/Library/LaunchAgents/...
     ├── embed.py                      # OPTIONAL: Ollama embedding helper
     ├── vsearch.py                    # OPTIONAL: semantic search Python core
-    └── vsearch                       # OPTIONAL: bash wrapper (~/bin/vsearch)
+    ├── vsearch                       # OPTIONAL: bash wrapper (~/bin/vsearch)
+    ├── install-semantic.sh           # OPTIONAL: one-shot installer (native ollama binary)
+    ├── install-semantic-docker.sh    # OPTIONAL: one-shot installer (ollama in Docker)
+    └── ollama.plist.template         # OPTIONAL: launchd auto-start template (native mode)
 ```
 
 ## Author / version

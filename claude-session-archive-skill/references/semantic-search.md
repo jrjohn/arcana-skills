@@ -31,54 +31,51 @@ The base skill ships with `csearch` (FTS5 lexical). For **concept-level / synony
                           (nomic-embed-text, 274 MB, runs entirely locally)
 ```
 
-## One-time install (Step 7 of installation-guide.md)
+## Two installation paths
+
+Pick one based on what you already have:
+
+| Mode | When to pick | Speed (Apple Silicon) | Cleanup |
+|---|---|---|---|
+| **Native binary** (`install-semantic.sh`) | Default; no Docker on machine | **~20ms / embed call** (Metal accelerated) | rm -rf ~/claude-archive/ollama-bin |
+| **Docker container** (`install-semantic-docker.sh`) | You already use Docker Desktop / want clean container | ~80ms / embed call (no Metal in Docker on Mac) | docker rm -f + docker volume rm |
+
+For Linux + NVIDIA GPU: Docker mode supports `--gpus=all` (set `OLLAMA_GPU=all` before running the script).
+
+### Path A — Native binary (recommended on macOS)
 
 ```bash
-# 1. Ollama daemon
-# Either install via brew (slow, pulls mlx) or download binary directly:
-curl -fL https://github.com/ollama/ollama/releases/latest/download/ollama-darwin.tgz \
-  -o /tmp/ollama.tgz
-mkdir -p ~/claude-archive/ollama-bin
-tar -xzf /tmp/ollama.tgz -C ~/claude-archive/ollama-bin
-ln -sf ~/claude-archive/ollama-bin/ollama ~/bin/ollama
-
-# Run as background daemon (one-shot)
-nohup ~/bin/ollama serve > ~/claude-archive/ollama.log 2>&1 &
-
-# Or register with launchd for auto-start at login + restart on crash:
-USER=$(whoami)
-sed "s|<USERNAME>|$USER|g" scripts/ollama.plist.template \
-  > ~/Library/LaunchAgents/com.${USER}.ollama.plist
-launchctl load ~/Library/LaunchAgents/com.${USER}.ollama.plist
-
-# 2. Pull embedding model (~274 MB)
-ollama pull nomic-embed-text
-
-# 3. Python venv with sqlite-vec + requests
-python3 -m venv ~/claude-archive/.venv
-~/claude-archive/.venv/bin/pip install sqlite-vec requests
-
-# 4. Install scripts
-cp scripts/embed.py    ~/claude-archive/embed.py
-cp scripts/vsearch.py  ~/claude-archive/vsearch.py
-cp scripts/vsearch     ~/bin/vsearch
-chmod +x ~/bin/vsearch ~/claude-archive/embed.py ~/claude-archive/vsearch.py
-
-# 5. Backfill embeddings for existing rows (~46 min for 96k rows on M-series)
-~/claude-archive/.venv/bin/python ~/claude-archive/embed.py
-# Outputs: progress every 500 rows, e.g.
-#   embedding 96000 rows via nomic-embed-text...
-#     500/96000  rate=33.0/s  eta=48.4 min
-#     1000/96000 rate=33.5/s  eta=47.2 min
-#     ...
-#   embedded 96000 rows in 47.8 min  (skipped 0 empty)
-
-# 6. Confirm
-sqlite3 ~/claude-archive/sessions.db "
-  SELECT (SELECT COUNT(*) FROM msg) AS msgs,
-         (SELECT COUNT(*) FROM msg_vec) AS vecs
-"
+./scripts/install-semantic.sh
 ```
+
+What it does:
+1. Downloads ollama binary tarball from GitHub releases (~125 MB)
+2. Extracts to `~/claude-archive/ollama-bin/`, symlinks to `~/bin/ollama`
+3. Registers `ollama serve` with launchd → auto-start at login, restart on crash
+4. Pulls `nomic-embed-text` model (~274 MB)
+5. Creates `~/claude-archive/.venv` with `sqlite-vec` + `requests`
+6. Copies `embed.py`, `vsearch.py`, `vsearch` wrapper
+7. Kicks off backfill in background
+
+### Path B — Docker container (cross-platform, easier cleanup)
+
+```bash
+./scripts/install-semantic-docker.sh
+```
+
+What it does:
+1. Pulls `ollama/ollama` image (~1 GB)
+2. Runs container `claude-archive-ollama` with `--restart unless-stopped`
+3. Publishes port 11434 to localhost (same API endpoint, transparent to embed.py / vsearch.py)
+4. Pulls `nomic-embed-text` inside container
+5. Same venv + scripts setup as native path
+6. Same backfill kick-off
+
+Caveat for macOS: Docker uses a Linux VM, no Metal GPU passthrough → embedding ~3-5x slower than native. Backfill of 100k rows takes ~3-5 hours instead of ~1 hour. Functionally identical, just slower for the one-time backfill. Steady-state incremental embed (a few new rows per 15-min ingest tick) is unaffected.
+
+### Manual install (no script)
+
+If you want to do steps yourself, see the source of `install-semantic.sh` — the steps are commented and idempotent.
 
 ## Ongoing operation
 
@@ -160,23 +157,33 @@ For now (≤1M rows) brute force is plenty.
 
 ## Disabling / removing
 
+### Native install
 ```bash
-# Stop Ollama (if managed by launchd, unload first)
 USER=$(whoami)
 launchctl unload ~/Library/LaunchAgents/com.${USER}.ollama.plist 2>/dev/null
 rm -f ~/Library/LaunchAgents/com.${USER}.ollama.plist
 pkill -f 'ollama serve'
+rm -rf ~/.ollama ~/claude-archive/ollama-bin
+rm -f ~/bin/ollama
+```
 
+### Docker install
+```bash
+docker rm -f claude-archive-ollama
+docker volume rm ollama
+rm -f ~/bin/ollama   # the docker exec wrapper
+```
+
+### Common (both modes)
+```bash
 # Drop vec table (preserves msg / FTS5)
 sqlite3 ~/claude-archive/sessions.db "DROP TABLE msg_vec"
 
-# Remove model + binary if reclaiming disk
-rm -rf ~/.ollama ~/claude-archive/ollama-bin
-
-# build.py's maybe_embed_new() is silent no-op if embed.py / Ollama missing
+# Remove vsearch
+rm -f ~/bin/vsearch ~/claude-archive/embed.py ~/claude-archive/vsearch.py
 ```
 
-`csearch` and the rest of the skill keep working unchanged.
+`csearch` and the rest of the base skill keep working unchanged. `build.py`'s `maybe_embed_new()` is a silent no-op if `embed.py` / Ollama is missing, so removal is safe.
 
 ## Why nomic-embed-text?
 
