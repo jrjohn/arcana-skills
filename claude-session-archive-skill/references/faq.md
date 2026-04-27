@@ -99,6 +99,25 @@ Most of this works. Substitutions:
 
 The `build.py` and `csearch` themselves are POSIX-portable.
 
+## Q: Windows install — what's different?
+
+Use the `.ps1` scripts in `scripts/`:
+- `install.ps1` — replaces the bash steps + registers Windows **Task Scheduler** (not launchd)
+- `csearch.ps1` / `vsearch.ps1` — PowerShell wrappers (placed in `%USERPROFILE%\bin`, added to PATH)
+- `install-semantic.ps1` / `install-semantic-docker.ps1` — Ollama install (native via OllamaSetup.exe, or Docker Desktop)
+
+Common Windows gotchas:
+- **Execution Policy blocks .ps1** — run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+- **sqlite3.exe not in PATH** — `winget install -e --id SQLite.SQLite` (or download from sqlite.org and add to PATH manually).
+- **Python from Microsoft Store** — installs at a stub path that confuses scripts. Prefer `winget install -e --id Python.Python.3.12` or python.org installer with "Add to PATH" checked.
+- **Task Scheduler under Battery** — tasks may be skipped on battery. `install.ps1` sets `-AllowStartIfOnBatteries` to avoid this.
+- **Path with spaces** (e.g. `C:\Users\Jane Doe\`) — always quote arguments. `install.ps1` handles this internally; if writing your own scripts, use `"%USERPROFILE%\..."` not bare paths.
+
+Verify Scheduled Task is registered + running:
+```powershell
+Get-ScheduledTask -TaskName ClaudeArchiveIngest | Format-List State,LastRunTime,NextRunTime,LastTaskResult
+```
+
 ## Q: How big can this DB get on disk?
 
 Empirically: ~5MB per active workday. Heavy users see ~100MB/month. The schema scales linearly; with current tuning, query latency is flat up to ~10GB.

@@ -1,6 +1,6 @@
 ---
 name: claude-session-archive-skill
-description: Cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into a local SQLite FTS5 database (~/claude-archive/sessions.db) every 15 minutes via launchd, so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. Two query modes: `csearch` (FTS5 lexical, exact phrase / boolean / prefix) and optionally `vsearch` (semantic via Ollama + sqlite-vec + nomic-embed-text — concept queries, synonym / cross-language matching). Activates when user wants to (a) install the archive on a new Mac, (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec semantic stack, (d) tune SQLite performance, or (e) troubleshoot FTS5 syntax / ingest issues.
+description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into a local SQLite FTS5 database (~/claude-archive/sessions.db) every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. Two query modes: `csearch` (FTS5 lexical, exact phrase / boolean / prefix) and optionally `vsearch` (semantic via Ollama + sqlite-vec + nomic-embed-text — concept queries, synonym / cross-language matching). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec semantic stack, (d) tune SQLite performance, or (e) troubleshoot FTS5 syntax / ingest issues.
 version: 1.0.0
 allowed-tools:
   - Read
@@ -47,17 +47,42 @@ msg_fts                                                      -- FTS5 over conten
 ingest_state(file_path, mtime, lines)                        -- incremental tracking
 ```
 
-## Quick install (6 steps base + optional Step 7)
+## Quick install — pick your OS
 
-Detailed instructions in `references/installation-guide.md`. Summary:
+Detailed instructions in `references/installation-guide.md`.
 
-1. **Mkdirs** — `mkdir -p ~/claude-archive ~/bin`
-2. **Place ingest script** — copy `scripts/build.py` to `~/claude-archive/build.py`, `chmod +x`, run once: `python3 ~/claude-archive/build.py`
-3. **Place CLI helper** — copy `scripts/csearch` to `~/bin/csearch`, `chmod +x`, ensure `~/bin` in PATH
-4. **Register launchd** — copy `scripts/launchd.plist.template` to `~/Library/LaunchAgents/com.<USER>.claude-archive.plist` (replace `<USER>`), `launchctl load` it
-5. **Place `~/.sqliterc`** — copy `scripts/sqliterc.template` to `~/.sqliterc` (CLI auto-applies SQLite tuning)
-6. **Add to `~/.claude/CLAUDE.md`** — paste the snippet at the bottom of this file so future Claude sessions auto-query the DB
-7. **(Optional) Semantic search** — install Ollama + sqlite-vec, get `vsearch` for concept-level / cross-language queries. See `references/semantic-search.md`
+### macOS / Linux (bash)
+
+```bash
+cd scripts
+mkdir -p ~/claude-archive ~/bin
+cp build.py ~/claude-archive/ ; chmod +x ~/claude-archive/build.py
+cp csearch ~/bin/ ; chmod +x ~/bin/csearch
+cp sqliterc.template ~/.sqliterc
+USER=$(whoami)
+sed "s/<USERNAME>/$USER/g" launchd.plist.template > ~/Library/LaunchAgents/com.${USER}.claude-archive.plist
+launchctl load ~/Library/LaunchAgents/com.${USER}.claude-archive.plist
+python3 ~/claude-archive/build.py
+# (Optional) semantic search:
+./install-semantic.sh        # native Ollama
+# or
+./install-semantic-docker.sh # Docker container
+```
+
+### Windows (PowerShell)
+
+```powershell
+# Allow local script execution once:
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+# Then from inside scripts/:
+.\install.ps1                # base: build.py + csearch.ps1 + Scheduled Task
+.\install-semantic.ps1       # OPTIONAL: native Ollama + vsearch.ps1
+# or
+.\install-semantic-docker.ps1  # OPTIONAL: Ollama in Docker Desktop
+```
+
+Then in any new Claude session add the snippet at the bottom of this file to `~/.claude/CLAUDE.md` (or `%USERPROFILE%\.claude\CLAUDE.md`) so Claude knows to query the DB.
 
 ## Daily usage patterns
 
@@ -176,12 +201,17 @@ claude-session-archive-skill/
     ├── csearch                       # CLI helper (~/bin/csearch)
     ├── sqliterc.template             # → ~/.sqliterc
     ├── launchd.plist.template        # → ~/Library/LaunchAgents/...
-    ├── embed.py                      # OPTIONAL: Ollama embedding helper
-    ├── vsearch.py                    # OPTIONAL: semantic search Python core
+    ├── embed.py                      # OPTIONAL: Ollama embedding helper (cross-platform Python)
+    ├── vsearch.py                    # OPTIONAL: semantic search Python core (cross-platform)
     ├── vsearch                       # OPTIONAL: bash wrapper (~/bin/vsearch)
-    ├── install-semantic.sh           # OPTIONAL: one-shot installer (native ollama binary)
-    ├── install-semantic-docker.sh    # OPTIONAL: one-shot installer (ollama in Docker)
-    └── ollama.plist.template         # OPTIONAL: launchd auto-start template (native mode)
+    ├── vsearch.ps1                   # OPTIONAL Windows: PowerShell wrapper
+    ├── csearch.ps1                   # Windows: PowerShell csearch wrapper
+    ├── install.ps1                   # Windows: base installer (mkdir + scheduled task + sqliterc)
+    ├── install-semantic.ps1          # Windows OPTIONAL: native Ollama + vsearch
+    ├── install-semantic-docker.ps1   # Windows OPTIONAL: Docker Ollama variant
+    ├── install-semantic.sh           # macOS/Linux OPTIONAL: native Ollama installer
+    ├── install-semantic-docker.sh    # macOS/Linux OPTIONAL: Docker Ollama installer
+    └── ollama.plist.template         # macOS OPTIONAL: launchd auto-start template
 ```
 
 ## Author / version
@@ -189,3 +219,4 @@ claude-session-archive-skill/
 - 2026-04-24 v1.0 initial setup (John Chang)
 - 2026-04-27 v1.0.0 packaged as skill, with SQLite tuning (cache 512MB, mmap, temp_store=MEMORY)
 - 2026-04-27 v1.1.0 optional semantic search: Ollama + sqlite-vec + nomic-embed-text + `vsearch`
+- 2026-04-27 v1.2.0 native Windows support: csearch.ps1 / vsearch.ps1 / install.ps1 / install-semantic.ps1 / install-semantic-docker.ps1 + Scheduled Task instead of launchd

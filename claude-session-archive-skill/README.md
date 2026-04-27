@@ -45,58 +45,75 @@ claude-session-archive-skill/
     ├── csearch                       # CLI lexical search
     ├── sqliterc.template             # → ~/.sqliterc (SQLite tuning)
     ├── launchd.plist.template        # → ~/Library/LaunchAgents/com.USER.claude-archive.plist
-    ├── embed.py                      # OPTIONAL: Ollama embedding helper
-    ├── vsearch.py                    # OPTIONAL: semantic search core
+    ├── embed.py                      # OPTIONAL: Ollama embedding helper (cross-platform)
+    ├── vsearch.py                    # OPTIONAL: semantic search core (cross-platform)
+    │
+    │  # macOS / Linux
     ├── vsearch                       # OPTIONAL: bash wrapper (~/bin/vsearch)
-    ├── install-semantic.sh           # OPTIONAL: one-shot installer (native binary)
-    ├── install-semantic-docker.sh    # OPTIONAL: one-shot installer (Docker container)
-    └── ollama.plist.template         # OPTIONAL: launchd auto-start (native mode)
+    ├── install-semantic.sh           # OPTIONAL: native binary installer
+    ├── install-semantic-docker.sh    # OPTIONAL: Docker container installer
+    ├── ollama.plist.template         # OPTIONAL: launchd auto-start (macOS)
+    │
+    │  # Windows
+    ├── csearch.ps1                   # PowerShell csearch wrapper
+    ├── vsearch.ps1                   # OPTIONAL: PowerShell vsearch wrapper
+    ├── install.ps1                   # base installer (build.py + Scheduled Task)
+    ├── install-semantic.ps1          # OPTIONAL: native Ollama (OllamaSetup.exe)
+    └── install-semantic-docker.ps1   # OPTIONAL: Docker Desktop variant
 ```
 
-## Quick install (base)
+## Quick install — pick your OS
+
+### macOS / Linux (bash)
 
 ```bash
-# 1. mkdirs
+cd scripts
 mkdir -p ~/claude-archive ~/bin
-
-# 2. ingest script
-cp scripts/build.py ~/claude-archive/build.py
-chmod +x ~/claude-archive/build.py
-python3 ~/claude-archive/build.py
-
-# 3. CLI
-cp scripts/csearch ~/bin/csearch
-chmod +x ~/bin/csearch
+cp build.py ~/claude-archive/build.py    && chmod +x ~/claude-archive/build.py
+cp csearch  ~/bin/csearch                && chmod +x ~/bin/csearch
+cp sqliterc.template ~/.sqliterc
 echo $PATH | grep -q "$HOME/bin" || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
 
-# 4. launchd
+# launchd auto-ingest @ 15 min
 USER=$(whoami)
-sed "s/<USERNAME>/$USER/g" scripts/launchd.plist.template \
-  > ~/Library/LaunchAgents/com.${USER}.claude-archive.plist
+sed "s/<USERNAME>/$USER/g" launchd.plist.template > ~/Library/LaunchAgents/com.${USER}.claude-archive.plist
 launchctl load ~/Library/LaunchAgents/com.${USER}.claude-archive.plist
 
-# 5. SQLite tuning
-cp scripts/sqliterc.template ~/.sqliterc
-
-# 6. Tell Claude about it (paste snippet from SKILL.md into ~/.claude/CLAUDE.md)
+# first ingest
+python3 ~/claude-archive/build.py
 ```
+
+### Windows (PowerShell)
+
+```powershell
+# One-time: allow local script execution
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+cd scripts
+.\install.ps1
+# That single script does: mkdirs → copy build.py / csearch.ps1 / sqliterc → register
+# Scheduled Task "ClaudeArchiveIngest" (15 min) → run first ingest → add %USERPROFILE%\bin to PATH
+```
+
+Then for both: paste the snippet from `SKILL.md` into `~/.claude/CLAUDE.md` (or `%USERPROFILE%\.claude\CLAUDE.md` on Windows) so future Claude sessions know to query the DB.
 
 For details, see `references/installation-guide.md`.
 
 ## Optional: add semantic search
 
-Two install paths — pick one:
-
 ```bash
-# Native binary (default; ~20ms/call on Apple Silicon Metal)
-./scripts/install-semantic.sh
-
-# Docker container (cross-platform; ~80ms/call on macOS without Metal,
-#                   GPU-accelerated on Linux with NVIDIA + OLLAMA_GPU=all)
-./scripts/install-semantic-docker.sh
+# macOS / Linux
+./scripts/install-semantic.sh           # native Ollama binary
+./scripts/install-semantic-docker.sh    # Docker variant
 ```
 
-After install completes (~1 hr native / ~3-5 hr Docker on macOS for 100k rows), `vsearch` is ready. See `references/semantic-search.md` for details and trade-offs.
+```powershell
+# Windows
+.\scripts\install-semantic.ps1          # native Ollama (downloads OllamaSetup.exe)
+.\scripts\install-semantic-docker.ps1   # Docker Desktop variant
+```
+
+After install completes (~1 hr native / ~3-5 hr Docker on macOS for 100k rows), `vsearch` / `vsearch.ps1` is ready. See `references/semantic-search.md` for details and trade-offs.
 
 ## Privacy
 

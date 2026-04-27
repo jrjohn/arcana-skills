@@ -164,6 +164,46 @@ After install, all should hold:
 
 ---
 
+## Windows install path
+
+For Windows users, all the same steps are wrapped in PowerShell scripts. Run from inside cloned `claude-session-archive-skill/scripts/`:
+
+```powershell
+# One-time: allow local script execution
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+# Base setup (build.py + csearch.ps1 + Scheduled Task @ 15 min)
+.\install.ps1
+
+# OPTIONAL: semantic search
+.\install-semantic.ps1            # native Ollama Windows installer
+# or
+.\install-semantic-docker.ps1     # Docker Desktop variant
+```
+
+What `install.ps1` does (parallel to Steps 1-5 above):
+
+| Step | Linux/macOS | Windows |
+|---|---|---|
+| Mkdirs | `mkdir -p ~/claude-archive ~/bin` | `New-Item ~/claude-archive ~/bin` |
+| Ingest script | `cp build.py ~/claude-archive/` | `Copy-Item build.py %USERPROFILE%\claude-archive\` |
+| CLI helper | `cp csearch ~/bin/` | `Copy-Item csearch.ps1 %USERPROFILE%\bin\` |
+| Tuning | `cp sqliterc.template ~/.sqliterc` | `Copy-Item sqliterc.template $HOME\.sqliterc` |
+| Scheduled ingest | launchd plist | **Windows Task Scheduler** `ClaudeArchiveIngest` (15-min repetition) |
+| Initial ingest | `python3 ~/claude-archive/build.py` | `python %USERPROFILE%\claude-archive\build.py` |
+| PATH | `~/bin` | adds `%USERPROFILE%\bin` to user PATH |
+
+Verification on Windows:
+```powershell
+Get-ScheduledTask -TaskName ClaudeArchiveIngest | Format-List State,LastRunTime,NextRunTime
+csearch.ps1 claude
+```
+
+Prerequisites on Windows:
+- Python 3.11+ in PATH (`python --version`)
+- sqlite3.exe in PATH (`winget install -e --id SQLite.SQLite`)
+- PowerShell 5.1+ (built in to Windows 10/11)
+
 ## Step 7 (optional) — Semantic search via Ollama + sqlite-vec
 
 Adds `vsearch` for concept-level / synonym / cross-language queries. Complements `csearch`, doesn't replace it.
