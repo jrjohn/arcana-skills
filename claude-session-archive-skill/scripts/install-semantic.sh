@@ -45,9 +45,19 @@ if ! command -v ollama >/dev/null 2>&1; then
 fi
 echo "    ollama: $(ollama --version 2>/dev/null || echo 'pending start')"
 
-# 2. Start Ollama daemon if not running
+# 2. Register Ollama with launchd (auto-start at login + restart on crash)
+USER_SHORT=$(whoami)
+PLIST="$HOME/Library/LaunchAgents/com.${USER_SHORT}.ollama.plist"
+if [ ! -f "$PLIST" ]; then
+    echo "==> registering ollama with launchd..."
+    sed "s|<USERNAME>|${USER_SHORT}|g" "$SKILL_DIR/scripts/ollama.plist.template" > "$PLIST"
+    launchctl unload "$PLIST" 2>/dev/null || true
+    launchctl load "$PLIST"
+    sleep 3
+fi
+# Fallback if user didn't want launchd
 if ! curl -s --max-time 2 http://localhost:11434/api/tags >/dev/null 2>&1; then
-    echo "==> starting ollama serve..."
+    echo "==> starting ollama serve (no launchd) ..."
     nohup ollama serve > "$ARCHIVE_DIR/ollama.log" 2>&1 &
     sleep 3
 fi

@@ -42,8 +42,14 @@ mkdir -p ~/claude-archive/ollama-bin
 tar -xzf /tmp/ollama.tgz -C ~/claude-archive/ollama-bin
 ln -sf ~/claude-archive/ollama-bin/ollama ~/bin/ollama
 
-# Run as background daemon
+# Run as background daemon (one-shot)
 nohup ~/bin/ollama serve > ~/claude-archive/ollama.log 2>&1 &
+
+# Or register with launchd for auto-start at login + restart on crash:
+USER=$(whoami)
+sed "s|<USERNAME>|$USER|g" scripts/ollama.plist.template \
+  > ~/Library/LaunchAgents/com.${USER}.ollama.plist
+launchctl load ~/Library/LaunchAgents/com.${USER}.ollama.plist
 
 # 2. Pull embedding model (~274 MB)
 ollama pull nomic-embed-text
@@ -155,7 +161,10 @@ For now (≤1M rows) brute force is plenty.
 ## Disabling / removing
 
 ```bash
-# Stop Ollama
+# Stop Ollama (if managed by launchd, unload first)
+USER=$(whoami)
+launchctl unload ~/Library/LaunchAgents/com.${USER}.ollama.plist 2>/dev/null
+rm -f ~/Library/LaunchAgents/com.${USER}.ollama.plist
 pkill -f 'ollama serve'
 
 # Drop vec table (preserves msg / FTS5)

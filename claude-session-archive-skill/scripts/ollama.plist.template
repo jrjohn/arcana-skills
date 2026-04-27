@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template for ~/Library/LaunchAgents/com.<USERNAME>.ollama.plist
+  Replace <USERNAME> with your macOS short username (output of `whoami`).
+
+  Auto-starts Ollama daemon at boot/login + restarts if it crashes.
+  Required for `vsearch` (semantic search) to work without manual `ollama serve`.
+
+  Then:
+    launchctl load ~/Library/LaunchAgents/com.<USERNAME>.ollama.plist
+    launchctl list | grep ollama          # confirm
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.<USERNAME>.ollama</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/<USERNAME>/claude-archive/ollama-bin/ollama</string>
+    <string>serve</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/<USERNAME>/claude-archive/ollama.log</string>
+  <key>StandardErrorPath</key><string>/Users/<USERNAME>/claude-archive/ollama.err</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/<USERNAME></string>
+    <!-- Keep model loaded in RAM for 30 min idle (faster vsearch on warm cache) -->
+    <key>OLLAMA_KEEP_ALIVE</key><string>30m</string>
+  </dict>
+</dict>
+</plist>
