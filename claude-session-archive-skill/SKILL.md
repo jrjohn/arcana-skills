@@ -1,6 +1,6 @@
 ---
 name: claude-session-archive-skill
-description: Cross-session full-text history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into a local SQLite FTS5 database (~/claude-archive/sessions.db) every 15 minutes via launchd, so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. Activates when user wants to (a) install the archive on a new Mac, (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "查歷史對話 / past conversations"), (c) tune SQLite performance, or (d) troubleshoot ingest / FTS5 syntax issues.
+description: Cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into a local SQLite FTS5 database (~/claude-archive/sessions.db) every 15 minutes via launchd, so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. Two query modes: `csearch` (FTS5 lexical, exact phrase / boolean / prefix) and optionally `vsearch` (semantic via Ollama + sqlite-vec + nomic-embed-text — concept queries, synonym / cross-language matching). Activates when user wants to (a) install the archive on a new Mac, (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec semantic stack, (d) tune SQLite performance, or (e) troubleshoot FTS5 syntax / ingest issues.
 version: 1.0.0
 allowed-tools:
   - Read
@@ -47,7 +47,7 @@ msg_fts                                                      -- FTS5 over conten
 ingest_state(file_path, mtime, lines)                        -- incremental tracking
 ```
 
-## Quick install (6 steps)
+## Quick install (6 steps base + optional Step 7)
 
 Detailed instructions in `references/installation-guide.md`. Summary:
 
@@ -57,10 +57,11 @@ Detailed instructions in `references/installation-guide.md`. Summary:
 4. **Register launchd** — copy `scripts/launchd.plist.template` to `~/Library/LaunchAgents/com.<USER>.claude-archive.plist` (replace `<USER>`), `launchctl load` it
 5. **Place `~/.sqliterc`** — copy `scripts/sqliterc.template` to `~/.sqliterc` (CLI auto-applies SQLite tuning)
 6. **Add to `~/.claude/CLAUDE.md`** — paste the snippet at the bottom of this file so future Claude sessions auto-query the DB
+7. **(Optional) Semantic search** — install Ollama + sqlite-vec, get `vsearch` for concept-level / cross-language queries. See `references/semantic-search.md`
 
 ## Daily usage patterns
 
-### CLI
+### CLI — `csearch` (FTS5 lexical, always available)
 
 ```bash
 # 簡單關鍵字
@@ -79,6 +80,23 @@ csearch 'somnic*'
 # 限定 project（slug 部分匹配）
 csearch FortiGate network
 ```
+
+### CLI — `vsearch` (semantic, optional Step 7)
+
+```bash
+# Concept search without remembering specific keywords
+vsearch '上次廣播 deny log 太多怎麼解的'
+
+# Cross-language: 防火牆 finds firewall
+vsearch '防火牆規則調整' network
+
+# Vague description
+vsearch 'wireless AP keeps disconnecting' network
+```
+
+When to pick which:
+- **csearch** — you remember a specific phrase / IP / hostname
+- **vsearch** — you forgot the exact wording, or need synonym / cross-language matching
 
 ### Direct SQL (for complex queries)
 
@@ -151,15 +169,20 @@ claude-session-archive-skill/
 │   ├── installation-guide.md         # detailed step-by-step setup
 │   ├── fts5-syntax.md                # FTS5 query language reference
 │   ├── tuning.md                     # SQLite performance + maintenance
-│   └── faq.md                        # common questions / troubleshooting
+│   ├── faq.md                        # common questions / troubleshooting
+│   └── semantic-search.md            # OPTIONAL: Ollama + sqlite-vec for vsearch
 └── scripts/
     ├── build.py                      # ingest script (~/claude-archive/build.py)
     ├── csearch                       # CLI helper (~/bin/csearch)
     ├── sqliterc.template             # → ~/.sqliterc
-    └── launchd.plist.template        # → ~/Library/LaunchAgents/...
+    ├── launchd.plist.template        # → ~/Library/LaunchAgents/...
+    ├── embed.py                      # OPTIONAL: Ollama embedding helper
+    ├── vsearch.py                    # OPTIONAL: semantic search Python core
+    └── vsearch                       # OPTIONAL: bash wrapper (~/bin/vsearch)
 ```
 
 ## Author / version
 
 - 2026-04-24 v1.0 initial setup (John Chang)
 - 2026-04-27 v1.0.0 packaged as skill, with SQLite tuning (cache 512MB, mmap, temp_store=MEMORY)
+- 2026-04-27 v1.1.0 optional semantic search: Ollama + sqlite-vec + nomic-embed-text + `vsearch`

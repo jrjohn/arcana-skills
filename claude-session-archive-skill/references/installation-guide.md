@@ -164,8 +164,29 @@ After install, all should hold:
 
 ---
 
+## Step 7 (optional) — Semantic search via Ollama + sqlite-vec
+
+Adds `vsearch` for concept-level / synonym / cross-language queries. Complements `csearch`, doesn't replace it.
+
+```bash
+./scripts/install-semantic.sh
+```
+
+This downloads ~400 MB (Ollama binary + `nomic-embed-text` model), creates a Python venv, installs `embed.py` / `vsearch.py` / `vsearch` CLI, and kicks off backfill. Backfill runs ~30-90 min in background for ~100k rows on Apple Silicon.
+
+After install:
+```bash
+vsearch '上次廣播 deny log 怎麼解的'        # concept query, no exact keyword needed
+vsearch '防火牆規則調整' network            # also matches "firewall policy"
+```
+
+Full details and trade-offs: `semantic-search.md`.
+
+---
+
 ## See also
 
 - `fts5-syntax.md` — FTS5 query language reference
 - `tuning.md` — SQLite performance + ANALYZE / VACUUM
 - `faq.md` — common questions / errors
+- `semantic-search.md` — optional Ollama + sqlite-vec semantic layer

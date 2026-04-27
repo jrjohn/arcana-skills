@@ -141,6 +141,24 @@ def ingest_file(conn, path):
     return new_rows
 
 
+def maybe_embed_new(conn):
+    """If embed.py is importable and Ollama is reachable, embed any new rows.
+    Silent no-op otherwise — keeps build.py functional even without semantic stack."""
+    try:
+        import embed
+    except ImportError:
+        return
+    try:
+        embed.ensure_vec_schema(conn)
+        # quick health check — don't burn time if ollama is down
+        import requests
+        requests.get("http://localhost:11434/api/tags", timeout=2)
+    except Exception as e:
+        print(f"(skip embedding: {e})")
+        return
+    embed.embed_missing(conn)
+
+
 def main():
     DB_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
@@ -173,6 +191,9 @@ def main():
     print(f"DB total: {total} rows across {sess} sessions / {proj} projects")
     print(f"DB path:  {DB_PATH}")
     print(f"DB size:  {os.path.getsize(DB_PATH)/1024/1024:.1f} MB")
+
+    # Optional: incremental semantic embedding (requires Ollama + sqlite-vec)
+    maybe_embed_new(conn)
 
     conn.close()
 

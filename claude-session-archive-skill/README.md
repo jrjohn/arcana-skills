@@ -1,19 +1,27 @@
-# claude-session-archive
+# claude-session-archive-skill
 
-Cross-session full-text history of every Claude Code conversation, stored locally. Pair this with Memory for a complete recall stack:
+Cross-session full-text + semantic history of every Claude Code conversation, stored locally. Pair this with Memory for a complete recall stack:
 
 - **Memory** = curated signal (identity / traps / invariants — small)
 - **This archive** = verbatim log (every command + result, every chat — large, query on demand)
 
-Backed by SQLite + FTS5 with proper tuning. Millisecond queries. Updates every 15 minutes via launchd.
+Backed by SQLite FTS5 (lexical) and optionally Ollama + sqlite-vec (semantic). Millisecond queries. Updates every 15 minutes via launchd.
 
 ## What it gives you
 
+### `csearch` — FTS5 lexical (always available)
 ```bash
 csearch ZyXEL                                 # cross-project keyword
 csearch '"auto-power-down"' network           # phrase, project-filtered
 csearch 'Sophos AND SEDService' network       # boolean
 csearch 'somnic*'                             # prefix
+```
+
+### `vsearch` — semantic (optional Step 7)
+```bash
+vsearch '上次廣播 deny log 怎麼解的'           # concept query, no exact keyword
+vsearch '防火牆規則調整' network              # also matches "firewall policy"
+vsearch 'wireless AP keeps dropping' network  # vague description still works
 ```
 
 Inside Claude:
@@ -27,18 +35,23 @@ claude-session-archive-skill/
 ├── SKILL.md                          # Skill entry — read this first
 ├── README.md                         # this file
 ├── references/
-│   ├── installation-guide.md         # 6-step setup walkthrough
-│   ├── fts5-syntax.md                # query language reference
+│   ├── installation-guide.md         # 6-step base setup walkthrough
+│   ├── fts5-syntax.md                # FTS5 query language reference
 │   ├── tuning.md                     # SQLite performance + maintenance
-│   └── faq.md                        # common errors / questions
+│   ├── faq.md                        # common errors / questions
+│   └── semantic-search.md            # OPTIONAL: Ollama + sqlite-vec for vsearch
 └── scripts/
-    ├── build.py                      # JSONL → SQLite ingest
-    ├── csearch                       # CLI helper
-    ├── sqliterc.template             # → ~/.sqliterc (CLI auto-applies tuning)
-    └── launchd.plist.template        # → ~/Library/LaunchAgents/com.USER.claude-archive.plist
+    ├── build.py                      # JSONL → SQLite ingest (with embed hook)
+    ├── csearch                       # CLI lexical search
+    ├── sqliterc.template             # → ~/.sqliterc (SQLite tuning)
+    ├── launchd.plist.template        # → ~/Library/LaunchAgents/com.USER.claude-archive.plist
+    ├── embed.py                      # OPTIONAL: Ollama embedding helper
+    ├── vsearch.py                    # OPTIONAL: semantic search core
+    ├── vsearch                       # OPTIONAL: bash wrapper (~/bin/vsearch)
+    └── install-semantic.sh           # OPTIONAL: one-shot semantic stack installer
 ```
 
-## Quick install
+## Quick install (base)
 
 ```bash
 # 1. mkdirs
@@ -67,6 +80,15 @@ cp scripts/sqliterc.template ~/.sqliterc
 ```
 
 For details, see `references/installation-guide.md`.
+
+## Optional: add semantic search
+
+```bash
+# One-shot installer: Ollama binary + nomic-embed-text model + venv + scripts + backfill
+./scripts/install-semantic.sh
+```
+
+After install completes (~30-90 min for 100k rows on Apple Silicon), `vsearch` is ready. See `references/semantic-search.md` for details and trade-offs.
 
 ## Privacy
 
