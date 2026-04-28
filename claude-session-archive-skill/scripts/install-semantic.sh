@@ -11,11 +11,11 @@
 # What it does:
 #   1. Downloads Ollama binary (no brew, no compile, ~125MB)
 #   2. Starts Ollama daemon
-#   3. Pulls nomic-embed-text model (~274MB)
+#   3. Pulls bge-m3 model (~1.2 GB)
 #   4. Creates ~/claude-archive/.venv with sqlite-vec + requests
-#   5. Copies embed.py / vsearch.py to ~/claude-archive/
+#   5. Copies embed.py / embed_parallel.py / vsearch.py to ~/claude-archive/
 #   6. Copies vsearch wrapper to ~/bin/
-#   7. Kicks off backfill in background (~30-90 min for 100k rows)
+#   7. Kicks off parallel backfill in background (~2-3 hr for 100k rows on Apple Silicon)
 #
 # Idempotent: re-running skips already-completed steps.
 
@@ -64,12 +64,12 @@ fi
 curl -s --max-time 2 http://localhost:11434/api/tags >/dev/null && echo "    ollama daemon: up"
 
 # 3. Pull embedding model
-if ! ollama list 2>/dev/null | grep -q nomic-embed-text; then
-    echo "==> pulling nomic-embed-text (~274 MB)..."
-    ollama pull nomic-embed-text
+if ! ollama list 2>/dev/null | grep -q bge-m3; then
+    echo "==> pulling bge-m3 (~1.2 GB)..."
+    ollama pull bge-m3
 fi
 echo "    model ready:"
-ollama list | grep nomic-embed-text || true
+ollama list | grep bge-m3 || true
 
 # 4. Python venv
 if [ ! -d "$ARCHIVE_DIR/.venv" ]; then
@@ -82,10 +82,11 @@ echo "==> installing python deps..."
 echo "    sqlite-vec: $($ARCHIVE_DIR/.venv/bin/python -c 'import sqlite_vec; print(sqlite_vec.__version__)')"
 
 # 5. Copy scripts
-echo "==> installing embed.py + vsearch.py..."
-cp "$SKILL_DIR/scripts/embed.py"    "$ARCHIVE_DIR/embed.py"
-cp "$SKILL_DIR/scripts/vsearch.py"  "$ARCHIVE_DIR/vsearch.py"
-chmod +x "$ARCHIVE_DIR/embed.py" "$ARCHIVE_DIR/vsearch.py"
+echo "==> installing embed.py + embed_parallel.py + vsearch.py..."
+cp "$SKILL_DIR/scripts/embed.py"          "$ARCHIVE_DIR/embed.py"
+cp "$SKILL_DIR/scripts/embed_parallel.py" "$ARCHIVE_DIR/embed_parallel.py"
+cp "$SKILL_DIR/scripts/vsearch.py"        "$ARCHIVE_DIR/vsearch.py"
+chmod +x "$ARCHIVE_DIR/embed.py" "$ARCHIVE_DIR/embed_parallel.py" "$ARCHIVE_DIR/vsearch.py"
 
 # 6. vsearch wrapper
 echo "==> installing vsearch CLI..."
@@ -105,10 +106,10 @@ PENDING=$((TOTAL_ROWS - EMBED_ROWS))
 echo "==> rows to backfill: $PENDING (of $TOTAL_ROWS total)"
 
 if [ "$PENDING" -gt 0 ]; then
-    echo "==> launching backfill in background"
+    echo "==> launching parallel backfill in background (8 workers)"
     echo "    log: $ARCHIVE_DIR/backfill.log"
-    echo "    estimate: ~$((PENDING / 1800)) min on Apple Silicon"
-    nohup "$ARCHIVE_DIR/.venv/bin/python" "$ARCHIVE_DIR/embed.py" \
+    echo "    estimate: ~$((PENDING / 420)) min on Apple Silicon (bge-m3 ~7 emb/sec @ 8 workers)"
+    nohup "$ARCHIVE_DIR/.venv/bin/python" "$ARCHIVE_DIR/embed_parallel.py" 8 \
         > "$ARCHIVE_DIR/backfill.log" 2>&1 &
     echo "    PID: $!"
     echo

@@ -5,7 +5,7 @@ Cross-session full-text + semantic history of every Claude Code conversation, st
 - **Memory** = curated signal (identity / traps / invariants — small)
 - **This archive** = verbatim log (every command + result, every chat — large, query on demand)
 
-Backed by SQLite FTS5 (lexical) and optionally Ollama + sqlite-vec (semantic). Millisecond queries. Updates every 15 minutes via launchd.
+Backed by SQLite FTS5 (lexical) and optionally Ollama + sqlite-vec (semantic, **bge-m3** 1024-dim, multilingual SOTA). Millisecond queries. Updates every 15 minutes via launchd / Task Scheduler.
 
 ## What it gives you
 
@@ -46,6 +46,7 @@ claude-session-archive-skill/
     ├── sqliterc.template             # → ~/.sqliterc (SQLite tuning)
     ├── launchd.plist.template        # → ~/Library/LaunchAgents/com.USER.claude-archive.plist
     ├── embed.py                      # OPTIONAL: Ollama embedding helper (cross-platform)
+    ├── embed_parallel.py             # OPTIONAL: parallel backfill (8 workers, 4-5x faster)
     ├── vsearch.py                    # OPTIONAL: semantic search core (cross-platform)
     │
     │  # macOS / Linux

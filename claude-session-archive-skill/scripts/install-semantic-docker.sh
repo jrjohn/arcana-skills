@@ -10,8 +10,8 @@
 #   + Easier full uninstall (one container + one volume)
 #   + Same command on macOS and Linux
 #   - On macOS: Docker uses Linux VM, NO Metal GPU acceleration
-#     → Embedding latency ~3-5x slower vs native (~80ms vs ~20ms per call)
-#     → Backfill 100k rows: ~3-5 hours instead of ~1 hour
+#     → bge-m3 embedding: ~3-5x slower vs native (~500ms vs ~140ms per call)
+#     → Backfill 100k rows: ~6-12 hours instead of ~2-3 hours
 #   - On Linux with NVIDIA: Docker can passthrough GPU (--gpus=all), faster
 #
 # Usage:
@@ -83,8 +83,8 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
 done
 
 # 4. Pull embedding model
-echo "==> pulling nomic-embed-text (~274 MB)..."
-docker exec "$CONTAINER_NAME" ollama pull nomic-embed-text
+echo "==> pulling bge-m3 (~1.2 GB)..."
+docker exec "$CONTAINER_NAME" ollama pull bge-m3
 
 # 5. Python venv
 if [ ! -d "$ARCHIVE_DIR/.venv" ]; then
@@ -96,12 +96,13 @@ echo "==> installing python deps..."
 "$ARCHIVE_DIR/.venv/bin/pip" install --quiet sqlite-vec requests
 
 # 6. Copy scripts (same as native variant)
-echo "==> installing embed.py / vsearch.py / vsearch ..."
-cp "$SKILL_DIR/scripts/embed.py"    "$ARCHIVE_DIR/embed.py"
-cp "$SKILL_DIR/scripts/vsearch.py"  "$ARCHIVE_DIR/vsearch.py"
-cp "$SKILL_DIR/scripts/vsearch"     "$BIN_DIR/vsearch"
-cp "$SKILL_DIR/scripts/build.py"    "$ARCHIVE_DIR/build.py"
-chmod +x "$ARCHIVE_DIR/embed.py" "$ARCHIVE_DIR/vsearch.py" "$BIN_DIR/vsearch" "$ARCHIVE_DIR/build.py"
+echo "==> installing embed.py / embed_parallel.py / vsearch.py / vsearch ..."
+cp "$SKILL_DIR/scripts/embed.py"          "$ARCHIVE_DIR/embed.py"
+cp "$SKILL_DIR/scripts/embed_parallel.py" "$ARCHIVE_DIR/embed_parallel.py"
+cp "$SKILL_DIR/scripts/vsearch.py"        "$ARCHIVE_DIR/vsearch.py"
+cp "$SKILL_DIR/scripts/vsearch"           "$BIN_DIR/vsearch"
+cp "$SKILL_DIR/scripts/build.py"          "$ARCHIVE_DIR/build.py"
+chmod +x "$ARCHIVE_DIR/embed.py" "$ARCHIVE_DIR/embed_parallel.py" "$ARCHIVE_DIR/vsearch.py" "$BIN_DIR/vsearch" "$ARCHIVE_DIR/build.py"
 
 # 7. Convenience wrapper to talk to docker container
 cat > "$BIN_DIR/ollama" <<EOF
@@ -118,9 +119,9 @@ PENDING=$((TOTAL_ROWS - EMBED_ROWS))
 
 echo "==> rows to backfill: $PENDING (of $TOTAL_ROWS total)"
 if [ "$PENDING" -gt 0 ]; then
-    echo "==> launching backfill in background (Docker mode is 3-5x slower than native on macOS)"
+    echo "==> launching parallel backfill in background (8 workers; Docker on macOS = 3-5x slower than native)"
     echo "    log: $ARCHIVE_DIR/backfill.log"
-    nohup "$ARCHIVE_DIR/.venv/bin/python" "$ARCHIVE_DIR/embed.py" \
+    nohup "$ARCHIVE_DIR/.venv/bin/python" "$ARCHIVE_DIR/embed_parallel.py" 8 \
         > "$ARCHIVE_DIR/backfill.log" 2>&1 &
     echo "    PID: $!"
 fi

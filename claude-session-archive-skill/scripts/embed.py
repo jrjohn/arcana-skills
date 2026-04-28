@@ -13,7 +13,7 @@ Used by:
 - python embed.py (CLI)     — backfill standalone
 
 Requires:
-- Ollama running (http://localhost:11434) with `nomic-embed-text` model pulled
+- Ollama running (http://localhost:11434) with `bge-m3` pulled
 - Python venv with `sqlite-vec` and `requests` installed
 """
 import os
@@ -26,8 +26,16 @@ from pathlib import Path
 import requests
 import sqlite_vec
 
-EMBED_MODEL = "nomic-embed-text"
-EMBED_DIM = 768
+# Model history:
+#   v1.1.0 nomic-embed-text        768d  (137M, ~262MB) — English-only, weak on Chinese
+#   v1.3.1 nomic-embed-text-v2-moe 768d  (305M MoE, ~957MB) — 100+ langs but Ollama hard-clamps
+#                                  context to 512 tokens (Nomic confirms). Too short for our
+#                                  session messages, abandoned.
+#   v1.3.2 bge-m3                  1024d (568M, ~1.2GB) — multilingual SOTA on MIRACL, native
+#                                  8192-token context, strong Chinese. dim change requires
+#                                  msg_vec table rebuild.
+EMBED_MODEL = "bge-m3"
+EMBED_DIM = 1024
 OLLAMA_URL = "http://localhost:11434/api/embeddings"
 MAX_CHARS = 2000  # truncate long content; embedding captures gist not full text
 DB_PATH = Path.home() / "claude-archive" / "sessions.db"
@@ -61,7 +69,7 @@ def vec_to_blob(v):
 
 def ensure_vec_schema(conn):
     """Load sqlite-vec extension and create msg_vec table if missing.
-    Uses cosine distance (nomic-embed-text outputs unnormalized vectors)."""
+    Uses cosine distance (works for both normalized and unnormalized vectors)."""
     conn.enable_load_extension(True)
     sqlite_vec.load(conn)
     conn.execute(f"""

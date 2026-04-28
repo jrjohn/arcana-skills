@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   Windows PowerShell counterpart to scripts/vsearch (bash).
-  Embeds query via Ollama (nomic-embed-text), runs KNN over msg_vec, joins msg.
+  Embeds query via Ollama (bge-m3), runs KNN over msg_vec, joins msg.
 
 .EXAMPLE
   .\vsearch.ps1 '上次廣播 deny log 怎麼解的' network
@@ -12,7 +12,7 @@
 
 .NOTES
   Requires (run install-semantic.ps1 first):
-    - Ollama running (http://localhost:11434) with nomic-embed-text pulled
+    - Ollama running (http://localhost:11434) with bge-m3 pulled
     - %USERPROFILE%\claude-archive\.venv with sqlite-vec + requests installed
     - %USERPROFILE%\claude-archive\vsearch.py + embed.py
 #>

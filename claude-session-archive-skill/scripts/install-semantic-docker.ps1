@@ -68,8 +68,8 @@ while ($retries -gt 0) {
 if ($retries -eq 0) { Write-Error "Daemon not ready" }
 Write-Host "    daemon ready"
 
-Write-Host "==> Pulling nomic-embed-text..."
-& docker exec $Container ollama pull nomic-embed-text
+Write-Host "==> Pulling bge-m3..."
+& docker exec $Container ollama pull bge-m3
 
 # Python venv + scripts (same as native variant)
 $venv = Join-Path $Archive '.venv'
@@ -81,9 +81,10 @@ $venvPip    = Join-Path $venv 'Scripts\pip.exe'
 & $venvPip install --quiet --upgrade pip
 & $venvPip install --quiet sqlite-vec requests
 
-Copy-Item -Force (Join-Path $SkillDir 'scripts\embed.py')   (Join-Path $Archive 'embed.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch.py') (Join-Path $Archive 'vsearch.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\build.py')   (Join-Path $Archive 'build.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\embed.py')          (Join-Path $Archive 'embed.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\embed_parallel.py') (Join-Path $Archive 'embed_parallel.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch.py')        (Join-Path $Archive 'vsearch.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\build.py')          (Join-Path $Archive 'build.py')
 
 # convenience wrapper: ollama.ps1 → docker exec
 $ollamaWrapper = Join-Path $env:USERPROFILE 'bin\ollama.ps1'
@@ -96,7 +97,7 @@ $pendingQuery = @"
 import sqlite3, sqlite_vec
 c = sqlite3.connect(r'$Archive\sessions.db')
 c.enable_load_extension(True); sqlite_vec.load(c)
-c.execute('CREATE VIRTUAL TABLE IF NOT EXISTS msg_vec USING vec0(embedding float[768] distance_metric=cosine)')
+c.execute('CREATE VIRTUAL TABLE IF NOT EXISTS msg_vec USING vec0(embedding float[1024] distance_metric=cosine)')
 total = c.execute('SELECT COUNT(*) FROM msg').fetchone()[0]
 try: vec = c.execute('SELECT COUNT(*) FROM msg_vec').fetchone()[0]
 except Exception: vec = 0
@@ -107,8 +108,8 @@ $pending = [int](& $venvPython -c $pendingQuery)
 Write-Host "==> Backfill rows: $pending"
 if ($pending -gt 0) {
     $logFile = Join-Path $Archive 'backfill.log'
-    Write-Host "    Estimate (Docker on Win): ~$([math]::Round($pending / 600, 1)) min (~3-5x slower than native)"
-    Start-Process -FilePath $venvPython -ArgumentList "`"$Archive\embed.py`"" `
+    Write-Host "    Estimate (Docker on Win): ~$([math]::Round($pending / 120, 1)) min (~3-5x slower than native bge-m3)"
+    Start-Process -FilePath $venvPython -ArgumentList "`"$Archive\embed_parallel.py`" 8" `
         -RedirectStandardOutput $logFile -WindowStyle Hidden
 }
 

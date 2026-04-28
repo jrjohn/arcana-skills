@@ -4,11 +4,11 @@
 
 .DESCRIPTION
   Counterpart to install-semantic.sh (macOS native binary path).
-  Sets up Ollama + sqlite-vec + nomic-embed-text on Windows so vsearch.ps1 works.
+  Sets up Ollama + sqlite-vec + bge-m3 on Windows so vsearch.ps1 works.
 
   What this does:
     1. Detects (or downloads) Ollama (native Windows installer or pre-installed)
-    2. Pulls nomic-embed-text model (~274 MB)
+    2. Pulls bge-m3 model (~1.2 GB)
     3. Creates %USERPROFILE%\claude-archive\.venv with sqlite-vec + requests
     4. Copies embed.py + vsearch.py into %USERPROFILE%\claude-archive\
     5. Kicks off backfill in background
@@ -70,11 +70,11 @@ if ($retries -eq 0) { Write-Error "Ollama daemon not reachable. Start it manuall
 
 # 3. pull model
 $models = & ollama list 2>$null
-if ($models -notmatch 'nomic-embed-text') {
-    Write-Host "==> Pulling nomic-embed-text (~274 MB)..."
-    & ollama pull nomic-embed-text
+if ($models -notmatch 'bge-m3') {
+    Write-Host "==> Pulling bge-m3 (~1.2 GB)..."
+    & ollama pull bge-m3
 }
-Write-Host "    model ready: nomic-embed-text"
+Write-Host "    model ready: bge-m3"
 
 # 4. python venv
 $venv = Join-Path $Archive '.venv'
@@ -92,9 +92,10 @@ $svcVer = & $venvPython -c "import sqlite_vec; print(sqlite_vec.__version__)" 2>
 Write-Host "    sqlite-vec: $svcVer"
 
 # 5. copy scripts
-Write-Host "==> Installing embed.py + vsearch.py..."
-Copy-Item -Force (Join-Path $SkillDir 'scripts\embed.py')   (Join-Path $Archive 'embed.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch.py') (Join-Path $Archive 'vsearch.py')
+Write-Host "==> Installing embed.py + embed_parallel.py + vsearch.py..."
+Copy-Item -Force (Join-Path $SkillDir 'scripts\embed.py')          (Join-Path $Archive 'embed.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\embed_parallel.py') (Join-Path $Archive 'embed_parallel.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch.py')        (Join-Path $Archive 'vsearch.py')
 
 # 6. ensure newer build.py (with maybe_embed_new hook)
 Copy-Item -Force (Join-Path $SkillDir 'scripts\build.py') (Join-Path $Archive 'build.py')
@@ -104,7 +105,7 @@ $pendingQuery = @"
 import sqlite3, sqlite_vec
 c = sqlite3.connect(r'$Archive\sessions.db')
 c.enable_load_extension(True); sqlite_vec.load(c)
-c.execute('CREATE VIRTUAL TABLE IF NOT EXISTS msg_vec USING vec0(embedding float[768] distance_metric=cosine)')
+c.execute('CREATE VIRTUAL TABLE IF NOT EXISTS msg_vec USING vec0(embedding float[1024] distance_metric=cosine)')
 total = c.execute('SELECT COUNT(*) FROM msg').fetchone()[0]
 try:
     vec = c.execute('SELECT COUNT(*) FROM msg_vec').fetchone()[0]
@@ -118,10 +119,10 @@ $pending = [int]$pending
 Write-Host "==> Rows to backfill: $pending"
 if ($pending -gt 0) {
     $logFile = Join-Path $Archive 'backfill.log'
-    Write-Host "==> Launching backfill in background"
+    Write-Host "==> Launching parallel backfill in background (8 workers)"
     Write-Host "    Log: $logFile"
-    Write-Host "    Estimate: ~$([math]::Round($pending / 1800, 1)) min on Apple Silicon-equivalent CPU"
-    Start-Process -FilePath $venvPython -ArgumentList "`"$Archive\embed.py`"" `
+    Write-Host "    Estimate: ~$([math]::Round($pending / 420, 1)) min (bge-m3 ~7 emb/sec @ 8 workers)"
+    Start-Process -FilePath $venvPython -ArgumentList "`"$Archive\embed_parallel.py`" 8" `
         -RedirectStandardOutput $logFile -WindowStyle Hidden
 }
 

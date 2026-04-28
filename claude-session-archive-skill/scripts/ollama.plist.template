@@ -28,6 +28,8 @@
     <key>HOME</key><string>/Users/<USERNAME></string>
     <!-- Keep model loaded in RAM for 30 min idle (faster vsearch on warm cache) -->
     <key>OLLAMA_KEEP_ALIVE</key><string>30m</string>
+    <!-- Allow 4 concurrent inference requests (used by embed_parallel.py for backfill) -->
+    <key>OLLAMA_NUM_PARALLEL</key><string>4</string>
   </dict>
 </dict>
 </plist>

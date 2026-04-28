@@ -212,7 +212,7 @@ Adds `vsearch` for concept-level / synonym / cross-language queries. Complements
 ./scripts/install-semantic.sh
 ```
 
-This downloads ~400 MB (Ollama binary + `nomic-embed-text` model), creates a Python venv, installs `embed.py` / `vsearch.py` / `vsearch` CLI, and kicks off backfill. Backfill runs ~30-90 min in background for ~100k rows on Apple Silicon.
+This downloads ~1.3 GB (Ollama binary + `bge-m3` model), creates a Python venv, installs `embed.py` / `embed_parallel.py` / `vsearch.py` / `vsearch` CLI, and kicks off parallel backfill (8 workers). Backfill runs ~2-3 hr in background for ~100k rows on Apple Silicon (Metal-accelerated).
 
 After install:
 ```bash

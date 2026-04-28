@@ -10,10 +10,28 @@ The base skill ships with `csearch` (FTS5 lexical). For **concept-level / synony
 | "上次討論 X 怎麼解的" without remembering keywords | ❌ | ✅ |
 | 中英對照（`防火牆` 找到 `firewall`） | ❌ | ✅ |
 | Concept query (`找權限管理相關決策`) | ❌ | ✅ |
-| Speed | ~10 ms | ~50–150 ms |
+| Speed | ~10 ms | ~150–300 ms (bge-m3) |
 | Privacy | 100% local | 100% local (Ollama) |
 
 `vsearch` complements, doesn't replace `csearch`. Use both.
+
+## Embedding model: `bge-m3` (since v1.3)
+
+| | bge-m3 |
+|---|---|
+| Size | 1.2 GB (568M params) |
+| Dimensions | 1024 |
+| Native context | **8192 tokens** (vs nomic 2048) |
+| Multilingual | SOTA on MIRACL — **strong Chinese / 中文** |
+| Latency | ~140 ms / call (warm, Apple Silicon Metal) |
+| Storage | ~4 KB / row × 100k rows ≈ 400 MB |
+
+**Model history** (in `embed.py` comments):
+- **v1.1** nomic-embed-text (768d, 274 MB) — English-only, weak on Chinese
+- **v1.3.1** nomic-embed-text-v2-moe (768d, 957 MB, 100+ langs) — abandoned: Ollama hard-clamps context to 512 tokens, too short for session messages
+- **v1.3.2** **bge-m3 (1024d, 1.2 GB)** — current. Multilingual SOTA, native 8192 context, strong CJK
+
+To switch model later: edit `EMBED_MODEL` + `EMBED_DIM` in `embed.py`, drop `msg_vec`, re-pull model, re-run `embed_parallel.py`.
 
 ## Architecture
 
@@ -23,12 +41,13 @@ The base skill ships with `csearch` (FTS5 lexical). For **concept-level / synony
        ▼  build.py (ingest text + call embed_missing)
 ~/claude-archive/sessions.db
        ├── msg            FTS5 indexed (csearch)
-       └── msg_vec        vec0 + nomic-embed-text (vsearch)
-                          768-dim, cosine distance
+       └── msg_vec        vec0 + bge-m3 (vsearch)
+                          1024-dim, cosine distance
                                        │
                                        ▼
                           Ollama @ localhost:11434
-                          (nomic-embed-text, 274 MB, runs entirely locally)
+                          (bge-m3, 1.2 GB, runs entirely locally)
+                          OLLAMA_NUM_PARALLEL=4 for parallel backfill
 ```
 
 ## Two installation paths
@@ -37,8 +56,8 @@ Pick one based on what you already have:
 
 | Mode | When to pick | Speed (Apple Silicon) | Cleanup |
 |---|---|---|---|
-| **Native binary** (`install-semantic.sh`) | Default; no Docker on machine | **~20ms / embed call** (Metal accelerated) | rm -rf ~/claude-archive/ollama-bin |
-| **Docker container** (`install-semantic-docker.sh`) | You already use Docker Desktop / want clean container | ~80ms / embed call (no Metal in Docker on Mac) | docker rm -f + docker volume rm |
+| **Native binary** (`install-semantic.sh`) | Default; no Docker on machine | **~140ms / embed call** (Metal accelerated) | rm -rf ~/claude-archive/ollama-bin |
+| **Docker container** (`install-semantic-docker.sh`) | You already use Docker Desktop / want clean container | ~500ms / embed call (no Metal in Docker on Mac) | docker rm -f + docker volume rm |
 
 For Linux + NVIDIA GPU: Docker mode supports `--gpus=all` (set `OLLAMA_GPU=all` before running the script).
 
@@ -52,7 +71,7 @@ What it does:
 1. Downloads ollama binary tarball from GitHub releases (~125 MB)
 2. Extracts to `~/claude-archive/ollama-bin/`, symlinks to `~/bin/ollama`
 3. Registers `ollama serve` with launchd → auto-start at login, restart on crash
-4. Pulls `nomic-embed-text` model (~274 MB)
+4. Pulls `bge-m3` model (~1.2 GB)
 5. Creates `~/claude-archive/.venv` with `sqlite-vec` + `requests`
 6. Copies `embed.py`, `vsearch.py`, `vsearch` wrapper
 7. Kicks off backfill in background
@@ -67,7 +86,7 @@ What it does:
 1. Pulls `ollama/ollama` image (~1 GB)
 2. Runs container `claude-archive-ollama` with `--restart unless-stopped`
 3. Publishes port 11434 to localhost (same API endpoint, transparent to embed.py / vsearch.py)
-4. Pulls `nomic-embed-text` inside container
+4. Pulls `bge-m3` inside container
 5. Same venv + scripts setup as native path
 6. Same backfill kick-off
 
@@ -114,36 +133,54 @@ Use both:
 ```sql
 -- Created automatically by ensure_vec_schema()
 CREATE VIRTUAL TABLE msg_vec USING vec0(
-    embedding float[768] distance_metric=cosine
+    embedding float[1024] distance_metric=cosine
 );
 -- rowid links to msg.rowid (1:1, sparse — only embedded rows present)
 ```
 
 ## Disk impact
 
-- `nomic-embed-text` model: 274 MB on disk (~/.ollama/models/)
-- `msg_vec` table: ~3 KB / row (768 floats × 4 bytes + overhead)
-  - 96k rows ≈ 290 MB
-  - 1M rows ≈ 3 GB
+- `bge-m3` model: 1.2 GB on disk (~/.ollama/models/)
+- `msg_vec` table: ~4 KB / row (1024 floats × 4 bytes + overhead)
+  - 100k rows ≈ 400 MB
+  - 1M rows ≈ 4 GB
 
-Compared to `msg` + FTS5 currently ~186 MB, the semantic stack roughly doubles DB size at current row count.
+Compared to `msg` + FTS5 around 200 MB, the semantic stack adds another ~400 MB at current row count.
 
 ## Memory while running
 
-- Ollama daemon: ~500 MB resident (model loaded)
+- Ollama daemon: ~1.5 GB resident (bge-m3 loaded into Metal)
 - Python query: ~100 MB during search (mmap dominates)
-- Together: < 1 GB. On a 16GB+ Mac, irrelevant.
+- Together: < 2 GB. On a 16GB+ Mac, irrelevant.
 
 ## Performance characteristics
 
 | Component | Cold | Hot |
 |---|---|---|
-| Ollama embed (single) | 50-100 ms | 14-25 ms |
-| sqlite-vec KNN over 96k rows | ~30-80 ms (brute force) | same |
+| Ollama bge-m3 embed (single) | 500-1500 ms | **140 ms** (Metal) |
+| sqlite-vec KNN over 100k rows | ~30-80 ms (brute force) | same |
 | msg JOIN | < 5 ms | < 5 ms |
-| **Total `vsearch` end-to-end** | ~150 ms | **~50-150 ms** |
+| **Total `vsearch` end-to-end** | ~700 ms | **~150-300 ms** |
 
-Ollama keeps the model resident after first use for ~5 min idle (configurable). For frequent use, single calls stay in the warm path.
+Ollama keeps the model resident for `OLLAMA_KEEP_ALIVE=30m` after last use. For frequent vsearch, calls stay warm.
+
+## Parallel backfill (`embed_parallel.py`)
+
+For initial backfill of 100k+ rows, sequential `embed.py` is slow (~7 emb/s single-thread = 4 hr). Use the parallel runner:
+
+```bash
+~/claude-archive/.venv/bin/python ~/claude-archive/embed_parallel.py 8
+```
+
+- Spawns 8 ThreadPoolExecutor workers, all calling Ollama HTTP concurrently
+- Ollama batches them via `OLLAMA_NUM_PARALLEL=4` (set in launchd plist)
+- Effective rate: ~7-10 emb/s (4-5x faster than sequential)
+- Progress every 500 rows printed to stdout
+- Resumable: only processes msg rows missing from msg_vec
+
+`install-semantic.sh` / `.ps1` automatically runs `embed_parallel.py 8` for initial backfill.
+
+After backfill, `build.py`'s `maybe_embed_new()` hook handles incremental new rows (small batches, sequential is fine).
 
 ## Scaling beyond 1M rows
 
@@ -185,16 +222,20 @@ rm -f ~/bin/vsearch ~/claude-archive/embed.py ~/claude-archive/vsearch.py
 
 `csearch` and the rest of the base skill keep working unchanged. `build.py`'s `maybe_embed_new()` is a silent no-op if `embed.py` / Ollama is missing, so removal is safe.
 
-## Why nomic-embed-text?
+## Why bge-m3?
 
-- 768-dim, fast (~20 ms / call on Apple Silicon)
-- Multilingual (中英 mix works)
-- 274 MB model — small footprint
-- Free, runs locally
+- **1024-dim** — richer semantic space than 768-dim
+- **Native 8192-token context** — full session messages fit, no truncation surprises
+- **Multilingual SOTA** on MIRACL benchmark — strong Chinese / 中文 / Japanese / multilingual
+- **1.2 GB** model on disk — bigger than nomic but still small enough for local inference
+- Free, 100% local
 
 Alternatives if you want to swap:
-- `mxbai-embed-large` — 1024-dim, slightly better quality, ~700 MB, ~1.5x slower
-- `bge-m3` — strong multilingual, larger
+- `nomic-embed-text` — 768-dim, 274 MB, faster (~20 ms) but English-only, weak on Chinese
+- `mxbai-embed-large` — 1024-dim, English-only, ~700 MB
 - OpenAI `text-embedding-3-small` — but DB content goes to OpenAI = privacy violation
 
-Edit `EMBED_MODEL` and `EMBED_DIM` in `embed.py` to change. After change, drop `msg_vec` and re-backfill (different model = different vector space, can't mix).
+Edit `EMBED_MODEL` and `EMBED_DIM` in `embed.py` to change. After change:
+1. Drop `msg_vec` table (different model = different vector space, can't mix)
+2. Re-pull new model: `ollama pull <model>`
+3. Re-run `embed_parallel.py 8` to backfill
