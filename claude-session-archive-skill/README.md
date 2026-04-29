@@ -28,7 +28,17 @@ vsearch 'wireless AP keeps dropping' network  # vague description still works
 
 Inside Claude:
 > User: "上週那個 FortiGate shaper 怎麼設的？"
-> Claude: *(silently runs `csearch 'shaper' network`, reads the actual session, reports back)*
+> Claude: *(silently runs `vsearch '上週 FortiGate shaper 設定' network`, reads the actual session, reports back)*
+
+### Preflight order — vsearch first
+
+**Claude defaults to `vsearch` and only falls back to `csearch` for explicit literals.** Reasons:
+
+- vsearch tolerates fuzzy / cross-language phrasing — most user recall queries don't quote the exact original keyword
+- `bge-m3` matches Chinese ↔ English concepts (e.g. `防火牆規則調整` → `firewall policy edit`) without a thesaurus
+- A miss on csearch produces zero hits silently; a miss on vsearch still surfaces nearby semantic neighbours, which is more useful when the user is fishing
+
+Skip vsearch and go straight to csearch only when the query is a precise literal — IP / hostname / file path / FTS5 boolean syntax / known key name. Pin this rule in `~/.claude/CLAUDE.md` (see snippet in `SKILL.md`).
 
 ### `auto_recent.md` — Memory bridge (since v1.4.0)
 
@@ -124,6 +134,10 @@ Adds concept / cross-language / synonym matching on top of `csearch`. Downloads 
 After install, `vsearch` is on PATH (or `vsearch.ps1` on Windows). The `crs vsearch` Rust subcommand also works against the same `msg_vec` table once embeddings exist. See `references/semantic-search.md` for trade-offs.
 
 ## What's new
+
+### v1.6.2 — `vsearch`-first preflight
+
+Default Claude query order flipped: **`vsearch` first, `csearch` only as fallback for explicit literals.** Rationale: most past-session recall queries are paraphrased ("上次怎麼處理 X 的"), not verbatim — semantic match wins. `csearch` stays the right tool for IPs, hostnames, file paths, and FTS5 boolean syntax. README, `SKILL.md` trigger table, `references/semantic-search.md` decision flow, and the installation-guide verification line all updated to match. No behaviour change in the binaries — pure documentation / prompt-engineering update. Pair this with a `~/.claude/CLAUDE.md` snippet pinning the same rule.
 
 ### v1.6.1 — vec0 statically linked
 

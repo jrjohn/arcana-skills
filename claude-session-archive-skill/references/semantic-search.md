@@ -124,9 +124,9 @@ csearch 'broadcast deny'         # only matches rows literally containing both w
 vsearch 'broadcast deny'         # also matches rows about "NetBIOS noise" / "local-in policy" / "log flood"
 ```
 
-Use both:
-1. `csearch` first (free, instant, no Ollama dependency)
-2. `vsearch` as fallback when keywords don't match
+Use both, default order:
+1. `vsearch` first — most recall queries are paraphrased and benefit from semantic + cross-language match. ~50-150 ms with a warm Ollama daemon.
+2. `csearch` as fallback — free, instant, but only fires on literal substrings. Go straight to `csearch` when the query *is* the exact literal you remember (IP, hostname, file path, error string, FTS5 boolean syntax). Also use `csearch` when `vsearch` returns nothing useful (rare; usually means the row hasn't been embedded yet).
 
 ## Schema additions
 

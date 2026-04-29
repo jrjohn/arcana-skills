@@ -160,7 +160,7 @@ After install, all should hold:
 - [ ] `launchctl list | grep claude-archive` shows the agent
 - [ ] `sqlite3 ~/claude-archive/sessions.db "SELECT COUNT(*) FROM msg"` returns N > 0
 - [ ] After 15 min, `sqlite3 ~/claude-archive/sessions.db "SELECT MAX(ts) FROM msg"` advances toward "now"
-- [ ] In a new Claude session, ask "上週做什麼?" — Claude should `csearch` first instead of saying "I don't remember"
+- [ ] In a new Claude session, ask "上週做什麼?" — Claude should query the archive (`vsearch` first if semantic stack installed, otherwise `csearch`) instead of saying "I don't remember"
 
 ---
 

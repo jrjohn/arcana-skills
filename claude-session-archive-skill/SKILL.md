@@ -19,7 +19,7 @@ Permanent, local, full-text searchable history of every Claude Code session you'
 
 | Trigger | Action |
 |---|---|
-| User asks you to recall something from a past session ("上週那個 X 怎麼設的？", "we discussed Y last Thursday") | Run `csearch '<keywords>' [project]` first, then summarize from the hit |
+| User asks you to recall something from a past session ("上週那個 X 怎麼設的？", "we discussed Y last Thursday") | Run `vsearch '<natural-language paraphrase>' [project]` first (semantic, default); fall back to `csearch '<exact phrase>' [project]` only when query is a precise literal (IP / hostname / file path / FTS5 syntax) or vsearch returns nothing useful |
 | User invokes `/claude-session-archive-skill` or types `csearch ...` and it errors | Diagnose: archive not installed yet → walk through install. Already installed → check FTS5 syntax. |
 | User on a fresh Mac wants the archive set up | Walk through Steps 1-6 in `references/installation-guide.md` |
 | User reports queries are slow or DB grew large | See `references/tuning.md` |
