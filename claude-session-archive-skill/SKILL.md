@@ -135,6 +135,36 @@ WHERE project LIKE '%network%'
 ORDER BY ts LIMIT 20"
 ```
 
+## Auto-context for Memory (`gen-recent-context.sh` + SessionStart hook)
+
+Bridges session.db with Memory: every time `claude` starts, a hook runs `gen-recent-context.sh` which writes a fresh per-project `auto_recent.md` (loaded into Memory) containing:
+
+1. **Open pending items** — extracted from `<project>/memory/project_pending.md`
+2. **Last 8 unique user prompts in 48h** — what you've been asking
+3. **Last 5 substantive assistant replies in 48h** — what the assistant produced
+
+Every time `build.py` runs (every 15 min via launchd / Task Scheduler), it ALSO refreshes `auto_recent.md` for every known project — so even long-running sessions see fresh context.
+
+**Three layers working together:**
+
+```
+JSONL (raw, auto)           ← Claude Code writes
+   ↓ build.py (15 min)
+session.db (queryable)      ← csearch / vsearch
+   ↓ gen-recent-context.sh
+auto_recent.md (curated)    ← Memory auto-loads at session start
+   +
+project_pending.md          ← Manually curated, also auto-loaded
+   +
+other memory files
+   ↓
+Claude session              ← Has all of the above in context
+```
+
+**Setup**:
+- `install-semantic.sh` automatically copies `gen-recent-context.sh` and registers the SessionStart hook into `~/.claude/settings.json`
+- For manual setup, see `references/installation-guide.md`
+
 ## Critical guidance
 
 **1. Never delete old rows.** The whole point is permanent memory. If disk gets tight, move `~/claude-archive/` to external storage (edit `DB_DIR` in `build.py`), don't `DELETE FROM msg WHERE ts < ...`. Losing history defeats the purpose.
@@ -182,6 +212,14 @@ FTS5 syntax: phrase `'"..."'`, boolean `A AND B / OR / NOT`, prefix `foo*`. Word
 - DB is a historical snapshot — always verify current state (file content, live config) before acting on it
 - DB contains sensitive output (passwords / tokens / IPs) — local only, no sharing
 - Memory and DB split: Memory for curated signal, DB for log-style recall
+
+## Auto-context bridging (gen-recent-context.sh)
+Each session start, a SessionStart hook runs `~/claude-archive/gen-recent-context.sh`
+which writes `<project>/memory/auto_recent.md` with: pending items + last 48h
+user prompts + last 48h substantive assistant replies. This auto-loads via the
+Memory mechanism, so I always have fresh per-project context in my system prompt.
+
+build.py also calls it every 15 min during ingest, refreshing all known projects.
 ```
 
 ## Files in this skill
@@ -199,6 +237,7 @@ claude-session-archive-skill/
 └── scripts/
     ├── build.py                      # ingest script (~/claude-archive/build.py)
     ├── csearch                       # CLI helper (~/bin/csearch)
+    ├── gen-recent-context.sh         # SessionStart hook target — writes auto_recent.md to project memory
     ├── sqliterc.template             # → ~/.sqliterc
     ├── launchd.plist.template        # → ~/Library/LaunchAgents/...
     ├── embed.py                      # OPTIONAL: Ollama embedding helper (cross-platform Python)
@@ -222,3 +261,4 @@ claude-session-archive-skill/
 - 2026-04-27 v1.1.0 optional semantic search: Ollama + sqlite-vec + nomic-embed-text + `vsearch`
 - 2026-04-27 v1.2.0 native Windows support: csearch.ps1 / vsearch.ps1 / install.ps1 / install-semantic.ps1 / install-semantic-docker.ps1 + Scheduled Task instead of launchd
 - 2026-04-28 v1.3.2 model upgrade: nomic-embed-text (768d) → **bge-m3 (1024d)**. Multilingual SOTA on MIRACL, native 8192-token context, strong Chinese. Adds `embed_parallel.py` for 4-5× faster initial backfill via ThreadPoolExecutor + OLLAMA_NUM_PARALLEL=4.
+- 2026-04-29 v1.4.0 **Memory bridge**: `gen-recent-context.sh` + SessionStart hook + build.py refresh. Per-project `auto_recent.md` is auto-generated at every session start (containing pending + last 48h user prompts + assistant responses) and refreshed every 15 min by build.py — so Claude always has fresh per-project context in its Memory at session start. install-semantic.sh auto-registers the SessionStart hook via jq.

@@ -93,10 +93,34 @@ echo "==> installing vsearch CLI..."
 cp "$SKILL_DIR/scripts/vsearch" "$BIN_DIR/vsearch"
 chmod +x "$BIN_DIR/vsearch"
 
-# 7. Sync newer build.py (with maybe_embed_new)
-echo "==> updating build.py (adds maybe_embed_new hook)..."
+# 7. Sync newer build.py (with maybe_embed_new + auto_recent refresh)
+echo "==> updating build.py..."
 cp "$SKILL_DIR/scripts/build.py" "$ARCHIVE_DIR/build.py"
 chmod +x "$ARCHIVE_DIR/build.py"
+
+# 7a. Install gen-recent-context.sh + register SessionStart hook
+echo "==> installing gen-recent-context.sh..."
+cp "$SKILL_DIR/scripts/gen-recent-context.sh" "$ARCHIVE_DIR/gen-recent-context.sh"
+chmod +x "$ARCHIVE_DIR/gen-recent-context.sh"
+
+SETTINGS="$HOME/.claude/settings.json"
+HOOK_CMD="$ARCHIVE_DIR/gen-recent-context.sh 2>/dev/null || true"
+if command -v jq >/dev/null 2>&1; then
+    [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
+    if jq -e --arg cmd "$HOOK_CMD" \
+        '(.hooks.SessionStart // []) | flatten | map(.command? // "") | any(contains("gen-recent-context"))' \
+        "$SETTINGS" >/dev/null 2>&1 ; then
+        echo "    SessionStart hook already registered (skip)"
+    else
+        echo "==> registering SessionStart hook..."
+        jq --arg cmd "$HOOK_CMD" \
+            '.hooks.SessionStart = ((.hooks.SessionStart // []) + [{"hooks":[{"type":"command","command":$cmd,"timeout":30}]}])' \
+            "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
+    fi
+else
+    echo "    (jq not installed; skip auto-registration. Manually add to ~/.claude/settings.json:"
+    echo "      hooks.SessionStart [{\"hooks\":[{\"type\":\"command\",\"command\":\"$HOOK_CMD\"}]}])"
+fi
 
 # 8. Kick off backfill
 TOTAL_ROWS=$(sqlite3 "$ARCHIVE_DIR/sessions.db" "SELECT COUNT(*) FROM msg" 2>/dev/null || echo 0)

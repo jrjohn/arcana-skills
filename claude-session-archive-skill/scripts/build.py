@@ -159,6 +159,36 @@ def maybe_embed_new(conn):
     embed.embed_missing(conn)
 
 
+def refresh_recent_context():
+    """For every known project (memory dir exists), regenerate auto_recent.md.
+    Keeps long-running sessions seeing fresh context between SessionStart fires."""
+    import subprocess
+    script = HOME / 'claude-archive' / 'gen-recent-context.sh'
+    if not script.exists():
+        return
+    proj_root = HOME / '.claude' / 'projects'
+    if not proj_root.is_dir():
+        return
+    refreshed = 0
+    for proj_dir in proj_root.glob('-*'):
+        if (proj_dir / 'memory').is_dir():
+            try:
+                subprocess.run(
+                    [str(script)],
+                    env={**os.environ, 'CLAUDE_PROJECT_SLUG': proj_dir.name},
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                    check=False,
+                )
+                refreshed += 1
+            except Exception:
+                pass
+    if refreshed:
+        print(f"refreshed auto_recent.md for {refreshed} project(s)")
+
+
 def main():
     DB_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
@@ -196,6 +226,9 @@ def main():
     maybe_embed_new(conn)
 
     conn.close()
+
+    # Refresh auto_recent.md for all known projects (so long-running sessions get fresh context)
+    refresh_recent_context()
 
 
 if __name__ == '__main__':

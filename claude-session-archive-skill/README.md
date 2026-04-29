@@ -41,8 +41,9 @@ claude-session-archive-skill/
 │   ├── faq.md                        # common errors / questions
 │   └── semantic-search.md            # OPTIONAL: Ollama + sqlite-vec for vsearch
 └── scripts/
-    ├── build.py                      # JSONL → SQLite ingest (with embed hook)
+    ├── build.py                      # JSONL → SQLite ingest (with embed + auto_recent refresh hooks)
     ├── csearch                       # CLI lexical search
+    ├── gen-recent-context.sh         # SessionStart hook — generates per-project auto_recent.md
     ├── sqliterc.template             # → ~/.sqliterc (SQLite tuning)
     ├── launchd.plist.template        # → ~/Library/LaunchAgents/com.USER.claude-archive.plist
     ├── embed.py                      # OPTIONAL: Ollama embedding helper (cross-platform)

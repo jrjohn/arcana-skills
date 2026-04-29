@@ -66,6 +66,13 @@ if ($userPath -notlike "*$BinDir*") {
 Write-Host "==> Running first ingest (may take 30-60 sec on fresh DB)..."
 & python (Join-Path $Archive 'build.py')
 
+# 5a. SessionStart hook for auto_recent.md (Windows uses gen-recent-context.ps1 — TODO: port; for now just install bash version usable from WSL)
+$ctxScript = Join-Path $SkillDir 'scripts\gen-recent-context.sh'
+if (Test-Path $ctxScript) {
+    Copy-Item -Force $ctxScript (Join-Path $Archive 'gen-recent-context.sh')
+    Write-Host "==> gen-recent-context.sh installed (Windows users: requires WSL or Git Bash to execute)"
+}
+
 # 6. register scheduled task — runs every 15 min
 Write-Host "==> Registering Scheduled Task 'ClaudeArchiveIngest' (every 15 min)..."
 $taskName = 'ClaudeArchiveIngest'
