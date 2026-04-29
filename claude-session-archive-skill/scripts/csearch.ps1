@@ -14,7 +14,7 @@
 .NOTES
   Requires:
     - sqlite3.exe in PATH (e.g. winget install sqlite.sqlite)
-    - ~/claude-archive/sessions.db populated by build.py
+    - ~/claude-archive/sessions.db populated by crs build
 #>
 param(
     [Parameter(Mandatory=$true,  Position=0)][string]$Query,
@@ -23,7 +23,7 @@ param(
 
 $db = Join-Path $env:USERPROFILE "claude-archive\sessions.db"
 if (-not (Test-Path $db)) {
-    Write-Error "DB not found: $db. Run build.py first to ingest JSONLs."
+    Write-Error "DB not found: $db. Run crs build first to ingest JSONLs."
     exit 1
 }
 

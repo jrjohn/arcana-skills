@@ -1,7 +1,7 @@
 #!/bin/bash
 # gen-recent-context.sh — Auto-generate per-project recent context for Memory.
 #
-# Triggered by SessionStart hook + every-15-min build.py cron. Writes a
+# Triggered by SessionStart hook + every-15-min crs build cron. Writes a
 # single section: vsearch ranking of last-48h msgs against the project's
 # pending list. Pending excerpt itself is NOT duplicated — Claude reads
 # project_pending.md directly via MEMORY.md index when it needs that.
@@ -15,7 +15,7 @@
 # Writes ~/.claude/projects/<slug>/memory/auto_recent.md
 #
 # Source for the project comes from (priority order):
-#   1. $CLAUDE_PROJECT_SLUG env var      ← used by build.py 15-min cron loop
+#   1. $CLAUDE_PROJECT_SLUG env var      ← used by crs build 15-min cron loop
 #   2. JSON on stdin: {"cwd": "..."}     ← SessionStart hook input
 #   3. $CLAUDE_PROJECT_DIR env var
 #   4. $PWD                              ← fallback when run interactively
@@ -93,11 +93,10 @@ last-update: $NOW
 
 MD
 
-    VENV_PY="$HOME/claude-archive/.venv/bin/python"
-    VS_SCRIPT="$HOME/claude-archive/vsearch-since.py"
+    CRS_BIN="$HOME/claude-archive/crs/target/release/crs"
 
-    if [ ! -x "$VENV_PY" ] || [ ! -f "$VS_SCRIPT" ]; then
-        echo "_(vsearch-since 不可用：venv or script 缺)_"
+    if [ ! -x "$CRS_BIN" ]; then
+        echo "_(vsearch-since 不可用：crs binary 缺)_"
     elif [ ! -f "$PENDING" ]; then
         echo "_(無 pending 檔可當 query seed)_"
     else
@@ -110,9 +109,9 @@ MD
         if [ -z "$QUERY" ]; then
             echo "_(pending list 空，無 query seed)_"
         else
-            # --flag=value form: SLUG starts with '-' which argparse mis-reads
+            # --flag=value form: SLUG starts with '-' which clap could mis-read
             # as another flag in space-separated form.
-            "$VENV_PY" "$VS_SCRIPT" \
+            "$CRS_BIN" vsearch-since \
                 --query="$QUERY" \
                 --project="$SLUG" \
                 --hours=48 \

@@ -14,6 +14,8 @@
 #     → Backfill 100k rows: ~6-12 hours instead of ~2-3 hours
 #   - On Linux with NVIDIA: Docker can passthrough GPU (--gpus=all), faster
 #
+# No Python required — embedding goes through `crs` (Rust) inside the host.
+#
 # Usage:
 #   ./install-semantic-docker.sh
 
@@ -22,6 +24,7 @@ set -e
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARCHIVE_DIR="$HOME/claude-archive"
 BIN_DIR="$HOME/bin"
+CRS_BIN="$ARCHIVE_DIR/crs/target/release/crs"
 CONTAINER_NAME="claude-archive-ollama"
 IMAGE="ollama/ollama:latest"
 
@@ -30,7 +33,13 @@ echo "    skill source: $SKILL_DIR"
 echo "    archive dir:  $ARCHIVE_DIR"
 echo "    container:    $CONTAINER_NAME"
 
-# 0. Sanity: docker available?
+# 0. Sanity: base install done?
+if [ ! -x "$CRS_BIN" ]; then
+    echo "ERROR: crs binary not found at $CRS_BIN"
+    echo "       Run ./install.sh first (base setup)."
+    exit 1
+fi
+
 if ! command -v docker >/dev/null 2>&1; then
     echo "ERROR: docker not found. Install Docker Desktop (macOS) or docker-engine (Linux) first."
     echo "       Or use ./install-semantic.sh for the native binary path."
@@ -41,6 +50,7 @@ if ! docker info >/dev/null 2>&1; then
     exit 1
 fi
 echo "    docker: $(docker --version)"
+echo "    crs:    $CRS_BIN"
 
 mkdir -p "$ARCHIVE_DIR" "$BIN_DIR"
 
@@ -55,7 +65,7 @@ if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
 fi
 
 # 3. Run container with named volume for model persistence + restart policy
-#    Port 11434 published so embed.py / vsearch.py reach it as if local
+#    Port 11434 published so crs reaches it as if local
 echo "==> starting ollama container..."
 GPU_FLAG=""
 if [ -n "${OLLAMA_GPU:-}" ] && [ "$OLLAMA_GPU" = "all" ]; then
@@ -86,27 +96,7 @@ done
 echo "==> pulling bge-m3 (~1.2 GB)..."
 docker exec "$CONTAINER_NAME" ollama pull bge-m3
 
-# 5. Python venv
-if [ ! -d "$ARCHIVE_DIR/.venv" ]; then
-    echo "==> creating venv at $ARCHIVE_DIR/.venv"
-    python3 -m venv "$ARCHIVE_DIR/.venv"
-fi
-echo "==> installing python deps..."
-"$ARCHIVE_DIR/.venv/bin/pip" install --quiet --upgrade pip
-"$ARCHIVE_DIR/.venv/bin/pip" install --quiet sqlite-vec requests
-
-# 6. Copy scripts (same as native variant)
-echo "==> installing embed.py / embed_parallel.py / vsearch.py / vsearch-since.py / vsearch / gen-recent-context.sh ..."
-cp "$SKILL_DIR/scripts/embed.py"              "$ARCHIVE_DIR/embed.py"
-cp "$SKILL_DIR/scripts/embed_parallel.py"     "$ARCHIVE_DIR/embed_parallel.py"
-cp "$SKILL_DIR/scripts/vsearch.py"            "$ARCHIVE_DIR/vsearch.py"
-cp "$SKILL_DIR/scripts/vsearch-since.py"      "$ARCHIVE_DIR/vsearch-since.py"
-cp "$SKILL_DIR/scripts/vsearch"               "$BIN_DIR/vsearch"
-cp "$SKILL_DIR/scripts/build.py"              "$ARCHIVE_DIR/build.py"
-cp "$SKILL_DIR/scripts/gen-recent-context.sh" "$ARCHIVE_DIR/gen-recent-context.sh"
-chmod +x "$ARCHIVE_DIR/embed.py" "$ARCHIVE_DIR/embed_parallel.py" "$ARCHIVE_DIR/vsearch.py" "$ARCHIVE_DIR/vsearch-since.py" "$BIN_DIR/vsearch" "$ARCHIVE_DIR/build.py" "$ARCHIVE_DIR/gen-recent-context.sh"
-
-# 7. Convenience wrapper to talk to docker container
+# 5. Convenience wrapper to talk to docker container
 cat > "$BIN_DIR/ollama" <<EOF
 #!/usr/bin/env bash
 # Pass through to ollama in docker container
@@ -114,7 +104,7 @@ exec docker exec -it $CONTAINER_NAME ollama "\$@"
 EOF
 chmod +x "$BIN_DIR/ollama"
 
-# 8. Kick off backfill
+# 6. Kick off backfill via crs embed-missing
 TOTAL_ROWS=$(sqlite3 "$ARCHIVE_DIR/sessions.db" "SELECT COUNT(*) FROM msg" 2>/dev/null || echo 0)
 EMBED_ROWS=$(sqlite3 "$ARCHIVE_DIR/sessions.db" "SELECT COUNT(*) FROM msg_vec" 2>/dev/null || echo 0)
 PENDING=$((TOTAL_ROWS - EMBED_ROWS))
@@ -123,7 +113,7 @@ echo "==> rows to backfill: $PENDING (of $TOTAL_ROWS total)"
 if [ "$PENDING" -gt 0 ]; then
     echo "==> launching parallel backfill in background (8 workers; Docker on macOS = 3-5x slower than native)"
     echo "    log: $ARCHIVE_DIR/backfill.log"
-    nohup "$ARCHIVE_DIR/.venv/bin/python" "$ARCHIVE_DIR/embed_parallel.py" 8 \
+    nohup "$CRS_BIN" embed-missing --workers 8 \
         > "$ARCHIVE_DIR/backfill.log" 2>&1 &
     echo "    PID: $!"
 fi

@@ -7,7 +7,7 @@ Cross-session full-text + semantic history of every Claude Code conversation, st
 
 Backed by SQLite FTS5 (lexical) and optionally Ollama + sqlite-vec (semantic, **bge-m3** 1024-dim, multilingual SOTA). Millisecond queries. Updates every 15 minutes via launchd / Task Scheduler / cron.
 
-Default deployment is **Rust (`crs`) — single ~5 MB binary, no venv, no Python required at runtime.** Python scripts ship as a fallback for environments without a Rust toolchain.
+Deployment is **Rust (`crs`) — single ~5 MB self-contained binary** that bundles SQLite + FTS5 + sqlite-vec. No Python venv anywhere. Prerequisite: a `cargo` toolchain (rustup) on the install machine — the binary is then portable.
 
 ## What it gives you
 
@@ -48,66 +48,35 @@ A skip-guard avoids regenerating when nothing changed (`pending_mtime ≤ auto_r
 
 ## Quick install
 
-Two-step pattern on every platform: **(1) base** sets up the DB + 15-min ingest, **(2) accelerator** replaces Python with the Rust `crs` binary. Step (2) is recommended but optional — the Python scripts work fine on their own.
+One installer per platform. Builds the Rust `crs` binary, wires up the 15-min ingest schedule, registers the SessionStart hook, runs the first ingest. Semantic search (Ollama + bge-m3) is a separate optional step.
 
-### macOS
+Prerequisite (all platforms): **Rust toolchain** — `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`.
 
-```bash
-cd scripts
-
-# 1. Base — DB + launchd + Python helpers
-mkdir -p ~/claude-archive ~/bin
-cp build.py ~/claude-archive/build.py     && chmod +x ~/claude-archive/build.py
-cp csearch  ~/bin/csearch                 && chmod +x ~/bin/csearch
-cp sqliterc.template ~/.sqliterc
-echo $PATH | grep -q "$HOME/bin" || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
-USER=$(whoami)
-sed "s/<USERNAME>/$USER/g" launchd.plist.template > ~/Library/LaunchAgents/com.${USER}.claude-archive.plist
-launchctl load ~/Library/LaunchAgents/com.${USER}.claude-archive.plist
-python3 ~/claude-archive/build.py            # first ingest
-
-# 2. Rust accelerator (recommended) — single binary, no venv at runtime
-./install-rust-accel.sh                      # needs rustup; ~2-5 min first build
-```
-
-### Linux
+### macOS / Linux
 
 ```bash
 cd scripts
-
-# 1. Base — DB + cron + Python helpers
-mkdir -p ~/claude-archive ~/bin
-cp build.py ~/claude-archive/build.py     && chmod +x ~/claude-archive/build.py
-cp csearch  ~/bin/csearch                 && chmod +x ~/bin/csearch
-cp sqliterc.template ~/.sqliterc
-echo $PATH | grep -q "$HOME/bin" || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
-( crontab -l 2>/dev/null; echo "*/15 * * * * /usr/bin/python3 $HOME/claude-archive/build.py >/dev/null 2>&1" ) | crontab -
-python3 ~/claude-archive/build.py            # first ingest
-
-# 2. Rust accelerator (recommended)
-./install-rust-accel.sh
+./install.sh
+# Optional semantic search:
+./install-semantic.sh           # native Ollama
+./install-semantic-docker.sh    # Docker variant
 ```
 
-> The Rust installer auto-rewires the launchd plist on macOS. On Linux it builds `crs` and symlinks `~/bin/crs`; you'll need to update your crontab to call `~/bin/crs build` instead of `python3 build.py` (one-line edit).
+`install.sh` does: cargo build crs → mkdirs → copy sqliterc / gen-recent-context.sh → symlink `~/bin/crs` → write launchd plist (macOS) or crontab entry (Linux) pointing to `crs build` → register SessionStart hook (`crs gen-recent`) in `~/.claude/settings.json` → first ingest.
 
 ### Windows (PowerShell)
 
 ```powershell
-# One-time: allow local script execution
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # one-time
 
 cd scripts
-
-# 1. Base — DB + Scheduled Task + csearch.ps1 + SessionStart hook auto-registered
 .\install.ps1
-
-# 2. Rust accelerator (recommended) — needs rustup
-.\install-rust-accel.ps1
+# Optional semantic search:
+.\install-semantic.ps1          # OllamaSetup.exe
+.\install-semantic-docker.ps1   # Docker Desktop variant
 ```
 
-`install.ps1` does mkdirs → copy build.py / csearch.ps1 / sqliterc → register Scheduled Task `ClaudeArchiveIngest` (15 min) → first ingest → add `%USERPROFILE%\bin` to PATH → register SessionStart hook in `%USERPROFILE%\.claude\settings.json`.
-
-`install-rust-accel.ps1` builds `crs.exe`, copies to `%USERPROFILE%\bin\`, and rewires the Scheduled Task + SessionStart hook to use the binary.
+`install.ps1` does: cargo build crs.exe → mkdirs → copy sqliterc / csearch.ps1 / vsearch.ps1 / gen-recent-context.ps1 → register Scheduled Task `ClaudeArchiveIngest` (15 min, runs `crs.exe build`) → register SessionStart hook (`crs.exe gen-recent`) in `%USERPROFILE%\.claude\settings.json` → first ingest.
 
 ### Then (all platforms)
 
@@ -131,9 +100,13 @@ Adds concept / cross-language / synonym matching on top of `csearch`. Downloads 
 .\scripts\install-semantic-docker.ps1   # Docker Desktop variant
 ```
 
-After install, `vsearch` is on PATH (or `vsearch.ps1` on Windows). The `crs vsearch` Rust subcommand also works against the same `msg_vec` table once embeddings exist. See `references/semantic-search.md` for trade-offs.
+After install, `crs vsearch` (or `vsearch.ps1` on Windows) works against the populated `msg_vec` table. See `references/semantic-search.md` for trade-offs.
 
 ## What's new
+
+### v1.7.0 — Rust-only
+
+Dropped Python entirely. `crs` (Rust) is now the **base**, no longer optional acceleration. One installer per platform: `install.sh` (macOS/Linux) / `install.ps1` (Windows) builds cargo and wires up launchd / Scheduled Task / SessionStart hook in one step. Removed `build.py / embed.py / embed_parallel.py / vsearch.py / vsearch-since.py / csearch.py` and the bash `csearch / vsearch` wrappers. `install-semantic.*` no longer creates a Python venv — only installs Ollama + bge-m3 and triggers `crs embed-missing` for backfill. **Prerequisite changed**: now requires `cargo` (rustup) instead of `python3`. Migration on existing installs: re-run the new `install.sh` — it auto-rewires the launchd plist + SessionStart hook.
 
 ### v1.6.3 — `install-rust-accel.sh` auto-appends `~/bin` to PATH
 
@@ -201,34 +174,27 @@ claude-session-archive-skill/
 │   ├── faq.md                        # common errors / questions
 │   └── semantic-search.md            # OPTIONAL: Ollama + sqlite-vec for vsearch
 └── scripts/
-    │   # Rust (default since v1.6) — single ~5 MB binary, no venv
-    ├── crs/                          # Rust source (~720 LOC: build / embed / vsearch / csearch / gen-recent)
-    ├── install-rust-accel.sh         # macOS / Linux installer (rustup + cargo build)
-    ├── install-rust-accel.ps1        # Windows installer
+    │   # Rust source (the only runtime code)
+    ├── crs/                          # ~720 LOC: build / embed-missing / vsearch / csearch / vsearch-since / gen-recent
     │
-    │   # Python fallback / bootstrap
-    ├── build.py                      # JSONL → SQLite ingest
-    ├── csearch                       # CLI lexical search (bash)
-    ├── csearch.py                    # core
-    ├── csearch.ps1                   # PowerShell wrapper
-    ├── embed.py                      # Ollama embedding helper (newest-first)
-    ├── embed_parallel.py             # parallel backfill (8 workers, 4-5× faster)
-    ├── vsearch                       # CLI semantic search (bash)
-    ├── vsearch.py                    # core
-    ├── vsearch.ps1                   # PowerShell wrapper
-    ├── vsearch-since.py              # time-bounded semantic search
-    ├── gen-recent-context.sh         # SessionStart hook (bash)
-    ├── gen-recent-context.ps1        # SessionStart hook (PowerShell)
+    │   # Installers — base (compiles crs + wires schedule + first ingest)
+    ├── install.sh                    # macOS / Linux
+    ├── install.ps1                   # Windows
     │
-    │   # Templates / installers
-    ├── sqliterc.template             # → ~/.sqliterc (SQLite tuning)
-    ├── launchd.plist.template        # macOS: → ~/Library/LaunchAgents/com.USER.claude-archive.plist
-    ├── ollama.plist.template         # macOS optional: Ollama auto-start
-    ├── install.ps1                   # Windows base installer
-    ├── install-semantic.sh           # macOS / Linux: native Ollama + vsearch
+    │   # Installers — optional semantic stack (Ollama + bge-m3, no Python)
+    ├── install-semantic.sh           # macOS / Linux: native Ollama
     ├── install-semantic-docker.sh    # macOS / Linux: Docker variant
-    ├── install-semantic.ps1          # Windows: native Ollama (OllamaSetup.exe)
-    └── install-semantic-docker.ps1   # Windows: Docker Desktop variant
+    ├── install-semantic.ps1          # Windows: OllamaSetup.exe
+    ├── install-semantic-docker.ps1   # Windows: Docker Desktop variant
+    │
+    │   # Hooks / wrappers / templates
+    ├── gen-recent-context.sh         # SessionStart hook (bash) — calls crs vsearch-since
+    ├── gen-recent-context.ps1        # SessionStart hook (PowerShell)
+    ├── csearch.ps1                   # Windows PowerShell csearch wrapper (sqlite3.exe)
+    ├── vsearch.ps1                   # Windows PowerShell vsearch wrapper (calls crs.exe)
+    ├── sqliterc.template             # → ~/.sqliterc (SQLite tuning)
+    ├── launchd.plist.template        # macOS: → ~/Library/LaunchAgents/com.USER.claude-archive.plist (runs crs build)
+    └── ollama.plist.template         # macOS optional: Ollama auto-start
 ```
 
 ## Privacy

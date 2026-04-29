@@ -12,6 +12,8 @@
     - Docker Desktop on Windows uses WSL2 backend → slightly more memory overhead
     - No GPU passthrough unless WSL2-CUDA configured (~3-5x slower vs native)
 
+  No Python required — embedding goes through crs.exe (Rust) on the host.
+
 .NOTES
   Set OLLAMA_GPU=all environment variable before running to enable GPU
   passthrough (Linux + NVIDIA only; on Windows requires WSL2 CUDA setup).
@@ -20,8 +22,8 @@
 param()
 
 $ErrorActionPreference = 'Stop'
-$SkillDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$Archive  = Join-Path $env:USERPROFILE 'claude-archive'
+$Archive = Join-Path $env:USERPROFILE 'claude-archive'
+$Crs     = Join-Path $Archive 'crs\target\release\crs.exe'
 $Container = 'claude-archive-ollama'
 $Image     = 'ollama/ollama:latest'
 
@@ -34,6 +36,9 @@ try { & docker info > $null } catch { Write-Error "Docker daemon not running." }
 
 if (-not (Test-Path $Archive)) {
     Write-Error "Run install.ps1 first — base setup not detected at $Archive"
+}
+if (-not (Test-Path $Crs)) {
+    Write-Error "crs.exe not found at $Crs. Run install.ps1 first."
 }
 
 Write-Host "==> Pulling $Image (~1 GB)..."
@@ -71,47 +76,24 @@ Write-Host "    daemon ready"
 Write-Host "==> Pulling bge-m3..."
 & docker exec $Container ollama pull bge-m3
 
-# Python venv + scripts (same as native variant)
-$venv = Join-Path $Archive '.venv'
-if (-not (Test-Path "$venv\Scripts\python.exe")) {
-    & python -m venv $venv
-}
-$venvPython = Join-Path $venv 'Scripts\python.exe'
-$venvPip    = Join-Path $venv 'Scripts\pip.exe'
-& $venvPip install --quiet --upgrade pip
-& $venvPip install --quiet sqlite-vec requests
-
-Copy-Item -Force (Join-Path $SkillDir 'scripts\embed.py')               (Join-Path $Archive 'embed.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\embed_parallel.py')      (Join-Path $Archive 'embed_parallel.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch.py')             (Join-Path $Archive 'vsearch.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch-since.py')       (Join-Path $Archive 'vsearch-since.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\build.py')               (Join-Path $Archive 'build.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\gen-recent-context.ps1') (Join-Path $Archive 'gen-recent-context.ps1')
-
-# convenience wrapper: ollama.ps1 → docker exec
+# Convenience wrapper: ollama.ps1 → docker exec
 $ollamaWrapper = Join-Path $env:USERPROFILE 'bin\ollama.ps1'
 @"
 & docker exec -i $Container ollama @args
 "@ | Set-Content -Path $ollamaWrapper -Encoding UTF8
 
-# Backfill
-$pendingQuery = @"
-import sqlite3, sqlite_vec
-c = sqlite3.connect(r'$Archive\sessions.db')
-c.enable_load_extension(True); sqlite_vec.load(c)
-c.execute('CREATE VIRTUAL TABLE IF NOT EXISTS msg_vec USING vec0(embedding float[1024] distance_metric=cosine)')
-total = c.execute('SELECT COUNT(*) FROM msg').fetchone()[0]
-try: vec = c.execute('SELECT COUNT(*) FROM msg_vec').fetchone()[0]
-except Exception: vec = 0
-print(total - vec)
-"@
-$pending = [int](& $venvPython -c $pendingQuery)
+# Backfill via crs.exe embed-missing
+$db = Join-Path $Archive 'sessions.db'
+$total = [int](& sqlite3 $db 'SELECT COUNT(*) FROM msg' 2>$null)
+$vec   = 0
+try { $vec = [int](& sqlite3 $db 'SELECT COUNT(*) FROM msg_vec' 2>$null) } catch {}
+$pending = $total - $vec
 
 Write-Host "==> Backfill rows: $pending"
 if ($pending -gt 0) {
     $logFile = Join-Path $Archive 'backfill.log'
     Write-Host "    Estimate (Docker on Win): ~$([math]::Round($pending / 120, 1)) min (~3-5x slower than native bge-m3)"
-    Start-Process -FilePath $venvPython -ArgumentList "`"$Archive\embed_parallel.py`" 8" `
+    Start-Process -FilePath $Crs -ArgumentList 'embed-missing','--workers','8' `
         -RedirectStandardOutput $logFile -WindowStyle Hidden
 }
 

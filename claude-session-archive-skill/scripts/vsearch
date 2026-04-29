@@ -1,8 +1,0 @@
-#!/bin/bash
-# vsearch <query> [project-suffix]
-#   Semantic search over ~/claude-archive/sessions.db using Ollama + sqlite-vec.
-#   Companion to csearch (FTS5 lexical).
-#
-# Requires: ~/claude-archive/.venv/bin/python with sqlite-vec + requests installed,
-#           Ollama daemon running with bge-m3 model pulled.
-exec "$HOME/claude-archive/.venv/bin/python" "$HOME/claude-archive/vsearch.py" "$@"

@@ -1,7 +1,7 @@
 ---
 name: claude-session-archive-skill
 description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into a local SQLite FTS5 database (~/claude-archive/sessions.db) every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. Two query modes: `csearch` (FTS5 lexical, exact phrase / boolean / prefix) and optionally `vsearch` (semantic via Ollama + sqlite-vec + bge-m3 — multilingual SOTA, concept queries, synonym / cross-language matching, strong Chinese). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec semantic stack, (d) tune SQLite performance, or (e) troubleshoot FTS5 syntax / ingest issues.
-version: 1.6.1
+version: 1.7.0
 allowed-tools:
   - Read
   - Write
@@ -30,10 +30,10 @@ Permanent, local, full-text searchable history of every Claude Code session you'
 ```
 ~/.claude/projects/*/*.jsonl    ← Claude Code writes session JSONL (automatic)
             │
-            ▼  build.py (idempotent incremental ingest)
-~/claude-archive/sessions.db    ← SQLite + FTS5 virtual table
+            ▼  crs build (idempotent incremental ingest, Rust binary)
+~/claude-archive/sessions.db    ← SQLite + FTS5 + sqlite-vec (all bundled in crs)
             │  (launchd every 15 min)
-            ├── ~/bin/csearch                  CLI helper
+            ├── ~/bin/crs                      single binary: build / csearch / vsearch / vsearch-since / gen-recent / embed-missing
             ├── sqlite3 <db> "SELECT ..."      raw SQL
             ├── ~/.sqliterc                    cache=512MB / mmap=512MB tuning
             └── ~/.claude/CLAUDE.md            instructions so any new Claude
@@ -51,22 +51,17 @@ ingest_state(file_path, mtime, lines)                        -- incremental trac
 
 Detailed instructions in `references/installation-guide.md`.
 
+Prerequisite: **Rust toolchain** (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`). The installer compiles a single `crs` binary (~5 MB, bundles SQLite + FTS5 + sqlite-vec). No Python venv anywhere.
+
 ### macOS / Linux (bash)
 
 ```bash
 cd scripts
-mkdir -p ~/claude-archive ~/bin
-cp build.py ~/claude-archive/ ; chmod +x ~/claude-archive/build.py
-cp csearch ~/bin/ ; chmod +x ~/bin/csearch
-cp sqliterc.template ~/.sqliterc
-USER=$(whoami)
-sed "s/<USERNAME>/$USER/g" launchd.plist.template > ~/Library/LaunchAgents/com.${USER}.claude-archive.plist
-launchctl load ~/Library/LaunchAgents/com.${USER}.claude-archive.plist
-python3 ~/claude-archive/build.py
+./install.sh                  # build crs + launchd (mac) / cron (linux) + sqliterc + first ingest
 # (Optional) semantic search:
-./install-semantic.sh        # native Ollama
+./install-semantic.sh         # native Ollama + bge-m3 model + backfill via crs embed-missing
 # or
-./install-semantic-docker.sh # Docker container
+./install-semantic-docker.sh  # Ollama in Docker Desktop / docker-engine
 ```
 
 ### Windows (PowerShell)
@@ -76,8 +71,8 @@ python3 ~/claude-archive/build.py
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 # Then from inside scripts/:
-.\install.ps1                # base: build.py + csearch.ps1 + Scheduled Task
-.\install-semantic.ps1       # OPTIONAL: native Ollama + vsearch.ps1
+.\install.ps1                  # build crs.exe + Scheduled Task + sqliterc + first ingest
+.\install-semantic.ps1         # OPTIONAL: native Ollama (OllamaSetup.exe) + bge-m3
 # or
 .\install-semantic-docker.ps1  # OPTIONAL: Ollama in Docker Desktop
 ```
@@ -146,15 +141,15 @@ Bridges session.db with Memory: every time `claude` starts, a hook runs `gen-rec
 - override with `FORCE_REGEN=1 ~/claude-archive/gen-recent-context.sh`
 - log at `~/claude-archive/gen-recent-context.log` records `[OK] / [SKIP] / [ERROR]` per run
 
-Every time `build.py` runs (every 15 min via launchd / Task Scheduler), it ALSO calls the regen script for every known project — so even long-running sessions see fresh context, but the skip guard prevents wasted CPU on idle projects.
+Every time `crs build` runs (every 15 min via launchd / Task Scheduler), it ALSO calls `crs gen-recent` for every known project — so even long-running sessions see fresh context, but the skip guard prevents wasted CPU on idle projects.
 
 **Three layers working together:**
 
 ```
 JSONL (raw, auto)           ← Claude Code writes
-   ↓ build.py (15 min)
+   ↓ crs build (15 min)
 session.db (queryable)      ← csearch / vsearch
-   ↓ gen-recent-context.sh
+   ↓ crs gen-recent
 auto_recent.md (curated)    ← Memory auto-loads at session start
    +
 project_pending.md          ← Manually curated, also auto-loaded
@@ -164,13 +159,11 @@ other memory files
 Claude session              ← Has all of the above in context
 ```
 
-**Setup**:
-- `install-semantic.sh` automatically copies `gen-recent-context.sh` and registers the SessionStart hook into `~/.claude/settings.json`
-- For manual setup, see `references/installation-guide.md`
+**Setup**: `install.sh` (base) registers the SessionStart hook into `~/.claude/settings.json` automatically. The hook command is `crs gen-recent`.
 
 ## Critical guidance
 
-**1. Never delete old rows.** The whole point is permanent memory. If disk gets tight, move `~/claude-archive/` to external storage (edit `DB_DIR` in `build.py`), don't `DELETE FROM msg WHERE ts < ...`. Losing history defeats the purpose.
+**1. Never delete old rows.** The whole point is permanent memory. If disk gets tight, move `~/claude-archive/` to external storage (rebuild `crs` against the new path), don't `DELETE FROM msg WHERE ts < ...`. Losing history defeats the purpose.
 
 **2. FTS5 hyphen / colon trap.** FTS5 treats `-`, `:`, `.` as boolean / column operators. Anything containing them must be quoted as a phrase:
 ```bash
@@ -182,7 +175,7 @@ csearch 'local-in-deny-broadcast' network      # ✗ error: "no such column: in"
 
 **4. Memory and DB have different roles.** Memory = curated signal (identity, traps, invariants — small). DB = verbatim log (any-time-any-detail recall — large). Don't write log facts to Memory; don't curate the DB.
 
-**5. Ingest is incremental + idempotent.** `build.py` uses (file path, mtime) tracking — re-running is safe and only re-reads changed JSONLs. New session content lands in DB at next 15-min launchd tick (or run manually for instant indexing).
+**5. Ingest is incremental + idempotent.** `crs build` uses (file path, mtime) tracking — re-running is safe and only re-reads changed JSONLs. New session content lands in DB at next 15-min launchd tick (or run `crs build` manually for instant indexing).
 
 ## Snippet for `~/.claude/CLAUDE.md`
 
@@ -192,8 +185,9 @@ Paste this near the top so every Claude session knows about the archive:
 # Cross-session history (use SQLite archive — don't ask the user repeatedly)
 
 All my Claude Code session JSONLs are ingested into ~/claude-archive/sessions.db
-(SQLite FTS5, every 15 min via launchd). It contains verbatim user / assistant /
-tool_use input / tool_result output across all projects, all sessions.
+(SQLite FTS5 + sqlite-vec, every 15 min via the `crs` Rust binary on launchd).
+It contains verbatim user / assistant / tool_use input / tool_result output
+across all projects, all sessions.
 
 ## Schema
 msg(session_id, project, seq, ts, role, tool_name, content)
@@ -206,7 +200,7 @@ msg_fts = virtual FTS5 over msg.content (tokenize=unicode61)
 - Building project mental model → past tool calls beat memory (more complete) and git log (more immediate)
 
 ## How to query
-- CLI: `csearch <fts-query> [project-suffix]`
+- CLI: `csearch <fts-query> [project-suffix]` (= `crs csearch`) or `vsearch '<concept>' [project]` (= `crs vsearch`)
 - SQL: `sqlite3 ~/claude-archive/sessions.db "SELECT ... WHERE rowid IN (SELECT rowid FROM msg_fts WHERE content MATCH 'xxx') LIMIT 20"`
 
 FTS5 syntax: phrase `'"..."'`, boolean `A AND B / OR / NOT`, prefix `foo*`. Words with `- / : / .` MUST be phrase-quoted.
@@ -216,13 +210,13 @@ FTS5 syntax: phrase `'"..."'`, boolean `A AND B / OR / NOT`, prefix `foo*`. Word
 - DB contains sensitive output (passwords / tokens / IPs) — local only, no sharing
 - Memory and DB split: Memory for curated signal, DB for log-style recall
 
-## Auto-context bridging (gen-recent-context.sh)
-Each session start, a SessionStart hook runs `~/claude-archive/gen-recent-context.sh`
-which writes `<project>/memory/auto_recent.md` with: pending items + last 48h
-user prompts + last 48h substantive assistant replies. This auto-loads via the
-Memory mechanism, so I always have fresh per-project context in my system prompt.
+## Auto-context bridging (crs gen-recent)
+Each session start, a SessionStart hook runs `crs gen-recent` which writes
+`<project>/memory/auto_recent.md` with: pending items + last 48h user prompts +
+last 48h substantive assistant replies. This auto-loads via the Memory
+mechanism, so I always have fresh per-project context in my system prompt.
 
-build.py also calls it every 15 min during ingest, refreshing all known projects.
+`crs build` also runs it every 15 min during ingest, refreshing all known projects.
 ```
 
 ## Files in this skill
@@ -238,28 +232,25 @@ claude-session-archive-skill/
 │   ├── faq.md                        # common questions / troubleshooting
 │   └── semantic-search.md            # OPTIONAL: Ollama + sqlite-vec for vsearch
 └── scripts/
-    ├── build.py                      # ingest script (~/claude-archive/build.py)
-    ├── csearch                       # CLI helper (~/bin/csearch)
-    ├── gen-recent-context.sh         # SessionStart hook target — writes auto_recent.md to project memory
+    ├── crs/                          # Rust source (~720 LOC: build / embed / vsearch / csearch / gen-recent / vsearch-since)
+    ├── install.sh                    # macOS/Linux base installer (cargo build + launchd/cron + sqliterc + first ingest + SessionStart hook)
+    ├── install.ps1                   # Windows base installer (cargo build + Scheduled Task + sqliterc + SessionStart hook)
+    ├── csearch.ps1                   # Windows PowerShell csearch wrapper (sqlite3.exe)
+    ├── vsearch.ps1                   # Windows PowerShell vsearch wrapper (calls crs.exe vsearch)
+    ├── gen-recent-context.sh         # legacy hook target — calls crs vsearch-since (kept for stable hook command path)
+    ├── gen-recent-context.ps1        # Windows port of the same
     ├── sqliterc.template             # → ~/.sqliterc
-    ├── launchd.plist.template        # → ~/Library/LaunchAgents/...
-    ├── embed.py                      # OPTIONAL: Ollama embedding helper (cross-platform Python, newest-first)
-    ├── embed_parallel.py             # OPTIONAL: parallel backfill runner (8 workers, 4-5x faster, newest-first)
-    ├── vsearch.py                    # OPTIONAL: semantic search Python core (cross-platform)
-    ├── vsearch-since.py              # OPTIONAL: time-bounded semantic search (used by gen-recent-context.sh)
-    ├── vsearch                       # OPTIONAL: bash wrapper (~/bin/vsearch)
-    ├── vsearch.ps1                   # OPTIONAL Windows: PowerShell wrapper
-    ├── csearch.ps1                   # Windows: PowerShell csearch wrapper
-    ├── install.ps1                   # Windows: base installer (mkdir + scheduled task + sqliterc)
-    ├── install-semantic.ps1          # Windows OPTIONAL: native Ollama + vsearch
-    ├── install-semantic-docker.ps1   # Windows OPTIONAL: Docker Ollama variant
-    ├── install-semantic.sh           # macOS/Linux OPTIONAL: native Ollama installer
-    ├── install-semantic-docker.sh    # macOS/Linux OPTIONAL: Docker Ollama installer
-    └── ollama.plist.template         # macOS OPTIONAL: launchd auto-start template
+    ├── launchd.plist.template        # → ~/Library/LaunchAgents/com.<USER>.claude-archive.plist (runs crs build)
+    ├── ollama.plist.template         # macOS OPTIONAL: launchd auto-start template
+    ├── install-semantic.sh           # macOS/Linux OPTIONAL: native Ollama + bge-m3 + crs embed-missing backfill
+    ├── install-semantic-docker.sh    # macOS/Linux OPTIONAL: Docker Ollama variant
+    ├── install-semantic.ps1          # Windows OPTIONAL: native Ollama (OllamaSetup.exe) + bge-m3
+    └── install-semantic-docker.ps1   # Windows OPTIONAL: Docker Desktop variant
 ```
 
 ## Author / version
 
+- 2026-04-29 v1.7.0 **Rust-only**: dropped Python entirely. `crs` is now the **base** install, no longer optional acceleration. `install.sh` / `install.ps1` build cargo and wire up launchd / Scheduled Task / SessionStart hook in one shot. Removed `build.py` / `embed.py` / `embed_parallel.py` / `vsearch.py` / `vsearch-since.py` / `csearch.py` and the bash `csearch` / `vsearch` wrappers. `install-semantic.*` no longer creates a Python venv — it just installs Ollama + bge-m3 and calls `crs embed-missing` for backfill. **Prerequisite changed**: now requires `cargo` (rustup) instead of `python3`. Migration on existing installs: rebuild via the new `install.sh`, which auto-rewires launchd plist + SessionStart hook.
 - 2026-04-24 v1.0 initial setup (John Chang)
 - 2026-04-27 v1.0.0 packaged as skill, with SQLite tuning (cache 512MB, mmap, temp_store=MEMORY)
 - 2026-04-27 v1.1.0 optional semantic search: Ollama + sqlite-vec + nomic-embed-text + `vsearch`

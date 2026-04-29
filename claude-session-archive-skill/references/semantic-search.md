@@ -26,19 +26,19 @@ The base skill ships with `csearch` (FTS5 lexical). For **concept-level / synony
 | Latency | ~140 ms / call (warm, Apple Silicon Metal) |
 | Storage | ~4 KB / row × 100k rows ≈ 400 MB |
 
-**Model history** (in `embed.py` comments):
+**Model history**:
 - **v1.1** nomic-embed-text (768d, 274 MB) — English-only, weak on Chinese
 - **v1.3.1** nomic-embed-text-v2-moe (768d, 957 MB, 100+ langs) — abandoned: Ollama hard-clamps context to 512 tokens, too short for session messages
 - **v1.3.2** **bge-m3 (1024d, 1.2 GB)** — current. Multilingual SOTA, native 8192 context, strong CJK
 
-To switch model later: edit `EMBED_MODEL` + `EMBED_DIM` in `embed.py`, drop `msg_vec`, re-pull model, re-run `embed_parallel.py`.
+To switch model later: edit `EMBED_MODEL` + `EMBED_DIM` in `crs/src/main.rs`, `cargo build --release` again, drop `msg_vec`, re-pull model, run `crs embed-missing --workers 8`.
 
 ## Architecture
 
 ```
 ~/.claude/projects/*/*.jsonl
        │
-       ▼  build.py (ingest text + call embed_missing)
+       ▼  crs build (ingest text + call embed-missing)
 ~/claude-archive/sessions.db
        ├── msg            FTS5 indexed (csearch)
        └── msg_vec        vec0 + bge-m3 (vsearch)
@@ -72,9 +72,9 @@ What it does:
 2. Extracts to `~/claude-archive/ollama-bin/`, symlinks to `~/bin/ollama`
 3. Registers `ollama serve` with launchd → auto-start at login, restart on crash
 4. Pulls `bge-m3` model (~1.2 GB)
-5. Creates `~/claude-archive/.venv` with `sqlite-vec` + `requests`
-6. Copies `embed.py`, `vsearch.py`, `vsearch` wrapper
-7. Kicks off backfill in background
+5. Kicks off backfill via `crs embed-missing --workers 8` in background
+
+No Python venv — embedding goes through the same `crs` binary that does the FTS5 ingest.
 
 ### Path B — Docker container (cross-platform, easier cleanup)
 
@@ -85,10 +85,9 @@ What it does:
 What it does:
 1. Pulls `ollama/ollama` image (~1 GB)
 2. Runs container `claude-archive-ollama` with `--restart unless-stopped`
-3. Publishes port 11434 to localhost (same API endpoint, transparent to embed.py / vsearch.py)
+3. Publishes port 11434 to localhost (same API endpoint, transparent to crs)
 4. Pulls `bge-m3` inside container
-5. Same venv + scripts setup as native path
-6. Same backfill kick-off
+5. Backfill kick-off via `crs embed-missing --workers 8`
 
 Caveat for macOS: Docker uses a Linux VM, no Metal GPU passthrough → embedding ~3-5x slower than native. Backfill of 100k rows takes ~3-5 hours instead of ~1 hour. Functionally identical, just slower for the one-time backfill. Steady-state incremental embed (a few new rows per 15-min ingest tick) is unaffected.
 
@@ -98,7 +97,7 @@ If you want to do steps yourself, see the source of `install-semantic.sh` — th
 
 ## Ongoing operation
 
-- `build.py` calls `maybe_embed_new()` after ingest. If Ollama is reachable + `embed.py` is importable, it embeds new rows; otherwise silent no-op.
+- `crs build` embeds new rows after ingest (built-in step, controlled by `--no-embed` to disable). If Ollama is reachable, it embeds new rows; otherwise silent no-op.
 - Each new row costs ~30 ms during ingest (negligible at 15-min cadence).
 - launchd doesn't need any change — same plist, same schedule.
 
@@ -164,23 +163,23 @@ Compared to `msg` + FTS5 around 200 MB, the semantic stack adds another ~400 MB 
 
 Ollama keeps the model resident for `OLLAMA_KEEP_ALIVE=30m` after last use. For frequent vsearch, calls stay warm.
 
-## Parallel backfill (`embed_parallel.py`)
+## Parallel backfill (`crs embed-missing`)
 
-For initial backfill of 100k+ rows, sequential `embed.py` is slow (~7 emb/s single-thread = 4 hr). Use the parallel runner:
+For initial backfill of 100k+ rows, sequential single-thread is slow (~7 emb/s = 4 hr). Use the parallel runner:
 
 ```bash
-~/claude-archive/.venv/bin/python ~/claude-archive/embed_parallel.py 8
+crs embed-missing --workers 8
 ```
 
-- Spawns 8 ThreadPoolExecutor workers, all calling Ollama HTTP concurrently
+- Spawns 8 worker threads (rayon), all calling Ollama HTTP concurrently
 - Ollama batches them via `OLLAMA_NUM_PARALLEL=4` (set in launchd plist)
 - Effective rate: ~7-10 emb/s (4-5x faster than sequential)
-- Progress every 500 rows printed to stdout
+- Progress printed to stdout every batch
 - Resumable: only processes msg rows missing from msg_vec
 
-`install-semantic.sh` / `.ps1` automatically runs `embed_parallel.py 8` for initial backfill.
+`install-semantic.sh` / `.ps1` runs this automatically for initial backfill.
 
-After backfill, `build.py`'s `maybe_embed_new()` hook handles incremental new rows (small batches, sequential is fine).
+After backfill, `crs build`'s embed step handles incremental new rows (small batches, sequential is fine).
 
 ## Scaling beyond 1M rows
 
@@ -215,12 +214,9 @@ rm -f ~/bin/ollama   # the docker exec wrapper
 ```bash
 # Drop vec table (preserves msg / FTS5)
 sqlite3 ~/claude-archive/sessions.db "DROP TABLE msg_vec"
-
-# Remove vsearch
-rm -f ~/bin/vsearch ~/claude-archive/embed.py ~/claude-archive/vsearch.py
 ```
 
-`csearch` and the rest of the base skill keep working unchanged. `build.py`'s `maybe_embed_new()` is a silent no-op if `embed.py` / Ollama is missing, so removal is safe.
+`csearch` and the rest of the base skill keep working unchanged. `crs build`'s embed step is a silent no-op if Ollama is unreachable, so removal is safe.
 
 ## Why bge-m3?
 
@@ -235,7 +231,7 @@ Alternatives if you want to swap:
 - `mxbai-embed-large` — 1024-dim, English-only, ~700 MB
 - OpenAI `text-embedding-3-small` — but DB content goes to OpenAI = privacy violation
 
-Edit `EMBED_MODEL` and `EMBED_DIM` in `embed.py` to change. After change:
+Edit `EMBED_MODEL` and `EMBED_DIM` in `crs/src/main.rs` and `cargo build --release` again. After change:
 1. Drop `msg_vec` table (different model = different vector space, can't mix)
 2. Re-pull new model: `ollama pull <model>`
-3. Re-run `embed_parallel.py 8` to backfill
+3. Re-run `crs embed-missing --workers 8` to backfill

@@ -11,8 +11,8 @@
 | `temp_store` | DEFAULT | **MEMORY** | Sorts / temp tables in RAM |
 
 These are set in two places:
-1. **`build.py`** — applied on every ingest (so launchd benefits)
-2. **`~/.sqliterc`** — auto-applied to every `sqlite3` CLI invocation (`csearch`, ad-hoc queries)
+1. **`crs build`** — applied on every ingest run (so launchd benefits)
+2. **`~/.sqliterc`** — auto-applied to every `sqlite3` CLI invocation (ad-hoc queries)
 
 ## Verify
 
@@ -81,7 +81,7 @@ launchctl load ~/Library/LaunchAgents/com.<USER>.claude-archive.plist
    # 3. Restart launchd
    launchctl load ~/Library/LaunchAgents/com.<USER>.claude-archive.plist
    ```
-2. Or edit `~/claude-archive/build.py` `DB_DIR` to point at the new location and update the launchd plist accordingly.
+2. Or change the DB path: edit `crs/src/main.rs` (`DB_DIR` constant), `cargo build --release` again, and update the launchd plist `ProgramArguments` accordingly.
 
 ## Benchmark
 
@@ -99,7 +99,7 @@ These remain millisecond-level up to ~1GB DB size with current tuning.
 
 ## Indexes
 
-`build.py` creates these (idempotent):
+`crs build` creates these (idempotent):
 
 ```sql
 PRIMARY KEY (session_id, seq)        -- main lookup

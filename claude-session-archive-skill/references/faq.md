@@ -5,7 +5,7 @@
 No. JSONL is written by Claude Code in real time, but the DB is updated only when launchd's 15-minute tick fires. To force-sync:
 
 ```bash
-python3 ~/claude-archive/build.py
+crs build
 ```
 
 Idempotent — only re-ingests files whose mtime changed.
@@ -52,7 +52,7 @@ Common causes (in order of likelihood):
 1. **Hyphen / dot in query without quotes** — see above.
 2. **Implicit AND across all words** — `csearch foo bar` requires both. Try `'foo OR bar'`.
 3. **Wrong project filter** — `csearch X mysub` only matches projects whose slug *contains* `mysub`. Check `sqlite3 ~/claude-archive/sessions.db "SELECT DISTINCT project FROM msg LIMIT 30"` to see slugs.
-4. **Ingest hasn't run yet** — current session's JSONL not yet ingested. `python3 ~/claude-archive/build.py`.
+4. **Ingest hasn't run yet** — current session's JSONL not yet ingested. Run `crs build`.
 5. **Tokenizer differences** — words like `sk-proj-xxx` get tokenized as `sk` + `proj` + `xxx`. Use phrase to bind.
 
 ## Q: launchctl load fails with "Bootstrap failed"
@@ -61,7 +61,7 @@ Common causes:
 
 - File already loaded — `launchctl unload` first, then re-load
 - Permissions on plist not 644 — `chmod 644 ~/Library/LaunchAgents/com.<USER>.claude-archive.plist`
-- Path in plist doesn't exist — make sure `/usr/bin/python3` and your `build.py` path are valid
+- Path in plist doesn't exist — make sure `~/claude-archive/crs/target/release/crs` is built and on disk (`ls -lh` it; if missing, re-run `./install.sh`)
 
 Diagnose:
 ```bash
@@ -71,11 +71,11 @@ log show --predicate 'subsystem == "com.apple.xpc.launchd"' --last 10m | grep cl
 
 ## Q: Can I rebuild from scratch?
 
-Yes. `build.py` is idempotent and full rebuild is safe:
+Yes. `crs build` is idempotent and full rebuild is safe:
 
 ```bash
 rm ~/claude-archive/sessions.db
-python3 ~/claude-archive/build.py    # 30-60 sec
+crs build         # 30-60 sec
 ```
 
 You'll lose nothing because `~/.claude/projects/*/*.jsonl` is the source of truth. Don't use this to "reset" — use only if DB is corrupt.
@@ -92,17 +92,16 @@ Better: extract from `~/.claude/projects/<proj>/<session-id>.jsonl` directly, wh
 
 ## Q: What if I'm on Linux, not Mac?
 
-Most of this works. Substitutions:
-- launchd → systemd timer or cron
+Linux is supported. `install.sh` detects the platform and writes a crontab entry instead of a launchd plist. Substitutions if you prefer systemd:
+- launchd → systemd timer or cron (default install uses crontab)
 - `~/Library/LaunchAgents/...plist` → `~/.config/systemd/user/claude-archive.timer`
-- `/usr/bin/python3` path may differ
 
-The `build.py` and `csearch` themselves are POSIX-portable.
+The `crs` binary itself is POSIX-portable — same Rust source, just rebuild on Linux.
 
 ## Q: Windows install — what's different?
 
 Use the `.ps1` scripts in `scripts/`:
-- `install.ps1` — replaces the bash steps + registers Windows **Task Scheduler** (not launchd)
+- `install.ps1` — builds `crs.exe` via cargo, registers Windows **Task Scheduler** (not launchd), copies sqliterc + csearch.ps1 + vsearch.ps1, registers SessionStart hook
 - `csearch.ps1` / `vsearch.ps1` — PowerShell wrappers (placed in `%USERPROFILE%\bin`, added to PATH)
 - `install-semantic.ps1` / `install-semantic-docker.ps1` — Ollama install (native via OllamaSetup.exe, or Docker Desktop)
 

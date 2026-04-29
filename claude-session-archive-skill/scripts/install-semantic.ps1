@@ -1,25 +1,23 @@
 <#
 .SYNOPSIS
-  Optional semantic-search stack installer for Windows.
+  Add Ollama + bge-m3 semantic stack on Windows.
 
 .DESCRIPTION
   Counterpart to install-semantic.sh (macOS native binary path).
-  Sets up Ollama + sqlite-vec + bge-m3 on Windows so vsearch.ps1 works.
+  Run AFTER install.ps1 (base setup) is complete.
 
   What this does:
-    1. Detects (or downloads) Ollama (native Windows installer or pre-installed)
+    1. Detects (or downloads) Ollama (native Windows installer)
     2. Pulls bge-m3 model (~1.2 GB)
-    3. Creates %USERPROFILE%\claude-archive\.venv with sqlite-vec + requests
-    4. Copies embed.py + vsearch.py into %USERPROFILE%\claude-archive\
-    5. Kicks off backfill in background
+    3. Kicks off backfill in background via `crs.exe embed-missing`
 
-  After install, vsearch.ps1 can be invoked from any PowerShell.
+  No Python required — embedding goes through crs.exe (Rust). After install,
+  vsearch.ps1 / `crs vsearch` work over the same msg_vec table.
 
 .NOTES
   Requirements:
     - Windows 10/11
-    - Python 3.11+ in PATH
-    - install.ps1 already run (base setup done)
+    - install.ps1 already run (base setup done — crs.exe + DB)
     - PowerShell execution policy: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
   Docker variant: see install-semantic-docker.ps1.
@@ -28,14 +26,18 @@
 param()
 
 $ErrorActionPreference = 'Stop'
-$SkillDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$Archive  = Join-Path $env:USERPROFILE 'claude-archive'
+$Archive = Join-Path $env:USERPROFILE 'claude-archive'
+$Crs     = Join-Path $Archive 'crs\target\release\crs.exe'
 
 Write-Host "==> install-semantic.ps1" -ForegroundColor Cyan
 
 if (-not (Test-Path $Archive)) {
     Write-Error "Run install.ps1 first — base setup not detected at $Archive"
 }
+if (-not (Test-Path $Crs)) {
+    Write-Error "crs.exe not found at $Crs. Run install.ps1 first."
+}
+Write-Host "    crs: $Crs"
 
 # 1. Ollama
 $ollamaInstalled = $null -ne (Get-Command ollama -ErrorAction SilentlyContinue)
@@ -76,47 +78,12 @@ if ($models -notmatch 'bge-m3') {
 }
 Write-Host "    model ready: bge-m3"
 
-# 4. python venv
-$venv = Join-Path $Archive '.venv'
-if (-not (Test-Path "$venv\Scripts\python.exe")) {
-    Write-Host "==> Creating venv at $venv"
-    & python -m venv $venv
-}
-$venvPython = Join-Path $venv 'Scripts\python.exe'
-$venvPip    = Join-Path $venv 'Scripts\pip.exe'
-
-Write-Host "==> Installing python deps..."
-& $venvPip install --quiet --upgrade pip
-& $venvPip install --quiet sqlite-vec requests
-$svcVer = & $venvPython -c "import sqlite_vec; print(sqlite_vec.__version__)" 2>&1
-Write-Host "    sqlite-vec: $svcVer"
-
-# 5. copy scripts
-Write-Host "==> Installing embed.py + embed_parallel.py + vsearch.py + vsearch-since.py..."
-Copy-Item -Force (Join-Path $SkillDir 'scripts\embed.py')          (Join-Path $Archive 'embed.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\embed_parallel.py') (Join-Path $Archive 'embed_parallel.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch.py')        (Join-Path $Archive 'vsearch.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch-since.py')  (Join-Path $Archive 'vsearch-since.py')
-
-# 6. ensure newer build.py (with maybe_embed_new hook) + gen-recent-context.ps1
-Copy-Item -Force (Join-Path $SkillDir 'scripts\build.py')                 (Join-Path $Archive 'build.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\gen-recent-context.ps1')   (Join-Path $Archive 'gen-recent-context.ps1')
-
-# 7. kick off backfill in background
-$pendingQuery = @"
-import sqlite3, sqlite_vec
-c = sqlite3.connect(r'$Archive\sessions.db')
-c.enable_load_extension(True); sqlite_vec.load(c)
-c.execute('CREATE VIRTUAL TABLE IF NOT EXISTS msg_vec USING vec0(embedding float[1024] distance_metric=cosine)')
-total = c.execute('SELECT COUNT(*) FROM msg').fetchone()[0]
-try:
-    vec = c.execute('SELECT COUNT(*) FROM msg_vec').fetchone()[0]
-except Exception:
-    vec = 0
-print(total - vec)
-"@
-$pending = & $venvPython -c $pendingQuery
-$pending = [int]$pending
+# 4. kick off backfill in background via crs.exe embed-missing
+$db = Join-Path $Archive 'sessions.db'
+$total = [int](& sqlite3 $db 'SELECT COUNT(*) FROM msg' 2>$null)
+$vec   = 0
+try { $vec = [int](& sqlite3 $db 'SELECT COUNT(*) FROM msg_vec' 2>$null) } catch {}
+$pending = $total - $vec
 
 Write-Host "==> Rows to backfill: $pending"
 if ($pending -gt 0) {
@@ -124,7 +91,7 @@ if ($pending -gt 0) {
     Write-Host "==> Launching parallel backfill in background (8 workers)"
     Write-Host "    Log: $logFile"
     Write-Host "    Estimate: ~$([math]::Round($pending / 420, 1)) min (bge-m3 ~7 emb/sec @ 8 workers)"
-    Start-Process -FilePath $venvPython -ArgumentList "`"$Archive\embed_parallel.py`" 8" `
+    Start-Process -FilePath $Crs -ArgumentList 'embed-missing','--workers','8' `
         -RedirectStandardOutput $logFile -WindowStyle Hidden
 }
 
@@ -132,4 +99,4 @@ Write-Host ""
 Write-Host "✓ Semantic stack installed." -ForegroundColor Green
 Write-Host "  Once backfill finishes:"
 Write-Host "    vsearch.ps1 '上次廣播 deny log 怎麼解的'"
-Write-Host "    vsearch.ps1 'wireless ap reboot issue' network"
+Write-Host "    crs vsearch 'wireless ap reboot issue' network"

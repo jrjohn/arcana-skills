@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
 #
-# install-semantic.sh — Install Ollama + sqlite-vec + vsearch on top of base archive.
+# install-semantic.sh — Install Ollama + bge-m3 model on top of base archive.
 #
-# Run AFTER you've installed the base claude-session-archive-skill (Steps 1-6).
-# This adds optional Step 7: semantic search via local embeddings.
-#
-# Usage:
-#   ./install-semantic.sh
+# Run AFTER you've installed the base claude-session-archive (./install.sh).
+# This adds the embedding stack so vsearch (semantic) works in addition to
+# csearch (FTS5 lexical).
 #
 # What it does:
-#   1. Downloads Ollama binary (no brew, no compile, ~125MB)
-#   2. Starts Ollama daemon
+#   1. Downloads Ollama native binary (no brew, no compile, ~125 MB)
+#   2. Registers Ollama with launchd (macOS) for auto-start + crash restart
 #   3. Pulls bge-m3 model (~1.2 GB)
-#   4. Creates ~/claude-archive/.venv with sqlite-vec + requests
-#   5. Copies embed.py / embed_parallel.py / vsearch.py to ~/claude-archive/
-#   6. Copies vsearch wrapper to ~/bin/
-#   7. Kicks off parallel backfill in background (~2-3 hr for 100k rows on Apple Silicon)
+#   4. Kicks off parallel backfill in background via `crs embed-missing`
+#      (~2-3 hr for 100k rows on Apple Silicon, Metal-accelerated)
+#
+# No Python required — embedding goes through `crs` (Rust). The crs binary
+# was already built by install.sh.
 #
 # Idempotent: re-running skips already-completed steps.
 
@@ -24,14 +23,23 @@ set -e
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARCHIVE_DIR="$HOME/claude-archive"
 BIN_DIR="$HOME/bin"
+CRS_BIN="$ARCHIVE_DIR/crs/target/release/crs"
 
 echo "==> install-semantic.sh"
 echo "    skill source: $SKILL_DIR"
 echo "    archive dir:  $ARCHIVE_DIR"
 
+# 0. Sanity: base install done?
+if [ ! -x "$CRS_BIN" ]; then
+    echo "!! crs binary not found at $CRS_BIN"
+    echo "   Run ./install.sh first (base setup)."
+    exit 1
+fi
+echo "    crs:    $CRS_BIN"
+
 mkdir -p "$ARCHIVE_DIR" "$BIN_DIR"
 
-# 1. Ollama binary
+# 1. Ollama binary (macOS native)
 if ! command -v ollama >/dev/null 2>&1; then
     echo "==> downloading ollama binary..."
     OLLAMA_VER="v0.21.2"
@@ -71,70 +79,17 @@ fi
 echo "    model ready:"
 ollama list | grep bge-m3 || true
 
-# 4. Python venv
-if [ ! -d "$ARCHIVE_DIR/.venv" ]; then
-    echo "==> creating venv at $ARCHIVE_DIR/.venv"
-    python3 -m venv "$ARCHIVE_DIR/.venv"
-fi
-echo "==> installing python deps..."
-"$ARCHIVE_DIR/.venv/bin/pip" install --quiet --upgrade pip
-"$ARCHIVE_DIR/.venv/bin/pip" install --quiet sqlite-vec requests
-echo "    sqlite-vec: $($ARCHIVE_DIR/.venv/bin/python -c 'import sqlite_vec; print(sqlite_vec.__version__)')"
-
-# 5. Copy scripts
-echo "==> installing embed.py + embed_parallel.py + vsearch.py + vsearch-since.py..."
-cp "$SKILL_DIR/scripts/embed.py"          "$ARCHIVE_DIR/embed.py"
-cp "$SKILL_DIR/scripts/embed_parallel.py" "$ARCHIVE_DIR/embed_parallel.py"
-cp "$SKILL_DIR/scripts/vsearch.py"        "$ARCHIVE_DIR/vsearch.py"
-cp "$SKILL_DIR/scripts/vsearch-since.py"  "$ARCHIVE_DIR/vsearch-since.py"
-chmod +x "$ARCHIVE_DIR/embed.py" "$ARCHIVE_DIR/embed_parallel.py" "$ARCHIVE_DIR/vsearch.py" "$ARCHIVE_DIR/vsearch-since.py"
-
-# 6. vsearch wrapper
-echo "==> installing vsearch CLI..."
-cp "$SKILL_DIR/scripts/vsearch" "$BIN_DIR/vsearch"
-chmod +x "$BIN_DIR/vsearch"
-
-# 7. Sync newer build.py (with maybe_embed_new + auto_recent refresh)
-echo "==> updating build.py..."
-cp "$SKILL_DIR/scripts/build.py" "$ARCHIVE_DIR/build.py"
-chmod +x "$ARCHIVE_DIR/build.py"
-
-# 7a. Install gen-recent-context.sh + register SessionStart hook
-echo "==> installing gen-recent-context.sh..."
-cp "$SKILL_DIR/scripts/gen-recent-context.sh" "$ARCHIVE_DIR/gen-recent-context.sh"
-chmod +x "$ARCHIVE_DIR/gen-recent-context.sh"
-
-SETTINGS="$HOME/.claude/settings.json"
-HOOK_CMD="$ARCHIVE_DIR/gen-recent-context.sh 2>/dev/null || true"
-if command -v jq >/dev/null 2>&1; then
-    [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
-    if jq -e --arg cmd "$HOOK_CMD" \
-        '(.hooks.SessionStart // []) | flatten | map(.command? // "") | any(contains("gen-recent-context"))' \
-        "$SETTINGS" >/dev/null 2>&1 ; then
-        echo "    SessionStart hook already registered (skip)"
-    else
-        echo "==> registering SessionStart hook..."
-        jq --arg cmd "$HOOK_CMD" \
-            '.hooks.SessionStart = ((.hooks.SessionStart // []) + [{"hooks":[{"type":"command","command":$cmd,"timeout":30}]}])' \
-            "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
-    fi
-else
-    echo "    (jq not installed; skip auto-registration. Manually add to ~/.claude/settings.json:"
-    echo "      hooks.SessionStart [{\"hooks\":[{\"type\":\"command\",\"command\":\"$HOOK_CMD\"}]}])"
-fi
-
-# 8. Kick off backfill
+# 4. Kick off backfill via crs embed-missing
 TOTAL_ROWS=$(sqlite3 "$ARCHIVE_DIR/sessions.db" "SELECT COUNT(*) FROM msg" 2>/dev/null || echo 0)
 EMBED_ROWS=$(sqlite3 "$ARCHIVE_DIR/sessions.db" "SELECT COUNT(*) FROM msg_vec" 2>/dev/null || echo 0)
 PENDING=$((TOTAL_ROWS - EMBED_ROWS))
 
 echo "==> rows to backfill: $PENDING (of $TOTAL_ROWS total)"
-
 if [ "$PENDING" -gt 0 ]; then
     echo "==> launching parallel backfill in background (8 workers)"
     echo "    log: $ARCHIVE_DIR/backfill.log"
     echo "    estimate: ~$((PENDING / 420)) min on Apple Silicon (bge-m3 ~7 emb/sec @ 8 workers)"
-    nohup "$ARCHIVE_DIR/.venv/bin/python" "$ARCHIVE_DIR/embed_parallel.py" 8 \
+    nohup "$CRS_BIN" embed-missing --workers 8 \
         > "$ARCHIVE_DIR/backfill.log" 2>&1 &
     echo "    PID: $!"
     echo
@@ -145,5 +100,5 @@ fi
 
 echo
 echo "==> done. Once backfill finishes:"
-echo "      vsearch '上次廣播 deny log 怎麼解的'"
-echo "      vsearch 'how to fix wifi disconnect' network"
+echo "      crs vsearch '上次廣播 deny log 怎麼解的'"
+echo "      crs vsearch 'how to fix wifi disconnect' network"

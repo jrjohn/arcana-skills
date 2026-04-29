@@ -1,60 +1,89 @@
 <#
 .SYNOPSIS
-  Windows installer for claude-session-archive-skill base setup.
+  Base installer for claude-session-archive on Windows.
 
 .DESCRIPTION
-  Counterpart to README.md "Quick install" bash steps. Sets up:
-    - %USERPROFILE%\claude-archive\ (mkdirs)
-    - build.py + sqliterc.template into %USERPROFILE%\claude-archive\
-    - csearch.ps1 / vsearch.ps1 into %USERPROFILE%\bin\ (added to PATH)
-    - Scheduled Task "ClaudeArchiveIngest" — runs build.py every 15 min
-    - Initial ingest run
+  Builds the Rust binary `crs.exe` (single ~5 MB self-contained binary, bundles
+  SQLite + FTS5 + sqlite-vec) and wires up the 15-min ingest schedule.
 
-  Run from inside cloned arcana-skills/claude-session-archive-skill/scripts/.
+  Steps:
+    1. Verify cargo + sqlite3.exe in PATH
+    2. mkdirs %USERPROFILE%\claude-archive, %USERPROFILE%\bin
+    3. Copy crs source + cargo build --release
+    4. Copy crs.exe + csearch.ps1 + vsearch.ps1 + sqliterc + gen-recent-context.ps1
+    5. Add %USERPROFILE%\bin to user PATH
+    6. Register Scheduled Task ClaudeArchiveIngest (every 15 min → crs.exe build)
+    7. Register SessionStart hook (crs.exe gen-recent)
+    8. First ingest run
+    9. Smoke test
+
+  Idempotent: re-running rebuilds + re-points hooks safely.
+
+  AFTER this: optionally run install-semantic.ps1 to add Ollama + bge-m3 for
+  semantic vsearch. Pure FTS5 csearch works without it.
 
 .NOTES
-  Requirements (verify before running):
-    - Python 3.11+ in PATH (python --version)
-    - sqlite3.exe in PATH (winget install -e --id SQLite.SQLite, or download)
-    - PowerShell execution policy allows local scripts:
-        Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-
-  After install, run install-semantic.ps1 (optional) for Ollama-based vsearch.
+  Requirements:
+    - Rust toolchain (rustup-init.exe, then `rustup default stable`)
+      https://rustup.rs
+    - sqlite3.exe in PATH (winget install -e --id SQLite.SQLite)
+    - PowerShell execution policy: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 #>
 [CmdletBinding()]
 param()
 
 $ErrorActionPreference = 'Stop'
-$SkillDir   = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$Archive    = Join-Path $env:USERPROFILE 'claude-archive'
-$BinDir     = Join-Path $env:USERPROFILE 'bin'
+$SkillDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$Archive  = Join-Path $env:USERPROFILE 'claude-archive'
+$SrcDir   = Join-Path $Archive 'crs'
+$Bin      = Join-Path $SrcDir 'target\release\crs.exe'
+$BinDir   = Join-Path $env:USERPROFILE 'bin'
+$Settings = Join-Path $env:USERPROFILE '.claude\settings.json'
 
-Write-Host "==> Installing claude-session-archive-skill (base)" -ForegroundColor Cyan
-Write-Host "    Skill source: $SkillDir"
-Write-Host "    Archive dir:  $Archive"
-Write-Host "    Bin dir:      $BinDir"
+Write-Host "==> install.ps1 — claude-session-archive base" -ForegroundColor Cyan
+Write-Host "    skill source: $SkillDir"
+Write-Host "    archive dir:  $Archive"
+Write-Host "    crs binary:   $Bin"
 
-# 0. Sanity checks
-foreach ($cmd in 'python','sqlite3') {
+# 1. Sanity checks
+foreach ($cmd in 'cargo','sqlite3') {
     if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
-        Write-Error "$cmd not found in PATH. Install before running."
+        if ($cmd -eq 'cargo') {
+            Write-Error "cargo not found. Install Rust via https://rustup.rs and re-run."
+        } else {
+            Write-Error "$cmd not found in PATH. Install before running (winget install -e --id SQLite.SQLite)."
+        }
     }
 }
+Write-Host "    cargo:   $((& cargo --version))"
+Write-Host "    sqlite3: $((& sqlite3 -version) | Select-Object -First 1)"
 
-# 1. mkdirs
-New-Item -ItemType Directory -Force -Path $Archive, $BinDir | Out-Null
+# 2. mkdirs
+New-Item -ItemType Directory -Force -Path $Archive, $BinDir, (Join-Path $SrcDir 'src') | Out-Null
 
-# 2. copy scripts
-Write-Host "==> Copying build.py + sqliterc.template ..."
-Copy-Item -Force (Join-Path $SkillDir 'scripts\build.py')           (Join-Path $Archive 'build.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\sqliterc.template')  (Join-Path $env:USERPROFILE '.sqliterc')
+# 3. Copy crs source + build
+Copy-Item -Force (Join-Path $SkillDir 'scripts\crs\Cargo.toml')  (Join-Path $SrcDir 'Cargo.toml')
+$lockSrc = Join-Path $SkillDir 'scripts\crs\Cargo.lock'
+if (Test-Path $lockSrc) { Copy-Item -Force $lockSrc (Join-Path $SrcDir 'Cargo.lock') }
+Copy-Item -Force (Join-Path $SkillDir 'scripts\crs\src\main.rs') (Join-Path $SrcDir 'src\main.rs')
 
-# 3. CLI wrappers
-Write-Host "==> Copying csearch.ps1 + vsearch.ps1 to $BinDir ..."
+Write-Host "==> cargo build --release  (first time ~2-5 min, deps cached afterwards)"
+Push-Location $SrcDir
+& cargo build --release
+Pop-Location
+$sizeMB = [math]::Round((Get-Item $Bin).Length / 1MB, 2)
+Write-Host "    built: ${sizeMB} MB at $Bin"
+
+# 4. Copy artifacts
+Write-Host "==> Installing artifacts to $BinDir + $Archive ..."
+Copy-Item -Force $Bin (Join-Path $BinDir 'crs.exe')
 Copy-Item -Force (Join-Path $SkillDir 'scripts\csearch.ps1') (Join-Path $BinDir 'csearch.ps1')
 Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch.ps1') (Join-Path $BinDir 'vsearch.ps1')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\sqliterc.template') (Join-Path $env:USERPROFILE '.sqliterc')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\gen-recent-context.ps1') (Join-Path $Archive 'gen-recent-context.ps1')
+Write-Host "    crs.exe + csearch.ps1 + vsearch.ps1 + .sqliterc + gen-recent-context.ps1 installed"
 
-# 4. add ~/bin to user PATH if not already
+# 5. Add %USERPROFILE%\bin to user PATH if missing
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 if ($userPath -notlike "*$BinDir*") {
     Write-Host "==> Adding $BinDir to user PATH ..."
@@ -62,76 +91,76 @@ if ($userPath -notlike "*$BinDir*") {
     Write-Host "    Re-open terminal to pick up new PATH."
 }
 
-# 5. first ingest
-Write-Host "==> Running first ingest (may take 30-60 sec on fresh DB)..."
-& python (Join-Path $Archive 'build.py')
-
-# 5a. Install gen-recent-context.ps1 + register SessionStart hook
-$ctxSrc = Join-Path $SkillDir 'scripts\gen-recent-context.ps1'
-$ctxDst = Join-Path $Archive 'gen-recent-context.ps1'
-if (Test-Path $ctxSrc) {
-    Copy-Item -Force $ctxSrc $ctxDst
-    Write-Host "==> gen-recent-context.ps1 installed at $ctxDst"
-
-    $settingsPath = Join-Path $env:USERPROFILE '.claude\settings.json'
-    $hookCmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$ctxDst`""
-    if (-not (Test-Path $settingsPath)) {
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $settingsPath) | Out-Null
-        '{}' | Set-Content -Path $settingsPath -Encoding UTF8
-    }
-    try {
-        $settings = Get-Content -Path $settingsPath -Raw | ConvertFrom-Json
-    } catch {
-        $settings = [PSCustomObject]@{}
-    }
-    if (-not $settings.PSObject.Properties['hooks']) {
-        $settings | Add-Member -NotePropertyName hooks -NotePropertyValue ([PSCustomObject]@{})
-    }
-    if (-not $settings.hooks.PSObject.Properties['SessionStart']) {
-        $settings.hooks | Add-Member -NotePropertyName SessionStart -NotePropertyValue @()
-    }
-    $alreadyRegistered = $false
-    foreach ($entry in @($settings.hooks.SessionStart)) {
-        foreach ($h in @($entry.hooks)) {
-            if ($h.command -and $h.command -like '*gen-recent-context*') { $alreadyRegistered = $true }
-        }
-    }
-    if ($alreadyRegistered) {
-        Write-Host "    SessionStart hook already registered (skip)"
-    } else {
-        $newEntry = [PSCustomObject]@{
-            hooks = @(
-                [PSCustomObject]@{ type = 'command'; command = $hookCmd; timeout = 30 }
-            )
-        }
-        $settings.hooks.SessionStart = @($settings.hooks.SessionStart) + $newEntry
-        ($settings | ConvertTo-Json -Depth 10) | Set-Content -Path $settingsPath -Encoding UTF8
-        Write-Host "==> SessionStart hook registered in $settingsPath"
-    }
-}
-
-# 6. register scheduled task — runs every 15 min
-Write-Host "==> Registering Scheduled Task 'ClaudeArchiveIngest' (every 15 min)..."
+# 6. Register Scheduled Task — crs.exe build every 15 min
+Write-Host "==> Registering Scheduled Task 'ClaudeArchiveIngest' (every 15 min) ..."
 $taskName = 'ClaudeArchiveIngest'
 $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($existing) { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false }
 
-$pythonExe = (Get-Command python).Source
-$action  = New-ScheduledTaskAction -Execute $pythonExe -Argument "`"$Archive\build.py`""
+$action  = New-ScheduledTaskAction -Execute $Bin -Argument 'build'
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
                                     -RepetitionInterval (New-TimeSpan -Minutes 15)
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
+$tsetting = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
                                           -DontStopIfGoingOnBatteries `
                                           -StartWhenAvailable `
                                           -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
-                       -Settings $settings -Description "Claude Code session JSONL → SQLite FTS5 ingest" `
+                       -Settings $tsetting -Description "Claude Code session JSONL → SQLite FTS5 ingest (Rust crs)" `
                        -RunLevel Limited | Out-Null
+
+# 7. Register SessionStart hook
+$hookCmd = "`"$Bin`" gen-recent"
+if (-not (Test-Path $Settings)) {
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Settings) | Out-Null
+    '{}' | Set-Content -Path $Settings -Encoding UTF8
+}
+try {
+    $obj = Get-Content -Path $Settings -Raw | ConvertFrom-Json
+} catch {
+    $obj = [PSCustomObject]@{}
+}
+if (-not $obj.PSObject.Properties['hooks']) {
+    $obj | Add-Member -NotePropertyName hooks -NotePropertyValue ([PSCustomObject]@{})
+}
+if (-not $obj.hooks.PSObject.Properties['SessionStart']) {
+    $obj.hooks | Add-Member -NotePropertyName SessionStart -NotePropertyValue @()
+}
+$alreadyRegistered = $false
+foreach ($entry in @($obj.hooks.SessionStart)) {
+    foreach ($h in @($entry.hooks)) {
+        if ($h.command -and ($h.command -like '*crs*gen-recent*' -or $h.command -like '*gen-recent-context*')) {
+            $alreadyRegistered = $true
+        }
+    }
+}
+if ($alreadyRegistered) {
+    Write-Host "    SessionStart hook already registered (skip)"
+} else {
+    $newEntry = [PSCustomObject]@{
+        hooks = @(
+            [PSCustomObject]@{ type = 'command'; command = $hookCmd; timeout = 30 }
+        )
+    }
+    $obj.hooks.SessionStart = @($obj.hooks.SessionStart) + $newEntry
+    ($obj | ConvertTo-Json -Depth 10) | Set-Content -Path $Settings -Encoding UTF8
+    Write-Host "==> SessionStart hook registered in $Settings"
+}
+
+# 8. First ingest
+Write-Host "==> First ingest ..."
+& $Bin build --no-embed
+
+# 9. Smoke test
+Write-Host ""
+Write-Host "==> smoke test:"
+& $Bin --help | Select-Object -First 3
 
 Write-Host ""
 Write-Host "✓ Base install complete." -ForegroundColor Green
-Write-Host "  Test:    csearch.ps1 claude"
-Write-Host "  Verify:  Get-ScheduledTask -TaskName ClaudeArchiveIngest"
+Write-Host "  - 15-min ingest:  Get-ScheduledTask -TaskName ClaudeArchiveIngest"
+Write-Host "  - SessionStart:   crs.exe gen-recent"
+Write-Host "  - interactive:    csearch.ps1 / vsearch.ps1 / crs csearch / crs vsearch"
 Write-Host ""
-Write-Host "Next step (optional, semantic search):"
-Write-Host "  .\install-semantic.ps1"
+Write-Host "Optional next step (semantic search via Ollama + bge-m3):"
+Write-Host "  .\install-semantic.ps1          # native OllamaSetup.exe"
+Write-Host "  .\install-semantic-docker.ps1   # Docker Desktop variant"

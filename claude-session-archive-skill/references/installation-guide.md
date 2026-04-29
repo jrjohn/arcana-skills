@@ -7,7 +7,7 @@ Detailed step-by-step setup. For the conceptual overview see `../SKILL.md`.
 | Layer | Purpose | Maintained by |
 |---|---|---|
 | **JSONL** (`~/.claude/projects/*/*.jsonl`) | Raw verbatim per-session log | Claude Code (automatic) |
-| **SQLite FTS5** (`~/claude-archive/sessions.db`) | Cross-session full-text index | This skill (launchd every 15 min) |
+| **SQLite FTS5** (`~/claude-archive/sessions.db`) | Cross-session full-text + vector index | This skill (`crs build`, every 15 min via launchd / cron / Task Scheduler) |
 | **Memory** (`~/.claude/projects/*/memory/`) | Curated signal: identity, traps, invariants | Claude (writes when learning something durable) |
 
 ## Architecture
@@ -15,12 +15,12 @@ Detailed step-by-step setup. For the conceptual overview see `../SKILL.md`.
 ```
 ~/.claude/projects/*/*.jsonl        (Claude Code writes automatically)
               │
-              ▼ build.py (incremental, idempotent)
-~/claude-archive/sessions.db        (SQLite + FTS5)
+              ▼ crs build (incremental, idempotent — Rust binary)
+~/claude-archive/sessions.db        (SQLite + FTS5 + sqlite-vec, all bundled in crs)
               │
-              ├── ~/bin/csearch                   CLI helper
+              ├── ~/bin/crs                       single binary: build / csearch / vsearch / vsearch-since / gen-recent / embed-missing
               ├── sqlite3 <db> "SELECT ..."       direct SQL
-              ├── ~/.sqliterc                    cache/mmap/temp_store tuning
+              ├── ~/.sqliterc                     cache/mmap/temp_store tuning
               └── ~/.claude/CLAUDE.md             instructions for future Claude
 ```
 
@@ -28,79 +28,70 @@ DB schema:
 ```sql
 msg(session_id, project, seq, ts, role, tool_name, content)  PRIMARY KEY (session_id, seq)
 msg_fts                  -- virtual FTS5 over content, tokenize=unicode61
+msg_vec                  -- vec0 (cosine), 1024-dim bge-m3 embeddings (only after install-semantic.sh)
 ingest_state(file_path, mtime, lines)
 ```
 
 ---
 
-## Step 1 — Mkdirs
+## Prerequisites
+
+- **Rust toolchain (`cargo`)** — install via rustup:
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  ```
+  Re-open shell so `cargo` is on PATH.
+- **sqlite3** CLI (almost always pre-installed; `brew install sqlite` / `apt install sqlite3` if missing).
+- **(Optional)** `jq` for automatic SessionStart hook registration in `install.sh`. Without it, the hook line is printed for manual paste.
+
+No Python needed. No venv anywhere.
+
+---
+
+## Step 1 — Run the base installer
+
+The installer compiles the `crs` Rust binary, writes the launchd plist (macOS) or crontab entry (Linux), copies sqliterc, registers the SessionStart hook, and runs the first ingest — all idempotent.
 
 ```bash
-mkdir -p ~/claude-archive ~/bin
+cd scripts
+./install.sh
 ```
 
-## Step 2 — Place ingest script
+What it does:
+1. Verify `cargo` present
+2. `mkdir -p ~/claude-archive ~/bin`
+3. Copy `crs/` source → `cargo build --release` (~2-5 min first time, cached afterward)
+4. `~/bin/crs` symlink + ensure `~/bin` on PATH (auto-appends to `~/.zshrc` / `~/.bashrc` / `~/.profile`)
+5. `~/.sqliterc` tuning
+6. Copy `gen-recent-context.sh` to `~/claude-archive/`
+7. Schedule the 15-min ingest:
+   - **macOS**: writes `~/Library/LaunchAgents/com.<USER>.claude-archive.plist` calling `crs build`, runs `launchctl load`
+   - **Linux**: adds `*/15 * * * * ~/claude-archive/crs/target/release/crs build` to crontab
+8. Register `crs gen-recent` as a SessionStart hook in `~/.claude/settings.json` (skipped if already present; needs `jq`)
+9. First ingest (`crs build --no-embed`) — populates `msg` + `msg_fts`
+10. Smoke test: prints `crs --help`
 
-Copy `scripts/build.py` to `~/claude-archive/build.py`:
-
-```bash
-cp scripts/build.py ~/claude-archive/build.py
-chmod +x ~/claude-archive/build.py
-python3 ~/claude-archive/build.py    # first ingest, ~30 sec
+Expected output of step 9 (first ingest):
 ```
-
-Output should look like:
-```
-  +XXXX  -Users-USER-Documents-projects-foo/abc123.jsonl
-  ...
++XXXX  -Users-USER-Documents-projects-foo/abc123.jsonl
+...
 touched N files, +M rows
 DB total: M rows / S sessions / P projects
-DB path: /Users/USER/claude-archive/sessions.db (XX.X MB)
 ```
 
-## Step 3 — Place CLI helper
-
-Copy `scripts/csearch` to `~/bin/csearch`:
+## Step 2 — Verify
 
 ```bash
-cp scripts/csearch ~/bin/csearch
-chmod +x ~/bin/csearch
-
-# Make sure ~/bin is in PATH (zsh):
-echo $PATH | grep -q "$HOME/bin" || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-
-# Smoke test:
-csearch claude
+ls -la ~/claude-archive/sessions.db        # exists, > 1MB after first ingest
+crs csearch claude                         # returns at least one row
+launchctl list | grep claude-archive       # macOS
+crontab -l | grep claude-archive           # Linux
+sqlite3 ~/claude-archive/sessions.db "SELECT COUNT(*) FROM msg"
 ```
 
-## Step 4 — Register launchd auto-ingest
+After 15 min, `sqlite3 ~/claude-archive/sessions.db "SELECT MAX(ts) FROM msg"` advances toward "now".
 
-Copy `scripts/launchd.plist.template` to `~/Library/LaunchAgents/`, replacing `<USERNAME>` with your macOS short username (e.g. `whoami`):
-
-```bash
-USER=$(whoami)
-sed "s/<USERNAME>/$USER/g" scripts/launchd.plist.template \
-  > ~/Library/LaunchAgents/com.${USER}.claude-archive.plist
-
-launchctl load ~/Library/LaunchAgents/com.${USER}.claude-archive.plist
-launchctl list | grep claude-archive    # confirm presence
-```
-
-## Step 5 — Place `~/.sqliterc`
-
-```bash
-cp scripts/sqliterc.template ~/.sqliterc
-```
-
-Verify SQLite picks up the tuning:
-```bash
-sqlite3 ~/claude-archive/sessions.db "PRAGMA cache_size"   # → -524288
-sqlite3 ~/claude-archive/sessions.db "PRAGMA mmap_size"    # → 536870912
-sqlite3 ~/claude-archive/sessions.db "PRAGMA temp_store"   # → 2 (MEMORY)
-```
-
-## Step 6 — Add to `~/.claude/CLAUDE.md`
+## Step 3 — Add to `~/.claude/CLAUDE.md`
 
 Paste this near the top of `~/.claude/CLAUDE.md` so every future Claude session knows about the archive:
 
@@ -108,12 +99,13 @@ Paste this near the top of `~/.claude/CLAUDE.md` so every future Claude session 
 # Cross-session history (use SQLite archive — don't ask the user repeatedly)
 
 All my Claude Code session JSONLs are ingested into ~/claude-archive/sessions.db
-(SQLite FTS5, every 15 min via launchd). Verbatim user / assistant /
-tool_use input / tool_result output across all projects, all sessions.
+(SQLite FTS5 + sqlite-vec, every 15 min via the `crs` Rust binary on launchd / cron / Task Scheduler).
+Verbatim user / assistant / tool_use input / tool_result output across all projects, all sessions.
 
 ## Schema
 msg(session_id, project, seq, ts, role, tool_name, content)
 msg_fts = virtual FTS5 over msg.content (tokenize=unicode61)
+msg_vec = vec0 cosine (1024-dim bge-m3) — only after running install-semantic.sh
 
 ## When to query
 - User asks to recall something from a previous session → query DB first, don't say "I don't remember"
@@ -122,7 +114,8 @@ msg_fts = virtual FTS5 over msg.content (tokenize=unicode61)
 - Building project mental model → past tool calls beat memory and git log
 
 ## How to query
-- CLI: `csearch <fts-query> [project-suffix]`
+- CLI: `csearch <fts-query> [project-suffix]` (= `crs csearch`) for exact phrase / IP / hostname
+       `vsearch '<concept>' [project]` (= `crs vsearch`) for fuzzy / cross-language / synonym
 - SQL: `sqlite3 ~/claude-archive/sessions.db "SELECT ... WHERE rowid IN (SELECT rowid FROM msg_fts WHERE content MATCH 'xxx') LIMIT 20"`
 
 FTS5 syntax: phrase `'"..."'`, boolean `A AND B / OR / NOT`, prefix `foo*`. Words with `- / : / .` MUST be phrase-quoted.
@@ -155,9 +148,10 @@ Disposition rules:
 
 After install, all should hold:
 
+- [ ] `~/claude-archive/crs/target/release/crs --help` prints subcommand list
 - [ ] `ls -la ~/claude-archive/sessions.db` exists, > 1MB
-- [ ] `csearch claude` returns at least one row
-- [ ] `launchctl list | grep claude-archive` shows the agent
+- [ ] `csearch claude` (or `crs csearch claude`) returns at least one row
+- [ ] `launchctl list | grep claude-archive` (macOS) or `crontab -l | grep claude-archive` (Linux) shows the entry
 - [ ] `sqlite3 ~/claude-archive/sessions.db "SELECT COUNT(*) FROM msg"` returns N > 0
 - [ ] After 15 min, `sqlite3 ~/claude-archive/sessions.db "SELECT MAX(ts) FROM msg"` advances toward "now"
 - [ ] In a new Claude session, ask "上週做什麼?" — Claude should query the archive (`vsearch` first if semantic stack installed, otherwise `csearch`) instead of saying "I don't remember"
@@ -166,95 +160,84 @@ After install, all should hold:
 
 ## Windows install path
 
-For Windows users, all the same steps are wrapped in PowerShell scripts. Run from inside cloned `claude-session-archive-skill/scripts/`:
+For Windows users, all the same steps are wrapped in PowerShell:
 
 ```powershell
 # One-time: allow local script execution
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
-# Base setup (build.py + csearch.ps1 + Scheduled Task @ 15 min)
-.\install.ps1
-
-# OPTIONAL: semantic search
-.\install-semantic.ps1            # native Ollama Windows installer
+cd scripts
+.\install.ps1                       # base setup
+.\install-semantic.ps1              # OPTIONAL: native Ollama (OllamaSetup.exe)
 # or
-.\install-semantic-docker.ps1     # Docker Desktop variant
+.\install-semantic-docker.ps1       # OPTIONAL: Docker Desktop variant
 ```
 
-What `install.ps1` does (parallel to Steps 1-5 above):
+`install.ps1` parallels `install.sh` step-for-step:
 
-| Step | Linux/macOS | Windows |
+| Step | macOS / Linux | Windows |
 |---|---|---|
 | Mkdirs | `mkdir -p ~/claude-archive ~/bin` | `New-Item ~/claude-archive ~/bin` |
-| Ingest script | `cp build.py ~/claude-archive/` | `Copy-Item build.py %USERPROFILE%\claude-archive\` |
-| CLI helper | `cp csearch ~/bin/` | `Copy-Item csearch.ps1 %USERPROFILE%\bin\` |
+| Build binary | `cargo build --release` (in `~/claude-archive/crs/`) | same, output `crs.exe` |
+| CLI | `~/bin/crs` symlink | `%USERPROFILE%\bin\crs.exe` copy + `csearch.ps1` / `vsearch.ps1` wrappers |
 | Tuning | `cp sqliterc.template ~/.sqliterc` | `Copy-Item sqliterc.template $HOME\.sqliterc` |
-| Scheduled ingest | launchd plist | **Windows Task Scheduler** `ClaudeArchiveIngest` (15-min repetition) |
-| Initial ingest | `python3 ~/claude-archive/build.py` | `python %USERPROFILE%\claude-archive\build.py` |
+| Scheduled ingest | launchd plist (macOS) / crontab (Linux) | **Windows Task Scheduler** `ClaudeArchiveIngest` (15-min repetition) calling `crs.exe build` |
+| Initial ingest | `crs build --no-embed` | same |
 | PATH | `~/bin` | adds `%USERPROFILE%\bin` to user PATH |
+| SessionStart hook | jq into `~/.claude/settings.json` | PowerShell into `%USERPROFILE%\.claude\settings.json` |
 
 Verification on Windows:
 ```powershell
 Get-ScheduledTask -TaskName ClaudeArchiveIngest | Format-List State,LastRunTime,NextRunTime
 csearch.ps1 claude
+crs --help
 ```
 
 Prerequisites on Windows:
-- Python 3.11+ in PATH (`python --version`)
+- Rust toolchain (rustup-init.exe → `rustup default stable`)
 - sqlite3.exe in PATH (`winget install -e --id SQLite.SQLite`)
 - PowerShell 5.1+ (built in to Windows 10/11)
 
-## Step 7 (optional) — Semantic search via Ollama + sqlite-vec
+## Step 4 (optional) — Semantic search via Ollama + sqlite-vec
 
 Adds `vsearch` for concept-level / synonym / cross-language queries. Complements `csearch`, doesn't replace it.
 
 ```bash
 ./scripts/install-semantic.sh
+# or for Docker
+./scripts/install-semantic-docker.sh
 ```
 
-This downloads ~1.3 GB (Ollama binary + `bge-m3` model), creates a Python venv, installs `embed.py` / `embed_parallel.py` / `vsearch.py` / `vsearch` CLI, and kicks off parallel backfill (8 workers). Backfill runs ~2-3 hr in background for ~100k rows on Apple Silicon (Metal-accelerated).
+This downloads ~1.3 GB (Ollama binary + `bge-m3` model) and kicks off `crs embed-missing` in background (~2-3 hr for ~100k rows on Apple Silicon, Metal-accelerated). Newest rows embed first so fresh conversations are queryable in minutes. **No Python venv** — embedding goes through the same `crs` binary you already built in Step 1.
 
 After install:
 ```bash
-vsearch '上次廣播 deny log 怎麼解的'        # concept query, no exact keyword needed
-vsearch '防火牆規則調整' network            # also matches "firewall policy"
+crs vsearch '上次廣播 deny log 怎麼解的'      # concept query, no exact keyword needed
+crs vsearch '防火牆規則調整' network          # also matches "firewall policy"
 ```
 
 Full details and trade-offs: `semantic-search.md`.
 
-## Step 8 (optional, recommended) — SessionStart hook for auto_recent.md
+## Step 5 (informational) — SessionStart hook
 
-Bridges session.db → Memory: every `claude` start, a hook regenerates `<project>/memory/auto_recent.md` containing pending + last 48h conversation events.
+`install.sh` already registered the SessionStart hook in `~/.claude/settings.json`. The hook command is:
 
-If you ran `install-semantic.sh`, this is **already done** (auto-registered via jq).
-
-For manual setup:
-
-```bash
-# 1. Place script
-cp scripts/gen-recent-context.sh ~/claude-archive/gen-recent-context.sh
-chmod +x ~/claude-archive/gen-recent-context.sh
-
-# 2. Add SessionStart hook to ~/.claude/settings.json
-jq --arg cmd "$HOME/claude-archive/gen-recent-context.sh 2>/dev/null || true" \
-   '.hooks.SessionStart = ((.hooks.SessionStart // []) + [{"hooks":[{"type":"command","command":$cmd,"timeout":30}]}])' \
-   ~/.claude/settings.json > ~/.claude/settings.json.tmp && mv ~/.claude/settings.json.tmp ~/.claude/settings.json
-
-# 3. Add auto_recent.md to MEMORY.md index for each project
-echo '- [自動最近 context](auto_recent.md) — auto-generated by SessionStart hook' \
-  >> ~/.claude/projects/<slug>/memory/MEMORY.md
+```
+~/claude-archive/crs/target/release/crs gen-recent 2>/dev/null || true
 ```
 
-`build.py` already calls `gen-recent-context.sh` for every known project at the end of each ingest run (every 15 min via launchd / Task Scheduler), so long-running sessions also get fresh context. No additional setup needed.
+Each `claude` start triggers it; it writes `<project>/memory/auto_recent.md` containing the last-48h messages most semantically related to the project's open `pending` items (KNN over `msg_vec`, cosine ≤ 0.65, top 6 hits). Skip-guard avoids regenerating when neither the pending file nor the DB has changed.
 
-Verify:
+If you skipped semantic install, the hook still runs but the auto_recent.md will note `_(vsearch-since 不可用：crs binary 缺)_` is **not** what you'll see — instead it'll just say `_(無 pending 檔可當 query seed)_` if no pending file exists, or it falls through to whatever the embedded crs path produces (which works fine for empty/text-only fallback).
+
+To regenerate manually for testing:
 ```bash
-# Manual trigger to test
-CLAUDE_PROJECT_SLUG='-Users-jrjohn-Documents-projects-network' ~/claude-archive/gen-recent-context.sh
-
-# Open a new claude session, ask "目前 pending 有什麼？" — Claude should answer immediately
-# without csearch (the answer is in auto_recent.md → Memory)
+CLAUDE_PROJECT_SLUG='-Users-USER-Documents-projects-network' ~/claude-archive/gen-recent-context.sh
+# or directly via crs:
+crs gen-recent
 ```
+
+`crs build` calls `gen-recent` for every known project at the end of each ingest run (every 15 min via launchd / Task Scheduler), so long-running sessions also get fresh context.
 
 ---
 

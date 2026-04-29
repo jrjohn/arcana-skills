@@ -3,7 +3,7 @@
   Windows port of gen-recent-context.sh — auto-generate per-project recent context for Memory.
 
 .DESCRIPTION
-  Triggered by SessionStart hook + every-15-min build.py task. Writes a
+  Triggered by SessionStart hook + every-15-min crs build task. Writes a
   single section: vsearch ranking of last-48h msgs against the project's
   pending list. Pending excerpt itself is NOT duplicated — Claude reads
   project_pending.md directly via MEMORY.md index when it needs that.
@@ -17,7 +17,7 @@
   Writes %USERPROFILE%\.claude\projects\<slug>\memory\auto_recent.md
 
   Slug source (priority):
-    1. $env:CLAUDE_PROJECT_SLUG       ← used by build.py 15-min loop
+    1. $env:CLAUDE_PROJECT_SLUG       ← used by crs build 15-min loop
     2. JSON on stdin: {"cwd": "..."}  ← SessionStart hook input
     3. $env:CLAUDE_PROJECT_DIR
     4. $PWD                           ← interactive fallback
@@ -107,9 +107,8 @@ if (-not $forceRegen -and (Test-Path $OutFile)) {
 }
 
 # 3. Generate
-$Now      = Get-Date -Format 'yyyy-MM-dd HH:mm'
-$VenvPy   = Join-Path $Archive '.venv\Scripts\python.exe'
-$VsScript = Join-Path $Archive 'vsearch-since.py'
+$Now    = Get-Date -Format 'yyyy-MM-dd HH:mm'
+$CrsBin = Join-Path $Archive 'crs\target\release\crs.exe'
 
 $lines = @()
 $lines += '---'
@@ -126,8 +125,8 @@ $lines += '> vsearch on pending → KNN over msg_vec (cosine, max-distance 0.65)
 $lines += "> project=``$Slug``。要改邏輯動 ``gen-recent-context.ps1``。"
 $lines += ''
 
-if (-not (Test-Path $VenvPy) -or -not (Test-Path $VsScript)) {
-    $lines += '_(vsearch-since 不可用：venv or script 缺)_'
+if (-not (Test-Path $CrsBin)) {
+    $lines += '_(vsearch-since 不可用：crs binary 缺)_'
 } elseif (-not (Test-Path $Pending)) {
     $lines += '_(無 pending 檔可當 query seed)_'
 } else {
@@ -147,7 +146,7 @@ if (-not (Test-Path $VenvPy) -or -not (Test-Path $VsScript)) {
         $lines += '_(pending list 空，無 query seed)_'
     } else {
         try {
-            $vsOutput = & $VenvPy $VsScript `
+            $vsOutput = & $CrsBin vsearch-since `
                 "--query=$query" `
                 "--project=$Slug" `
                 '--hours=48' `
