@@ -135,6 +135,10 @@ After install, `vsearch` is on PATH (or `vsearch.ps1` on Windows). The `crs vsea
 
 ## What's new
 
+### v1.6.3 — `install-rust-accel.sh` auto-appends `~/bin` to PATH
+
+Closes a gap with the main install. The macOS/Linux base install snippet in this README conditionally appends `export PATH="$HOME/bin:$PATH"` to `~/.zshrc` / `~/.bashrc` when `~/bin` is missing from `PATH`. The Rust accel installer was only **printing a note** ("note: add to ~/.zshrc: …") and leaving the user to act. If `~/bin` wasn't already on PATH at that point, the bare `crs` / `csearch` / `vsearch` commands silently failed in interactive shells (launchd kept working because it uses absolute paths). The Rust installer now matches the base install: detects shell (`zsh` → `~/.zshrc`, `bash` → `~/.bashrc`, else `~/.profile`), checks if `~/bin` is already referenced, and appends the export only when missing. Idempotent. Windows installers (`install.ps1` / `install-rust-accel.ps1`) were already correct via `[Environment]::SetEnvironmentVariable("Path", …, "User")`. No binary changes.
+
 ### v1.6.2 — `vsearch`-first preflight
 
 Default Claude query order flipped: **`vsearch` first, `csearch` only as fallback for explicit literals.** Rationale: most past-session recall queries are paraphrased ("上次怎麼處理 X 的"), not verbatim — semantic match wins. `csearch` stays the right tool for IPs, hostnames, file paths, and FTS5 boolean syntax. README, `SKILL.md` trigger table, `references/semantic-search.md` decision flow, and the installation-guide verification line all updated to match. No behaviour change in the binaries — pure documentation / prompt-engineering update. Pair this with a `~/.claude/CLAUDE.md` snippet pinning the same rule.

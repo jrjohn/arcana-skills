@@ -65,7 +65,21 @@ ln -sf "$BIN" "$USER_BIN/crs"
 echo "    symlink: $USER_BIN/crs → $BIN"
 case ":$PATH:" in
     *":$USER_BIN:"*) : ;;
-    *) echo "    note: add to ~/.zshrc:  export PATH=\"$USER_BIN:\$PATH\"" ;;
+    *)
+        # Auto-append to the appropriate shell rc file (matches main README install snippet).
+        # macOS default zsh → ~/.zshrc ; Linux bash → ~/.bashrc ; fall back to ~/.profile.
+        case "${SHELL##*/}" in
+            zsh) RC="$HOME/.zshrc" ;;
+            bash) RC="$HOME/.bashrc" ;;
+            *) RC="$HOME/.profile" ;;
+        esac
+        if [ -f "$RC" ] && grep -qE '\$HOME/bin|"~/bin"' "$RC"; then
+            echo "    PATH: ~/bin already referenced in $RC — no change"
+        else
+            printf '\n# claude-session-archive: ensure ~/bin on PATH for crs/csearch/vsearch\nexport PATH="$HOME/bin:$PATH"\n' >> "$RC"
+            echo "    PATH: appended 'export PATH=\"\$HOME/bin:\$PATH\"' to $RC (open a new shell to pick up)"
+        fi
+        ;;
 esac
 
 # 5. Rewire launchd plist:  python3 build.py → crs build
