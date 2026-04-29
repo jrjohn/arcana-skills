@@ -81,10 +81,12 @@ $venvPip    = Join-Path $venv 'Scripts\pip.exe'
 & $venvPip install --quiet --upgrade pip
 & $venvPip install --quiet sqlite-vec requests
 
-Copy-Item -Force (Join-Path $SkillDir 'scripts\embed.py')          (Join-Path $Archive 'embed.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\embed_parallel.py') (Join-Path $Archive 'embed_parallel.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch.py')        (Join-Path $Archive 'vsearch.py')
-Copy-Item -Force (Join-Path $SkillDir 'scripts\build.py')          (Join-Path $Archive 'build.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\embed.py')               (Join-Path $Archive 'embed.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\embed_parallel.py')      (Join-Path $Archive 'embed_parallel.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch.py')             (Join-Path $Archive 'vsearch.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch-since.py')       (Join-Path $Archive 'vsearch-since.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\build.py')               (Join-Path $Archive 'build.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\gen-recent-context.ps1') (Join-Path $Archive 'gen-recent-context.ps1')
 
 # convenience wrapper: ollama.ps1 → docker exec
 $ollamaWrapper = Join-Path $env:USERPROFILE 'bin\ollama.ps1'

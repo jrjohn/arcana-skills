@@ -82,11 +82,12 @@ echo "==> installing python deps..."
 echo "    sqlite-vec: $($ARCHIVE_DIR/.venv/bin/python -c 'import sqlite_vec; print(sqlite_vec.__version__)')"
 
 # 5. Copy scripts
-echo "==> installing embed.py + embed_parallel.py + vsearch.py..."
+echo "==> installing embed.py + embed_parallel.py + vsearch.py + vsearch-since.py..."
 cp "$SKILL_DIR/scripts/embed.py"          "$ARCHIVE_DIR/embed.py"
 cp "$SKILL_DIR/scripts/embed_parallel.py" "$ARCHIVE_DIR/embed_parallel.py"
 cp "$SKILL_DIR/scripts/vsearch.py"        "$ARCHIVE_DIR/vsearch.py"
-chmod +x "$ARCHIVE_DIR/embed.py" "$ARCHIVE_DIR/embed_parallel.py" "$ARCHIVE_DIR/vsearch.py"
+cp "$SKILL_DIR/scripts/vsearch-since.py"  "$ARCHIVE_DIR/vsearch-since.py"
+chmod +x "$ARCHIVE_DIR/embed.py" "$ARCHIVE_DIR/embed_parallel.py" "$ARCHIVE_DIR/vsearch.py" "$ARCHIVE_DIR/vsearch-since.py"
 
 # 6. vsearch wrapper
 echo "==> installing vsearch CLI..."

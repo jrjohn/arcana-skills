@@ -6,7 +6,7 @@ Usage:
   vsearch '<natural language query>' [project-suffix]
 
 Pipeline:
-  1. Embed query via Ollama (bge-m3)
+  1. Embed query via Ollama (nomic-embed-text)
   2. KNN top-200 over msg_vec
   3. Optionally filter by project, take top 20
   4. Display ranked by cosine distance (lower = more similar)

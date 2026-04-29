@@ -43,7 +43,7 @@ def main():
         SELECT m.rowid, m.content
         FROM msg m LEFT JOIN msg_vec v ON v.rowid = m.rowid
         WHERE v.rowid IS NULL
-        ORDER BY m.rowid
+        ORDER BY m.rowid DESC
     """
     )
     rows = cur.fetchall()

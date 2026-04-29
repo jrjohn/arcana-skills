@@ -161,9 +161,16 @@ def maybe_embed_new(conn):
 
 def refresh_recent_context():
     """For every known project (memory dir exists), regenerate auto_recent.md.
-    Keeps long-running sessions seeing fresh context between SessionStart fires."""
-    import subprocess
-    script = HOME / 'claude-archive' / 'gen-recent-context.sh'
+    Keeps long-running sessions seeing fresh context between SessionStart fires.
+
+    Picks .ps1 (powershell.exe) on Windows, .sh elsewhere."""
+    import subprocess, sys
+    if sys.platform == 'win32':
+        script = HOME / 'claude-archive' / 'gen-recent-context.ps1'
+        cmd_prefix = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(script)]
+    else:
+        script = HOME / 'claude-archive' / 'gen-recent-context.sh'
+        cmd_prefix = [str(script)]
     if not script.exists():
         return
     proj_root = HOME / '.claude' / 'projects'
@@ -174,12 +181,12 @@ def refresh_recent_context():
         if (proj_dir / 'memory').is_dir():
             try:
                 subprocess.run(
-                    [str(script)],
+                    cmd_prefix,
                     env={**os.environ, 'CLAUDE_PROJECT_SLUG': proj_dir.name},
                     stdin=subprocess.DEVNULL,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                    timeout=10,
+                    timeout=15,
                     check=False,
                 )
                 refreshed += 1

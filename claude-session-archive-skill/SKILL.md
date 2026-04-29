@@ -1,7 +1,7 @@
 ---
 name: claude-session-archive-skill
 description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into a local SQLite FTS5 database (~/claude-archive/sessions.db) every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. Two query modes: `csearch` (FTS5 lexical, exact phrase / boolean / prefix) and optionally `vsearch` (semantic via Ollama + sqlite-vec + bge-m3 — multilingual SOTA, concept queries, synonym / cross-language matching, strong Chinese). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec semantic stack, (d) tune SQLite performance, or (e) troubleshoot FTS5 syntax / ingest issues.
-version: 1.0.0
+version: 1.6.1
 allowed-tools:
   - Read
   - Write
@@ -139,11 +139,14 @@ ORDER BY ts LIMIT 20"
 
 Bridges session.db with Memory: every time `claude` starts, a hook runs `gen-recent-context.sh` which writes a fresh per-project `auto_recent.md` (loaded into Memory) containing:
 
-1. **Open pending items** — extracted from `<project>/memory/project_pending.md`
-2. **Last 8 unique user prompts in 48h** — what you've been asking
-3. **Last 5 substantive assistant replies in 48h** — what the assistant produced
+- **vsearch ranking of last-48h msgs against the project's pending list** — KNN over `msg_vec` (cosine, max-distance 0.65), top 6 hits. Pending excerpt itself is **NOT** duplicated; Claude reads `project_pending.md` directly via the MEMORY.md index when it needs that. This avoids doubling tokens and keeps the auto file small (~20 lines).
 
-Every time `build.py` runs (every 15 min via launchd / Task Scheduler), it ALSO refreshes `auto_recent.md` for every known project — so even long-running sessions see fresh context.
+**Skip guard** — the script exits early (no Ollama call, no disk write) when nothing has changed:
+- `pending_mtime <= auto_recent_mtime` AND `latest_msg_ts <= auto_recent_mtime` → SKIP
+- override with `FORCE_REGEN=1 ~/claude-archive/gen-recent-context.sh`
+- log at `~/claude-archive/gen-recent-context.log` records `[OK] / [SKIP] / [ERROR]` per run
+
+Every time `build.py` runs (every 15 min via launchd / Task Scheduler), it ALSO calls the regen script for every known project — so even long-running sessions see fresh context, but the skip guard prevents wasted CPU on idle projects.
 
 **Three layers working together:**
 
@@ -240,9 +243,10 @@ claude-session-archive-skill/
     ├── gen-recent-context.sh         # SessionStart hook target — writes auto_recent.md to project memory
     ├── sqliterc.template             # → ~/.sqliterc
     ├── launchd.plist.template        # → ~/Library/LaunchAgents/...
-    ├── embed.py                      # OPTIONAL: Ollama embedding helper (cross-platform Python)
-    ├── embed_parallel.py             # OPTIONAL: parallel backfill runner (8 workers, 4-5x faster)
+    ├── embed.py                      # OPTIONAL: Ollama embedding helper (cross-platform Python, newest-first)
+    ├── embed_parallel.py             # OPTIONAL: parallel backfill runner (8 workers, 4-5x faster, newest-first)
     ├── vsearch.py                    # OPTIONAL: semantic search Python core (cross-platform)
+    ├── vsearch-since.py              # OPTIONAL: time-bounded semantic search (used by gen-recent-context.sh)
     ├── vsearch                       # OPTIONAL: bash wrapper (~/bin/vsearch)
     ├── vsearch.ps1                   # OPTIONAL Windows: PowerShell wrapper
     ├── csearch.ps1                   # Windows: PowerShell csearch wrapper
@@ -262,3 +266,12 @@ claude-session-archive-skill/
 - 2026-04-27 v1.2.0 native Windows support: csearch.ps1 / vsearch.ps1 / install.ps1 / install-semantic.ps1 / install-semantic-docker.ps1 + Scheduled Task instead of launchd
 - 2026-04-28 v1.3.2 model upgrade: nomic-embed-text (768d) → **bge-m3 (1024d)**. Multilingual SOTA on MIRACL, native 8192-token context, strong Chinese. Adds `embed_parallel.py` for 4-5× faster initial backfill via ThreadPoolExecutor + OLLAMA_NUM_PARALLEL=4.
 - 2026-04-29 v1.4.0 **Memory bridge**: `gen-recent-context.sh` + SessionStart hook + build.py refresh. Per-project `auto_recent.md` is auto-generated at every session start (containing pending + last 48h user prompts + assistant responses) and refreshed every 15 min by build.py — so Claude always has fresh per-project context in its Memory at session start. install-semantic.sh auto-registers the SessionStart hook via jq.
+- 2026-04-29 v1.6.1 **vec0 statically linked**: switched from runtime `load_extension(vec0.dylib)` (which required the Python venv to be present) to the `sqlite-vec` crate, which bundles the C source statically. `crs` is now truly venv-free — `mv ~/claude-archive/.venv elsewhere` and vsearch still works. Binary 4.9 → 5.0 MB. FTS5 was already statically linked since v1.6.0 (rusqlite `bundled` feature compiles SQLite with `SQLITE_ENABLE_FTS5`).
+- 2026-04-29 v1.6.0 **Optional Rust acceleration**: `crs` — single 4.9 MB binary that replaces every Python helper (build / embed_parallel / vsearch / vsearch-since / csearch / gen-recent-context). Bench (Apple M4): startup 80ms→<5ms (>16×), csearch 20ms→<5ms (>4×), gen-recent SKIP 10ms→<5ms (~3-5×), build steady-state 20-100ms→<5ms (5-20×). The Ollama-bound paths (gen-recent regen, embed-missing) see modest 1.0-1.3× since the bottleneck is `bge-m3` inference, not the client. Real value isn't raw speed — it's no-venv deploy, single-file binary, dropping a Python dependency from the launchd plist. Opt-in via `install-rust-accel.sh` / `install-rust-accel.ps1` (needs rustup, ~2-5 min cargo build). Skill ships full Rust source in `scripts/crs/` (~720 LOC). Python scripts stay as fallback.
+- 2026-04-29 v1.5.0 **Energy-aware auto_recent**:
+  - **vsearch-on-pending replaces three-section dump.** Previous design dumped pending excerpt + 8 user prompts + 5 assistant replies (49 lines, often noisy). New design uses pending-list as a semantic query against last-48h `msg_vec` rows (KNN, cosine ≤ 0.65) and surfaces the top 6 hits actually related to open work. Pending itself is **not** duplicated (Claude reads `project_pending.md` from the MEMORY.md index when needed) — halves the auto-loaded token budget.
+  - **Skip guard.** `gen-recent-context.sh` exits early when `pending_mtime ≤ auto_recent_mtime` AND `latest_msg_ts ≤ auto_recent_mtime`. Idle projects no longer trigger Ollama embed + KNN every 15 min. `FORCE_REGEN=1` overrides. Logs `[OK] / [SKIP] / [ERROR]` to `~/claude-archive/gen-recent-context.log`.
+  - **embed.py / embed_parallel.py: newest-first ordering** (`ORDER BY rowid DESC`). During long initial backfills, fresh conversations become queryable immediately instead of waiting for the entire historical corpus to embed.
+  - **vsearch-since.py** new helper: time-bounded (`--hours`) + cosine-cutoff (`--max-distance`) + length filter (`--min-len`/`--max-len`) — used by `gen-recent-context.sh`. Standalone-callable for any "what did I do recently about X?" query.
+  - install-semantic.sh / install-semantic-docker.sh now copy `vsearch-since.py` and the docker variant also copies `gen-recent-context.sh`.
+  - **Windows parity**: `gen-recent-context.ps1` ports the bash version (skip guard, vsearch-on-pending, log file). `install.ps1` now auto-registers the SessionStart hook in `%USERPROFILE%\.claude\settings.json` (replacing the previous WSL-only TODO). `install-semantic.ps1` / `install-semantic-docker.ps1` install `vsearch-since.py` + `gen-recent-context.ps1`. `build.py` picks `.ps1` via `powershell.exe` on Windows, `.sh` elsewhere.

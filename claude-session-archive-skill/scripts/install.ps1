@@ -66,11 +66,48 @@ if ($userPath -notlike "*$BinDir*") {
 Write-Host "==> Running first ingest (may take 30-60 sec on fresh DB)..."
 & python (Join-Path $Archive 'build.py')
 
-# 5a. SessionStart hook for auto_recent.md (Windows uses gen-recent-context.ps1 — TODO: port; for now just install bash version usable from WSL)
-$ctxScript = Join-Path $SkillDir 'scripts\gen-recent-context.sh'
-if (Test-Path $ctxScript) {
-    Copy-Item -Force $ctxScript (Join-Path $Archive 'gen-recent-context.sh')
-    Write-Host "==> gen-recent-context.sh installed (Windows users: requires WSL or Git Bash to execute)"
+# 5a. Install gen-recent-context.ps1 + register SessionStart hook
+$ctxSrc = Join-Path $SkillDir 'scripts\gen-recent-context.ps1'
+$ctxDst = Join-Path $Archive 'gen-recent-context.ps1'
+if (Test-Path $ctxSrc) {
+    Copy-Item -Force $ctxSrc $ctxDst
+    Write-Host "==> gen-recent-context.ps1 installed at $ctxDst"
+
+    $settingsPath = Join-Path $env:USERPROFILE '.claude\settings.json'
+    $hookCmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$ctxDst`""
+    if (-not (Test-Path $settingsPath)) {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $settingsPath) | Out-Null
+        '{}' | Set-Content -Path $settingsPath -Encoding UTF8
+    }
+    try {
+        $settings = Get-Content -Path $settingsPath -Raw | ConvertFrom-Json
+    } catch {
+        $settings = [PSCustomObject]@{}
+    }
+    if (-not $settings.PSObject.Properties['hooks']) {
+        $settings | Add-Member -NotePropertyName hooks -NotePropertyValue ([PSCustomObject]@{})
+    }
+    if (-not $settings.hooks.PSObject.Properties['SessionStart']) {
+        $settings.hooks | Add-Member -NotePropertyName SessionStart -NotePropertyValue @()
+    }
+    $alreadyRegistered = $false
+    foreach ($entry in @($settings.hooks.SessionStart)) {
+        foreach ($h in @($entry.hooks)) {
+            if ($h.command -and $h.command -like '*gen-recent-context*') { $alreadyRegistered = $true }
+        }
+    }
+    if ($alreadyRegistered) {
+        Write-Host "    SessionStart hook already registered (skip)"
+    } else {
+        $newEntry = [PSCustomObject]@{
+            hooks = @(
+                [PSCustomObject]@{ type = 'command'; command = $hookCmd; timeout = 30 }
+            )
+        }
+        $settings.hooks.SessionStart = @($settings.hooks.SessionStart) + $newEntry
+        ($settings | ConvertTo-Json -Depth 10) | Set-Content -Path $settingsPath -Encoding UTF8
+        Write-Host "==> SessionStart hook registered in $settingsPath"
+    }
 }
 
 # 6. register scheduled task — runs every 15 min

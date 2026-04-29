@@ -92,13 +92,15 @@ $svcVer = & $venvPython -c "import sqlite_vec; print(sqlite_vec.__version__)" 2>
 Write-Host "    sqlite-vec: $svcVer"
 
 # 5. copy scripts
-Write-Host "==> Installing embed.py + embed_parallel.py + vsearch.py..."
+Write-Host "==> Installing embed.py + embed_parallel.py + vsearch.py + vsearch-since.py..."
 Copy-Item -Force (Join-Path $SkillDir 'scripts\embed.py')          (Join-Path $Archive 'embed.py')
 Copy-Item -Force (Join-Path $SkillDir 'scripts\embed_parallel.py') (Join-Path $Archive 'embed_parallel.py')
 Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch.py')        (Join-Path $Archive 'vsearch.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\vsearch-since.py')  (Join-Path $Archive 'vsearch-since.py')
 
-# 6. ensure newer build.py (with maybe_embed_new hook)
-Copy-Item -Force (Join-Path $SkillDir 'scripts\build.py') (Join-Path $Archive 'build.py')
+# 6. ensure newer build.py (with maybe_embed_new hook) + gen-recent-context.ps1
+Copy-Item -Force (Join-Path $SkillDir 'scripts\build.py')                 (Join-Path $Archive 'build.py')
+Copy-Item -Force (Join-Path $SkillDir 'scripts\gen-recent-context.ps1')   (Join-Path $Archive 'gen-recent-context.ps1')
 
 # 7. kick off backfill in background
 $pendingQuery = @"

@@ -96,13 +96,15 @@ echo "==> installing python deps..."
 "$ARCHIVE_DIR/.venv/bin/pip" install --quiet sqlite-vec requests
 
 # 6. Copy scripts (same as native variant)
-echo "==> installing embed.py / embed_parallel.py / vsearch.py / vsearch ..."
-cp "$SKILL_DIR/scripts/embed.py"          "$ARCHIVE_DIR/embed.py"
-cp "$SKILL_DIR/scripts/embed_parallel.py" "$ARCHIVE_DIR/embed_parallel.py"
-cp "$SKILL_DIR/scripts/vsearch.py"        "$ARCHIVE_DIR/vsearch.py"
-cp "$SKILL_DIR/scripts/vsearch"           "$BIN_DIR/vsearch"
-cp "$SKILL_DIR/scripts/build.py"          "$ARCHIVE_DIR/build.py"
-chmod +x "$ARCHIVE_DIR/embed.py" "$ARCHIVE_DIR/embed_parallel.py" "$ARCHIVE_DIR/vsearch.py" "$BIN_DIR/vsearch" "$ARCHIVE_DIR/build.py"
+echo "==> installing embed.py / embed_parallel.py / vsearch.py / vsearch-since.py / vsearch / gen-recent-context.sh ..."
+cp "$SKILL_DIR/scripts/embed.py"              "$ARCHIVE_DIR/embed.py"
+cp "$SKILL_DIR/scripts/embed_parallel.py"     "$ARCHIVE_DIR/embed_parallel.py"
+cp "$SKILL_DIR/scripts/vsearch.py"            "$ARCHIVE_DIR/vsearch.py"
+cp "$SKILL_DIR/scripts/vsearch-since.py"      "$ARCHIVE_DIR/vsearch-since.py"
+cp "$SKILL_DIR/scripts/vsearch"               "$BIN_DIR/vsearch"
+cp "$SKILL_DIR/scripts/build.py"              "$ARCHIVE_DIR/build.py"
+cp "$SKILL_DIR/scripts/gen-recent-context.sh" "$ARCHIVE_DIR/gen-recent-context.sh"
+chmod +x "$ARCHIVE_DIR/embed.py" "$ARCHIVE_DIR/embed_parallel.py" "$ARCHIVE_DIR/vsearch.py" "$ARCHIVE_DIR/vsearch-since.py" "$BIN_DIR/vsearch" "$ARCHIVE_DIR/build.py" "$ARCHIVE_DIR/gen-recent-context.sh"
 
 # 7. Convenience wrapper to talk to docker container
 cat > "$BIN_DIR/ollama" <<EOF
