@@ -45,18 +45,19 @@ Write-Host "    skill source: $SkillDir"
 Write-Host "    archive dir:  $Archive"
 Write-Host "    crs binary:   $Bin"
 
-# 1. Sanity checks
-foreach ($cmd in 'cargo','sqlite3') {
-    if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
-        if ($cmd -eq 'cargo') {
-            Write-Error "cargo not found. Install Rust via https://rustup.rs and re-run."
-        } else {
-            Write-Error "$cmd not found in PATH. Install before running (winget install -e --id SQLite.SQLite)."
-        }
-    }
+# 1. Sanity checks — cargo strict; sqlite3 is recommended but optional
+#    (crs.exe bundles SQLite, so csearch / vsearch work without sqlite3.exe;
+#     it's only needed for raw `sqlite3 sessions.db` queries.)
+if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+    Write-Error "cargo not found. Install Rust via https://rustup.rs and re-run."
 }
 Write-Host "    cargo:   $((& cargo --version))"
-Write-Host "    sqlite3: $((& sqlite3 -version) | Select-Object -First 1)"
+
+if (Get-Command sqlite3 -ErrorAction SilentlyContinue) {
+    Write-Host "    sqlite3: $((& sqlite3 -version) | Select-Object -First 1)"
+} else {
+    Write-Host "    sqlite3: missing (optional — install with 'winget install -e --id SQLite.SQLite' if you want raw SQL queries)" -ForegroundColor Yellow
+}
 
 # 2. mkdirs
 New-Item -ItemType Directory -Force -Path $Archive, $BinDir, (Join-Path $SrcDir 'src') | Out-Null

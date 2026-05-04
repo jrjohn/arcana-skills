@@ -79,13 +79,25 @@ if ($models -notmatch 'bge-m3') {
 Write-Host "    model ready: bge-m3"
 
 # 4. kick off backfill in background via crs.exe embed-missing
+#    (sqlite3 CLI is optional — if missing, skip the row-count display and
+#     just launch the backfill; crs internals will scan correctly anyway.)
 $db = Join-Path $Archive 'sessions.db'
-$total = [int](& sqlite3 $db 'SELECT COUNT(*) FROM msg' 2>$null)
-$vec   = 0
-try { $vec = [int](& sqlite3 $db 'SELECT COUNT(*) FROM msg_vec' 2>$null) } catch {}
-$pending = $total - $vec
+$pending = -1
+if (Get-Command sqlite3 -ErrorAction SilentlyContinue) {
+    try {
+        $total = [int](& sqlite3 $db 'SELECT COUNT(*) FROM msg' 2>$null)
+        $vec   = 0
+        try { $vec = [int](& sqlite3 $db 'SELECT COUNT(*) FROM msg_vec' 2>$null) } catch {}
+        $pending = $total - $vec
+    } catch { $pending = -1 }
+}
 
-Write-Host "==> Rows to backfill: $pending"
+if ($pending -ge 0) {
+    Write-Host "==> Rows to backfill: $pending"
+} else {
+    Write-Host "==> Rows to backfill: (sqlite3 CLI not in PATH; skipping count, launching backfill anyway)"
+    $pending = 1   # treat as positive so the backfill kicks off
+}
 if ($pending -gt 0) {
     $logFile = Join-Path $Archive 'backfill.log'
     Write-Host "==> Launching parallel backfill in background (8 workers)"

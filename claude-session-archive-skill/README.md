@@ -102,6 +102,46 @@ Adds concept / cross-language / synonym matching on top of `csearch`. Downloads 
 
 After install, `crs vsearch` (or `vsearch.ps1` on Windows) works against the populated `msg_vec` table. See `references/semantic-search.md` for trade-offs.
 
+## Operations — verify it's healthy
+
+After install (or whenever vsearch / auto_recent feels stale), run:
+
+```bash
+crs doctor
+```
+
+What it checks (each line is `✓ OK`, `⚠ warn`, or `✗ fail`):
+
+- **tooling** — `cargo` (required to rebuild), `sqlite3` + `jq` (optional)
+- **storage** — archive dir exists, DB file exists + size, perms (`0600` on Unix)
+- **database** — `msg` row count, `msg_vec` row count, **embed backlog** (rows in `msg` not yet in `msg_vec`), **stale rowids** (rows in `msg_vec` whose `msg.rowid` no longer exists), latest `msg.ts`
+- **schedule** — launchd plist loaded (macOS) / cron entry present (Linux) / Scheduled Task registered (Windows)
+- **hooks** — SessionStart hook for `crs gen-recent` in `~/.claude/settings.json`
+- **ollama** — daemon reachable at `localhost:11434`, `bge-m3` model pulled
+
+Exit code: `0` clean / `1` warnings / `2` failures — usable in cron / CI.
+
+If `doctor` reports stale rowids:
+
+```bash
+crs prune-vec --dry-run    # preview count
+crs prune-vec              # actually drop them
+```
+
+This drops `msg_vec` rows whose `msg.rowid` no longer exists (left over from re-ingest cycles where `msg.rowid` was reused). Cosmetic — vsearch already works thanks to v1.7.2's `INSERT OR REPLACE` — but keeps DB lean and `msg`/`msg_vec` counts close.
+
+If `doctor` reports an embed backlog:
+
+```bash
+crs embed-missing          # parallel backfill, newest-first
+```
+
+Pair the two for a full reset:
+
+```bash
+crs prune-vec && crs embed-missing && crs doctor
+```
+
 ## Trade-offs (pros / cons)
 
 Honest evaluation as of 2026-05-04 (v1.7.3). Use this to decide whether the operational cost matches your recall needs.
@@ -158,6 +198,17 @@ Items **1, 2, 3, 6** together close the operational visibility gap that produced
 Estimated 1-2 hours total for someone with the codebase loaded. Other items can ship piecemeal in later patch releases.
 
 ## What's new
+
+### v1.8.0 — `crs doctor` + `crs prune-vec` + installer prereq surfacing
+
+First batch from the 2026-05-04 audit. Closes the operational visibility gap that produced the silent vsearch outage:
+
+- **`crs doctor`** — single-command health check across tooling, storage, DB consistency, schedule, hooks, and Ollama. Exit code 0 / 1 / 2 = clean / warn / fail (cron-friendly).
+- **`crs prune-vec`** — drops orphaned `msg_vec` rowids left over after re-ingest. Supports `--dry-run`. Pairs with v1.7.2's `INSERT OR REPLACE` (defence in depth: collisions are tolerated *and* cleanable).
+- **Installer prereq surfacing.** `install.sh` now lists `jq` / `sqlite3` status with exact install commands per OS before mid-run discovery. `install.ps1` downgrades `sqlite3.exe` from a fatal abort to a warning (since `crs.exe` already bundles SQLite — `sqlite3.exe` is only needed for raw `sqlite3 sessions.db` queries). `install-semantic.ps1` now skips its row-count probe gracefully when `sqlite3.exe` is absent rather than erroring.
+- **README ops section** documents `crs doctor` / `crs prune-vec` workflows so they're discoverable without reading the changelog.
+
+Implements items 1, 2, 3, 6 from the install-hardening roadmap. Items 4, 5, 7-10 remain candidates for later patch releases.
 
 ### v1.7.0 — Rust-only
 

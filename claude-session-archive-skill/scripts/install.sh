@@ -50,6 +50,38 @@ if ! command -v cargo >/dev/null 2>&1; then
 fi
 echo "    cargo: $(cargo --version)"
 
+# 1.5. Optional but recommended dependencies — warn early so users can decide
+#      to abort + install rather than discover the gap mid-run.
+echo
+echo "==> Optional dependencies (none are strictly required, but recommended)"
+for dep in jq sqlite3; do
+    if command -v "$dep" >/dev/null 2>&1; then
+        echo "    ✓ $dep: present"
+    else
+        case "$dep" in
+            jq)
+                echo "    ⚠ jq: missing"
+                echo "         needed for automatic SessionStart hook registration in"
+                echo "         ~/.claude/settings.json (otherwise printed for manual paste)."
+                case "$PLATFORM" in
+                    Darwin) echo "         install: brew install jq" ;;
+                    Linux)  echo "         install: apt install jq  (or yum / pacman / apk equivalent)" ;;
+                esac
+                ;;
+            sqlite3)
+                echo "    ⚠ sqlite3 CLI: missing"
+                echo "         needed only for raw SQL queries against sessions.db. The crs"
+                echo "         binary already bundles SQLite, so csearch / vsearch work fine"
+                echo "         without this — install only if you want \`sqlite3 ~/claude-archive/sessions.db\`."
+                case "$PLATFORM" in
+                    Darwin) echo "         install: brew install sqlite" ;;
+                    Linux)  echo "         install: apt install sqlite3  (or yum / pacman / apk equivalent)" ;;
+                esac
+                ;;
+        esac
+    fi
+done
+
 # 2. mkdirs
 mkdir -p "$ARCHIVE_DIR" "$USER_BIN"
 

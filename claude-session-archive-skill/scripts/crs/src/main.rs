@@ -8,6 +8,8 @@
 //   gen-recent    replace gen-recent-context.sh (skip-guard + vsearch + write file)
 //   embed-missing parallel backfill of msg → msg_vec (replaces embed_parallel.py)
 //   embed-text    debug helper — embed one string and print first 5 dims
+//   doctor        health check (tooling / DB / schedule / hooks / Ollama / stale)
+//   prune-vec     drop msg_vec rows whose rowid no longer exists in msg
 
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::{Local, Utc};
@@ -15,6 +17,7 @@ use clap::{Parser, Subcommand};
 use rusqlite::{Connection, OpenFlags, params};
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -98,6 +101,14 @@ enum Cmd {
     },
     /// Embed one string and print first 5 dims (debug helper)
     EmbedText { text: String },
+    /// Health check — verify install state, schedule, hooks, model, DB consistency
+    Doctor,
+    /// Prune stale rowids from msg_vec (rowid present in msg_vec but not in msg)
+    PruneVec {
+        /// Show what would be deleted without modifying the DB
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 // ─────────────────────────── helpers ───────────────────────────
@@ -904,6 +915,278 @@ fn cmd_embed_text(text: &str) -> Result<()> {
     Ok(())
 }
 
+// ─────────────────────────── doctor ───────────────────────────
+
+fn whoami_short() -> String {
+    env::var("USER")
+        .or_else(|_| env::var("USERNAME"))
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+fn cmd_doctor() -> Result<()> {
+    let archive = home().join("claude-archive");
+    let db_p = db_path();
+    let mut warns: u32 = 0;
+    let mut fails: u32 = 0;
+
+    let mark = |status: char, msg: &str| println!("  {} {}", status, msg);
+
+    println!("==> claude-session-archive doctor");
+    println!("    archive: {}", archive.display());
+    println!("    db:      {}", db_p.display());
+    println!();
+
+    // [tooling] cargo (rebuild needs it), sqlite3 + jq optional
+    println!("[tooling]");
+    let probe = |cmd: &str, optional: bool, warns: &mut u32, fails: &mut u32| {
+        let ok = std::process::Command::new(cmd)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if ok {
+            mark('✓', &format!("{}: present", cmd));
+        } else if optional {
+            mark('⚠', &format!("{}: missing (optional)", cmd));
+            *warns += 1;
+        } else {
+            mark('✗', &format!("{}: missing (required for rebuild)", cmd));
+            *fails += 1;
+        }
+    };
+    probe("cargo", false, &mut warns, &mut fails);
+    probe("sqlite3", true, &mut warns, &mut fails);
+    if !cfg!(target_os = "windows") {
+        probe("jq", true, &mut warns, &mut fails);
+    }
+
+    // [storage] dir + DB + perms
+    println!("\n[storage]");
+    if archive.is_dir() {
+        mark('✓', &format!("archive dir exists ({})", archive.display()));
+    } else {
+        mark('✗', &format!("archive dir missing: {}", archive.display()));
+        fails += 1;
+    }
+    if db_p.is_file() {
+        let meta = fs::metadata(&db_p)?;
+        let mb = meta.len() as f64 / 1024.0 / 1024.0;
+        mark('✓', &format!("db: {:.1} MB", mb));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = meta.permissions().mode() & 0o777;
+            if mode == 0o600 {
+                mark('✓', &format!("db perms: 0{:o} (owner-only)", mode));
+            } else {
+                mark('⚠', &format!("db perms: 0{:o} (recommended 0600 — chmod 600 the file)", mode));
+                warns += 1;
+            }
+        }
+    } else {
+        mark('✗', &format!("db missing: {}", db_p.display()));
+        fails += 1;
+    }
+
+    // [database] msg / msg_vec / backlog / stale / latest ts
+    if db_p.is_file() {
+        println!("\n[database]");
+        let conn = open_db_with_vec()?;
+        let msg_total: i64 = conn.query_row("SELECT COUNT(*) FROM msg", [], |r| r.get(0))?;
+        let vec_total: i64 = conn.query_row("SELECT COUNT(*) FROM msg_vec", [], |r| r.get(0))?;
+        mark('•', &format!("msg rows:     {}", msg_total));
+        mark('•', &format!("msg_vec rows: {}", vec_total));
+
+        let backlog: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM msg m LEFT JOIN msg_vec v ON v.rowid = m.rowid \
+             WHERE v.rowid IS NULL AND length(m.content) >= 5",
+            [],
+            |r| r.get(0),
+        )?;
+        if backlog > 0 {
+            mark('⚠', &format!("embed backlog: {} (run: crs embed-missing)", backlog));
+            warns += 1;
+        } else {
+            mark('✓', "embed backlog: 0");
+        }
+
+        // Stale rowids — vec0 LEFT JOIN ... IS NULL is unreliable, scan with HashSet
+        let msg_ids: HashSet<i64> = conn
+            .prepare("SELECT rowid FROM msg")?
+            .query_map([], |r| r.get::<_, i64>(0))?
+            .collect::<rusqlite::Result<HashSet<i64>>>()?;
+        let stale = conn
+            .prepare("SELECT rowid FROM msg_vec")?
+            .query_map([], |r| r.get::<_, i64>(0))?
+            .filter_map(|r| r.ok())
+            .filter(|r| !msg_ids.contains(r))
+            .count();
+        if stale > 0 {
+            mark('⚠', &format!("msg_vec stale rowids: {} (run: crs prune-vec)", stale));
+            warns += 1;
+        } else {
+            mark('✓', "msg_vec stale rowids: 0");
+        }
+
+        if let Ok(latest_ts) = conn.query_row::<String, _, _>("SELECT MAX(ts) FROM msg", [], |r| r.get(0)) {
+            mark('•', &format!("latest msg ts: {}", latest_ts));
+        }
+    }
+
+    // [schedule] launchd / cron / Scheduled Task
+    println!("\n[schedule]");
+    let user = whoami_short();
+    if cfg!(target_os = "macos") {
+        let label = format!("com.{}.claude-archive", user);
+        match std::process::Command::new("launchctl").arg("list").output() {
+            Ok(o) if o.status.success() => {
+                let s = String::from_utf8_lossy(&o.stdout);
+                if s.contains(&label) {
+                    mark('✓', &format!("launchd: {} loaded", label));
+                } else {
+                    mark('✗', &format!("launchd: {} not loaded", label));
+                    fails += 1;
+                }
+            }
+            _ => {
+                mark('⚠', "launchctl not available");
+                warns += 1;
+            }
+        }
+    } else if cfg!(target_os = "linux") {
+        match std::process::Command::new("crontab").arg("-l").output() {
+            Ok(o) if o.status.success() => {
+                let s = String::from_utf8_lossy(&o.stdout);
+                if s.contains("crs build") || s.contains("claude-archive") {
+                    mark('✓', "cron: crs build entry present");
+                } else {
+                    mark('✗', "cron: no entry for crs build (run install.sh)");
+                    fails += 1;
+                }
+            }
+            _ => {
+                mark('⚠', "crontab -l failed (no user crontab?)");
+                warns += 1;
+            }
+        }
+    } else if cfg!(target_os = "windows") {
+        let out = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "Get-ScheduledTask -TaskName ClaudeArchiveIngest -ErrorAction SilentlyContinue | Select-Object -ExpandProperty TaskName",
+            ])
+            .output();
+        match out {
+            Ok(o) => {
+                let s = String::from_utf8_lossy(&o.stdout);
+                if s.contains("ClaudeArchiveIngest") {
+                    mark('✓', "scheduled task: ClaudeArchiveIngest registered");
+                } else {
+                    mark('✗', "scheduled task: ClaudeArchiveIngest missing (run install.ps1)");
+                    fails += 1;
+                }
+            }
+            _ => {
+                mark('⚠', "could not query Scheduled Tasks");
+                warns += 1;
+            }
+        }
+    }
+
+    // [hooks] SessionStart
+    println!("\n[hooks]");
+    let settings = home().join(".claude/settings.json");
+    if settings.is_file() {
+        let s = fs::read_to_string(&settings).unwrap_or_default();
+        if s.contains("gen-recent") {
+            mark('✓', "SessionStart hook: crs gen-recent present");
+        } else {
+            mark('⚠', &format!("SessionStart hook missing in {}", settings.display()));
+            warns += 1;
+        }
+    } else {
+        mark('⚠', &format!("settings.json not found: {}", settings.display()));
+        warns += 1;
+    }
+
+    // [ollama] daemon + model
+    println!("\n[ollama]");
+    let client = http_client()?;
+    match client.get("http://localhost:11434/api/tags").send() {
+        Ok(resp) if resp.status().is_success() => {
+            mark('✓', "daemon: reachable at localhost:11434");
+            let body = resp.text().unwrap_or_default();
+            if body.contains(MODEL) {
+                mark('✓', &format!("model {}: pulled", MODEL));
+            } else {
+                mark('⚠', &format!("model {} not pulled (run: ollama pull {})", MODEL, MODEL));
+                warns += 1;
+            }
+        }
+        _ => {
+            mark('⚠', "daemon: not reachable (vsearch / auto_recent will be skipped)");
+            warns += 1;
+        }
+    }
+
+    println!();
+    println!("==> Summary: {} fail / {} warn", fails, warns);
+    if fails > 0 {
+        std::process::exit(2);
+    } else if warns > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+// ─────────────────────────── prune-vec ───────────────────────────
+
+fn cmd_prune_vec(dry_run: bool) -> Result<()> {
+    let conn = open_db_with_vec()?;
+
+    println!("==> scanning msg_vec for stale rowids...");
+    let msg_ids: HashSet<i64> = conn
+        .prepare("SELECT rowid FROM msg")?
+        .query_map([], |r| r.get::<_, i64>(0))?
+        .collect::<rusqlite::Result<HashSet<i64>>>()?;
+    let stale: Vec<i64> = conn
+        .prepare("SELECT rowid FROM msg_vec")?
+        .query_map([], |r| r.get::<_, i64>(0))?
+        .filter_map(|r| r.ok())
+        .filter(|r| !msg_ids.contains(r))
+        .collect();
+
+    println!("    msg rows:     {}", msg_ids.len());
+    println!("    stale rowids: {}", stale.len());
+    if stale.is_empty() {
+        println!("    nothing to prune.");
+        return Ok(());
+    }
+    if dry_run {
+        println!("    (dry-run) — no rows deleted. Re-run without --dry-run to apply.");
+        return Ok(());
+    }
+
+    let mut del_stmt = conn.prepare("DELETE FROM msg_vec WHERE rowid = ?1")?;
+    let mut deleted = 0usize;
+    let mut errors = 0usize;
+    for (i, rowid) in stale.iter().enumerate() {
+        match del_stmt.execute(params![rowid]) {
+            Ok(_) => deleted += 1,
+            Err(e) => {
+                errors += 1;
+                eprintln!("delete rowid={} err={}", rowid, e);
+            }
+        }
+        if (i + 1) % 500 == 0 {
+            println!("  progress {}/{}", i + 1, stale.len());
+        }
+    }
+    println!("    deleted: {}  errors: {}", deleted, errors);
+    Ok(())
+}
+
 // ─────────────────────────── main ───────────────────────────
 
 fn main() -> Result<()> {
@@ -920,5 +1203,7 @@ fn main() -> Result<()> {
         Cmd::GenRecent { force } => cmd_gen_recent(force),
         Cmd::EmbedMissing { workers, limit } => cmd_embed_missing(workers, limit),
         Cmd::EmbedText { text } => cmd_embed_text(&text),
+        Cmd::Doctor => cmd_doctor(),
+        Cmd::PruneVec { dry_run } => cmd_prune_vec(dry_run),
     }
 }
