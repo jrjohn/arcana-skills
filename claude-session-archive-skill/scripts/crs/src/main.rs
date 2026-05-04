@@ -824,9 +824,13 @@ fn cmd_embed_missing(workers: usize, limit: usize) -> Result<()> {
 
     let total: i64 = conn.query_row("SELECT COUNT(*) FROM msg", [], |r| r.get(0))?;
     let done: i64 = conn.query_row("SELECT COUNT(*) FROM msg_vec", [], |r| r.get(0))?;
-    let pending = total - done;
+    let pending: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM msg m LEFT JOIN msg_vec v ON v.rowid = m.rowid \
+         WHERE v.rowid IS NULL AND length(m.content) >= 5",
+        [], |r| r.get(0),
+    )?;
     if pending <= 0 {
-        println!("nothing to embed: total={} done={}", total, done);
+        println!("nothing to embed: total={} done={} pending={}", total, done, pending);
         return Ok(());
     }
 

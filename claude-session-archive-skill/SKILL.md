@@ -1,7 +1,7 @@
 ---
 name: claude-session-archive-skill
 description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into a local SQLite FTS5 database (~/claude-archive/sessions.db) every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. Two query modes: `csearch` (FTS5 lexical, exact phrase / boolean / prefix) and optionally `vsearch` (semantic via Ollama + sqlite-vec + bge-m3 — multilingual SOTA, concept queries, synonym / cross-language matching, strong Chinese). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec semantic stack, (d) tune SQLite performance, or (e) troubleshoot FTS5 syntax / ingest issues.
-version: 1.7.0
+version: 1.7.1
 allowed-tools:
   - Read
   - Write
@@ -250,6 +250,7 @@ claude-session-archive-skill/
 
 ## Author / version
 
+- 2026-05-04 v1.7.1 **Bug fix — `embed-missing` skipped all new rows when `msg_vec` accumulated stale rowids**. `cmd_embed_missing` decided "nothing to embed" via `pending = COUNT(msg) - COUNT(msg_vec)`; once historical re-ingests / dedupes left orphan rowids in `msg_vec` (rows whose `msg.rowid` no longer exists), `done > total` made `pending ≤ 0` and the embed step short-circuited indefinitely. In practice this silently broke vsearch backfill for ≥6 days on at least one machine — `crs build` ran every 15 min, FTS index stayed current, but no new row ever reached `msg_vec`, so vsearch returned 4/28-and-older results forever. Fix: compute `pending` directly from `LEFT JOIN msg_vec WHERE v.rowid IS NULL` (the same predicate the actual embed query uses). Existing installs: rebuild with `cd scripts && ./install.sh` (or `cargo build --release` in `~/claude-archive/crs/`), then run `crs embed-missing` once to drain the accumulated backlog.
 - 2026-04-29 v1.7.0 **Rust-only**: dropped Python entirely. `crs` is now the **base** install, no longer optional acceleration. `install.sh` / `install.ps1` build cargo and wire up launchd / Scheduled Task / SessionStart hook in one shot. Removed `build.py` / `embed.py` / `embed_parallel.py` / `vsearch.py` / `vsearch-since.py` / `csearch.py` and the bash `csearch` / `vsearch` wrappers. `install-semantic.*` no longer creates a Python venv — it just installs Ollama + bge-m3 and calls `crs embed-missing` for backfill. **Prerequisite changed**: now requires `cargo` (rustup) instead of `python3`. Migration on existing installs: rebuild via the new `install.sh`, which auto-rewires launchd plist + SessionStart hook.
 - 2026-04-24 v1.0 initial setup (John Chang)
 - 2026-04-27 v1.0.0 packaged as skill, with SQLite tuning (cache 512MB, mmap, temp_store=MEMORY)
