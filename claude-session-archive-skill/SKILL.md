@@ -1,7 +1,7 @@
 ---
 name: claude-session-archive-skill
 description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into a local SQLite FTS5 database (~/claude-archive/sessions.db) every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. Two query modes: `csearch` (FTS5 lexical, exact phrase / boolean / prefix) and optionally `vsearch` (semantic via Ollama + sqlite-vec + bge-m3 — multilingual SOTA, concept queries, synonym / cross-language matching, strong Chinese). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec semantic stack, (d) tune SQLite performance, or (e) troubleshoot FTS5 syntax / ingest issues.
-version: 1.7.2
+version: 1.7.3
 allowed-tools:
   - Read
   - Write
@@ -115,8 +115,14 @@ vsearch 'wireless AP keeps disconnecting' network
 ```
 
 When to pick which:
-- **csearch** — you remember a specific phrase / IP / hostname
-- **vsearch** — you forgot the exact wording, or need synonym / cross-language matching
+- **csearch** — you remember a specific phrase / IP / hostname / file path / FTS5 syntax
+- **vsearch** — you forgot the exact wording, or need synonym / cross-language matching (Chinese ↔ English, etc.)
+- **csearch + date filter SQL** — time-bounded questions ("what did we do today / yesterday / last Thursday?")
+
+vsearch sweet spot vs blind spot (verified 2026-05-04):
+- ✅ **Strong on concrete technical concepts.** "rowid 殘留 導致 INSERT 衝突" → finds the actual `cmd_embed_missing` INSERT-collision discussion. "防火牆規則調整" → finds the firewall policy edit. The embedding clusters around the technical terms even when wording differs.
+- ❌ **Weak on time-relative queries.** "今天修了什麼 bug" / "what did we do this morning" → low hit-rate. The embedding weight goes mostly to the generic words ("今天", "bug", "we"), not to *what* you actually did. The DB has no notion of "today" — date is a column, not a concept. Use `csearch '<keyword>' [project]` plus a `WHERE date(ts) = ...` SQL clause instead — the FTS layer is real-time (every 15 min ingest tick) and `date()` filtering is exact.
+- ⚠️ **Embedding lag.** vsearch needs `bge-m3` to embed each new row, which happens during the next `crs build` tick. So messages from the *current ongoing* session may not be vsearchable for up to 15 minutes (FTS via `csearch` is updated synchronously during ingest — no lag there).
 
 ### Direct SQL (for complex queries)
 
@@ -250,6 +256,7 @@ claude-session-archive-skill/
 
 ## Author / version
 
+- 2026-05-04 v1.7.3 **Docs — vsearch sweet spot vs blind spot.** Added concrete usage guidance distilled from 2026-05-04 verification: vsearch is strong on technical-concept queries (terms cluster well in embedding space, e.g. "rowid 殘留 導致 INSERT 衝突" hits the actual collision discussion) but weak on time-relative ones ("today / 今天 / 昨天 / last Thursday") — the embedding weight goes to the generic time word, not the underlying topic. Time-bounded questions should use `csearch` + `WHERE date(ts) = ...` SQL filter instead, since FTS index is updated synchronously while embeddings backfill in batches up to 15 min behind. Updated `Daily usage patterns` to surface this trade-off and noted the embedding-lag caveat for current-session messages.
 - 2026-05-04 v1.7.2 **Bug fix — `embed-missing` INSERT now uses `INSERT OR REPLACE`** (with explicit `DELETE` + `INSERT` fallback). After v1.7.1 fixed the pending-count bug, the actual INSERT step still hit `UNIQUE constraint failed on msg_vec primary key` for every rowid that was stale in `msg_vec` (i.e. `msg.rowid` was reused after a re-ingest, but `msg_vec` never dropped the old vector). The `LEFT JOIN msg_vec WHERE v.rowid IS NULL` predicate misses these because of how the `vec0` virtual table interacts with SQLite's NULL fill-in for outer joins — the planner returns "not in vec_vec" but the underlying storage still holds the rowid. Symptom: every fresh `embed-missing` run noisily failed on hundreds of newest rows (the vsearch tail you most want — today's conversations) while quietly succeeding on older gaps. Fix: use `INSERT OR REPLACE` so a colliding rowid is overwritten with the new embedding; fall back to explicit `DELETE` + `INSERT` if the storage rejects `OR REPLACE`. Existing installs: rebuild and re-run `embed-missing` — stale rows get refreshed in place, no manual prune needed.
 - 2026-05-04 v1.7.1 **Bug fix — `embed-missing` skipped all new rows when `msg_vec` accumulated stale rowids**. `cmd_embed_missing` decided "nothing to embed" via `pending = COUNT(msg) - COUNT(msg_vec)`; once historical re-ingests / dedupes left orphan rowids in `msg_vec` (rows whose `msg.rowid` no longer exists), `done > total` made `pending ≤ 0` and the embed step short-circuited indefinitely. In practice this silently broke vsearch backfill for ≥6 days on at least one machine — `crs build` ran every 15 min, FTS index stayed current, but no new row ever reached `msg_vec`, so vsearch returned 4/28-and-older results forever. Fix: compute `pending` directly from `LEFT JOIN msg_vec WHERE v.rowid IS NULL` (the same predicate the actual embed query uses). Existing installs: rebuild with `cd scripts && ./install.sh` (or `cargo build --release` in `~/claude-archive/crs/`), then run `crs embed-missing` once to drain the accumulated backlog.
 - 2026-04-29 v1.7.0 **Rust-only**: dropped Python entirely. `crs` is now the **base** install, no longer optional acceleration. `install.sh` / `install.ps1` build cargo and wire up launchd / Scheduled Task / SessionStart hook in one shot. Removed `build.py` / `embed.py` / `embed_parallel.py` / `vsearch.py` / `vsearch-since.py` / `csearch.py` and the bash `csearch` / `vsearch` wrappers. `install-semantic.*` no longer creates a Python venv — it just installs Ollama + bge-m3 and calls `crs embed-missing` for backfill. **Prerequisite changed**: now requires `cargo` (rustup) instead of `python3`. Migration on existing installs: rebuild via the new `install.sh`, which auto-rewires launchd plist + SessionStart hook.
