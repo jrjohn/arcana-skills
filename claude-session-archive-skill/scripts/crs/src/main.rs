@@ -866,10 +866,18 @@ fn cmd_embed_missing(workers: usize, limit: usize) -> Result<()> {
                 Ok(v) => {
                     let blob = vec_to_blob(&v);
                     let c = conn_mu.lock().unwrap();
-                    if let Err(e) = c.execute(
-                        "INSERT INTO msg_vec(rowid, embedding) VALUES (?1, ?2)",
+                    let c_ref = &c;
+                    let res = c_ref.execute(
+                        "INSERT OR REPLACE INTO msg_vec(rowid, embedding) VALUES (?1, ?2)",
                         params![rowid, blob],
-                    ) {
+                    ).or_else(|_| {
+                        c_ref.execute("DELETE FROM msg_vec WHERE rowid = ?1", params![rowid])?;
+                        c_ref.execute(
+                            "INSERT INTO msg_vec(rowid, embedding) VALUES (?1, ?2)",
+                            params![rowid, blob],
+                        )
+                    });
+                    if let Err(e) = res {
                         eprintln!("insert rowid={} err={}", rowid, e);
                     }
                 }
