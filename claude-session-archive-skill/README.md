@@ -102,6 +102,61 @@ Adds concept / cross-language / synonym matching on top of `csearch`. Downloads 
 
 After install, `crs vsearch` (or `vsearch.ps1` on Windows) works against the populated `msg_vec` table. See `references/semantic-search.md` for trade-offs.
 
+## Trade-offs (pros / cons)
+
+Honest evaluation as of 2026-05-04 (v1.7.3). Use this to decide whether the operational cost matches your recall needs.
+
+### Pros
+
+1. **Zero-maintenance background ingest.** launchd / Task Scheduler / cron every 15 min — no user friction once installed.
+2. **Single Rust binary (~5 MB)** — bundles SQLite + FTS5 + sqlite-vec. No Python venv, no `pip install`. `cargo build` once on each new machine and ship the binary.
+3. **Cross-platform parity.** macOS / Linux / Windows each have base + native-Ollama + Docker-Ollama installers.
+4. **Three-tier graceful degradation.** `csearch` (always works, FTS lexical) → `vsearch` (semantic, optional) → `auto_recent.md` (Memory autoload). Each tier independently useful.
+5. **Newest-first embed ordering.** Today's conversations become vsearchable in minutes, not hours, even during long initial backfills.
+6. **Cross-language matching.** `bge-m3` (1024-dim multilingual SOTA) — "防火牆規則調整" matches "firewall policy edit" without a thesaurus.
+7. **Idempotent installer.** Re-running rebuilds + re-wires hooks safely; no "uninstall first" dance.
+8. **Memory ↔ DB separation is enforced by design.** Memory holds curated signal (small, high-density); DB holds verbatim log (large, queried on demand). Documented + reflected in `auto_recent.md` generation logic.
+
+### Cons
+
+1. **🔥 No health check / dashboard / alert.** A latent bug let `embed-missing` silently skip every new row for 6 days on at least one machine (the `pending = total - done` arithmetic broke once `msg_vec` accumulated stale rowids — fixed in v1.7.1/v1.7.2). FTS stayed current but vsearch returned only 4/28-and-older results. Detection took manual user-side curiosity. **No `crs doctor` subcommand exists yet.**
+2. **Privacy / encryption.** DB captures every tool output verbatim — passwords, API tokens, IPs, MACs. Protection is `chmod 600` only; no encryption at rest. Loss / theft of the disk is a credential-disclosure event.
+3. **Monotonic disk growth.** "Never delete old rows" is a stated invariant. 100k rows ≈ 731 MB. No retention policy, even opt-in. Move to external storage when tight.
+4. **Embedding lag.** `vsearch` needs an ingest tick (≤ 15 min) to include the *current* session. `csearch` (FTS) is updated synchronously and has no lag. Documented in v1.7.3.
+5. **`msg_vec` accumulates stale rowids.** When `msg.rowid` is reused after a re-ingest, the old vector lingers. Currently v1.7.2 papers over collisions with `INSERT OR REPLACE`, but **no `crs prune-vec` subcommand exists** to clean the stale tail. On one machine: `max(msg.rowid) = 513116` vs `count(msg) = 112304` → ~400k rowid gap, of which ~5k vec rows are orphans.
+6. **Ollama is a single point of failure for vsearch / auto_recent.** Daemon down → semantic stack stalls. No alert path. (FTS keeps working.)
+7. **No cross-machine transfer story.** No `crs export` / `crs import` / `crs sync`. Switching machines = re-ingest from scratch. Deliberate, but undocumented as a constraint.
+8. **First-time backfill is long and silent.** 100k rows × ~9-12 emb/sec ≈ 2-3 hr on Apple Silicon (Metal); ~3-5× slower in Docker. No progress notification surfaces — user sees `backfill.log` only if they look.
+9. **Errors fail silently.** Ingest / backfill failures land in log files but don't surface to the user. The 6-day vsearch outage in (1) is a direct consequence.
+
+## Install hardening — proposed roadmap
+
+Concrete improvements identified during the 2026-05-04 audit. Not yet implemented; ordered by ROI.
+
+| # | Item | Impact | Effort |
+|---|---|---|---|
+| **1** | **`crs doctor` subcommand** — single command checks: cargo / sqlite3 / jq present, DB perms, launchd / Task / cron registered + last-run-success, SessionStart hook present, Ollama reachable, `bge-m3` pulled, `msg` vs `msg_vec` ratio, stale rowid count, embed backlog size. Catches the silent-failure class that bit us 2026-05-04. | High | Medium |
+| **2** | **`crs prune-vec` subcommand** — `DELETE FROM msg_vec WHERE rowid NOT IN (SELECT rowid FROM msg)`. Run periodically or on demand. Prevents stale buildup; complements v1.7.2's `INSERT OR REPLACE`. | High | Small |
+| **3** | **Prerequisite checks fail early in installers.** macOS/Linux: probe `jq`. Windows: probe `sqlite3.exe`. If missing, print exact install command and exit before half-running. | High (UX) | Small |
+| **4** | **Unfreeze `OLLAMA_VER=v0.21.2`** in `install-semantic.sh`. Either fetch latest tag from GitHub Releases API or accept `OLLAMA_VER=…` env override (default = latest). | Medium | Small |
+| **5** | **`uninstall.sh` / `uninstall.ps1`** — tear down launchd / Task / hook / symlink. Currently users with cold feet have to reverse-engineer the install steps. | Medium | Medium |
+| **6** | **README operations section** — "How to verify the archive is healthy" with `crs doctor` + manual SQL probes. Surfaces this whole doc as a runbook, not just a feature list. | Medium (transparency) | Small |
+| **7** | **Shell-rc detection in `install.sh`** — `$SHELL` env var isn't reliable across login styles; switch to inspecting which rc files exist + are non-empty, and add an explicit `source $RC` hint at the end. | Low | Small |
+| **8** | **Linux systemd-timer alternative** to cron (parity with launchd). Detect at install time, prefer systemd if `systemctl --user` works, fall back to cron. | Low | Medium |
+| **9** | **Windows path-with-spaces hardening** in `install.ps1` — explicit `"..."` quoting around `$Archive`, `$Bin`, `$BinDir`. Some users have `Documents and Settings`-era profile names that bite later. | Low | Small |
+| **10** | **Docker semantic variant healthcheck wait.** Currently the install kicks off backfill before the container's `:11434` is necessarily ready; add a poll loop with timeout. | Low | Small |
+
+### Suggested first batch (v1.8.0 candidate)
+
+Items **1, 2, 3, 6** together close the operational visibility gap that produced the 2026-05-04 silent-failure incident:
+
+- `crs doctor` (#1) — proactive catch.
+- `crs prune-vec` (#2) — root-cause cleanup tool.
+- Installer prereq checks (#3) — fail-early UX.
+- README ops section (#6) — make all the above discoverable.
+
+Estimated 1-2 hours total for someone with the codebase loaded. Other items can ship piecemeal in later patch releases.
+
 ## What's new
 
 ### v1.7.0 — Rust-only
