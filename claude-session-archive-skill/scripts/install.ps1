@@ -14,6 +14,7 @@
     5. Add %USERPROFILE%\bin to user PATH
     6. Register Scheduled Task ClaudeArchiveIngest (every 15 min → crs.exe build)
     7. Register SessionStart hook (crs.exe gen-recent)
+    7b. Install + register PreToolUse archive-preflight hook (Bash + Read)
     8. First ingest run
     9. Smoke test
 
@@ -147,6 +148,52 @@ if ($alreadyRegistered) {
     Write-Host "==> SessionStart hook registered in $Settings"
 }
 
+# 7b. Install + register archive-preflight PreToolUse hook
+#     - Blocks raw sqlite3 against archive DB until vsearch/csearch runs once.
+#     - Blocks grep/Select-String/Read on memory files until vsearch/csearch runs once.
+#     - Sentinel: $env:TEMP\claude-archive-preflight-<session_id>
+$HooksDir  = Join-Path $env:USERPROFILE '.claude\hooks'
+$Preflight = Join-Path $HooksDir 'archive-preflight.ps1'
+New-Item -ItemType Directory -Force -Path $HooksDir | Out-Null
+Write-Host "==> installing archive-preflight hook → $Preflight"
+Copy-Item -Force (Join-Path $SkillDir 'scripts\archive-preflight.ps1') $Preflight
+
+# Re-load $obj to pick up SessionStart edit above
+$obj = Get-Content -Path $Settings -Raw | ConvertFrom-Json
+if (-not $obj.PSObject.Properties['hooks']) {
+    $obj | Add-Member -NotePropertyName hooks -NotePropertyValue ([PSCustomObject]@{})
+}
+if (-not $obj.hooks.PSObject.Properties['PreToolUse']) {
+    $obj.hooks | Add-Member -NotePropertyName PreToolUse -NotePropertyValue @()
+}
+
+$preflightCmd = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$Preflight`""
+foreach ($matcher in 'Bash','Read') {
+    $alreadyRegistered = $false
+    foreach ($entry in @($obj.hooks.PreToolUse)) {
+        if ($entry.matcher -eq $matcher) {
+            foreach ($h in @($entry.hooks)) {
+                if ($h.command -and ($h.command -like "*archive-preflight.ps1*")) {
+                    $alreadyRegistered = $true
+                }
+            }
+        }
+    }
+    if ($alreadyRegistered) {
+        Write-Host "    PreToolUse $matcher hook already registered (skip)"
+    } else {
+        $newPre = [PSCustomObject]@{
+            matcher = $matcher
+            hooks   = @(
+                [PSCustomObject]@{ type = 'command'; command = $preflightCmd; timeout = 5 }
+            )
+        }
+        $obj.hooks.PreToolUse = @($obj.hooks.PreToolUse) + $newPre
+        Write-Host "==> registering PreToolUse $matcher hook"
+    }
+}
+($obj | ConvertTo-Json -Depth 10) | Set-Content -Path $Settings -Encoding UTF8
+
 # 8. First ingest
 Write-Host "==> First ingest ..."
 & $Bin build --no-embed
@@ -158,9 +205,10 @@ Write-Host "==> smoke test:"
 
 Write-Host ""
 Write-Host "✓ Base install complete." -ForegroundColor Green
-Write-Host "  - 15-min ingest:  Get-ScheduledTask -TaskName ClaudeArchiveIngest"
-Write-Host "  - SessionStart:   crs.exe gen-recent"
-Write-Host "  - interactive:    csearch.ps1 / vsearch.ps1 / crs csearch / crs vsearch"
+Write-Host "  - 15-min ingest:        Get-ScheduledTask -TaskName ClaudeArchiveIngest"
+Write-Host "  - SessionStart hook:    crs.exe gen-recent"
+Write-Host "  - PreToolUse hook:      $Preflight (Bash + Read; vsearch/csearch preflight)"
+Write-Host "  - interactive:          csearch.ps1 / vsearch.ps1 / crs csearch / crs vsearch"
 Write-Host ""
 Write-Host "Optional next step (semantic search via Ollama + bge-m3):"
 Write-Host "  .\install-semantic.ps1          # native OllamaSetup.exe"

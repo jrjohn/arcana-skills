@@ -16,7 +16,8 @@
 #        macOS  → launchd plist
 #        Linux  → crontab entry
 #   8. Register SessionStart hook in ~/.claude/settings.json (needs jq)
-#   9. First ingest run
+#   8b. Install PreToolUse archive-preflight hook (Bash + Read)
+#  9. First ingest run
 #  10. Smoke test
 #
 # Idempotent: re-running rebuilds + re-points hooks safely.
@@ -170,6 +171,38 @@ else
     echo "       hooks.SessionStart [{\"hooks\":[{\"type\":\"command\",\"command\":\"$BIN gen-recent 2>/dev/null || true\",\"timeout\":30}]}])"
 fi
 
+# 8b. Install + register archive-preflight PreToolUse hook
+#     - Blocks raw sqlite3 against archive DB until vsearch/csearch runs once.
+#     - Blocks grep/Read on memory files until vsearch/csearch runs once.
+#     - Sentinel: /tmp/claude-archive-preflight-<session_id>
+HOOKS_DIR="$HOME/.claude/hooks"
+PREFLIGHT="$HOOKS_DIR/archive-preflight.sh"
+mkdir -p "$HOOKS_DIR"
+echo "==> installing archive-preflight hook → $PREFLIGHT"
+cp "$SKILL_DIR/scripts/archive-preflight.sh" "$PREFLIGHT"
+chmod +x "$PREFLIGHT"
+
+if command -v jq >/dev/null 2>&1; then
+    PREFLIGHT_CMD="$PREFLIGHT"
+    # Register PreToolUse hook for both Bash AND Read matchers (idempotent)
+    for matcher in Bash Read; do
+        if jq -e --arg m "$matcher" --arg c "$PREFLIGHT_CMD" \
+            '(.hooks.PreToolUse // []) | map(select(.matcher == $m)) | map(.hooks // []) | flatten | map(.command? // "") | any(. == $c)' \
+            "$SETTINGS" >/dev/null 2>&1 ; then
+            echo "    PreToolUse $matcher hook already registered (skip)"
+        else
+            echo "==> registering PreToolUse $matcher hook"
+            jq --arg m "$matcher" --arg c "$PREFLIGHT_CMD" \
+                '.hooks.PreToolUse = ((.hooks.PreToolUse // []) + [{"matcher":$m,"hooks":[{"type":"command","command":$c,"timeout":5}]}])' \
+                "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
+        fi
+    done
+else
+    echo "    (jq not installed; manually add to $SETTINGS PreToolUse for Bash + Read:"
+    echo "       {\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PREFLIGHT\",\"timeout\":5}]}"
+    echo "       {\"matcher\":\"Read\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PREFLIGHT\",\"timeout\":5}]})"
+fi
+
 # 9. First ingest
 echo "==> first ingest"
 "$BIN" build --no-embed
@@ -181,9 +214,10 @@ echo "==> smoke test:"
 
 echo
 echo "✓ Base install complete."
-echo "  - 15-min ingest:  $BIN build  (launchd / cron)"
-echo "  - SessionStart:   $BIN gen-recent"
-echo "  - interactive:    crs csearch / crs vsearch / crs vsearch-since"
+echo "  - 15-min ingest:        $BIN build  (launchd / cron)"
+echo "  - SessionStart hook:    $BIN gen-recent"
+echo "  - PreToolUse hook:      $PREFLIGHT (Bash + Read; vsearch/csearch preflight)"
+echo "  - interactive:          crs csearch / crs vsearch / crs vsearch-since"
 echo
 echo "Optional next step (semantic search via Ollama + bge-m3):"
 echo "  ./install-semantic.sh           # native Ollama (~125 MB) + ~1.2 GB model"

@@ -68,6 +68,7 @@ What it does:
    - **macOS**: writes `~/Library/LaunchAgents/com.<USER>.claude-archive.plist` calling `crs build`, runs `launchctl load`
    - **Linux**: adds `*/15 * * * * ~/claude-archive/crs/target/release/crs build` to crontab
 8. Register `crs gen-recent` as a SessionStart hook in `~/.claude/settings.json` (skipped if already present; needs `jq`)
+8b. Install `archive-preflight.sh` to `~/.claude/hooks/` and register it as a PreToolUse hook for both `Bash` and `Read` matchers (gates raw `sqlite3` against the archive DB and `grep`/`Read` on memory files until `vsearch`/`csearch` runs once per session — see README "Preflight enforcement" section)
 9. First ingest (`crs build --no-embed`) — populates `msg` + `msg_fts`
 10. Smoke test: prints `crs --help`
 
@@ -185,6 +186,7 @@ cd scripts
 | Initial ingest | `crs build --no-embed` | same |
 | PATH | `~/bin` | adds `%USERPROFILE%\bin` to user PATH |
 | SessionStart hook | jq into `~/.claude/settings.json` | PowerShell into `%USERPROFILE%\.claude\settings.json` |
+| PreToolUse preflight hook | `archive-preflight.sh` copied to `~/.claude/hooks/`, registered for Bash + Read | `archive-preflight.ps1` copied to `%USERPROFILE%\.claude\hooks\`, registered for Bash + Read |
 
 Verification on Windows:
 ```powershell

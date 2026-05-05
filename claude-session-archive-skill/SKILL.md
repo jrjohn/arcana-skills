@@ -183,6 +183,8 @@ csearch 'local-in-deny-broadcast' network      # ✗ error: "no such column: in"
 
 **5. Ingest is incremental + idempotent.** `crs build` uses (file path, mtime) tracking — re-running is safe and only re-reads changed JSONLs. New session content lands in DB at next 15-min launchd tick (or run `crs build` manually for instant indexing).
 
+**6. Memory file is a stale index, not source of truth (since v1.9.0 — enforced by hook).** `~/.claude/projects/*/memory/*.md` is hand-curated — only what someone bothered to write down. For roster / device / credential / history queries, the canonical source is the archive (full transcripts). The `archive-preflight.sh` hook denies `grep`/`Read` on memory files until `vsearch`/`csearch` runs once in the session, preventing the antipattern of grepping memory and silently missing data that's actually in the archive. `MEMORY.md` itself is exempted (it's auto-loaded by the system anyway). Once the sentinel is set, memory access is unblocked for the rest of the session — useful for "I just discussed this in this session" lookups.
+
 ## Snippet for `~/.claude/CLAUDE.md`
 
 Paste this near the top so every Claude session knows about the archive:
@@ -216,6 +218,19 @@ FTS5 syntax: phrase `'"..."'`, boolean `A AND B / OR / NOT`, prefix `foo*`. Word
 - DB contains sensitive output (passwords / tokens / IPs) — local only, no sharing
 - Memory and DB split: Memory for curated signal, DB for log-style recall
 
+## Memory file is NOT a substitute for archive query
+
+`~/.claude/projects/*/memory/*.md` is a stale, hand-curated index — only what someone
+manually wrote down. For roster / device / credential / history queries, the
+canonical source is the archive (full conversation transcripts). The
+`archive-preflight.sh` hook (registered for `Bash` + `Read`) denies grep / cat /
+Read on memory files until `vsearch` or `csearch` runs once this session.
+`MEMORY.md` (the index file itself) is exempted.
+
+Default flow: **vsearch first** (concept queries), **csearch** for known
+literals (IP / hostname / 工號 / phrase), **grep memory** only for
+"recent context I just discussed this session". Anything else = use the archive.
+
 ## Auto-context bridging (crs gen-recent)
 Each session start, a SessionStart hook runs `crs gen-recent` which writes
 `<project>/memory/auto_recent.md` with: pending items + last 48h user prompts +
@@ -239,10 +254,12 @@ claude-session-archive-skill/
 │   └── semantic-search.md            # OPTIONAL: Ollama + sqlite-vec for vsearch
 └── scripts/
     ├── crs/                          # Rust source (~720 LOC: build / embed / vsearch / csearch / gen-recent / vsearch-since)
-    ├── install.sh                    # macOS/Linux base installer (cargo build + launchd/cron + sqliterc + first ingest + SessionStart hook)
-    ├── install.ps1                   # Windows base installer (cargo build + Scheduled Task + sqliterc + SessionStart hook)
+    ├── install.sh                    # macOS/Linux base installer (cargo build + launchd/cron + sqliterc + first ingest + SessionStart hook + PreToolUse preflight hook)
+    ├── install.ps1                   # Windows base installer (cargo build + Scheduled Task + sqliterc + SessionStart hook + PreToolUse preflight hook)
     ├── csearch.ps1                   # Windows PowerShell csearch wrapper (sqlite3.exe)
     ├── vsearch.ps1                   # Windows PowerShell vsearch wrapper (calls crs.exe vsearch)
+    ├── archive-preflight.sh          # PreToolUse hook (Bash + Read) — gates raw sqlite3 + memory grep until vsearch/csearch runs once
+    ├── archive-preflight.ps1         # Windows port of the preflight hook
     ├── gen-recent-context.sh         # legacy hook target — calls crs vsearch-since (kept for stable hook command path)
     ├── gen-recent-context.ps1        # Windows port of the same
     ├── sqliterc.template             # → ~/.sqliterc
@@ -256,6 +273,7 @@ claude-session-archive-skill/
 
 ## Author / version
 
+- 2026-05-05 v1.9.0 **Preflight enforcement hook — memory grep + sqlite3 gating.** Adds a `PreToolUse` hook (`archive-preflight.sh` / `archive-preflight.ps1`) that mechanically enforces the vsearch-first preflight that has been documented since v1.6.2 but was prose-only and frequently skipped. The hook registers on **both `Bash` and `Read` matchers** in `~/.claude/settings.json` and applies three rules per session: (1) `vsearch` / `csearch` invocation creates a sentinel `/tmp/claude-archive-preflight-<session_id>` and is always allowed, (2) raw `sqlite3 ~/claude-archive/sessions.db ...` is denied until the sentinel exists, (3) **NEW: `grep`/`cat`/`head`/`tail`/`sed`/`awk` on `~/.claude/projects/*/memory/*.md` and `Read` on the same files are also denied until the sentinel exists** — `MEMORY.md` itself is exempted (auto-loaded by system). Motivation: 2026-05-05 audit found Claude grepping memory for a 6-person department roster, hitting only 2/6 because memory was a stale hand-curated subset; a `csearch` would have hit the full audit transcript with all 6. Codifying the rule in a hook prevents the antipattern at runtime, not just in docs. `install.sh` / `install.ps1` install + register the hook idempotently. Re-running the installer is safe.
 - 2026-05-04 v1.8.0 **Operational visibility — `crs doctor` + `crs prune-vec` + installer prereq surfacing.** First batch from the 2026-05-04 audit (items 1, 2, 3, 6 of the install-hardening roadmap). `crs doctor` is a single-command health check spanning tooling / storage / DB consistency / schedule / hooks / Ollama, returning exit-code 0/1/2 (clean / warn / fail) for cron-friendly use. `crs prune-vec` drops orphaned `msg_vec` rowids left over after re-ingest cycles (complements v1.7.2's `INSERT OR REPLACE` — collisions are tolerated *and* cleanable). `install.sh` now surfaces optional `jq` / `sqlite3` status with exact install commands per OS before mid-run discovery; `install.ps1` downgrades `sqlite3.exe` from fatal abort to warning since `crs.exe` already bundles SQLite; `install-semantic.ps1` skips its row-count probe gracefully when `sqlite3.exe` is absent. README gains an "Operations — verify it's healthy" section that documents these workflows. Roadmap items 4, 5, 7-10 remain for later patch releases.
 - 2026-05-04 v1.7.3 **Docs — vsearch sweet spot vs blind spot.** Added concrete usage guidance distilled from 2026-05-04 verification: vsearch is strong on technical-concept queries (terms cluster well in embedding space, e.g. "rowid 殘留 導致 INSERT 衝突" hits the actual collision discussion) but weak on time-relative ones ("today / 今天 / 昨天 / last Thursday") — the embedding weight goes to the generic time word, not the underlying topic. Time-bounded questions should use `csearch` + `WHERE date(ts) = ...` SQL filter instead, since FTS index is updated synchronously while embeddings backfill in batches up to 15 min behind. Updated `Daily usage patterns` to surface this trade-off and noted the embedding-lag caveat for current-session messages.
 - 2026-05-04 v1.7.2 **Bug fix — `embed-missing` INSERT now uses `INSERT OR REPLACE`** (with explicit `DELETE` + `INSERT` fallback). After v1.7.1 fixed the pending-count bug, the actual INSERT step still hit `UNIQUE constraint failed on msg_vec primary key` for every rowid that was stale in `msg_vec` (i.e. `msg.rowid` was reused after a re-ingest, but `msg_vec` never dropped the old vector). The `LEFT JOIN msg_vec WHERE v.rowid IS NULL` predicate misses these because of how the `vec0` virtual table interacts with SQLite's NULL fill-in for outer joins — the planner returns "not in vec_vec" but the underlying storage still holds the rowid. Symptom: every fresh `embed-missing` run noisily failed on hundreds of newest rows (the vsearch tail you most want — today's conversations) while quietly succeeding on older gaps. Fix: use `INSERT OR REPLACE` so a colliding rowid is overwritten with the new embedding; fall back to explicit `DELETE` + `INSERT` if the storage rejects `OR REPLACE`. Existing installs: rebuild and re-run `embed-missing` — stale rows get refreshed in place, no manual prune needed.

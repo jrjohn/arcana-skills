@@ -40,6 +40,24 @@ Inside Claude:
 
 Skip vsearch and go straight to csearch only when the query is a precise literal — IP / hostname / file path / FTS5 boolean syntax / known key name. Pin this rule in `~/.claude/CLAUDE.md` (see snippet in `SKILL.md`).
 
+### Preflight enforcement (since v1.9.0) — `archive-preflight.sh` hook
+
+The installer registers a **`PreToolUse` hook** on `Bash` and `Read` that enforces the preflight rule mechanically. The hook lives at `~/.claude/hooks/archive-preflight.sh` (or `archive-preflight.ps1` on Windows). Behavior per session:
+
+| First action of the session | Outcome |
+|---|---|
+| `vsearch ...` or `csearch ...` | ✅ allowed → sets sentinel `/tmp/claude-archive-preflight-<session_id>` (or `%TEMP%\` on Windows) |
+| `sqlite3 ~/claude-archive/sessions.db ...` | ❌ denied with reason — must run `vsearch`/`csearch` first |
+| `grep / cat / head / tail / sed / awk` on `~/.claude/projects/*/memory/*.md` | ❌ denied — memory file is a stale index, not source of truth |
+| `Read` tool on `~/.claude/projects/*/memory/*.md` | ❌ denied (same reason). `MEMORY.md` itself is exempted (auto-loaded by system). |
+| Anything else | ✅ allowed silently |
+
+Once `vsearch`/`csearch` runs once and sets the sentinel, subsequent `sqlite3` queries and memory grepping/reading are unblocked for the rest of the session.
+
+**Why block memory grep too?** Memory files are hand-curated indexes — incomplete by design (only what someone bothered to write down). For "who is in dept X?", "what's .136 used for?", "where's password Y?" the canonical source is the archive (full conversation transcripts). Forcing `vsearch`/`csearch` first prevents the antipattern of grepping memory and silently missing 2/3 of the data that's actually in the archive.
+
+The hook is registered idempotently — re-running `install.sh` is safe.
+
 ### `auto_recent.md` — Memory bridge (since v1.4.0)
 
 Every session start, a hook regenerates `<project>/memory/auto_recent.md` with the last-48h messages most semantically related to the project's open `pending` items (KNN over `msg_vec`, cosine ≤ 0.65, top 6 hits). Claude sees it automatically — no `csearch` needed for "what was I doing yesterday?"
@@ -62,7 +80,7 @@ cd scripts
 ./install-semantic-docker.sh    # Docker variant
 ```
 
-`install.sh` does: cargo build crs → mkdirs → copy sqliterc / gen-recent-context.sh → symlink `~/bin/crs` → write launchd plist (macOS) or crontab entry (Linux) pointing to `crs build` → register SessionStart hook (`crs gen-recent`) in `~/.claude/settings.json` → first ingest.
+`install.sh` does: cargo build crs → mkdirs → copy sqliterc / gen-recent-context.sh → symlink `~/bin/crs` → write launchd plist (macOS) or crontab entry (Linux) pointing to `crs build` → register SessionStart hook (`crs gen-recent`) → install + register PreToolUse `archive-preflight.sh` hook (Bash + Read) in `~/.claude/settings.json` → first ingest.
 
 ### Windows (PowerShell)
 
@@ -76,7 +94,7 @@ cd scripts
 .\install-semantic-docker.ps1   # Docker Desktop variant
 ```
 
-`install.ps1` does: cargo build crs.exe → mkdirs → copy sqliterc / csearch.ps1 / vsearch.ps1 / gen-recent-context.ps1 → register Scheduled Task `ClaudeArchiveIngest` (15 min, runs `crs.exe build`) → register SessionStart hook (`crs.exe gen-recent`) in `%USERPROFILE%\.claude\settings.json` → first ingest.
+`install.ps1` does: cargo build crs.exe → mkdirs → copy sqliterc / csearch.ps1 / vsearch.ps1 / gen-recent-context.ps1 → register Scheduled Task `ClaudeArchiveIngest` (15 min, runs `crs.exe build`) → register SessionStart hook (`crs.exe gen-recent`) → install + register PreToolUse `archive-preflight.ps1` hook (Bash + Read) in `%USERPROFILE%\.claude\settings.json` → first ingest.
 
 ### Then (all platforms)
 
@@ -198,6 +216,21 @@ Items **1, 2, 3, 6** together close the operational visibility gap that produced
 Estimated 1-2 hours total for someone with the codebase loaded. Other items can ship piecemeal in later patch releases.
 
 ## What's new
+
+### v1.9.0 — Preflight enforcement hook (memory grep + sqlite3 gating)
+
+Adds a `PreToolUse` hook (`archive-preflight.sh` / `archive-preflight.ps1`) that **mechanically enforces the vsearch-first preflight** documented since v1.6.2. Previously the rule was prose-only (in CLAUDE.md and SKILL.md), which Claude could and did skip. Now:
+
+- **Hook is registered for both `Bash` and `Read` matchers** in `~/.claude/settings.json`.
+- **First action of the session must be `vsearch` or `csearch`** — otherwise `sqlite3 ~/claude-archive/sessions.db ...` is denied with a hint.
+- **NEW: memory file grep / Read is also gated.** `~/.claude/projects/*/memory/*.md` is treated as a stale, hand-curated index; for "who is in dept X?" / "what's .136?" / "where's password Y?" the canonical source is the archive (full transcripts), not memory. `MEMORY.md` itself is exempted (it's auto-loaded by the system anyway).
+- Sentinel file (`/tmp/claude-archive-preflight-<session_id>` on Unix, `%TEMP%\` on Windows) unblocks the rest of the session after one `vsearch`/`csearch` run.
+
+Motivation: an audit on 2026-05-05 found Claude grepping memory for a 6-person department roster, hitting only 2 of 6 because memory only mentioned the 2 employees that had previously triggered an incident. A `csearch` would have hit the full 4/24 audit transcript with all 6. Codifying the rule in a hook prevents the antipattern at runtime, not just in docs.
+
+`install.sh` / `install.ps1` install the hook idempotently. Both auto-add the matcher entries via `jq` (Linux/Mac) or `ConvertFrom-Json` (Windows). Re-running the installer is safe.
+
+See README "Preflight enforcement (since v1.9.0)" section for the full behavior table.
 
 ### v1.8.0 — `crs doctor` + `crs prune-vec` + installer prereq surfacing
 
