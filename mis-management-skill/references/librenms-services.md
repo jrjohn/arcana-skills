@@ -174,13 +174,15 @@ WHERE name = '[CRIT] CPU >=95%';
 
 After UPDATE: short spikes (≤10 min) absorbed by `delay=600`. Sustained ≥10 min saturation still alerts (once), then mutes until recovery, then re-arms.
 
-**If alerts continue flapping after rule UPDATE**: dispatcher may have cached old rule values. Restart the alerter container:
+**Always restart dispatcher after rule UPDATE.** Confirmed empirically (2026-05-06): the dispatcher caches alert rules at startup and does **not** poll the DB for rule changes during a fire-cycle. Verified by waiting 28 min after a rule UPDATE — the old `count` value still applied. Solution:
 
 ```bash
 docker restart librenms_dispatcher
 ```
 
-(Caveat: this affects all alert evaluation for ~30s. Generally safe but get authorization on shared infra.)
+Effect: < 1 sec container restart, alert evaluation pauses for one poll window (~5 min) then resumes with fresh rule cache. Generally safe on shared infra but worth flagging the user for authorization since it briefly interrupts monitoring for all devices.
+
+Make this the standard SOP — change rule, restart dispatcher, then verify. Don't wait for "next cron cycle" to see if it took effect; it won't.
 
 Don't blanket-apply this pattern to all rules — only ones flapping. Real sustained saturation still needs to alert promptly, and `count=1` permanently mutes a stuck-stuck condition until recovery.
 
