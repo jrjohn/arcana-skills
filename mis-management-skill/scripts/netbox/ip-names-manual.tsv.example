@@ -1,0 +1,10 @@
+# Manual overrides for ip-names.tsv (run via gen-ip-names-tsv.py)
+# Use this for: infra labels (FortiGate / switches / NAS / printers), external services,
+# or to override NetBox/FG description with cleaner display name.
+# Format: <IP>\t<Name>  (tab-separated, # comments OK, blank lines ignored)
+
+
+# Example entries (replace with your own IPs):
+# 10.0.0.1	FortiGate
+# 10.0.0.14	QNAP NAS
+# 10.0.0.200	MIS hub server

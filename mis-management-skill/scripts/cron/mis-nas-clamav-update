@@ -1,0 +1,4 @@
+# Daily ClamAV signature update for QNAP NAS .14 (downloads via .200 proxy
+# because NAS bundled OpenSSL too old for clamav.net Cloudflare CDN).
+# Doc: /Users/jrjohn/Documents/projects/network/info/docs/playbooks/nas-clamav-update.md
+30 4 * * * root flock -n /var/lock/mis-nas-clamav ${MIS_HOME:-/opt/mis-log-db}/nas-clamav-update.sh >> /var/log/mis-nas-clamav.log 2>&1

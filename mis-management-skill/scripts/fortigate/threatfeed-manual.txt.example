@@ -1,0 +1,7 @@
+# Manual additions to threatfeed (merged into threatfeed.txt by mis-threatfeed-sync-v3.py)
+# Format: one IP or CIDR per line. Lines starting with # ignored.
+# Date YYYY-MM-DD prefix to comment for tracking.
+
+# Example: add IPs/CIDRs you want to manually block
+# 192.0.2.1   # description
+# 198.51.100.0/24   # CIDR block

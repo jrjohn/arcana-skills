@@ -1,0 +1,4 @@
+# Auto-curate inbound threatfeed (high-volume attackers from FG local-in deny log)
+# Doc: /Users/jrjohn/Documents/projects/network/info/docs/playbooks/auto-curate-threatfeed.md
+# Output: ${WEB_ROOT:-/opt/mis-http}/threatfeed-manual-auto.txt → mis-threatfeed-sync :05 picks up
+15,45 * * * * root flock -n /var/lock/mis-auto-curate /usr/bin/python3 ${MIS_HOME:-/opt/mis-log-db}/auto-curate-threatfeed.py >> /var/log/mis-auto-threatfeed.log 2>&1

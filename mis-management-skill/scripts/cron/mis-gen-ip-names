@@ -1,0 +1,3 @@
+# Auto-regenerate ${MIS_HOME:-/opt/mis-log-db}/ip-names.tsv from NetBox + FG DHCP + manual
+# every hour at :02 (just before any ai-usage / deny-report regen)
+2 * * * * root /usr/bin/python3 ${MIS_HOME:-/opt/mis-log-db}/gen-ip-names-tsv.py >> /var/log/mis-gen-ip-names.log 2>&1
