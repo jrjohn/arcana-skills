@@ -87,6 +87,8 @@ See `references/fortigate-automation.md` for the full pipeline.
 
 **6. AD LDAP from Linux.** Base DN is the **AD forest root**, not your DNS domain. If `domain` is `arcana.com.tw` but AD is `arcana.com`, base DN is `DC=arcana,DC=com`. Discover with: `ldapsearch -x -H ldap://<AD_IP> -s base -b '' '(objectClass=*)' defaultNamingContext`.
 
+**7. NAS conn log lives on the hub, not the NAS.** QNAP NAS sends syslog to `/var/log/remote/qnap/qnap.log` on the hub (configured via QNAP Notification Center). **Don't SSH into the NAS to grep logs** — busybox-style shell + version-dependent paths waste round-trips. The conn log includes `Users: <employee_id>` field, which is often the most reliable IP→employee mapping (more complete than NetBox or DHCP). See `references/nas-management.md`.
+
 ## Snippet for `~/.claude/CLAUDE.md`
 
 Paste this near the top so future Claude sessions know how to use this skill in the project:
