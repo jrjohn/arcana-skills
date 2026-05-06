@@ -77,9 +77,13 @@ Every 30 min: reads last 1h of FG inbound deny log (`subtype="local"` + `action=
 - Skip: IPs already in `threatfeed.txt` (CIDR membership check, not just literal match).
 - Threshold: configurable `THRESHOLD_PER_IP = 100` hits/h.
 
+**Why filter `subtype="local"` (not `srcintf="wan[12]"`)**: `subtype=local` includes both wan-source (real attackers) and lan-source (your own hosts trying to reach FG-itself ports — DNS, mgmt, etc.). The lan-source noise is **intentionally let through the regex**, then filtered out by the RFC1918 whitelist. This is simpler than maintaining a `srcintf` regex and naturally extends to multi-WAN setups.
+
 **CIDR aggregation**: when ≥ 3 IPs from same /24 all qualify in same window, promote to `<subnet>.0/24` block. Keeps the threatfeed compact and pre-empts botnet rotation.
 
 **Idempotent**: outputs to a separate file (`threatfeed-manual-auto.txt`) — `mis-threatfeed-sync-v3.py` reads it. Easy to revert (just delete a line).
+
+**Below-threshold long tail (expected)**: with `THRESHOLD_PER_IP = 100`, attackers at 30-90 hits/h are **deliberately not added** — they're too quiet to be worth a permanent block entry. You'll see them persistently in `check_deny_inbound.sh` output (FG default-denies them anyway). Don't chase the long tail by lowering threshold to 20 — you'll bloat the address group with mostly-harmless scanners and crowd out room for real botnets.
 
 ### `check_deny_inbound.sh` / `check_deny_outbound.sh`
 
@@ -134,6 +138,8 @@ Default: **100 hits/h** per IP triggers add.
 | 50 | Catches more attackers; more false positives (legit scanners, search engines) |
 | **100** (default) | Balanced |
 | 200 | Only the loudest attackers; misses persistent low-rate brute force |
+
+**Don't chase the long tail.** Persistent 30-90/h attackers will always exist (slow probes, distributed scanners). FG default-denies them just fine — adding them to the threatfeed only bloats the addrgrp without measurable benefit. Reserve the entry budget for high-volume attackers (≥ 100/h) and botnet sweeps (CIDR aggregate). If you want to catch persistent low-rate brute force on a specific port, write a per-port-deny rule instead — much narrower, much smaller list.
 
 ### `auto-curate-threatfeed.py` CIDR_AGGREGATE_MIN
 
