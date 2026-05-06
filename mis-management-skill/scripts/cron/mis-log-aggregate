@@ -1,0 +1,4 @@
+# 每 10 分鐘聚合一次 FG P6 accept log 到 SQLite (with flock 防止 overlap)
+*/10 * * * * root flock -n /var/lock/mis-aggregate ${MIS_HOME:-/opt/mis-log-db}/aggregate.py >> /var/log/mis-log-aggregate.log 2>&1
+# 每天凌晨 3:30 vacuum 保持 DB 緊湊
+30 3 * * * root flock -n /var/lock/mis-vacuum sqlite3 ${MIS_HOME:-/opt/mis-log-db}/mis-log.db "VACUUM"

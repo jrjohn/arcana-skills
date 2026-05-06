@@ -1,0 +1,2 @@
+# Refresh threat feed .txt for FG external-resource to pull (FG auto-fetches every 60min)
+20,50 * * * * root ${MIS_HOME:-/opt/mis-log-db}/mis-threatfeed-sync-v3.py >> /var/log/mis-threatfeed.log 2>&1
