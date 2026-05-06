@@ -88,6 +88,7 @@ cd arcana-skills
 |-------|-------------|
 | `doc-indexer-skill` | Document indexing and full-text search tool (Apache Tika + Lucene, PDF/Word/Excel/OCR support, Chinese tokenization) |
 | `claude-session-archive-skill` | Permanent local SQLite FTS5 archive of every Claude Code session (`~/claude-archive/sessions.db`) — cross-session full-text recall via `csearch`, auto-ingested every 15 min via launchd, with SQLite tuning and FTS5 syntax helpers |
+| `mis-management-skill` | Central MIS hub for SMB network — FortiGate threatfeed automation (auto-curate inbound attackers + nested addrgrp wrap for FG 6.2 600-member cap), NetBox-driven IP labeling, LibreNMS custom service checks, QNAP NAS ClamAV signature update proxy (legacy TLS workaround), AD LDAP queries from Linux, DNS-based AI usage tracking |
 
 ## Uninstallation
 
@@ -153,7 +154,9 @@ arcana-skills/
 ├── windows-developer-skill/
 ├── app-requirements-skill/
 ├── app-uiux-designer.skill/
-└── doc-indexer-skill/
+├── doc-indexer-skill/
+├── claude-session-archive-skill/
+└── mis-management-skill/
 ```
 
 ## System Requirements
