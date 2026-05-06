@@ -31,6 +31,9 @@
 
 param(
     [switch]$All,
+    [switch]$Update,
+    [switch]$New,
+    [switch]$List,
     [switch]$WSL,
     [switch]$Help
 )
@@ -58,6 +61,11 @@ $ClaudeDir = Join-Path $env:USERPROFILE ".claude"
 $UserSettings = Join-Path $ClaudeDir "settings.json"
 $UserClaudeMd = Join-Path $ClaudeDir "CLAUDE.md"
 $HooksDir = Join-Path $ClaudeDir "hooks"
+
+# Per-install tracking: which skills installed, version, timestamp
+function Get-InstallRecord {
+    return Join-Path (Get-SkillsDir) ".arcana-install.json"
+}
 
 # Colors
 function Write-Color {
@@ -93,15 +101,21 @@ Arcana Skills Installer for Claude Code (Windows)
 Usage: .\install.ps1 [OPTIONS]
 
 Options:
-  -All      Install all skills without prompting
-  -WSL      Install to WSL2 environment
-  -Help     Show this help message
+  (no flag)  Interactive — show status table, select what to install
+  -All       Reinstall ALL skills
+  -Update    Update only skills with newer version available
+  -New       Install only skills not yet present
+  -List      Show status table only (no install)
+  -WSL       Install to WSL2 environment
+  -Help      Show this help message
 
 Examples:
-  .\install.ps1           # Interactive installation
-  .\install.ps1 -All      # Install all skills
-  .\install.ps1 -WSL      # Install to WSL2
-  .\install.ps1 -WSL -All # Install all to WSL2
+  .\install.ps1            # Interactive — recommended for re-runs
+  .\install.ps1 -All       # Reinstall all skills
+  .\install.ps1 -Update    # Update outdated only
+  .\install.ps1 -New       # Add new skills only
+  .\install.ps1 -List      # Show status table
+  .\install.ps1 -WSL -All  # Install all to WSL2
 "@
 }
 
@@ -428,6 +442,197 @@ function Merge-SkillClaudeMd {
 }
 
 # Install a single skill
+# === Version detection + install tracking ===
+
+function Get-SkillVersion {
+    param([string]$SkillPath)
+    $verFile = Join-Path $SkillPath "VERSION"
+    if (Test-Path $verFile) {
+        return (Get-Content $verFile -Raw).Trim()
+    }
+    return "0.0.0"
+}
+
+function Get-InstalledVersion {
+    param([string]$Skill)
+    $record = Get-InstallRecord
+    if (-not (Test-Path $record)) { return "" }
+    try {
+        $data = Get-Content $record -Raw | ConvertFrom-Json
+        if ($data.PSObject.Properties.Name -contains $Skill) {
+            return $data.$Skill.version
+        }
+    } catch {}
+    return ""
+}
+
+function Compare-SkillVersion {
+    param([string]$A, [string]$B)
+    if ($A -eq $B) { return 0 }
+    try {
+        $av = [version]$A
+        $bv = [version]$B
+        if ($av -gt $bv) { return 1 } else { return 2 }
+    } catch {
+        # Non-semver — sort lexicographically
+        if ($A -gt $B) { return 1 } else { return 2 }
+    }
+}
+
+function Get-SkillStatus {
+    param([string]$Skill, [string]$SourcePath)
+    $skillSource = Join-Path $SourcePath $Skill
+    if (-not (Test-Path $skillSource)) { return "NOT_IN_REPO" }
+    $skillsDir = Get-SkillsDir
+    $skillTarget = Join-Path $skillsDir $Skill
+    $repoVer = Get-SkillVersion $skillSource
+    $installedVer = Get-InstalledVersion $Skill
+    if (-not $installedVer -and -not (Test-Path $skillTarget)) {
+        return "NEW"
+    }
+    if (-not $installedVer -and (Test-Path $skillTarget)) {
+        return "UPDATE_AVAILABLE"  # legacy install before this versioning system
+    }
+    $cmp = Compare-SkillVersion $repoVer $installedVer
+    if ($cmp -eq 1) { return "UPDATE_AVAILABLE" } else { return "UP_TO_DATE" }
+}
+
+function Save-InstallRecord {
+    param([string]$Skill, [string]$Version)
+    $record = Get-InstallRecord
+    $timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss")
+    $data = @{}
+    if (Test-Path $record) {
+        try {
+            $existing = Get-Content $record -Raw | ConvertFrom-Json
+            foreach ($prop in $existing.PSObject.Properties) {
+                $data[$prop.Name] = $prop.Value
+            }
+        } catch {}
+    }
+    $data[$Skill] = @{
+        version = $Version
+        installed_at = $timestamp
+    }
+    $data | ConvertTo-Json -Depth 5 | Set-Content $record -Encoding UTF8
+}
+
+function Show-StatusTable {
+    param([string]$SourcePath)
+    Write-Host ""
+    Write-Info "Skill installation status:"
+    Write-Host ""
+    Write-Host ("  {0,-4} {1,-22} {2,-36} {3,-10} {4,-10}" -f "#", "Status", "Skill", "Repo", "Installed")
+    Write-Host "  ─────────────────────────────────────────────────────────────────────────────────"
+
+    $i = 1
+    $statsNew = 0
+    $statsUpdate = 0
+    $statsUpToDate = 0
+    foreach ($skill in $Skills) {
+        $skillSource = Join-Path $SourcePath $skill
+        $repoVer = "-"
+        if (Test-Path $skillSource) {
+            $repoVer = Get-SkillVersion $skillSource
+        }
+        $installed = Get-InstalledVersion $skill
+        if (-not $installed) { $installed = "-" }
+        $status = Get-SkillStatus -Skill $skill -SourcePath $SourcePath
+        $marker = ""
+        $color = "White"
+        switch ($status) {
+            "NEW" {
+                $marker = "[+] new              "
+                $color = "Cyan"
+                $statsNew++
+            }
+            "UPDATE_AVAILABLE" {
+                $marker = "[^] update available "
+                $color = "Yellow"
+                $statsUpdate++
+            }
+            "UP_TO_DATE" {
+                $marker = "[v] up-to-date       "
+                $color = "Green"
+                $statsUpToDate++
+            }
+            "NOT_IN_REPO" {
+                $marker = "[!] missing in repo  "
+                $color = "Red"
+            }
+        }
+        Write-Host ("  {0,-4} " -f "$i)") -NoNewline
+        Write-Host $marker -ForegroundColor $color -NoNewline
+        Write-Host (" {0,-36} {1,-10} {2,-10}" -f $skill, $repoVer, $installed)
+        $i++
+    }
+    Write-Host ""
+    Write-Info "Summary: $statsNew new, $statsUpdate update available, $statsUpToDate up-to-date"
+    Write-Host ""
+}
+
+function Select-SkillsWithStatus {
+    param(
+        [string]$SourcePath,
+        [string]$TargetPath
+    )
+    Show-StatusTable -SourcePath $SourcePath
+    Write-Host "  Action options:"
+    Write-Host "    [Enter]  Install [+] new + update [^] outdated  (recommended)"
+    Write-Host "    a        Reinstall ALL skills"
+    Write-Host "    n        Install only [+] new skills"
+    Write-Host "    u        Update only [^] outdated skills"
+    Write-Host "    s        Select specific skill numbers (comma-separated)"
+    Write-Host "    q        Quit"
+    Write-Host ""
+    $selection = Read-Host "  > "
+    switch -Regex ($selection) {
+        "^$|^[yY]$" {
+            foreach ($skill in $Skills) {
+                $status = Get-SkillStatus -Skill $skill -SourcePath $SourcePath
+                if ($status -eq "NEW" -or $status -eq "UPDATE_AVAILABLE") {
+                    Install-Skill -SkillName $skill -SourcePath $SourcePath -TargetPath $TargetPath
+                }
+            }
+        }
+        "^[aA]$" { Install-AllSkills -SourcePath $SourcePath -TargetPath $TargetPath }
+        "^[nN]$" {
+            foreach ($skill in $Skills) {
+                if ((Get-SkillStatus -Skill $skill -SourcePath $SourcePath) -eq "NEW") {
+                    Install-Skill -SkillName $skill -SourcePath $SourcePath -TargetPath $TargetPath
+                }
+            }
+        }
+        "^[uU]$" {
+            foreach ($skill in $Skills) {
+                if ((Get-SkillStatus -Skill $skill -SourcePath $SourcePath) -eq "UPDATE_AVAILABLE") {
+                    Install-Skill -SkillName $skill -SourcePath $SourcePath -TargetPath $TargetPath
+                }
+            }
+        }
+        "^[sS]$" {
+            $nums = Read-Host "  Enter skill numbers (comma-separated)"
+            $indices = $nums -split ',' | ForEach-Object { $_.Trim() }
+            foreach ($idx in $indices) {
+                if ($idx -match '^\d+$') {
+                    $num = [int]$idx
+                    if ($num -ge 1 -and $num -le $Skills.Count) {
+                        Install-Skill -SkillName $Skills[$num - 1] -SourcePath $SourcePath -TargetPath $TargetPath
+                    }
+                }
+            }
+        }
+        "^[qQ]$" {
+            Write-Info "Cancelled"
+            exit 0
+        }
+        default {
+            Write-Warn "Unknown option: $selection"
+            exit 1
+        }
+    }
+}
+
 function Install-Skill {
     param(
         [string]$SkillName,
@@ -501,7 +706,11 @@ function Install-Skill {
     # Merge skill-specific CLAUDE.md if exists
     Merge-SkillClaudeMd -SkillName $SkillName -TargetPath $TargetPath
 
-    Write-Success "Installed: $SkillName"
+    # Record install with version
+    $version = Get-SkillVersion -SkillPath $sourceFull
+    Save-InstallRecord -Skill $SkillName -Version $version
+
+    Write-Success "Installed: $SkillName ($version)"
 }
 
 # Install all skills
@@ -882,11 +1091,38 @@ function Main {
             $sourcePath = $tempDir
         }
 
-        if ($All) {
+        if ($List) {
+            Show-StatusTable -SourcePath $sourcePath
+            if ($tempDir) { Remove-TempFiles -TempDir $tempDir }
+            return
+        }
+        elseif ($All) {
             Install-AllSkills -SourcePath $sourcePath -TargetPath $skillsDir
         }
+        elseif ($New) {
+            Write-Info "Installing only NEW skills (not yet present)..."
+            $count = 0
+            foreach ($skill in $Skills) {
+                if ((Get-SkillStatus -Skill $skill -SourcePath $sourcePath) -eq "NEW") {
+                    Install-Skill -SkillName $skill -SourcePath $sourcePath -TargetPath $skillsDir
+                    $count++
+                }
+            }
+            if ($count -eq 0) { Write-Info "No new skills to install." }
+        }
+        elseif ($Update) {
+            Write-Info "Updating only OUTDATED skills..."
+            $count = 0
+            foreach ($skill in $Skills) {
+                if ((Get-SkillStatus -Skill $skill -SourcePath $sourcePath) -eq "UPDATE_AVAILABLE") {
+                    Install-Skill -SkillName $skill -SourcePath $sourcePath -TargetPath $skillsDir
+                    $count++
+                }
+            }
+            if ($count -eq 0) { Write-Info "All installed skills are up-to-date." }
+        }
         else {
-            Select-Skills -SourcePath $sourcePath -TargetPath $skillsDir
+            Select-SkillsWithStatus -SourcePath $sourcePath -TargetPath $skillsDir
         }
 
         # Configure settings and hooks

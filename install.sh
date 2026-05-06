@@ -55,6 +55,9 @@ USER_SETTINGS="$CLAUDE_DIR/settings.json"
 USER_CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
 HOOKS_DIR="$CLAUDE_DIR/hooks"
 
+# Per-install tracking: which skills installed, version, timestamp
+INSTALL_RECORD="$SKILLS_DIR/.arcana-install.json"
+
 # Print banner
 print_banner() {
     echo -e "${BLUE}"
@@ -511,6 +514,181 @@ clone_repo() {
     SCRIPT_DIR="$TEMP_DIR/arcana-skills"
 }
 
+# === Version detection + install tracking ===
+
+# Read VERSION file from a skill folder; default "0.0.0" if missing
+get_skill_version() {
+    local skill_path=$1
+    if [ -f "$skill_path/VERSION" ]; then
+        cat "$skill_path/VERSION" | tr -d '[:space:]'
+    else
+        echo "0.0.0"
+    fi
+}
+
+# Read installed version from tracking file; empty if not installed
+get_installed_version() {
+    local skill=$1
+    if [ ! -f "$INSTALL_RECORD" ]; then
+        return
+    fi
+    if command -v jq &> /dev/null; then
+        jq -r --arg s "$skill" '.[$s].version // ""' "$INSTALL_RECORD" 2>/dev/null
+    fi
+}
+
+# Compare two semver-ish version strings.
+# Returns: 0 = equal, 1 = a > b, 2 = a < b
+version_compare() {
+    local a=$1 b=$2
+    if [ "$a" = "$b" ]; then return 0; fi
+    local first=$(printf '%s\n%s\n' "$a" "$b" | sort -V | head -1)
+    if [ "$first" = "$a" ]; then return 2; else return 1; fi
+}
+
+# Get status for a skill: NEW | UP_TO_DATE | UPDATE_AVAILABLE | NOT_IN_REPO
+get_skill_status() {
+    local skill=$1
+    local source_path="$SCRIPT_DIR/$skill"
+    if [ ! -d "$source_path" ]; then
+        echo "NOT_IN_REPO"
+        return
+    fi
+    local repo_ver=$(get_skill_version "$source_path")
+    local installed=$(get_installed_version "$skill")
+    if [ -z "$installed" ] && [ ! -d "$SKILLS_DIR/$skill" ]; then
+        echo "NEW"
+    elif [ -z "$installed" ] && [ -d "$SKILLS_DIR/$skill" ]; then
+        # Installed but no record (legacy install before this versioning system)
+        echo "UPDATE_AVAILABLE"
+    else
+        version_compare "$repo_ver" "$installed"
+        local rc=$?
+        case $rc in
+            1) echo "UPDATE_AVAILABLE" ;;
+            *) echo "UP_TO_DATE" ;;
+        esac
+    fi
+}
+
+# Record a successful install in tracking file
+record_install() {
+    local skill=$1
+    local version=$2
+    local timestamp=$(date -Iseconds 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
+
+    if ! command -v jq &> /dev/null; then
+        return 0  # silently skip if no jq
+    fi
+
+    if [ ! -f "$INSTALL_RECORD" ]; then
+        echo "{}" > "$INSTALL_RECORD"
+    fi
+
+    local tmp=$(mktemp)
+    jq --arg s "$skill" --arg v "$version" --arg t "$timestamp" \
+       '.[$s] = {"version": $v, "installed_at": $t}' \
+       "$INSTALL_RECORD" > "$tmp" && mv "$tmp" "$INSTALL_RECORD"
+}
+
+# Print status table for all skills
+print_status_table() {
+    echo ""
+    info "Skill installation status:"
+    echo ""
+    printf "  %-4s %-22s %-36s %-10s %-10s\n" "#" "Status" "Skill" "Repo" "Installed"
+    printf "  %s\n" "─────────────────────────────────────────────────────────────────────────────────"
+
+    local i=1
+    local stats_new=0 stats_update=0 stats_uptodate=0
+    for skill in "${SKILLS[@]}"; do
+        local source_path="$SCRIPT_DIR/$skill"
+        local repo_ver="-"
+        if [ -d "$source_path" ]; then
+            repo_ver=$(get_skill_version "$source_path")
+        fi
+        local installed=$(get_installed_version "$skill")
+        if [ -z "$installed" ]; then installed="-"; fi
+        local status=$(get_skill_status "$skill")
+
+        local marker=""
+        case "$status" in
+            NEW)              marker="${BLUE}[+] new${NC}              " ; stats_new=$((stats_new + 1)) ;;
+            UPDATE_AVAILABLE) marker="${YELLOW}[↑] update available${NC}"; stats_update=$((stats_update + 1)) ;;
+            UP_TO_DATE)       marker="${GREEN}[✓] up-to-date${NC}      " ; stats_uptodate=$((stats_uptodate + 1)) ;;
+            NOT_IN_REPO)      marker="${RED}[!] missing in repo${NC}   " ;;
+        esac
+
+        printf "  %-4s %b %-36s %-10s %-10s\n" "$i)" "$marker" "$skill" "$repo_ver" "$installed"
+        ((i++))
+    done
+    echo ""
+    info "Summary: $stats_new new, $stats_update update available, $stats_uptodate up-to-date"
+    echo ""
+}
+
+# Status-aware interactive selector
+select_with_status() {
+    print_status_table
+
+    echo "  Action options:"
+    echo "    [Enter]  Install [+] new + update [↑] outdated  (recommended)"
+    echo "    a        Reinstall ALL skills"
+    echo "    n        Install only [+] new skills"
+    echo "    u        Update only [↑] outdated skills"
+    echo "    s        Select specific skill numbers (comma-separated)"
+    echo "    q        Quit"
+    echo ""
+    read -p "  > " -r selection
+
+    case "$selection" in
+        ""|"y"|"Y")
+            for skill in "${SKILLS[@]}"; do
+                local status=$(get_skill_status "$skill")
+                if [ "$status" = "NEW" ] || [ "$status" = "UPDATE_AVAILABLE" ]; then
+                    install_skill "$skill"
+                fi
+            done
+            ;;
+        a|A)
+            install_all_skills
+            ;;
+        n|N)
+            for skill in "${SKILLS[@]}"; do
+                if [ "$(get_skill_status "$skill")" = "NEW" ]; then
+                    install_skill "$skill"
+                fi
+            done
+            ;;
+        u|U)
+            for skill in "${SKILLS[@]}"; do
+                if [ "$(get_skill_status "$skill")" = "UPDATE_AVAILABLE" ]; then
+                    install_skill "$skill"
+                fi
+            done
+            ;;
+        s|S)
+            echo ""
+            read -p "  Enter skill numbers (comma-separated): " nums
+            IFS=',' read -ra SELECTED <<< "$nums"
+            for idx in "${SELECTED[@]}"; do
+                idx=$(echo "$idx" | tr -d ' ')
+                if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -ge 1 ] && [ "$idx" -le "${#SKILLS[@]}" ]; then
+                    install_skill "${SKILLS[$((idx-1))]}"
+                fi
+            done
+            ;;
+        q|Q)
+            info "Cancelled"
+            exit 0
+            ;;
+        *)
+            warn "Unknown option: $selection — try Enter, a, n, u, s, or q"
+            exit 1
+            ;;
+    esac
+}
+
 # Merge skill-specific CLAUDE.md into user's CLAUDE.md
 merge_skill_claude_md() {
     local skill_name=$1
@@ -587,7 +765,12 @@ install_skill() {
     # Merge skill-specific CLAUDE.md if exists
     merge_skill_claude_md "$skill_name"
 
-    success "Installed: $skill_name"
+    # Record install with version
+    local version
+    version=$(get_skill_version "$source_path")
+    record_install "$skill_name" "$version"
+
+    success "Installed: $skill_name ($version)"
 }
 
 # Install all skills
@@ -676,16 +859,34 @@ main() {
                 install_mode="all"
                 shift
                 ;;
+            --update|-u)
+                install_mode="update"
+                shift
+                ;;
+            --new|-n)
+                install_mode="new"
+                shift
+                ;;
+            --list|-l)
+                install_mode="list"
+                shift
+                ;;
             --help|-h)
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
                 echo "Options:"
-                echo "  -a, --all     Install all skills without prompting"
-                echo "  -h, --help    Show this help message"
+                echo "  (no flag)     Interactive — show status table, select what to install"
+                echo "  -a, --all     Reinstall ALL skills"
+                echo "  -u, --update  Update only skills with newer version available"
+                echo "  -n, --new     Install only skills not yet present"
+                echo "  -l, --list    Show status table only (no install)"
+                echo "  -h, --help    Show this help"
+                echo ""
+                echo "Pipe mode (curl | bash) defaults to --all."
                 exit 0
                 ;;
             *)
-                error "Unknown option: $1"
+                error "Unknown option: $1 — try --help"
                 exit 1
                 ;;
         esac
@@ -699,19 +900,51 @@ main() {
 
     check_prerequisites
     ensure_skills_dir
+    ensure_jq >/dev/null 2>&1 || true   # quiet pre-warm; OK if not installed
 
     # Detect source and clone if needed
-    local source=$(detect_source)
+    local source
+    source=$(detect_source)
     if [ "$source" = "remote" ]; then
         clone_repo
     fi
 
-    # Install skills
-    if [ "$install_mode" = "all" ]; then
-        install_all_skills
-    else
-        select_skills
-    fi
+    # Dispatch by mode
+    case "$install_mode" in
+        all)
+            install_all_skills
+            ;;
+        new)
+            info "Installing only NEW skills (not yet present)..."
+            local count=0
+            for skill in "${SKILLS[@]}"; do
+                if [ "$(get_skill_status "$skill")" = "NEW" ]; then
+                    install_skill "$skill"
+                    count=$((count + 1))
+                fi
+            done
+            if [ "$count" = "0" ]; then info "No new skills to install — all are already present."; fi
+            ;;
+        update)
+            info "Updating only OUTDATED skills..."
+            local count=0
+            for skill in "${SKILLS[@]}"; do
+                if [ "$(get_skill_status "$skill")" = "UPDATE_AVAILABLE" ]; then
+                    install_skill "$skill"
+                    count=$((count + 1))
+                fi
+            done
+            if [ "$count" = "0" ]; then info "All installed skills are up-to-date."; fi
+            ;;
+        list)
+            print_status_table
+            cleanup
+            exit 0
+            ;;
+        interactive|*)
+            select_with_status
+            ;;
+    esac
 
     # Configure settings and hooks
     echo ""
