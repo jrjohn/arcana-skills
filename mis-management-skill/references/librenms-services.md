@@ -107,6 +107,22 @@ mysql ... librenms -e "SELECT service_id, service_name, service_ds FROM services
 ```
 Then `services-<id>.rrd` is the file.
 
+### "Chart suddenly jumps from 0 to N" — RRD recreate artifact
+
+If a service chart shows a long flat 0 then a sudden spike to a real value, **before assuming it's a real attack burst**, check whether the RRD was recently recreated:
+
+```bash
+ls -la /opt/librenms/data/librenms/rrd/<host>/services-N.rrd*
+# If you see a *.bak-YYYY-MM-DD sibling, the RRD was reset that day
+```
+
+The "0" before the recreate timestamp is `unknown` (no data because field names didn't match), not a real "no traffic". The real value has likely been steady — you just couldn't see it. Cross-check by greppping the source log:
+
+```bash
+grep -aE '<filter>' /var/log/<source>.log | tail -3000 | wc -l
+# Compare against pre-spike timestamp range
+```
+
 ## Inspect RRD content (debugging)
 
 ```bash
@@ -124,13 +140,29 @@ Healthy output should have ds names matching your perfdata field names (lowercas
 
 LibreNMS auto-fires alerts based on Nagios exit code. Key rules to set:
 
-| Service | Warn threshold | Crit threshold | Delay | Count |
-|---|---|---|---|---|
-| `fg-deny-inbound` | 1000 hits/h | 5000 hits/h | 180 | 2 |
-| `fg-deny-outbound` | 10000 hits/h | 50000 hits/h | 180 | 2 |
-| `fg-threatfeed-inbound` | (varies — context dependent) | | | |
+| Service | Warn threshold | Crit threshold | Delay | Count | Interval |
+|---|---|---|---|---|---|
+| `fg-deny-inbound` | 1000 hits/h | 5000 hits/h | 180 | 2 | 300 |
+| `fg-deny-outbound` | 10000 hits/h | 50000 hits/h | 180 | 2 | 300 |
+| `fg-threatfeed-inbound` | (varies — context dependent) | | | | |
 
-`Delay 180 + Count 2` = must trigger on 2 consecutive 5-min polls (i.e. sustained > 5 min) before alerting. Reduces noise from short bursts.
+`Delay 180 + Count 2` = sustained > 5 min before alerting. Reduces noise from short bursts.
+
+### When count=2 isn't enough — cron-induced flap
+
+If you have any **regular cron job that briefly spikes CPU on a monitored host** (e.g. heavy log aggregator, PowerShell DNS dump, ClamAV signature load), a `count=2` CPU rule will fire on every cron run because the spike lasts > 5 min (= 2 polls).
+
+Symptom: alert email pairs every 30 min like clockwork, fire→recover within 2-3 min, both .200 and .206 etc.
+
+**Fix**: bump `count=4 / delay=600 / interval=900` for CPU rules on hosts with known cron spikes. New behavior: needs ≥ 20 min sustained ≥ threshold to fire, re-fires at most every 15 min. Short spikes (< 10 min) absorbed.
+
+```sql
+UPDATE alert_rules
+SET extra = JSON_SET(extra, '$.count', 4, '$.delay', 600, '$.interval', 900)
+WHERE name = '[CRIT] CPU >=95%';
+```
+
+Don't blanket-apply this to all rules — only ones flapping. Real sustained CPU saturation still needs to alert promptly.
 
 ## Operational notes
 
