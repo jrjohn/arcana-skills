@@ -3,7 +3,10 @@
 #   (a) raw sqlite3 against ~/claude-archive/sessions.db, or
 #   (b) grep / cat / head / tail / less / more / sed / awk on a memory file
 #       in ~/.claude/projects/*/memory/*.md, or
-#   (c) Read tool reading the same memory files.
+#   (c) Read tool reading the same memory files, or
+#   (d) ssh ... grep|tail|cat ... /var/log/* (investigative remote log
+#       queries — prior session may already have extracted the answer), or
+#   (e) local grep|cat|tail on /var/log/ or *.log files (same logic as remote).
 #
 # Why memory enforcement: memory files are stale, hand-curated indexes
 # (incomplete by design). For roster / device / credential / history
@@ -12,11 +15,19 @@
 # only what someone manually wrote down. Forcing vsearch/csearch first
 # prevents the "I'll just grep memory and miss half the data" antipattern.
 #
+# Why log enforcement: investigative log digs (SSH or local) often duplicate
+# work already done in a prior session. The archive captures every prior
+# Bash tool_use + tool_result verbatim — it's faster to vsearch first and
+# reuse than to re-SSH and re-grep. If the answer genuinely isn't in the
+# archive, vsearch returns 0 results and the sentinel still unlocks.
+#
 # Behavior:
 #   - vsearch / csearch invocation -> set sentinel, allow.
 #   - sqlite3 against archive DB    -> allow only if sentinel exists.
 #   - grep/cat/.../Read on memory   -> allow only if sentinel exists.
 #   - Read on MEMORY.md (the index) -> always allow (auto-loaded by system).
+#   - ssh + log investigation       -> allow only if sentinel exists.
+#   - local log grep                -> allow only if sentinel exists.
 #   - Otherwise: allow silently.
 #
 # Sentinel: /tmp/claude-archive-preflight-<session_id>
@@ -85,6 +96,28 @@ if [ "$tool_name" = "Read" ] && [ -n "$file_path" ] && printf '%s' "$file_path" 
         exit 0
     fi
     deny_with_reason "Memory file is a stale INDEX, not source of truth. For roster / device / credential / history queries, run vsearch first (default) or csearch (known phrase / IP / identifier). Read on memory/*.md is allowed only after vsearch/csearch unlocks the sentinel — or for 'recent context I just discussed this session' lookups. See ~/.claude/CLAUDE.md → 'Memory file 不是 archive 替代' section."
+fi
+
+# 5. SSH command containing investigative log-grep pattern
+#    (e.g. "ssh ... grep ... /var/log/...", "ssh nas tail -f log")
+#    The intent is "look up something in remote logs" — archive may already have it.
+if [ -n "$command" ] && \
+   printf '%s' "$command" | grep -qE 'ssh[[:space:]]' && \
+   printf '%s' "$command" | grep -qE '(grep|cat|tail|head|less|sed|awk|find)[[:space:]]' && \
+   printf '%s' "$command" | grep -qE '/var/log/|\.log[[:space:]"'\''|]|\.log\.gz'; then
+    if [ -e "$sentinel" ]; then
+        exit 0
+    fi
+    deny_with_reason "About to SSH and grep/cat/tail a log file. Investigative work like this often duplicates a prior session — vsearch first to see if the answer is already in the archive. If it's genuinely a new investigation, vsearch returns 0 results and still sets the sentinel, which then unlocks subsequent SSH log queries."
+fi
+
+# 6. Bash local grep/cat/tail on /var/log/* or *.log
+if [ -n "$command" ] && \
+   printf '%s' "$command" | grep -qE '(^|[^A-Za-z0-9_])(grep|cat|tail|head|less|sed|awk)([^A-Za-z0-9_]|$)[^|]*(/var/log/|\.log[[:space:]"'\''|]|\.log\.gz)'; then
+    if [ -e "$sentinel" ]; then
+        exit 0
+    fi
+    deny_with_reason "About to grep/cat a log file locally. Same logic as remote SSH log queries — vsearch first to see if a prior session already extracted this. If genuinely new, vsearch returns 0 and the sentinel still unlocks."
 fi
 
 exit 0
