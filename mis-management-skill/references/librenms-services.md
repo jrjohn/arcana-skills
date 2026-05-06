@@ -142,27 +142,47 @@ LibreNMS auto-fires alerts based on Nagios exit code. Key rules to set:
 
 | Service | Warn threshold | Crit threshold | Delay | Count | Interval |
 |---|---|---|---|---|---|
-| `fg-deny-inbound` | 1000 hits/h | 5000 hits/h | 180 | 2 | 300 |
-| `fg-deny-outbound` | 10000 hits/h | 50000 hits/h | 180 | 2 | 300 |
+| `fg-deny-inbound` | 1000 hits/h | 5000 hits/h | 180 | 1 | 1800 |
+| `fg-deny-outbound` | 10000 hits/h | 50000 hits/h | 180 | 1 | 1800 |
 | `fg-threatfeed-inbound` | (varies — context dependent) | | | | |
 
-`Delay 180 + Count 2` = sustained > 5 min before alerting. Reduces noise from short bursts.
+### `extra` JSON semantics — what `count` / `delay` / `interval` actually mean
 
-### When count=2 isn't enough — cron-induced flap
+Easy to mis-interpret. As of LibreNMS 26.x:
 
-If you have any **regular cron job that briefly spikes CPU on a monitored host** (e.g. heavy log aggregator, PowerShell DNS dump, ClamAV signature load), a `count=2` CPU rule will fire on every cron run because the spike lasts > 5 min (= 2 polls).
+| Field | Meaning | NOT what it means |
+|---|---|---|
+| **`delay`** (sec) | Wait this many seconds after condition first becomes true before sending the first alert. The condition must remain true throughout, otherwise the timer resets. | Not a re-notification interval. |
+| **`interval`** (sec) | Re-notify cadence — every N seconds while still firing, send another email. | Not "polling interval" (that's the global poller, fixed at 5 min). |
+| **`count`** (int) | Maximum number of notifications to send for this fire-cycle, then mute until recovery. `count=1` = fire once then silence until condition recovers and re-trips. | **NOT** "require N consecutive polls before alerting" — that's a common misread. |
 
-Symptom: alert email pairs every 30 min like clockwork, fire→recover within 2-3 min, both .200 and .206 etc.
+**The right primitive for "must be sustained for N minutes before alerting" is `delay`**, not `count`.
 
-**Fix**: bump `count=4 / delay=600 / interval=900` for CPU rules on hosts with known cron spikes. New behavior: needs ≥ 20 min sustained ≥ threshold to fire, re-fires at most every 15 min. Short spikes (< 10 min) absorbed.
+### Cron-induced flap (CPU rules)
+
+If a host has a regular cron that briefly spikes CPU (heavy log aggregator, PowerShell DNS dump, ClamAV signature load), a CPU rule with `delay=180` will fire on every cron run because spikes typically last 3-5 min.
+
+Symptom: alert email pairs every 30 min like clockwork, fire→recover within 2-3 min, multiple hosts simultaneously.
+
+**Fix**: increase `delay` past the spike duration, AND set `count=1` so even if the spike DOES exceed the delay, you only get one email per cycle (not a flap-storm).
 
 ```sql
 UPDATE alert_rules
-SET extra = JSON_SET(extra, '$.count', 4, '$.delay', 600, '$.interval', 900)
+SET extra = JSON_SET(extra, '$.count', 1, '$.delay', 600, '$.interval', 1800)
 WHERE name = '[CRIT] CPU >=95%';
 ```
 
-Don't blanket-apply this to all rules — only ones flapping. Real sustained CPU saturation still needs to alert promptly.
+After UPDATE: short spikes (≤10 min) absorbed by `delay=600`. Sustained ≥10 min saturation still alerts (once), then mutes until recovery, then re-arms.
+
+**If alerts continue flapping after rule UPDATE**: dispatcher may have cached old rule values. Restart the alerter container:
+
+```bash
+docker restart librenms_dispatcher
+```
+
+(Caveat: this affects all alert evaluation for ~30s. Generally safe but get authorization on shared infra.)
+
+Don't blanket-apply this pattern to all rules — only ones flapping. Real sustained saturation still needs to alert promptly, and `count=1` permanently mutes a stuck-stuck condition until recovery.
 
 ## Operational notes
 
