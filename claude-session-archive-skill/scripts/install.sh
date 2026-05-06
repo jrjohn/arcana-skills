@@ -15,9 +15,10 @@
 #   7. Schedule 15-min ingest:
 #        macOS  → launchd plist
 #        Linux  → crontab entry
-#   8. Register SessionStart hook in ~/.claude/settings.json (needs jq)
-#   8b. Install PreToolUse archive-preflight hook (Bash + Read)
-#  9. First ingest run
+#   8.  Register SessionStart hook in ~/.claude/settings.json (needs jq)
+#   8b. Install + register PreToolUse archive-preflight hook (Bash + Read)
+#   8c. Install + register UserPromptSubmit auto-vsearch-on-prompt hook
+#   9.  First ingest run
 #  10. Smoke test
 #
 # Idempotent: re-running rebuilds + re-points hooks safely.
@@ -203,6 +204,49 @@ else
     echo "       {\"matcher\":\"Read\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PREFLIGHT\",\"timeout\":5}]})"
 fi
 
+# 8c. Install + register UserPromptSubmit auto-vsearch-on-prompt hook
+#     - Detects identity / history / status / question keywords in the prompt.
+#     - Runs `crs vsearch <prompt>` cross-project, injects top hits as
+#       additionalContext, and pre-sets the preflight sentinel.
+#     - Companion to 8b (proactive vs reactive enforcement).
+#
+#     Note: don't clobber a customized auto-vsearch-on-prompt.sh (e.g. one
+#     that bundles an extra trigger like emotional/persona switching).
+#     Detect and skip if the existing file differs from the skill version.
+AUTO_VSEARCH="$HOOKS_DIR/auto-vsearch-on-prompt.sh"
+SRC="$SKILL_DIR/scripts/auto-vsearch-on-prompt.sh"
+if [ -f "$AUTO_VSEARCH" ]; then
+    if cmp -s "$SRC" "$AUTO_VSEARCH"; then
+        echo "    auto-vsearch-on-prompt hook unchanged: $AUTO_VSEARCH"
+    else
+        echo "    !! $AUTO_VSEARCH exists and differs from skill version — leaving as-is"
+        echo "       (your version may have local customizations like a luminous-skill"
+        echo "       trigger; diff manually if needed)"
+    fi
+else
+    echo "==> installing auto-vsearch-on-prompt hook → $AUTO_VSEARCH"
+    cp "$SRC" "$AUTO_VSEARCH"
+    chmod +x "$AUTO_VSEARCH"
+fi
+
+if command -v jq >/dev/null 2>&1; then
+    UPS_CMD="$AUTO_VSEARCH"
+    if jq -e --arg c "$UPS_CMD" \
+        '(.hooks.UserPromptSubmit // []) | flatten | map(.command? // "") | any(. == $c or test("auto-vsearch-on-prompt"))' \
+        "$SETTINGS" >/dev/null 2>&1 ; then
+        echo "    UserPromptSubmit auto-vsearch hook already registered (skip)"
+    else
+        echo "==> registering UserPromptSubmit auto-vsearch hook"
+        jq --arg c "$UPS_CMD" \
+            '.hooks.UserPromptSubmit = ((.hooks.UserPromptSubmit // []) +
+                [{"hooks":[{"type":"command","command":$c,"timeout":5}]}])' \
+            "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
+    fi
+else
+    echo "    (jq not installed; manually add to $SETTINGS UserPromptSubmit:"
+    echo "       {\"hooks\":[{\"type\":\"command\",\"command\":\"$AUTO_VSEARCH\",\"timeout\":5}]})"
+fi
+
 # 9. First ingest
 echo "==> first ingest"
 "$BIN" build --no-embed
@@ -217,6 +261,7 @@ echo "✓ Base install complete."
 echo "  - 15-min ingest:        $BIN build  (launchd / cron)"
 echo "  - SessionStart hook:    $BIN gen-recent"
 echo "  - PreToolUse hook:      $PREFLIGHT (Bash + Read; vsearch/csearch preflight)"
+echo "  - UserPromptSubmit:     $AUTO_VSEARCH (auto-vsearch on identity/history/status prompts)"
 echo "  - interactive:          crs csearch / crs vsearch / crs vsearch-since"
 echo
 echo "Optional next step (semantic search via Ollama + bge-m3):"

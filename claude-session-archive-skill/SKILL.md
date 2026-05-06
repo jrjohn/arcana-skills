@@ -1,7 +1,7 @@
 ---
 name: claude-session-archive-skill
 description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into a local SQLite FTS5 database (~/claude-archive/sessions.db) every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. Two query modes: `csearch` (FTS5 lexical, exact phrase / boolean / prefix) and optionally `vsearch` (semantic via Ollama + sqlite-vec + bge-m3 — multilingual SOTA, concept queries, synonym / cross-language matching, strong Chinese). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec semantic stack, (d) tune SQLite performance, or (e) troubleshoot FTS5 syntax / ingest issues.
-version: 1.8.0
+version: 1.10.0
 allowed-tools:
   - Read
   - Write
@@ -20,10 +20,11 @@ Permanent, local, full-text searchable history of every Claude Code session you'
 | Trigger | Action |
 |---|---|
 | User asks you to recall something from a past session ("上週那個 X 怎麼設的？", "we discussed Y last Thursday") | Run `vsearch '<natural-language paraphrase>' [project]` first (semantic, default); fall back to `csearch '<exact phrase>' [project]` only when query is a precise literal (IP / hostname / file path / FTS5 syntax) or vsearch returns nothing useful |
+| User about to SSH / dig logs to identify someone or look up history (".98 是誰?", "上次怎麼處理 X 的") | **Discipline layer** (preflight hook) blocks the SSH/log-grep until vsearch runs. The answer is often already in archive. See `references/discipline-layer.md` |
 | User invokes `/claude-session-archive-skill` or types `csearch ...` and it errors | Diagnose: archive not installed yet → walk through install. Already installed → check FTS5 syntax. |
 | User on a fresh Mac wants the archive set up | Walk through Steps 1-6 in `references/installation-guide.md` |
 | User reports queries are slow or DB grew large | See `references/tuning.md` |
-| User asks a one-shot historical question ("when did port X get shut down?", "what password did we use for device Y?") | Use direct `sqlite3` SQL — see `references/fts5-syntax.md` for boolean / phrase / prefix patterns |
+| User asks a one-shot historical question ("when did port X get shut down?", "what password did we use for device Y?") | Use direct `sqlite3` SQL **after** running vsearch/csearch first (preflight hook blocks raw sqlite3 until then). See `references/fts5-syntax.md` |
 
 ## How it works (architecture)
 
@@ -167,6 +168,27 @@ Claude session              ← Has all of the above in context
 
 **Setup**: `install.sh` (base) registers the SessionStart hook into `~/.claude/settings.json` automatically. The hook command is `crs gen-recent`.
 
+## Discipline layer (hooks)
+
+`install.sh` registers two Claude Code hooks that enforce "vsearch/csearch first" mechanically — so the rule survives long contexts and time pressure, instead of relying on Claude remembering it.
+
+| Hook | Event | What it does |
+|---|---|---|
+| `archive-preflight.sh` (`.ps1` on Windows) | PreToolUse (Bash + Read) | **Reactive**. Denies raw `sqlite3 ... sessions.db`, memory-file grep/Read, and SSH/local log dig until a `vsearch`/`csearch` runs in this session and sets a sentinel (`/tmp/claude-archive-preflight-<sid>`) |
+| `auto-vsearch-on-prompt.sh` | UserPromptSubmit | **Proactive**. On prompts containing identity / history / status / question keywords, auto-runs `crs vsearch <prompt>`, injects top hits as `additionalContext`, and pre-sets the sentinel |
+
+**Three-tier query hierarchy** (from `references/discipline-layer.md`):
+
+1. 🥇 **vsearch** (default) — semantic, cross-language, tolerates fuzzy descriptions. Use for "上次怎麼處理 X" / concept queries / forgot-the-keyword cases.
+2. 🥈 **csearch** (drill-down) — FTS5 lexical, exact match. Use after vsearch finds the area, or when the query is itself a known IP / hostname / 工號 / filename / FTS5 boolean.
+3. ❌ **memory-file grep — NEVER as archive replacement.** Memory files are stale curated index, not source of truth. Preflight hook blocks `grep / cat / Read` on `~/.claude/projects/*/memory/*.md` until sentinel unlocks. Sole exception: "I just discussed this in *this* session" quick lookups.
+
+**Real-world incidents that drove the design:**
+- 2026-04 — Claude SSHed 3× into a device to ID `.98` before being reminded. Wasted round-trips.
+- 2026-05-05 — Memory grep returned 2/5 of "品質法規部" (memory was stale curated subset); vsearch found 4/24 in one shot.
+
+These prompted the explicit blocking rules. Don't disable lightly — read `references/discipline-layer.md` first to understand the failure modes.
+
 ## Critical guidance
 
 **1. Never delete old rows.** The whole point is permanent memory. If disk gets tight, move `~/claude-archive/` to external storage (rebuild `crs` against the new path), don't `DELETE FROM msg WHERE ts < ...`. Losing history defeats the purpose.
@@ -187,12 +209,22 @@ csearch 'local-in-deny-broadcast' network      # ✗ error: "no such column: in"
 
 ## Snippet for `~/.claude/CLAUDE.md`
 
-Paste this near the top so every Claude session knows about the archive:
+Paste this near the top so every Claude session knows about the archive **and** the discipline layer:
 
 ```markdown
+# 🚨 最高優先規則 — Archive DB Preflight
+
+> **每個新 session 的第一個 archive query 必須是 `vsearch` 或 `csearch`，不是 raw `sqlite3`。**
+>
+> Hook (`~/.claude/hooks/archive-preflight.sh`) 會擋下任何對 `~/claude-archive/sessions.db` 的 raw `sqlite3`、對 `~/.claude/projects/*/memory/*.md` 的 grep/Read、以及 `ssh ... grep ... /var/log/...` 的遠端 log 翻找，直到本 session 跑過一次 `vsearch` / `csearch`（它們會寫 sentinel 解鎖）。
+>
+> **不看 query 內容** — 連 `GROUP BY date(ts) COUNT(*)` 這種沒 keyword 的 metadata query 也會被擋。
+>
+> 預設選 `vsearch`；明確 IP / hostname / 檔名 / FTS5 syntax 才直接 `csearch`。
+
 # Cross-session history (use SQLite archive — don't ask the user repeatedly)
 
-All my Claude Code session JSONLs are ingested into ~/claude-archive/sessions.db
+All Claude Code session JSONLs are ingested into ~/claude-archive/sessions.db
 (SQLite FTS5 + sqlite-vec, every 15 min via the `crs` Rust binary on launchd).
 It contains verbatim user / assistant / tool_use input / tool_result output
 across all projects, all sessions.
@@ -206,10 +238,25 @@ msg_fts = virtual FTS5 over msg.content (tokenize=unicode61)
 - Picking up interrupted work ("continue from before") → look up that project's most recent session tail
 - Investigating historical config drift ("when did port X go down?") → past tool_use Bash + result is ground truth
 - Building project mental model → past tool calls beat memory (more complete) and git log (more immediate)
+- **Before SSH-ing into a device to grep logs / identify someone** → vsearch first, the answer is often already there
+
+## Three-tier query hierarchy
+
+| 你想找的東西 | 選 |
+|---|---|
+| 「上次怎麼處理 X 的」但忘記 keyword | **vsearch**（預設） |
+| 中英對照（「防火牆」找 firewall） | **vsearch**（預設） |
+| 概念查詢「跟 Y 有關的決策」 | **vsearch**（預設） |
+| 確切的 phrase / IP / hostname / 設備名 | csearch（直接走，跳過 vsearch） |
+| 找一個檔案 / 某天的 log | csearch + date filter SQL |
+
+1. **🥇 vsearch (default)** — 語意命中率高、跨語言、容忍模糊描述。
+2. **🥈 csearch (drill-down or known identifier)** — vsearch 找到大範圍後，鎖細節用。
+3. **❌ memory file grep — NEVER 當 archive 替代** — memory 是 stale curated index，不是 roster / device / credential / 歷史的 source of truth。Hook 會擋。唯一例外：「我這個 session 剛討論過 X」的 quick lookup。
 
 ## How to query
-- CLI: `csearch <fts-query> [project-suffix]` (= `crs csearch`) or `vsearch '<concept>' [project]` (= `crs vsearch`)
-- SQL: `sqlite3 ~/claude-archive/sessions.db "SELECT ... WHERE rowid IN (SELECT rowid FROM msg_fts WHERE content MATCH 'xxx') LIMIT 20"`
+- CLI: `vsearch '<concept>' [project]` or `csearch <fts-query> [project-suffix]`
+- SQL (after vsearch/csearch): `sqlite3 ~/claude-archive/sessions.db "SELECT ... WHERE rowid IN (SELECT rowid FROM msg_fts WHERE content MATCH 'xxx') LIMIT 20"`
 
 FTS5 syntax: phrase `'"..."'`, boolean `A AND B / OR / NOT`, prefix `foo*`. Words with `- / : / .` MUST be phrase-quoted.
 
@@ -218,26 +265,17 @@ FTS5 syntax: phrase `'"..."'`, boolean `A AND B / OR / NOT`, prefix `foo*`. Word
 - DB contains sensitive output (passwords / tokens / IPs) — local only, no sharing
 - Memory and DB split: Memory for curated signal, DB for log-style recall
 
-## Memory file is NOT a substitute for archive query
+## Auto-context bridging (crs gen-recent + auto-vsearch-on-prompt)
+- **SessionStart hook** runs `crs gen-recent` → writes `<project>/memory/auto_recent.md`
+  containing the project's pending items ranked against last-48h archive content
+  (vsearch KNN top hits). Auto-loads via Memory.
+- **UserPromptSubmit hook** (`auto-vsearch-on-prompt.sh`) — on prompts with
+  identity/history/status/question keywords, auto-runs `crs vsearch <prompt>`
+  cross-project and injects top hits as `additionalContext` (and pre-sets the
+  preflight sentinel). Common "who is .NN?" / "did we fix Y?" questions thus
+  arrive pre-answered without an extra round-trip.
 
-`~/.claude/projects/*/memory/*.md` is a stale, hand-curated index — only what someone
-manually wrote down. For roster / device / credential / history queries, the
-canonical source is the archive (full conversation transcripts). The
-`archive-preflight.sh` hook (registered for `Bash` + `Read`) denies grep / cat /
-Read on memory files until `vsearch` or `csearch` runs once this session.
-`MEMORY.md` (the index file itself) is exempted.
-
-Default flow: **vsearch first** (concept queries), **csearch** for known
-literals (IP / hostname / 工號 / phrase), **grep memory** only for
-"recent context I just discussed this session". Anything else = use the archive.
-
-## Auto-context bridging (crs gen-recent)
-Each session start, a SessionStart hook runs `crs gen-recent` which writes
-`<project>/memory/auto_recent.md` with: pending items + last 48h user prompts +
-last 48h substantive assistant replies. This auto-loads via the Memory
-mechanism, so I always have fresh per-project context in my system prompt.
-
-`crs build` also runs it every 15 min during ingest, refreshing all known projects.
+`crs build` also runs `gen-recent` every 15 min during ingest, refreshing all known projects.
 ```
 
 ## Files in this skill
@@ -251,15 +289,17 @@ claude-session-archive-skill/
 │   ├── fts5-syntax.md                # FTS5 query language reference
 │   ├── tuning.md                     # SQLite performance + maintenance
 │   ├── faq.md                        # common questions / troubleshooting
-│   └── semantic-search.md            # OPTIONAL: Ollama + sqlite-vec for vsearch
+│   ├── semantic-search.md            # OPTIONAL: Ollama + sqlite-vec for vsearch
+│   └── discipline-layer.md           # hooks: archive-preflight + auto-vsearch-on-prompt
 └── scripts/
     ├── crs/                          # Rust source (~720 LOC: build / embed / vsearch / csearch / gen-recent / vsearch-since)
-    ├── install.sh                    # macOS/Linux base installer (cargo build + launchd/cron + sqliterc + first ingest + SessionStart hook + PreToolUse preflight hook)
+    ├── install.sh                    # macOS/Linux base installer (cargo build + launchd/cron + sqliterc + first ingest + 3 hooks: SessionStart / PreToolUse / UserPromptSubmit)
     ├── install.ps1                   # Windows base installer (cargo build + Scheduled Task + sqliterc + SessionStart hook + PreToolUse preflight hook)
     ├── csearch.ps1                   # Windows PowerShell csearch wrapper (sqlite3.exe)
     ├── vsearch.ps1                   # Windows PowerShell vsearch wrapper (calls crs.exe vsearch)
-    ├── archive-preflight.sh          # PreToolUse hook (Bash + Read) — gates raw sqlite3 + memory grep until vsearch/csearch runs once
-    ├── archive-preflight.ps1         # Windows port of the preflight hook
+    ├── archive-preflight.sh          # PreToolUse hook (Bash + Read) — gates raw sqlite3 + memory grep + SSH/local log dig until vsearch/csearch runs once
+    ├── archive-preflight.ps1         # Windows port of the preflight hook (rules 1-4 only; SSH/log dig rules pending)
+    ├── auto-vsearch-on-prompt.sh     # UserPromptSubmit hook — auto-vsearch on identity/history/status prompts, injects top hits + pre-sets sentinel
     ├── gen-recent-context.sh         # legacy hook target — calls crs vsearch-since (kept for stable hook command path)
     ├── gen-recent-context.ps1        # Windows port of the same
     ├── sqliterc.template             # → ~/.sqliterc
@@ -273,6 +313,13 @@ claude-session-archive-skill/
 
 ## Author / version
 
+- 2026-05-06 v1.10.0 **Discipline layer expansion — log-dig blocking + UserPromptSubmit auto-vsearch + dedicated reference doc.** Builds on v1.9.0's preflight hook with three additions:
+  - **`archive-preflight.sh` rules 5+6** — hook now denies `ssh ... grep|tail|cat ... /var/log/...` and local `grep|tail|cat ...log` until the sentinel exists. Motivation: 2026-04 incident where Claude SSHed 3× into a device to identify `.98` before being reminded archive had the answer (3 wasted round-trips). Same justification as v1.9.0's memory-grep blocking — investigative log digs duplicate prior session work; vsearch first costs ~500ms and often returns the answer verbatim.
+  - **`auto-vsearch-on-prompt.sh` (NEW UserPromptSubmit hook)** — proactive companion to the reactive preflight. Pattern-matches identity/history/status/question keywords (`.NN`, `工號`, `MAC`, `是誰`, `上次`, `修了嗎`, `為什麼`, etc.) in the user's prompt, runs `crs vsearch <prompt>` cross-project, injects top hits as `additionalContext`, and pre-sets the preflight sentinel. Common "who is .NN?" / "did we fix Y?" questions skip the preflight dance entirely — answer arrives pre-loaded in Claude's first turn. Designed to be archive-only (no bundled triggers from other skills); separate concerns ship separate hooks.
+  - **`references/discipline-layer.md` (NEW reference doc)** — consolidates hook design rationale, sentinel mechanics, three-tier query hierarchy (vsearch default → csearch drill-down → memory grep forbidden), real-world incidents that drove each rule, performance notes, and composition rules for skills that want their own UserPromptSubmit hooks.
+  - `install.sh` extended: step 6 hook copy now handles `auto-vsearch-on-prompt.sh` with detection-and-skip for customized versions; step 8c registers the UserPromptSubmit hook in `~/.claude/settings.json` idempotently. Existing installs: re-run `install.sh` — preflight gets new rules 5+6, UserPromptSubmit hook installed and registered.
+  - **Windows port pending** — `archive-preflight.ps1` keeps rules 1-4 (from v1.9.0); rules 5+6 PowerShell port and `auto-vsearch-on-prompt.ps1` are TODO. Windows installs currently get partial discipline (preflight v1.9.0 behavior).
+  - SKILL.md gets dedicated "Discipline layer (hooks)" section above Critical guidance; CLAUDE.md snippet rewritten with the 最高優先規則 prefix and three-tier hierarchy table.
 - 2026-05-05 v1.9.0 **Preflight enforcement hook — memory grep + sqlite3 gating.** Adds a `PreToolUse` hook (`archive-preflight.sh` / `archive-preflight.ps1`) that mechanically enforces the vsearch-first preflight that has been documented since v1.6.2 but was prose-only and frequently skipped. The hook registers on **both `Bash` and `Read` matchers** in `~/.claude/settings.json` and applies three rules per session: (1) `vsearch` / `csearch` invocation creates a sentinel `/tmp/claude-archive-preflight-<session_id>` and is always allowed, (2) raw `sqlite3 ~/claude-archive/sessions.db ...` is denied until the sentinel exists, (3) **NEW: `grep`/`cat`/`head`/`tail`/`sed`/`awk` on `~/.claude/projects/*/memory/*.md` and `Read` on the same files are also denied until the sentinel exists** — `MEMORY.md` itself is exempted (auto-loaded by system). Motivation: 2026-05-05 audit found Claude grepping memory for a 6-person department roster, hitting only 2/6 because memory was a stale hand-curated subset; a `csearch` would have hit the full audit transcript with all 6. Codifying the rule in a hook prevents the antipattern at runtime, not just in docs. `install.sh` / `install.ps1` install + register the hook idempotently. Re-running the installer is safe.
 - 2026-05-04 v1.8.0 **Operational visibility — `crs doctor` + `crs prune-vec` + installer prereq surfacing.** First batch from the 2026-05-04 audit (items 1, 2, 3, 6 of the install-hardening roadmap). `crs doctor` is a single-command health check spanning tooling / storage / DB consistency / schedule / hooks / Ollama, returning exit-code 0/1/2 (clean / warn / fail) for cron-friendly use. `crs prune-vec` drops orphaned `msg_vec` rowids left over after re-ingest cycles (complements v1.7.2's `INSERT OR REPLACE` — collisions are tolerated *and* cleanable). `install.sh` now surfaces optional `jq` / `sqlite3` status with exact install commands per OS before mid-run discovery; `install.ps1` downgrades `sqlite3.exe` from fatal abort to warning since `crs.exe` already bundles SQLite; `install-semantic.ps1` skips its row-count probe gracefully when `sqlite3.exe` is absent. README gains an "Operations — verify it's healthy" section that documents these workflows. Roadmap items 4, 5, 7-10 remain for later patch releases.
 - 2026-05-04 v1.7.3 **Docs — vsearch sweet spot vs blind spot.** Added concrete usage guidance distilled from 2026-05-04 verification: vsearch is strong on technical-concept queries (terms cluster well in embedding space, e.g. "rowid 殘留 導致 INSERT 衝突" hits the actual collision discussion) but weak on time-relative ones ("today / 今天 / 昨天 / last Thursday") — the embedding weight goes to the generic time word, not the underlying topic. Time-bounded questions should use `csearch` + `WHERE date(ts) = ...` SQL filter instead, since FTS index is updated synchronously while embeddings backfill in batches up to 15 min behind. Updated `Daily usage patterns` to surface this trade-off and noted the embedding-lag caveat for current-session messages.
