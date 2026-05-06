@@ -47,6 +47,7 @@ SKILLS=(
     "doc-indexer-skill"
     "claude-session-archive-skill"
     "mis-management-skill"
+    "luminous-skill"
 )
 
 # Config paths
