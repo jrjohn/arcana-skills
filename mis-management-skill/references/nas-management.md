@@ -69,6 +69,64 @@ ssh admin@<NAS_IP> 'getcfg Public path -f /etc/config/smb.conf | cut -d/ -f3'
 
 If you don't set `AntivirusStatus = 4`, the Web UI keeps showing "更新失敗 / Update failed" forever even though the sigs are fresh.
 
+## NAS connection / event logs — query from the hub, not the NAS
+
+QNAP NAS sends syslog to the hub. **Do not SSH into the NAS to grep its log files** — the QNAP shell is busybox-style with weird paths (`/etc/log` may not exist, `/share/CACHEDEV1_DATA/.@logs/` is volume-dependent, persistent log location varies by QTS version), and you'll waste round-trips fighting the busybox.
+
+The hub aggregates everything at:
+
+```
+/var/log/remote/qnap/qnap.log               # current
+/var/log/remote/qnap/qnap.log-YYYYMMDD.gz   # daily rotated
+```
+
+This is set up via QNAP **Notification Center → System Logs → System Connection Logs → Send to syslog server** pointing at the hub.
+
+### Identifying which employee is on which IP from NAS conn log
+
+The `qlogd` line includes `Users: <employee_id>` — this is the most reliable IP→employee mapping for shared/dynamic-IP environments where NetBox / DHCP only have partial coverage.
+
+```bash
+grep -aE '192\.168\.<X>\.<Y>' /var/log/remote/qnap/qnap.log | tail -10
+# Sample line:
+# May  6 13:30:26 Nyx qlogd[10656]: conn log: Users: 25007, Source IP: 10.0.0.98,
+#   Computer name: lenovo-l14, Connection type: SAMBA, Accessed resources: <path>, Action: Read
+```
+
+For "who's at this IP" attribution, this beats:
+- NetBox (only has IPs you explicitly registered)
+- DHCP lease (only has hostname, doesn't tell you the logged-in user)
+- AD `lastLogonTimestamp` (lags 9-14 days for replication efficiency)
+
+### Common patterns to grep
+
+```bash
+# Who's been on this IP today
+grep -aE 'Source IP: 10\.0\.0\.98' /var/log/remote/qnap/qnap.log | grep -aoE 'Users: [0-9]+' | sort | uniq -c
+
+# What is employee 25007 doing on the NAS today
+grep -aE 'Users: 25007' /var/log/remote/qnap/qnap.log | tail -20
+
+# All SMB1 deny events (Mac SMB1 clients leaving log noise)
+grep -aE 'Deny SMB1' /var/log/remote/qnap/qnap.log | wc -l
+
+# Today's unique source IPs hitting the NAS
+grep -aE "$(date '+%b %_d')" /var/log/remote/qnap/qnap.log | grep -aoE 'Source IP: [0-9.]+' | sort -u
+```
+
+### Excel atomic-save pattern (don't be alarmed)
+
+Word/Excel saves trigger a flurry of read/add tmp/write/rename/delete events:
+```
+Read  <file>.xlsx
+Add   <random>.tmp
+Write <random>.tmp
+Rename <file>.xlsx → <other>.tmp
+Rename <random>.tmp → <file>.xlsx
+Delete <other>.tmp
+```
+This is normal Office save semantics — not malware, not corruption.
+
 ## SSH key auth (hub → NAS)
 
 QNAP has TWO `authorized_keys` locations:
