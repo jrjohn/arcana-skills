@@ -158,21 +158,31 @@ Easy to mis-interpret. As of LibreNMS 26.x:
 
 **The right primitive for "must be sustained for N minutes before alerting" is `delay`**, not `count`.
 
-### Cron-induced flap (CPU rules)
+### Cron-induced flap (CPU rules) — and the deeper false-reading trap
 
-If a host has a regular cron that briefly spikes CPU (heavy log aggregator, PowerShell DNS dump, ClamAV signature load), a CPU rule with `delay=180` will fire on every cron run because spikes typically last 3-5 min.
+CPU alert rules query the `processors` table (`processors.processor_usage >= 95`), which holds the **most recent SNMP poll value** — a sub-second snapshot, not an averaged window. If your SNMP probe lands on the host during a brief CPU burst (cron exec moment, Windows DNS aggregator, ClamAV sig load), `processors.processor_usage` gets written as 95+ for that instant and the rule fires immediately.
 
-Symptom: alert email pairs every 30 min like clockwork, fire→recover within 2-3 min, multiple hosts simultaneously.
+**Critical: cross-check RRD before assuming the host is actually saturating.** The RRD stores 5-min AVG/MAX, not the SNMP-poll instant. If RRD shows max < 60% but you're getting CRIT alerts at 95%, the alert is firing on a sub-second false-high reading, not real load.
 
-**Fix**: increase `delay` past the spike duration, AND set `count=1` so even if the spike DOES exceed the delay, you only get one email per cycle (not a flap-storm).
-
-```sql
-UPDATE alert_rules
-SET extra = JSON_SET(extra, '$.count', 1, '$.delay', 600, '$.interval', 1800)
-WHERE name = '[CRIT] CPU >=95%';
+```bash
+docker exec librenms rrdtool fetch /data/rrd/<host>/processor-hr-<idx>.rrd MAX -s now-2h -e now -r 300 | tail -25
 ```
 
-After UPDATE: short spikes (≤10 min) absorbed by `delay=600`. Sustained ≥10 min saturation still alerts (once), then mutes until recovery, then re-arms.
+If RRD never shows the alert threshold value, the rule is firing on noise, not load.
+
+**Fix**: bump the threshold past where SNMP-poll instants can ever realistically land. Going from 95 to 99 cuts noise dramatically — instant peaks rarely hit 99 on healthy hosts, but real saturation does.
+
+```sql
+UPDATE alert_rules SET 
+  builder = REPLACE(builder, '"value":"95"', '"value":"99"'),
+  query = REPLACE(query, '>= 95', '>= 99'),
+  name = REPLACE(name, '95%', '99%')
+WHERE id = <rule_id>;
+```
+
+This is more honest than tweaking `delay` / `count` — those fields don't actually suppress sub-poll-cycle bursts in practice (we tested `delay=600` with `count=1` and the rule still fired on 2-min spikes). The threshold change attacks the right layer: filter the noise out at the rule condition, not at the notification scheduler.
+
+If you still want true "sustained for N minutes" semantics (which `delay` notionally promises but doesn't reliably deliver in our testing), you need to either build a custom history table cron-fed every 5 min and rewrite the rule query to AVG over it, or use the alert rule `proc` field with a script that reads RRD directly. Both are significant engineering — for most SMB-scale ops, the threshold bump is the right call.
 
 **Always restart dispatcher after rule UPDATE.** Confirmed empirically (2026-05-06): the dispatcher caches alert rules at startup and does **not** poll the DB for rule changes during a fire-cycle. Verified by waiting 28 min after a rule UPDATE — the old `count` value still applied. Solution:
 
