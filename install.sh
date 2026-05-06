@@ -46,6 +46,7 @@ SKILLS=(
     "app-uiux-designer.skill"
     "doc-indexer-skill"
     "claude-session-archive-skill"
+    "mis-management-skill"
 )
 
 # Config paths
