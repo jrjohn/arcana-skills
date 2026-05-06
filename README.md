@@ -25,12 +25,28 @@ cd arcana-skills
 #### Installation Options
 
 ```bash
-# Interactive installation (select skills to install)
+# Interactive — show status table + select what to install (recommended for re-runs)
 ./install.sh
 
-# Install all skills
+# Reinstall ALL skills
 ./install.sh --all
+
+# Update only OUTDATED installed skills
+./install.sh --update
+
+# Install only NEW skills (skip already-installed)
+./install.sh --new
+
+# Show status table only (no install)
+./install.sh --list
 ```
+
+The interactive mode shows a status table per skill:
+- `[+] new` — not yet installed
+- `[↑] update available` — installed but newer version in repo
+- `[✓] up-to-date` — installed and current
+
+Default action (Enter): install [+] + update [↑], skip [✓]. Or pick individual skills by number.
 
 ### Windows
 
@@ -51,9 +67,14 @@ cd arcana-skills
 #### Installation Options
 
 ```powershell
-.\install.ps1           # Interactive installation
-.\install.ps1 -All      # Install all skills
+.\install.ps1            # Interactive — status table + select what to install
+.\install.ps1 -All       # Reinstall all skills
+.\install.ps1 -Update    # Update only outdated installed
+.\install.ps1 -New       # Install only new skills
+.\install.ps1 -List      # Show status table only (no install)
 ```
+
+Interactive mode shows the same status table as the bash version (`[+] new`, `[↑] update available`, `[✓] up-to-date`). Default action: install [+] + update [↑].
 
 ## Included Skills
 
