@@ -16,22 +16,32 @@ Pure CLAUDE.md instructions are best-effort: Claude reads them, but under load (
 Real incidents that prompted this layer:
 - **2026-04-XX** — Claude SSHed 3 times into a device to ID `.98` before being reminded archive had the answer. Wasted 3 round-trips. → preflight hook now blocks SSH-log-grep without vsearch.
 - **2026-05-05** — Asked "who's in 品質法規部". Claude grepped memory file, hit 2/5 people (memory was a stale curated index). vsearch on archive returned 4/24 in one shot. → preflight hook now blocks memory grep without vsearch, and the rule "memory ≠ archive replacement" is encoded in the deny reason.
+- **2026-05-11** — Post-compact, Claude went straight to `sqlite3 ... sessions.db WHERE content LIKE '%X%'` for a credential lookup instead of csearch. The CLAUDE.md prose said "vsearch first" but the credential section's example *literally* used raw `sqlite3 LIKE` — that pattern survived compact as muscle memory. **Also**: the sentinel from pre-compact vsearch was still valid, so the hook allowed the sqlite3 call. → v1.11 hard-bans `sqlite3 SEARCH` (LIKE/MATCH/msg_fts/GLOB) on sessions.db regardless of sentinel, and adds 30-min sentinel TTL to force re-vsearch after compact gaps.
 
 ## The two hooks
 
 ### 1. `archive-preflight.sh` — PreToolUse (reactive)
 
-Registered against `Bash` and `Read` matchers. Inspects the tool input and **denies** if the call is one of:
+Registered against `Bash` and `Read` matchers. Inspects the tool input and applies two tiers of rule:
+
+**Tier A — hard deny (sentinel cannot unlock; since v1.11):**
 
 | Trigger | Why blocked |
 |---|---|
-| `sqlite3 ... sessions.db` (raw SQL on archive DB) | Want vsearch/csearch first — they're often enough, and they prime the cache |
+| `sqlite3 ... sessions.db` with `LIKE` / `MATCH` / `msg_fts` / `GLOB` | Content search must go through csearch (FTS5 — faster, supports phrase/boolean, returns ts+project+role+~258 chars). Bypassing csearch loses discipline + caching benefits. Extend csearch CLI if its defaults aren't enough — don't bypass the hook. |
+
+**Tier B — sentinel-gated (any `vsearch` / `csearch` invocation in the last 30 min unlocks):**
+
+| Trigger | Why blocked |
+|---|---|
+| `sqlite3 ... sessions.db` metadata (COUNT / PRAGMA / .schema / msg_vec maintenance) | Even maintenance touches need preflight discipline (avoid drift) |
 | `grep / cat / tail / less / sed / awk` on `~/.claude/projects/*/memory/*.md` | Memory files are stale curated indexes, not source of truth |
 | `Read` on a memory file (except `MEMORY.md` itself) | Same reason — memory is index, archive is authoritative |
 | `ssh ... grep|tail|cat ... /var/log/...` or `*.log` | Investigative remote log queries often duplicate prior work — archive may already have the answer |
 | Local `grep|tail|cat /var/log/...` or `*.log` | Same logic for local logs |
+| `git log --grep=...` / `-S '...'` / `--all-match` | Investigative git history search — same logic |
 
-**Unblocking**: any `vsearch ...` or `csearch ...` invocation creates a sentinel file (`/tmp/claude-archive-preflight-<session_id>`). All blocked patterns then unblock for the rest of the session. The sentinel is per-session, not persistent — every new session re-locks until vsearch/csearch runs.
+**Unblocking Tier B**: any `vsearch ...` or `csearch ...` invocation creates/refreshes the sentinel file (`/tmp/claude-archive-preflight-<session_id>`). All Tier-B patterns then unblock until the sentinel expires (30 min, see Sentinel mechanics below).
 
 **Critically**: vsearch/csearch returning **zero results** still sets the sentinel. The rule is "you must check archive first", not "archive must contain the answer". A genuine new investigation just gets a one-line empty result, then proceeds normally.
 
@@ -56,12 +66,30 @@ False positives are inevitable (the regex is permissive). The cost of a false po
 ## Sentinel mechanics
 
 ```
-/tmp/claude-archive-preflight-<session_id>
+/tmp/claude-archive-preflight-<session_id>     # TTL: 30 minutes (since v1.11)
 ```
 
-- **Created by**: `vsearch` / `csearch` invocation (preflight hook), or any `auto-vsearch-on-prompt` archive-trigger match
-- **Checked by**: preflight hook on every Bash / Read call
-- **Cleared by**: nothing. `/tmp` clears on reboot, but each session has its own `session_id`, so cross-session contamination is impossible.
+- **Created / refreshed by**: `vsearch` / `csearch` invocation (preflight hook), or any `auto-vsearch-on-prompt` archive-trigger match. Each invocation touches the file, resetting the mtime → resetting the TTL clock.
+- **Checked by**: preflight hook on every Tier-B Bash / Read call via `sentinel_valid()`:
+  ```sh
+  sentinel_valid() {
+      [ -e "$sentinel" ] || return 1
+      mtime=$(stat -f %m "$sentinel" 2>/dev/null || stat -c %Y "$sentinel" 2>/dev/null)
+      age=$(( $(date +%s) - mtime ))
+      [ "$age" -gt 1800 ] && { rm -f "$sentinel"; return 1; }
+      return 0
+  }
+  ```
+- **Cleared by**:
+  - Reaching TTL (30 min from last refresh) — `sentinel_valid()` auto-removes stale file
+  - `/tmp` cleared on reboot
+  - Each session has its own `session_id`, so cross-session contamination is impossible
+
+### Why TTL exists (the compact gap)
+
+Without TTL, the sentinel created by a vsearch at minute 0 would be valid forever. If Claude Code compacts the conversation at minute 90, the model loses procedural memory of having run vsearch — but the sentinel file persists (same `session_id`). The model's next archive query post-compact could go straight to raw sqlite3 (Tier B), with the hook silently allowing it because the sentinel is still there.
+
+30-minute TTL fixes this: any meaningful idle gap or compact forces a re-vsearch. Active conversations refresh the sentinel automatically (auto-vsearch-on-prompt fires on every archive-intent prompt), so users never notice the TTL — it only kicks in when the model would otherwise drift.
 
 ### Manual override
 
@@ -72,7 +100,7 @@ SID=$(cat ~/.claude/projects/<project>/<latest>.jsonl | head -1 | jq -r '.sessio
 : > /tmp/claude-archive-preflight-${SID}
 ```
 
-This is escape-hatch only. Normal flow is: run vsearch, get results (even if empty), proceed.
+This is escape-hatch only and resets the 30-min TTL. Normal flow is: run vsearch, get results (even if empty), proceed. Note that Tier A (sqlite3 SEARCH) is NOT unlocked by the sentinel — there's no override for that, by design.
 
 ## Composition with other skills
 
@@ -95,7 +123,7 @@ Both run; both can inject `additionalContext`; Claude sees the union. Keep each 
 
 ## Performance notes
 
-- **Preflight overhead**: ~5ms per Bash/Read call (jq + a few greps on small input). Hook timeout is set to 5s, but real cost is sub-frame.
+- **Preflight overhead**: ~5ms per Bash/Read call (jq + a few greps on small input, plus a `stat` for TTL check). Hook timeout is set to 5s, but real cost is sub-frame.
 - **Auto-vsearch overhead**: ~500ms when triggered (vsearch latency dominated by Ollama embedding inference). Hook timeout is also 5s. If Ollama is down or slow, the hook fails silently (vsearch returns empty), prompt goes through unmodified — never blocks the user.
 - **No state persistence**: sentinel is `/tmp`-based; no DB writes, no I/O contention with `crs build`.
 

@@ -173,9 +173,11 @@ else
 fi
 
 # 8b. Install + register archive-preflight PreToolUse hook
-#     - Blocks raw sqlite3 against archive DB until vsearch/csearch runs once.
-#     - Blocks grep/Read on memory files until vsearch/csearch runs once.
-#     - Sentinel: /tmp/claude-archive-preflight-<session_id>
+#     - Hard-denies raw sqlite3 SEARCH (LIKE/MATCH/msg_fts/GLOB) on archive DB
+#       regardless of sentinel state — csearch is the only content-search interface (v1.11+).
+#     - Sentinel-gates (until vsearch/csearch runs): sqlite3 metadata, memory file grep/Read,
+#       SSH/local log dig, git log --grep.
+#     - Sentinel: /tmp/claude-archive-preflight-<session_id>, TTL 30 min (v1.11+).
 HOOKS_DIR="$HOME/.claude/hooks"
 PREFLIGHT="$HOOKS_DIR/archive-preflight.sh"
 mkdir -p "$HOOKS_DIR"
