@@ -24,7 +24,7 @@ Permanent, local, full-text searchable history of every Claude Code session you'
 | User invokes `/claude-session-archive-skill` or types `csearch ...` and it errors | Diagnose: archive not installed yet → walk through install. Already installed → check FTS5 syntax. |
 | User on a fresh Mac wants the archive set up | Walk through Steps 1-6 in `references/installation-guide.md` |
 | User reports queries are slow or DB grew large | See `references/tuning.md` |
-| User asks a one-shot historical question ("when did port X get shut down?", "what password did we use for device Y?") | Use direct `sqlite3` SQL **after** running vsearch/csearch first (preflight hook blocks raw sqlite3 until then). See `references/fts5-syntax.md` |
+| User asks a one-shot historical question ("when did port X get shut down?", "what password did we use for device Y?") | Use `csearch '<phrase>' [project]` — phrase/boolean FTS5 search returns ts + project + role + 258 chars per hit, covers credential/history lookups. Raw `sqlite3 LIKE / MATCH` against sessions.db is **forbidden** by hook; csearch is the supported interface. See `references/fts5-syntax.md` |
 
 ## How it works (architecture)
 
@@ -125,17 +125,22 @@ vsearch sweet spot vs blind spot (verified 2026-05-04):
 - ❌ **Weak on time-relative queries.** "今天修了什麼 bug" / "what did we do this morning" → low hit-rate. The embedding weight goes mostly to the generic words ("今天", "bug", "we"), not to *what* you actually did. The DB has no notion of "today" — date is a column, not a concept. Use `csearch '<keyword>' [project]` plus a `WHERE date(ts) = ...` SQL clause instead — the FTS layer is real-time (every 15 min ingest tick) and `date()` filtering is exact.
 - ⚠️ **Embedding lag.** vsearch needs `bge-m3` to embed each new row, which happens during the next `crs build` tick. So messages from the *current ongoing* session may not be vsearchable for up to 15 minutes (FTS via `csearch` is updated synchronously during ingest — no lag there).
 
-### Direct SQL (for complex queries)
+### Complex queries / large result sets → `csearch --limit`
 
-```sql
-sqlite3 ~/claude-archive/sessions.db "
-SELECT session_id, substr(ts,1,19), role, substr(content,1,200)
-FROM msg
-WHERE project LIKE '%network%'
-  AND date(ts) = '2026-04-23'
-  AND rowid IN (SELECT rowid FROM msg_fts WHERE content MATCH 'shaper quota')
-ORDER BY ts LIMIT 20"
+Raw `sqlite3 ... LIKE / MATCH / msg_fts / GLOB` against `sessions.db` is **forbidden by the preflight hook** (since v1.11.0), regardless of sentinel state. Use `csearch` (FTS5) for all content search:
+
+```bash
+csearch --limit 50 'shaper AND quota' network    # boolean + larger result set
+csearch --limit 100 '"per-ip-70m"' network        # exact phrase
 ```
+
+The hook still allows **metadata-only** sqlite3 (COUNT / PRAGMA / .schema / sqlite_master / msg_vec maintenance) when the sentinel is valid — e.g. checking embed backfill progress:
+
+```bash
+sqlite3 ~/claude-archive/sessions.db "SELECT (SELECT COUNT(*) FROM msg) AS msg, (SELECT COUNT(*) FROM msg_vec) AS vec"
+```
+
+Need more chars per hit, time-range filtering, or other features csearch doesn't yet support? Extend the csearch CLI in `scripts/crs/src/main.rs`, don't bypass the hook.
 
 ## Auto-context for Memory (`gen-recent-context.sh` + SessionStart hook)
 
@@ -174,8 +179,8 @@ Claude session              ← Has all of the above in context
 
 | Hook | Event | What it does |
 |---|---|---|
-| `archive-preflight.sh` (`.ps1` on Windows) | PreToolUse (Bash + Read) | **Reactive**. Denies raw `sqlite3 ... sessions.db`, memory-file grep/Read, and SSH/local log dig until a `vsearch`/`csearch` runs in this session and sets a sentinel (`/tmp/claude-archive-preflight-<sid>`) |
-| `auto-vsearch-on-prompt.sh` | UserPromptSubmit | **Proactive**. On prompts containing identity / history / status / question keywords, auto-runs `crs vsearch <prompt>`, injects top hits as `additionalContext`, and pre-sets the sentinel |
+| `archive-preflight.sh` (`.ps1` on Windows) | PreToolUse (Bash + Read) | **Reactive**. **Hard-denies** raw sqlite3 SEARCH against sessions.db (LIKE / MATCH / msg_fts / GLOB) regardless of sentinel — csearch is the only supported interface for content. Sentinel-gated: sqlite3 metadata queries, memory-file grep/Read, SSH/local log dig, `git log --grep`. Sentinel (`/tmp/claude-archive-preflight-<sid>`) is **TTL 30 min**: refreshed by every vsearch/csearch, expired sentinel forces re-vsearch (closes post-compact gap) |
+| `auto-vsearch-on-prompt.sh` | UserPromptSubmit | **Proactive**. On prompts containing identity / history / status / question keywords, auto-runs `crs vsearch <prompt>`, injects top hits as `additionalContext`, and pre-sets/refreshes the sentinel |
 
 **Three-tier query hierarchy** (from `references/discipline-layer.md`):
 
@@ -207,6 +212,10 @@ csearch 'local-in-deny-broadcast' network      # ✗ error: "no such column: in"
 
 **6. Memory file is a stale index, not source of truth (since v1.9.0 — enforced by hook).** `~/.claude/projects/*/memory/*.md` is hand-curated — only what someone bothered to write down. For roster / device / credential / history queries, the canonical source is the archive (full transcripts). The `archive-preflight.sh` hook denies `grep`/`Read` on memory files until `vsearch`/`csearch` runs once in the session, preventing the antipattern of grepping memory and silently missing data that's actually in the archive. `MEMORY.md` itself is exempted (it's auto-loaded by the system anyway). Once the sentinel is set, memory access is unblocked for the rest of the session — useful for "I just discussed this in this session" lookups.
 
+**7. csearch is the only content-search interface (since v1.11.0 — enforced by hook).** Raw `sqlite3 ... sessions.db` with `LIKE`, `MATCH`, `msg_fts`, or `GLOB` is hard-blocked by the preflight hook regardless of sentinel state. Use `csearch '<fts5-query>' [project] [--limit N]` instead — it's faster (FTS5 vs LIKE), supports phrase/boolean syntax, returns ~258 chars per hit covering credential / history / context lookups. Metadata queries (COUNT / PRAGMA / .schema / msg_vec) still allowed for backfill checks. If csearch's defaults don't cover your case, extend `scripts/crs/src/main.rs` (add `--full`, `--rowid`, time-range filter, etc.) — don't bypass the hook.
+
+**8. Sentinel has a 30-minute TTL (since v1.11.0).** The preflight sentinel expires 30 min after creation; refreshed on every vsearch/csearch. Motivation: post-compact, the model loses procedural memory of having run vsearch but `session_id` (and thus the sentinel file) persists. Without TTL, an idle gap or compact would leave the sentinel valid forever, allowing the model to skip vsearch in violation of the rule's intent. `auto-vsearch-on-prompt.sh` refreshes the sentinel on every prompt that matches archive-intent keywords, so active conversations rarely hit the TTL.
+
 ## Snippet for `~/.claude/CLAUDE.md`
 
 Paste this near the top so every Claude session knows about the archive **and** the discipline layer:
@@ -216,9 +225,11 @@ Paste this near the top so every Claude session knows about the archive **and** 
 
 > **每個新 session 的第一個 archive query 必須是 `vsearch` 或 `csearch`，不是 raw `sqlite3`。**
 >
-> Hook (`~/.claude/hooks/archive-preflight.sh`) 會擋下任何對 `~/claude-archive/sessions.db` 的 raw `sqlite3`、對 `~/.claude/projects/*/memory/*.md` 的 grep/Read、以及 `ssh ... grep ... /var/log/...` 的遠端 log 翻找，直到本 session 跑過一次 `vsearch` / `csearch`（它們會寫 sentinel 解鎖）。
+> Hook (`~/.claude/hooks/archive-preflight.sh`) 在 sentinel valid 前會擋下：對 `~/claude-archive/sessions.db` 的 raw `sqlite3`（含 metadata）、對 `~/.claude/projects/*/memory/*.md` 的 grep/Read、`ssh ... grep ... /var/log/...` 遠端 log 翻找、本機 log grep、`git log --grep`。跑過 `vsearch` / `csearch` 寫 sentinel 解鎖。
 >
-> **不看 query 內容** — 連 `GROUP BY date(ts) COUNT(*)` 這種沒 keyword 的 metadata query 也會被擋。
+> **無條件 deny**（v1.11+）：raw `sqlite3 ... sessions.db` 帶 `LIKE / MATCH / msg_fts / GLOB` — 無論 sentinel 狀態。改用 `csearch '<fts5-query>' [project]`（FTS5，~258 chars/hit，支援 phrase / boolean / `--limit N`）。
+>
+> **Sentinel TTL 30 分鐘**（v1.11+）：過期自動 cleanup + deny，主要關掉 compact 後 model 失憶但 sentinel 殘留的 gap。
 >
 > 預設選 `vsearch`；明確 IP / hostname / 檔名 / FTS5 syntax 才直接 `csearch`。
 
@@ -255,8 +266,9 @@ msg_fts = virtual FTS5 over msg.content (tokenize=unicode61)
 3. **❌ memory file grep — NEVER 當 archive 替代** — memory 是 stale curated index，不是 roster / device / credential / 歷史的 source of truth。Hook 會擋。唯一例外：「我這個 session 剛討論過 X」的 quick lookup。
 
 ## How to query
-- CLI: `vsearch '<concept>' [project]` or `csearch <fts-query> [project-suffix]`
-- SQL (after vsearch/csearch): `sqlite3 ~/claude-archive/sessions.db "SELECT ... WHERE rowid IN (SELECT rowid FROM msg_fts WHERE content MATCH 'xxx') LIMIT 20"`
+- **CLI**: `vsearch '<concept>' [project]` or `csearch '<fts-query>' [project] [--limit N]`
+- **Raw sqlite3 SEARCH is forbidden** by hook (LIKE / MATCH / msg_fts / GLOB). csearch is the only content-search path.
+- **Metadata-only sqlite3** still allowed when sentinel valid: `SELECT COUNT(*)`, `PRAGMA`, `.schema`, `msg_vec` maintenance.
 
 FTS5 syntax: phrase `'"..."'`, boolean `A AND B / OR / NOT`, prefix `foo*`. Words with `- / : / .` MUST be phrase-quoted.
 
@@ -297,8 +309,8 @@ claude-session-archive-skill/
     ├── install.ps1                   # Windows base installer (cargo build + Scheduled Task + sqliterc + SessionStart hook + PreToolUse preflight hook)
     ├── csearch.ps1                   # Windows PowerShell csearch wrapper (sqlite3.exe)
     ├── vsearch.ps1                   # Windows PowerShell vsearch wrapper (calls crs.exe vsearch)
-    ├── archive-preflight.sh          # PreToolUse hook (Bash + Read) — gates raw sqlite3 + memory grep + SSH/local log dig until vsearch/csearch runs once
-    ├── archive-preflight.ps1         # Windows port of the preflight hook (rules 1-4 only; SSH/log dig rules pending)
+    ├── archive-preflight.sh          # PreToolUse hook (Bash + Read) — hard-denies sqlite3 SEARCH (LIKE/MATCH/msg_fts/GLOB), sentinel-gates sqlite3 metadata + memory grep + SSH/local log dig + git log --grep; sentinel TTL 30 min
+    ├── archive-preflight.ps1         # Windows port of the preflight hook (rules 1-4 only; SSH/log dig + search-forbidden + TTL pending — v1.11 macOS-only)
     ├── auto-vsearch-on-prompt.sh     # UserPromptSubmit hook — auto-vsearch on identity/history/status prompts, injects top hits + pre-sets sentinel
     ├── gen-recent-context.sh         # legacy hook target — calls crs vsearch-since (kept for stable hook command path)
     ├── gen-recent-context.ps1        # Windows port of the same
@@ -312,6 +324,12 @@ claude-session-archive-skill/
 ```
 
 ## Author / version
+
+- 2026-05-11 v1.11.0 **Preflight hardening — forbid sqlite3 SEARCH + 30-min sentinel TTL.** Two independent fixes prompted by 2026-05-11 audit of post-compact behavior:
+  - **`archive-preflight.sh` rule 2 hard-denies sqlite3 SEARCH against sessions.db** (`LIKE`, `MATCH`, `msg_fts`, `GLOB`) regardless of sentinel state. Motivation: post-compact incident where the model went straight to `sqlite3 ... LIKE '%X%'` for credential lookup instead of csearch. CLAUDE.md prose said "vsearch first" but the credential section's example literally used raw `sqlite3 LIKE` — that pattern survived compact as muscle memory. The fix moves the rule from prose to hook + rewrites all credential examples to use csearch. Metadata queries (COUNT / PRAGMA / .schema / msg_vec maintenance) remain allowed when sentinel valid — they're for backfill checks, not content search. The deny message points users at `csearch --limit N` and phrase/boolean syntax.
+  - **Sentinel TTL 30 min** — the sentinel file (`/tmp/claude-archive-preflight-<sid>`) now expires 30 minutes after creation. `sentinel_valid()` helper checks mtime via `stat -f %m` (macOS) / `stat -c %Y` (Linux), removes stale sentinel automatically. Motivation: post-compact, the model loses procedural memory of having run vsearch but `session_id` (and thus the sentinel file) persists — without TTL, the hook would allow sqlite3 forever based on a vsearch from hours ago. `auto-vsearch-on-prompt.sh` refreshes the sentinel on every prompt that matches archive-intent keywords, so active conversations rarely hit the TTL; only post-compact / long-idle gaps trigger the re-vsearch requirement.
+  - CLAUDE.md credential section rewritten: 2-tier hierarchy (vsearch → csearch), removed all `sqlite3 LIKE` examples, added "禁用 raw sqlite3 搜尋" block listing the hard-denied patterns.
+  - Windows `archive-preflight.ps1` not updated this release — Windows installs continue at v1.10.0 preflight behavior.
 
 - 2026-05-06 v1.10.0 **Discipline layer expansion — log-dig blocking + UserPromptSubmit auto-vsearch + dedicated reference doc.** Builds on v1.9.0's preflight hook with three additions:
   - **`archive-preflight.sh` rules 5+6** — hook now denies `ssh ... grep|tail|cat ... /var/log/...` and local `grep|tail|cat ...log` until the sentinel exists. Motivation: 2026-04 incident where Claude SSHed 3× into a device to identify `.98` before being reminded archive had the answer (3 wasted round-trips). Same justification as v1.9.0's memory-grep blocking — investigative log digs duplicate prior session work; vsearch first costs ~500ms and often returns the answer verbatim.
