@@ -1,7 +1,7 @@
 ---
 name: claude-session-archive-skill
 description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into an archive DB every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. **Two interchangeable backends, same source, Cargo feature flag**: (1) DEFAULT `cargo build --release` → sqlite + sqlite-vec at `~/claude-archive/sessions.db` (single-device, sub-10ms local). (2) `cargo build --release --features pg-backend` (or `install.sh --with-pg`) → PostgreSQL 17 + pgvector on a remote VPS, accessed via local `pgsearchd` daemon over a unix-socket r2d2 connection pool (cross-device, ~280-400ms warm via daemon, ~1s direct without). See references/pg-backend.md. Two query modes: `csearch` (FTS5 lexical / PG GIN, exact phrase / boolean / prefix) and `vsearch` (semantic via Ollama + bge-m3 — multilingual SOTA, concept queries, synonym / cross-language matching, strong Chinese). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec / pgvector / pgsearchd daemon stack, (d) migrate from sqlite to PG backend (rebuild with --features pg-backend), (e) tune SQLite performance, or (f) troubleshoot FTS5 syntax / ingest issues.
-version: 1.13.0
+version: 1.13.1
 allowed-tools:
   - Read
   - Write

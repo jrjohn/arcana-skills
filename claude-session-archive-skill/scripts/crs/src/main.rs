@@ -1676,14 +1676,22 @@ struct PgRow {
 
 #[cfg(feature = "pg-backend")]
 fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
+    // MATERIALIZED CTE forces planner to use GIN index on content_tsv.
+    // Without it, PG sees `ORDER BY ts DESC LIMIT 10` and tries to walk
+    // msg_ts_idx backward + filter — scans thousands of rows before hitting
+    // a high-selectivity FTS match (observed: 432ms server, 16K rows filtered).
+    // With MATERIALIZED CTE, GIN runs first (selective), then sort+limit on
+    // the small result set (~10-50ms server-side).
     let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
     let rows = client.query(
-        "SELECT ts, project, session_id, role, tool_name, content
-         FROM msg
-         WHERE content_tsv @@ plainto_tsquery('simple', $1)
-           AND ($2::text IS NULL OR project LIKE $2)
-         ORDER BY ts DESC
-         LIMIT $3",
+        "WITH hits AS MATERIALIZED (
+             SELECT ts, project, session_id, role, tool_name, content
+             FROM msg
+             WHERE content_tsv @@ plainto_tsquery('simple', $1)
+               AND ($2::text IS NULL OR project LIKE $2)
+         )
+         SELECT ts, project, session_id, role, tool_name, content
+         FROM hits ORDER BY ts DESC LIMIT $3",
         &[&query, &proj_like, &(limit as i64)],
     )?;
     Ok(rows.iter().map(|r| PgRow {
