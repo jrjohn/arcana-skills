@@ -1715,32 +1715,52 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
 
 #[cfg(feature = "pg-backend")]
 fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
-    // Two filters baked in:
-    //   role IN ('user','assistant')   — skip meta events (queue-operation,
-    //     last-prompt, agent-name, ai-title, subagent-stream-progress, etc.)
-    //     that have no real content and just dilute the top-N.
-    //   DEDUP by content (ROW_NUMBER PARTITION BY content) — same prompt is
-    //     often stored multiple times (user row + queue-operation row, etc.).
-    //     Over-fetch by 5× to compensate, then take rn=1 per content.
+    // HNSW-first plan (MATERIALIZED) — without this, the planner picks Seq Scan
+    // when filters are added alongside ORDER BY embedding <=> v, blowing
+    // execution from ~20ms (HNSW) to ~6s (seq scan + sort over 100k+ rows).
+    //
+    // Pipeline:
+    //   knn      — HNSW top-N over msg (over_fetch * limit), index hit only
+    //   filt     — drop meta-role events (queue-operation, last-prompt, etc.)
+    //              that have no real content and dilute the top-K
+    //   dedup    — DISTINCT ON (content) keeping the closest occurrence (same
+    //              prompt is often stored multiple times: user row + queue-op
+    //              row + ai-title row, all bge-m3 embedded identically)
+    //
+    // Over-fetch needs to be big enough that after role+content filtering we
+    // still have `limit` rows. With ~71% user/assistant fraction in the
+    // archive (38122 user + 60123 assistant / 138814 with embedding), 100
+    // over-fetch typically yields >50 usable rows. ef_search defaults to 40
+    // on pgvector HNSW; we bump it inside the session to actually return up
+    // to over_fetch candidates.
     let emb = embed_pg_query(http, query)?;
     let lit = vec_literal(&emb);
     let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
-    let over_fetch = ((limit * 5).max(20)) as i64;
+    let over_fetch = ((limit * 20).max(100)) as i64;
+    // ef_search: pgvector HNSW. Raise so HNSW returns up to over_fetch rows
+    // (default 40 caps how many candidates the index walk surfaces). Plain
+    // SET (not SET LOCAL) — we are not in a txn; SET persists on this pooled
+    // connection but every vsearch resets to the same value, so no leak.
+    let ef = std::cmp::max(over_fetch as i32, 100);
+    client.execute(&format!("SET hnsw.ef_search = {ef}"), &[]).ok();
     let sql = format!(
-        "SELECT ts, project, session_id, role, tool_name, content, dist
-         FROM (
+        "WITH knn AS MATERIALIZED (
              SELECT ts, project, session_id, role, tool_name, content,
-                    embedding <=> '{lit}'::vector AS dist,
-                    ROW_NUMBER() OVER (PARTITION BY content
-                                       ORDER BY embedding <=> '{lit}'::vector) AS rn
+                    embedding <=> '{lit}'::vector AS dist
              FROM msg
              WHERE embedding IS NOT NULL
-               AND role IN ('user', 'assistant')
                AND ($1::text IS NULL OR project LIKE $1)
              ORDER BY embedding <=> '{lit}'::vector
              LIMIT $2
-         ) ranked
-         WHERE rn = 1
+         ),
+         filt AS (SELECT * FROM knn WHERE role IN ('user', 'assistant')),
+         dedup AS (
+             SELECT DISTINCT ON (content) ts, project, session_id, role, tool_name, content, dist
+             FROM filt
+             ORDER BY content, dist
+         )
+         SELECT ts, project, session_id, role, tool_name, content, dist
+         FROM dedup
          ORDER BY dist
          LIMIT $3"
     );
