@@ -1,7 +1,7 @@
 ---
 name: claude-session-archive-skill
-description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into an archive DB every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. **Two interchangeable backends**: (1) sqlite + sqlite-vec at `~/claude-archive/sessions.db` (default, single-device, sub-ms local) — (2) PostgreSQL + pgvector on a remote VPS (cross-device via TLS, ~270ms via daemon, see references/pg-backend.md). Two query modes: `csearch` (FTS5 lexical, exact phrase / boolean / prefix) and `vsearch` (semantic via Ollama + bge-m3 — multilingual SOTA, concept queries, synonym / cross-language matching, strong Chinese). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec / pgvector semantic stack, (d) migrate from sqlite to PG backend, (e) tune SQLite performance, or (f) troubleshoot FTS5 syntax / ingest issues.
-version: 1.12.0
+description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into an archive DB every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. **Two interchangeable backends, same source, Cargo feature flag**: (1) DEFAULT `cargo build --release` → sqlite + sqlite-vec at `~/claude-archive/sessions.db` (single-device, sub-10ms local). (2) `cargo build --release --features pg-backend` (or `install.sh --with-pg`) → PostgreSQL 17 + pgvector on a remote VPS, accessed via local `pgsearchd` daemon over a unix-socket r2d2 connection pool (cross-device, ~280-400ms warm via daemon, ~1s direct without). See references/pg-backend.md. Two query modes: `csearch` (FTS5 lexical / PG GIN, exact phrase / boolean / prefix) and `vsearch` (semantic via Ollama + bge-m3 — multilingual SOTA, concept queries, synonym / cross-language matching, strong Chinese). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec / pgvector / pgsearchd daemon stack, (d) migrate from sqlite to PG backend (rebuild with --features pg-backend), (e) tune SQLite performance, or (f) troubleshoot FTS5 syntax / ingest issues.
+version: 1.13.0
 allowed-tools:
   - Read
   - Write
@@ -50,23 +50,30 @@ ingest_state(file_path, mtime, lines)                        -- incremental trac
 
 ## Backends — sqlite (default) vs PostgreSQL+pgvector
 
-The skill ships with **two interchangeable backends**. Same `csearch / vsearch / build` interface; different storage layer underneath.
+The skill ships with **two interchangeable backends, same source, Cargo feature flag at build time**. Same `csearch / vsearch / build` CLI; different storage layer underneath.
 
-| | **sqlite + sqlite-vec** (default) | **PostgreSQL + pgvector** |
+| | **sqlite + sqlite-vec** (default) | **PostgreSQL + pgvector** (`pg-backend` feature) |
 |---|---|---|
-| Where | Local `~/claude-archive/sessions.db` | Remote PG container (e.g. cloud VPS) |
-| Latency | <10ms (lexical), ~150ms (vec, incl. local Ollama) | ~270ms via daemon, ~830ms direct |
+| Where | Local `~/claude-archive/sessions.db` | Remote PG 17 + pgvector (e.g. cloud VPS) |
+| Latency (warm) | csearch <10ms / vsearch ~150ms (local Ollama) | csearch ~280ms / vsearch ~380ms via `pgsearchd` |
+| Latency (no daemon) | n/a — always local | csearch ~970ms / vsearch ~1100ms (TLS handshake every call) |
+| Build cmd | `cargo build --release` | `cargo build --release --features pg-backend` |
 | Multi-device | ❌ single machine | ✅ query from any client over TLS |
 | Server cost | $0 | VPS / cloud box |
-| Setup time | 5 min (`scripts/install.sh`) | 1-2 hr (server + TLS + firewall) |
+| Setup time | 5 min (`scripts/install.sh`) | +1-2 hr server-side once (TLS + firewall + schema) |
 | Trust boundary | Local-only | Extends to that server |
+| Daemon | none | `pgsearchd` (unix socket, r2d2 pool size 4) — saves ~700ms TLS per query |
 | Best for | Single-laptop user, paranoid privacy, low latency | Multi-device, OK extending trust to server |
 
-The two are **mutually exclusive at the `crs` binary level** — you build one or the other. Switching is `git checkout` + `cargo build --release`.
+**Build-time exclusive**: each `crs` binary is one or the other. Switching is a 10-30s rebuild — same source, different `--features` flag. The default sqlite build doesn't even compile the postgres deps (lighter binary, faster build).
 
-For PG mode: full setup steps, performance numbers, security trade-offs, and rollback in [`references/pg-backend.md`](references/pg-backend.md).
+In `pg-backend` mode, `cmd_csearch` / `cmd_vsearch` / `cmd_vsearch_since` / `cmd_build` / `cmd_embed_missing` all route to PG. Two extra subcommands appear (`pgsearch`, `pgsearchd`) for direct PG queries and the long-running daemon. **Local sqlite is unused for search** in this mode — `~/claude-archive/sessions.db` may not even exist.
 
-The rest of this SKILL.md describes the sqlite default. Most commands (`csearch / vsearch / vsearch-since / pgsearch / build / embed-missing`) work identically against either backend — only the storage layer changes.
+PG mode requires env vars (`CRS_PG_PASSWORD` is mandatory, others have defaults). Connection details are read at runtime — **no credentials are hardcoded in the source**.
+
+For PG mode: full setup steps, env var schema, server-side compose, TLS cert management, performance numbers, security trade-offs, and rollback are in [`references/pg-backend.md`](references/pg-backend.md).
+
+The rest of this SKILL.md describes the sqlite default. Most CLI surfaces (`csearch / vsearch / vsearch-since / build / embed-missing`) are identical — only the storage layer changes.
 
 ## Quick install — pick your OS
 
@@ -78,12 +85,15 @@ Prerequisite: **Rust toolchain** (`curl --proto '=https' --tlsv1.2 -sSf https://
 
 ```bash
 cd scripts
-./install.sh                  # build crs + launchd (mac) / cron (linux) + sqliterc + first ingest
-# (Optional) semantic search:
+./install.sh                  # default: sqlite backend. cargo build + launchd (mac) / cron (linux) + sqliterc + first ingest
+./install.sh --with-pg        # OPTIONAL: build with pg-backend feature + install pgsearchd daemon plist (macOS)
+# (Optional) semantic search (sqlite mode only — PG mode already does embeds via the same Ollama):
 ./install-semantic.sh         # native Ollama + bge-m3 model + backfill via crs embed-missing
 # or
 ./install-semantic-docker.sh  # Ollama in Docker Desktop / docker-engine
 ```
+
+For `--with-pg`: also requires `CRS_PG_PASSWORD` (and optionally `CRS_PG_HOST/PORT/USER/DB`) in env or in the launchd plist's `EnvironmentVariables`. See `references/pg-backend.md` for full server-side setup.
 
 ### Windows (PowerShell)
 
@@ -336,6 +346,7 @@ claude-session-archive-skill/
     ├── gen-recent-context.ps1        # Windows port of the same
     ├── sqliterc.template             # → ~/.sqliterc
     ├── launchd.plist.template        # → ~/Library/LaunchAgents/com.<USER>.claude-archive.plist (runs crs build)
+    ├── pgsearchd.plist.template      # macOS PG-backend OPTIONAL: → ~/Library/LaunchAgents/com.<USER>.pgsearchd.plist (KeepAlive r2d2 pool daemon)
     ├── ollama.plist.template         # macOS OPTIONAL: launchd auto-start template
     ├── install-semantic.sh           # macOS/Linux OPTIONAL: native Ollama + bge-m3 + crs embed-missing backfill
     ├── install-semantic-docker.sh    # macOS/Linux OPTIONAL: Docker Ollama variant
@@ -344,6 +355,16 @@ claude-session-archive-skill/
 ```
 
 ## Author / version
+
+- 2026-05-14 v1.13.0 **PG backend behind Cargo feature flag + credential scrub + pgsearchd plist template.** The 2026-05-14 PG migration (v1.12.0) shipped with `csearch / vsearch / vsearch-since / build / embed-missing` hard-coded to PG and `PG_HOST/USER/PASS/DB` as `const &str` literals in `src/main.rs`. That made the sqlite path unreachable and (worse) put the bluesea password into anyone's clone of the repo. v1.13 fixes both:
+  - **Feature flag**: same `src/main.rs` builds either backend. `cargo build --release` → sqlite-only (Pgsearch / Pgsearchd subcommands hidden, postgres deps not compiled). `cargo build --release --features pg-backend` → PG-routed (csearch/vsearch dispatch through `pg_search_dispatch`, Pgsearch / Pgsearchd subcommands appear, daemon helper compiled). Pgsearchd is additionally `#[cfg(unix)]` (Windows has no unix sockets — falls back to direct connect on every query).
+  - **Credentials → env vars**: `CRS_PG_URL` (full libpq string) OR `CRS_PG_HOST/PORT/USER/PASSWORD/DB` (component-wise; PASSWORD required, others default to `localhost/5432/archive/archive_main`). `pg_config_url()` reads at runtime. `crs --features pg-backend` refuses to start without `CRS_PG_PASSWORD` (clear error pointing at pg-backend.md).
+  - **Cargo.toml**: `postgres / postgres-native-tls / native-tls / r2d2 / r2d2_postgres` are `optional = true`; `[features] pg-backend = ["dep:postgres", ...]`. Default build doesn't even download these from crates.io.
+  - **`install.sh --with-pg`** flag: passes `--features pg-backend` to cargo, additionally writes `~/Library/LaunchAgents/com.<USER>.pgsearchd.plist` from the new `scripts/pgsearchd.plist.template` (`KeepAlive` + `EnvironmentVariables` for CRS_PG_*). Skips first-ingest if `CRS_PG_PASSWORD` not set in env. Idempotent. Linux: prints systemd-user-unit guidance.
+  - **`crs doctor`** gains a `[pg-backend]` section when feature is enabled — checks env vars, runs `SELECT 1`, reports `msg` row count, looks for the `pgsearchd.sock`. Cleaner failure mode than mid-query crash.
+  - **`gen-recent-context`** skip-guard: in pg-backend mode, queries PG for `MAX(ts)` instead of local sqlite (which is empty in PG mode). Falls back to pending-mtime-only guard if PG unreachable — avoids hanging the SessionStart hook on network blip.
+  - **References**: `references/pg-backend.md` rewritten — section 1 ("Build crs for PG mode") now documents env vars + feature flag instead of "edit constants". Performance table refreshed with 2026-05-14 measurements (csearch warm 280ms / vsearch warm 380ms via daemon; +700ms TLS handshake direct). Daemon-vs-direct breakdown shown via `--json` output of `pgsearch`.
+  - **Migration for existing PG users (jrjohn etc.)**: re-run `install.sh --with-pg`. Edit the new `~/Library/LaunchAgents/com.<USER>.pgsearchd.plist` to set CRS_PG_PASSWORD, then `launchctl unload && load`. Existing socket / pool / launchd label / data unchanged. After this, `unset` the old hardcoded source — repo now lives at v1.13 with no creds.
 
 - 2026-05-11 v1.11.0 **Preflight hardening — forbid sqlite3 SEARCH + 30-min sentinel TTL.** Two independent fixes prompted by 2026-05-11 audit of post-compact behavior:
   - **`archive-preflight.sh` rule 2 hard-denies sqlite3 SEARCH against sessions.db** (`LIKE`, `MATCH`, `msg_fts`, `GLOB`) regardless of sentinel state. Motivation: post-compact incident where the model went straight to `sqlite3 ... LIKE '%X%'` for credential lookup instead of csearch. CLAUDE.md prose said "vsearch first" but the credential section's example literally used raw `sqlite3 LIKE` — that pattern survived compact as muscle memory. The fix moves the rule from prose to hook + rewrites all credential examples to use csearch. Metadata queries (COUNT / PRAGMA / .schema / msg_vec maintenance) remain allowed when sentinel valid — they're for backfill checks, not content search. The deny message points users at `csearch --limit N` and phrase/boolean syntax.

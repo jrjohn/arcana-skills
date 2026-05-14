@@ -5,9 +5,11 @@ Cross-session full-text + semantic history of every Claude Code conversation, st
 - **Memory** = curated signal (identity / traps / invariants — small)
 - **This archive** = verbatim log (every command + result, every chat — large, query on demand)
 
-Backed by SQLite FTS5 (lexical) and optionally Ollama + sqlite-vec (semantic, **bge-m3** 1024-dim, multilingual SOTA). Millisecond queries. Updates every 15 minutes via launchd / Task Scheduler / cron.
+Backed by SQLite FTS5 (lexical) and optionally Ollama + sqlite-vec (semantic, **bge-m3** 1024-dim, multilingual SOTA). Sub-10ms lexical / ~150ms semantic. Updates every 15 minutes via launchd / Task Scheduler / cron.
 
 Deployment is **Rust (`crs`) — single ~5 MB self-contained binary** that bundles SQLite + FTS5 + sqlite-vec. No Python venv anywhere. Prerequisite: a `cargo` toolchain (rustup) on the install machine — the binary is then portable.
+
+**Optional remote PG backend** (since v1.13): `cargo build --release --features pg-backend` (or `install.sh --with-pg`) re-routes csearch / vsearch / vsearch-since / build / embed-missing through a remote PostgreSQL 17 + pgvector instance. Adds `pgsearch` / `pgsearchd` subcommands; daemon holds an r2d2 connection pool over a unix socket so each query skips the ~700ms TLS handshake. Use this when you want the same archive across multiple machines. Default sqlite build is single-machine and faster (~10ms vs ~280ms warm). See `references/pg-backend.md` for full setup.
 
 ## What it gives you
 
@@ -88,13 +90,14 @@ Prerequisite (all platforms): **Rust toolchain** — `curl --proto '=https' --tl
 
 ```bash
 cd scripts
-./install.sh
-# Optional semantic search:
-./install-semantic.sh           # native Ollama
-./install-semantic-docker.sh    # Docker variant
+./install.sh                         # default: sqlite backend
+./install.sh --with-pg               # OPTIONAL: enable pg-backend feature + install pgsearchd plist
+# Optional semantic search (sqlite mode):
+./install-semantic.sh                # native Ollama
+./install-semantic-docker.sh         # Docker variant
 ```
 
-`install.sh` does: cargo build crs → mkdirs → copy sqliterc / gen-recent-context.sh → symlink `~/bin/crs` → write launchd plist (macOS) or crontab entry (Linux) pointing to `crs build` → register SessionStart hook (`crs gen-recent`) → install + register PreToolUse `archive-preflight.sh` hook (Bash + Read) in `~/.claude/settings.json` → first ingest.
+`install.sh` does: cargo build crs (`--features pg-backend` if `--with-pg`) → mkdirs → copy sqliterc / gen-recent-context.sh → symlink `~/bin/crs` → write launchd plist (macOS) or crontab entry (Linux) pointing to `crs build` → on macOS with `--with-pg`, also write `~/Library/LaunchAgents/com.<USER>.pgsearchd.plist` (KeepAlive r2d2 daemon) → register SessionStart hook (`crs gen-recent`) → install + register PreToolUse `archive-preflight.sh` hook (Bash + Read) in `~/.claude/settings.json` → first ingest (skipped if `--with-pg` and `CRS_PG_PASSWORD` not yet set in env).
 
 ### Windows (PowerShell)
 
@@ -231,6 +234,19 @@ Estimated 1-2 hours total for someone with the codebase loaded. Other items can 
 
 ## What's new
 
+### v1.13.0 — PG backend behind Cargo feature flag + credential scrub + pgsearchd plist template
+
+The 2026-05-14 PG migration (v1.12.0) shipped with `csearch / vsearch / vsearch-since / build / embed-missing` hard-coded to PG and `PG_HOST/USER/PASS/DB` as `const &str` literals in `src/main.rs`. That made the sqlite path unreachable from a binary built off this repo, and (worse) put bluesea credentials into anyone's clone. v1.13 fixes both:
+
+- **Same source builds either backend** via Cargo feature. `cargo build --release` → sqlite-only (default). `cargo build --release --features pg-backend` → PG-routed (csearch / vsearch / vsearch-since / build / embed-missing dispatch through `pg_search_dispatch`; `pgsearch` + `pgsearchd` subcommands appear). `Pgsearchd` is additionally `#[cfg(unix)]` (Windows falls back to direct connect on every query). The default build doesn't even download the postgres / r2d2 / native-tls deps — gated by `optional = true` + `[features] pg-backend = ["dep:..."]`.
+- **Credentials → env vars**: read at runtime from `CRS_PG_URL` (full libpq string) OR `CRS_PG_HOST/PORT/USER/PASSWORD/DB` (component-wise; PASSWORD required, others default to `localhost / 5432 / archive / archive_main`). `crs --features pg-backend` refuses to start without `CRS_PG_PASSWORD`, with a clear error pointing to `references/pg-backend.md`. **No password ever lives in source.**
+- **`install.sh --with-pg`** (or `WITH_PG=1`): passes `--features pg-backend` to cargo and additionally writes `~/Library/LaunchAgents/com.<USER>.pgsearchd.plist` from the new `scripts/pgsearchd.plist.template` (`KeepAlive` + `EnvironmentVariables` block for CRS_PG_*). Skips first-ingest if `CRS_PG_PASSWORD` not set. Linux: prints a systemd-user-unit guidance message.
+- **`crs doctor`** gains a `[pg-backend]` block when feature enabled — checks env vars, runs `SELECT 1`, reports `msg` row count, looks for the `pgsearchd.sock`. Cleaner failure mode than mid-query crash.
+- **`gen-recent-context`** skip-guard: in pg-backend mode queries PG for `MAX(ts)` (sqlite is empty in PG mode). Falls back to pending-mtime-only guard if PG unreachable — avoids blocking SessionStart on a network blip.
+- **`references/pg-backend.md`** rewritten — section 1 ("Build crs for PG mode") now documents env vars + feature flag instead of "edit constants". Performance table refreshed with 2026-05-14 measurements (csearch warm 280ms / vsearch warm 380ms via daemon; +700ms TLS handshake without daemon). Daemon-vs-direct breakdown via `--json` output of `pgsearch`.
+
+**Migrating an existing PG install**: re-run `install.sh --with-pg`, edit the new `~/Library/LaunchAgents/com.<USER>.pgsearchd.plist` to set `CRS_PG_PASSWORD`, then `launchctl unload && load`. Existing socket / pool / launchd label / data unchanged. Old hardcoded source can be discarded.
+
 ### v1.11.0 — Preflight hardening: forbid sqlite3 SEARCH + 30-min sentinel TTL
 
 Two independent fixes prompted by a 2026-05-11 post-compact incident where Claude went straight to `sqlite3 ... LIKE '%X%'` for a credential lookup instead of csearch:
@@ -359,6 +375,7 @@ claude-session-archive-skill/
     ├── vsearch.ps1                   # Windows PowerShell vsearch wrapper (calls crs.exe)
     ├── sqliterc.template             # → ~/.sqliterc (SQLite tuning)
     ├── launchd.plist.template        # macOS: → ~/Library/LaunchAgents/com.USER.claude-archive.plist (runs crs build)
+    ├── pgsearchd.plist.template      # macOS PG-backend optional: → ~/Library/LaunchAgents/com.USER.pgsearchd.plist (KeepAlive r2d2 daemon)
     └── ollama.plist.template         # macOS optional: Ollama auto-start
 ```
 

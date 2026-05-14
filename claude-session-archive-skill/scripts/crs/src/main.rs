@@ -1,7 +1,7 @@
 // crs — Rust port of claude-session-archive Python helpers.
 //
 // Subcommands:
-//   build         JSONL → SQLite incremental ingest + optional embed + refresh auto_recent
+//   build         JSONL → SQLite (or PG with --features pg-backend) incremental ingest
 //   csearch       FTS5 lexical search
 //   vsearch       semantic KNN search (over msg_vec)
 //   vsearch-since time-bounded vsearch (used by gen-recent)
@@ -10,6 +10,10 @@
 //   embed-text    debug helper — embed one string and print first 5 dims
 //   doctor        health check (tooling / DB / schedule / hooks / Ollama / stale)
 //   prune-vec     drop msg_vec rows whose rowid no longer exists in msg
+//
+// Optional with --features pg-backend (see references/pg-backend.md):
+//   pgsearch      Query remote PG+pgvector (auto-uses pgsearchd daemon if running)
+//   pgsearchd     Run pgsearch daemon (persistent r2d2 connection pool over unix socket)
 
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::{Local, Utc};
@@ -109,6 +113,38 @@ enum Cmd {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Query remote PG+pgvector. Auto-uses daemon if running. (pg-backend feature)
+    #[cfg(feature = "pg-backend")]
+    Pgsearch {
+        query: String,
+        /// Lexical FTS (default if no mode flag)
+        #[arg(long)]
+        fts: bool,
+        /// Vector semantic (Ollama bge-m3 1024d)
+        #[arg(long)]
+        vec: bool,
+        /// RRF hybrid (vec 0.7 + fts 0.3)
+        #[arg(long)]
+        hybrid: bool,
+        #[arg(long, default_value = "10")]
+        limit: usize,
+        /// JSON output instead of formatted
+        #[arg(long)]
+        json: bool,
+        /// Skip daemon, force direct TLS connection
+        #[arg(long)]
+        no_daemon: bool,
+    },
+    /// Run pgsearch daemon (r2d2 connection pool over unix socket). (pg-backend + unix)
+    #[cfg(all(feature = "pg-backend", unix))]
+    Pgsearchd {
+        /// Pool size (default 4)
+        #[arg(long, default_value = "4")]
+        pool_size: u32,
+        /// Foreground mode (don't detach). Default behavior.
+        #[arg(long, hide = true)]
+        foreground: bool,
+    },
 }
 
 // ─────────────────────────── helpers ───────────────────────────
@@ -158,6 +194,7 @@ fn open_db_with_vec() -> Result<Connection> {
     Ok(conn)
 }
 
+#[cfg(not(feature = "pg-backend"))]
 fn open_db_readonly() -> Result<Connection> {
     let conn = Connection::open_with_flags(
         db_path(),
@@ -192,6 +229,7 @@ fn embed_text(client: &reqwest::blocking::Client, text: &str) -> Result<Vec<f32>
     Ok(v)
 }
 
+#[cfg(not(feature = "pg-backend"))]
 fn vec_to_blob(v: &[f32]) -> Vec<u8> {
     let mut out = Vec::with_capacity(v.len() * 4);
     for f in v {
@@ -202,6 +240,7 @@ fn vec_to_blob(v: &[f32]) -> Vec<u8> {
 
 // ─────────────────────────── csearch ───────────────────────────
 
+#[cfg(not(feature = "pg-backend"))]
 fn cmd_csearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
     let conn = open_db_readonly()?;
     let sql = match project {
@@ -256,8 +295,17 @@ fn cmd_csearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "pg-backend")]
+fn cmd_csearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
+    let (rows, _conn_ms, _q_ms, _src) = pg_search_dispatch("fts", query, project, limit, false)?;
+    if rows.is_empty() { eprintln!("(no results)"); return Ok(()); }
+    for r in &rows { println!("{}", fmt_pg_row(r, 180)); }
+    Ok(())
+}
+
 // ─────────────────────────── vsearch ───────────────────────────
 
+#[cfg(not(feature = "pg-backend"))]
 fn cmd_vsearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
     let conn = open_db_with_vec()?;
     let client = http_client()?;
@@ -298,8 +346,16 @@ fn cmd_vsearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "pg-backend")]
+fn cmd_vsearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
+    let (rows, _conn_ms, _q_ms, _src) = pg_search_dispatch("vec", query, project, limit, false)?;
+    for r in &rows { println!("{}", fmt_pg_row(r, 200)); }
+    Ok(())
+}
+
 // ─────────────────────────── vsearch-since ───────────────────────────
 
+#[cfg(not(feature = "pg-backend"))]
 #[allow(clippy::too_many_arguments)]
 fn cmd_vsearch_since(
     query: &str,
@@ -361,6 +417,82 @@ fn cmd_vsearch_since(
         };
         let tag = if tool == "-" { role } else { format!("{}/{}", role, tool) };
         out.push(format!("- **{}** `{}` (sim={}) — {}", ts, tag, sim, truncated));
+    }
+    Ok(out)
+}
+
+#[cfg(feature = "pg-backend")]
+#[allow(clippy::too_many_arguments)]
+fn cmd_vsearch_since(
+    query: &str,
+    project: &str,
+    hours: i64,
+    limit: usize,
+    min_len: usize,
+    max_len: usize,
+    max_distance: f64,
+    max_snippet: usize,
+    knn: usize,
+) -> Result<Vec<String>> {
+    let _ = knn;  // unused on PG (HNSW handles it internally)
+    let mut pg = pg_connect()?;
+    let http = http_client()?;
+    let qemb = embed_pg_query(&http, query)?;
+    let lit = vec_literal(&qemb);
+
+    let since = Utc::now() - chrono::Duration::hours(hours);
+    let proj_pat = format!("%{}%", project);
+
+    let sql = format!(
+        "SELECT ts, role, COALESCE(tool_name,'-') AS tool,
+                content,
+                embedding <=> '{lit}'::vector AS dist
+         FROM msg
+         WHERE project LIKE $1
+           AND ts >= $2
+           AND embedding IS NOT NULL
+           AND length(content) BETWEEN $3 AND $4
+           AND content NOT LIKE '[TOOL_RESULT]%'
+           AND content NOT LIKE '[TOOL_USE%'
+           AND content NOT LIKE '[THINKING%'
+           AND content NOT LIKE '<%'
+           AND embedding <=> '{lit}'::vector <= $5
+         ORDER BY embedding <=> '{lit}'::vector
+         LIMIT $6"
+    );
+    let rows = pg.query(
+        &sql,
+        &[
+            &proj_pat, &since,
+            &(min_len as i64), &(max_len as i64),
+            &max_distance,
+            &(limit as i64),
+        ],
+    )?;
+
+    if rows.is_empty() {
+        return Ok(vec![format!("_(vsearch-since: no hits in last {}h)_", hours)]);
+    }
+    let mut out = Vec::with_capacity(rows.len());
+    for r in rows.iter() {
+        let ts: Option<chrono::DateTime<Utc>> = r.get(0);
+        let ts_str = ts.map(|t| t.format("%Y-%m-%dT%H:%M").to_string()).unwrap_or_else(|| "----".to_string());
+        let role: String = r.get(1);
+        let tool: String = r.get(2);
+        let content: String = r.get(3);
+        let sim: f64 = r.get(4);
+        let sim_s = format!("{:.3}", sim);
+        let snippet = content.replace('\n', " ").replace('\t', " ");
+        let snippet = snippet.trim();
+        let truncated = if snippet.chars().count() > max_snippet {
+            let mut s: String = snippet.chars().take(max_snippet.saturating_sub(3)).collect();
+            s.push_str("...");
+            s
+        } else {
+            snippet.to_string()
+        };
+        let tag = if tool == "-" { role } else { format!("{}/{}", role, tool) };
+        out.push(format!("- **{}** `{}` (sim={}) — {}", ts_str, tag, sim_s, truncated));
     }
     Ok(out)
 }
@@ -427,11 +559,6 @@ fn cmd_gen_recent(force: bool) -> Result<()> {
 
 fn gen_recent_for_slug(slug: &str, force: bool) -> Result<()> {
     let archive = home().join("claude-archive");
-    let db = archive.join("sessions.db");
-    if !db.exists() {
-        log_line("SKIP", "no session.db");
-        return Ok(());
-    }
 
     let mem_dir = home().join(format!(".claude/projects/{}/memory", slug));
     let pending = mem_dir.join("project_pending.md");
@@ -442,20 +569,38 @@ fn gen_recent_for_slug(slug: &str, force: bool) -> Result<()> {
         return Ok(());
     }
 
-    // Skip guard
+    // Skip guard — only consults local sqlite latest_msg_ts.
+    // In pg-backend mode the local sqlite isn't populated; the guard then
+    // falls back to pending_mtime only (acceptable: each pending update
+    // re-triggers regen, which is the original intent anyway).
     let force_env = env::var("FORCE_REGEN").map(|v| v == "1").unwrap_or(false);
     if !force && !force_env && out_file.exists() {
         let last_gen_ts = mtime_secs(&out_file);
         let pending_ts = if pending.exists() { mtime_secs(&pending) } else { 0 };
-        let conn = open_db_readonly()?;
-        let latest_msg_ts: i64 = conn
-            .query_row(
-                "SELECT IFNULL(strftime('%s', MAX(ts)), 0) FROM msg WHERE project = ?1",
-                params![slug],
-                |r| r.get::<_, String>(0).map(|s| s.parse::<i64>().unwrap_or(0))
-                       .or_else(|_| r.get::<_, i64>(0)),
-            )
-            .unwrap_or(0);
+
+        let latest_msg_ts: i64 = {
+            #[cfg(not(feature = "pg-backend"))]
+            {
+                let db = archive.join("sessions.db");
+                if !db.exists() {
+                    log_line("SKIP", "no session.db");
+                    return Ok(());
+                }
+                let conn = open_db_readonly()?;
+                conn.query_row(
+                    "SELECT IFNULL(strftime('%s', MAX(ts)), 0) FROM msg WHERE project = ?1",
+                    params![slug],
+                    |r| r.get::<_, String>(0).map(|s| s.parse::<i64>().unwrap_or(0))
+                           .or_else(|_| r.get::<_, i64>(0)),
+                ).unwrap_or(0)
+            }
+            #[cfg(feature = "pg-backend")]
+            {
+                // Try PG, but don't hard-fail: degrade to pending_mtime-only guard.
+                pg_latest_msg_ts(slug).unwrap_or(0)
+            }
+        };
+
         if pending_ts <= last_gen_ts && latest_msg_ts <= last_gen_ts {
             log_line(
                 "SKIP",
@@ -528,6 +673,7 @@ fn gen_recent_for_slug(slug: &str, force: bool) -> Result<()> {
 
 // ─────────────────────────── build (JSONL ingest) ───────────────────────────
 
+#[cfg(not(feature = "pg-backend"))]
 fn ensure_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(r#"
         CREATE TABLE IF NOT EXISTS msg (
@@ -661,6 +807,7 @@ fn flatten_content(rec: &Value) -> (String, Option<String>, String) {
     }
 }
 
+#[cfg(not(feature = "pg-backend"))]
 fn ingest_file(conn: &Connection, path: &Path) -> Result<usize> {
     let session_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
     let project = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
@@ -772,6 +919,7 @@ fn ollama_up() -> bool {
     false
 }
 
+#[cfg(not(feature = "pg-backend"))]
 fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize) -> Result<()> {
     let archive = home().join("claude-archive");
     fs::create_dir_all(&archive)?;
@@ -828,8 +976,136 @@ fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "pg-backend")]
+fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize) -> Result<()> {
+    let archive = home().join("claude-archive");
+    fs::create_dir_all(&archive)?;
+
+    let mut pg = pg_connect()?;
+    pg.batch_execute(
+        "CREATE TABLE IF NOT EXISTS ingest_state (
+            file_path TEXT PRIMARY KEY,
+            mtime DOUBLE PRECISION NOT NULL,
+            lines BIGINT NOT NULL
+        );",
+    )?;
+
+    let files = collect_jsonl_files()?;
+    let mut total_new = 0usize;
+    let mut touched = 0usize;
+    for path in &files {
+        match ingest_file_pg(&mut pg, path) {
+            Ok(0) => {}
+            Ok(n) => {
+                touched += 1;
+                total_new += n;
+                let proj_part = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("?");
+                let file_part = path.file_name().and_then(|s| s.to_str()).unwrap_or("?");
+                println!("  +{:6}  {}/{}", n, proj_part, file_part);
+            }
+            Err(e) => eprintln!("  !! {}: {}", path.display(), e),
+        }
+    }
+
+    let total: i64 = pg.query_one("SELECT COUNT(*) FROM msg", &[])?.get(0);
+    let sess:  i64 = pg.query_one("SELECT COUNT(DISTINCT session_id) FROM msg", &[])?.get(0);
+    let proj:  i64 = pg.query_one("SELECT COUNT(DISTINCT project) FROM msg", &[])?.get(0);
+    let emb_done: i64 = pg.query_one("SELECT COUNT(*) FROM msg WHERE embedding IS NOT NULL", &[])?.get(0);
+    let db_size: String = pg.query_one("SELECT pg_size_pretty(pg_database_size(current_database()))", &[])?.get(0);
+
+    println!("\ntouched {} files, +{} rows", touched, total_new);
+    println!("PG total: {} rows / {} sessions / {} projects / {} with embedding",
+             total, sess, proj, emb_done);
+    println!("PG db size: {}", db_size);
+
+    drop(pg);
+
+    if !no_embed {
+        if ollama_up() {
+            if let Err(e) = cmd_embed_missing(workers, 0) {
+                eprintln!("(embed warning: {})", e);
+            }
+        } else {
+            println!("(skip embedding: ollama not reachable)");
+        }
+    }
+
+    if !no_refresh {
+        refresh_all_recent_contexts();
+    }
+    Ok(())
+}
+
+#[cfg(feature = "pg-backend")]
+fn ingest_file_pg(pg: &mut postgres::Client, path: &Path) -> Result<usize> {
+    let session_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+    let project = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+    let mtime: f64 = fs::metadata(path)?
+        .modified()?
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_secs_f64();
+    let path_str = path.to_string_lossy().to_string();
+
+    // mtime gate (skip if unchanged)
+    if let Some(r) = pg.query_opt("SELECT mtime FROM ingest_state WHERE file_path = $1", &[&path_str])? {
+        let prev: f64 = r.get(0);
+        if (prev - mtime).abs() < 1e-6 { return Ok(0); }
+    }
+
+    let f = fs::File::open(path)?;
+    let reader = BufReader::new(f);
+
+    let mut tx = pg.transaction()?;
+    let mut new_rows = 0usize;
+    {
+        let stmt = tx.prepare(
+            "INSERT INTO msg (session_id, project, seq, ts, role, tool_name, content)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (session_id, seq) DO NOTHING",
+        )?;
+        let san = |s: &str| s.replace('\u{0000}', "");
+        let session_id_s = san(&session_id);
+        let project_s = san(&project);
+        for (seq, line) in reader.lines().enumerate() {
+            let raw = match line { Ok(l) => l, Err(_) => continue };
+            if raw.is_empty() { continue; }
+            let rec: Value = match serde_json::from_str(&raw) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let ts_raw = rec.get("timestamp").and_then(|v| v.as_str())
+                .or_else(|| rec.get("ts").and_then(|v| v.as_str()))
+                .unwrap_or("");
+            let (role, tool_name, content) = flatten_content(&rec);
+            let trimmed = content.trim();
+            if trimmed.is_empty() { continue; }
+            let bounded = truncate_chars(trimmed, 200_000);
+            let ts_opt: Option<chrono::DateTime<Utc>> = if !ts_raw.is_empty() {
+                chrono::DateTime::parse_from_rfc3339(ts_raw).ok().map(|t| t.with_timezone(&Utc))
+            } else { None };
+            let role_s = san(&role);
+            let tool_s = tool_name.as_deref().map(san);
+            let content_s = san(&bounded);
+            tx.execute(&stmt, &[
+                &session_id_s, &project_s, &(seq as i32), &ts_opt,
+                &role_s, &tool_s, &content_s,
+            ])?;
+            new_rows += 1;
+        }
+    }
+
+    tx.execute(
+        "INSERT INTO ingest_state (file_path, mtime, lines) VALUES ($1, $2, $3)
+         ON CONFLICT (file_path) DO UPDATE SET mtime = EXCLUDED.mtime, lines = EXCLUDED.lines",
+        &[&path_str, &mtime, &(new_rows as i64)],
+    )?;
+    tx.commit()?;
+    Ok(new_rows)
+}
+
 // ─────────────────────────── embed-missing ───────────────────────────
 
+#[cfg(not(feature = "pg-backend"))]
 fn cmd_embed_missing(workers: usize, limit: usize) -> Result<()> {
     let conn = open_db_with_vec()?;
 
@@ -906,6 +1182,66 @@ fn cmd_embed_missing(workers: usize, limit: usize) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "pg-backend")]
+fn cmd_embed_missing(workers: usize, limit: usize) -> Result<()> {
+    let mut pg = pg_connect()?;
+
+    let total:   i64 = pg.query_one("SELECT COUNT(*) FROM msg", &[])?.get(0);
+    let done:    i64 = pg.query_one("SELECT COUNT(*) FROM msg WHERE embedding IS NOT NULL", &[])?.get(0);
+    let pending: i64 = pg.query_one(
+        "SELECT COUNT(*) FROM msg WHERE embedding IS NULL AND length(content) >= 5",
+        &[],
+    )?.get(0);
+    if pending <= 0 {
+        println!("nothing to embed: total={} done={} pending={}", total, done, pending);
+        return Ok(());
+    }
+
+    let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
+    let select_sql = format!(
+        "SELECT id, content FROM msg
+         WHERE embedding IS NULL AND length(content) >= 5
+         ORDER BY id DESC {}",
+        limit_clause
+    );
+    let rows = pg.query(&select_sql, &[])?;
+    let jobs: Vec<(i64, String)> = rows.iter().map(|r| (r.get(0), r.get(1))).collect();
+    drop(pg);
+
+    println!("embed-missing: {} jobs over {} workers (newest-first)", jobs.len(), workers);
+
+    use rayon::prelude::*;
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
+    let pg_mu = Mutex::new(pg_connect()?);
+    let counter = Mutex::new(0u64);
+
+    pool.install(|| {
+        jobs.par_iter().for_each(|(id, content)| {
+            let client = http_client().expect("http client");
+            let snippet: String = content.chars().take(8000).collect();
+            match embed_text(&client, &snippet) {
+                Ok(v) => {
+                    let lit = vec_literal(&v);
+                    let sql = format!("UPDATE msg SET embedding = '{lit}'::vector WHERE id = $1");
+                    let mut p = pg_mu.lock().unwrap();
+                    if let Err(e) = p.execute(&sql, &[id]) {
+                        eprintln!("update id={} err={}", id, e);
+                    }
+                }
+                Err(e) => eprintln!("embed id={} err={}", id, e),
+            }
+            let mut n = counter.lock().unwrap();
+            *n += 1;
+            if *n % 200 == 0 {
+                println!("  progress {}/{}", *n, jobs.len());
+            }
+        });
+    });
+
+    println!("done.");
+    Ok(())
+}
+
 // ─────────────────────────── embed-text (debug) ───────────────────────────
 
 fn cmd_embed_text(text: &str) -> Result<()> {
@@ -934,6 +1270,11 @@ fn cmd_doctor() -> Result<()> {
     println!("==> claude-session-archive doctor");
     println!("    archive: {}", archive.display());
     println!("    db:      {}", db_p.display());
+    if cfg!(feature = "pg-backend") {
+        println!("    backend: pg-backend feature ENABLED (search routes to PG)");
+    } else {
+        println!("    backend: sqlite (default)");
+    }
     println!();
 
     // [tooling] cargo (rebuild needs it), sqlite3 + jq optional
@@ -1130,6 +1471,51 @@ fn cmd_doctor() -> Result<()> {
         }
     }
 
+    // [pg-backend] PG connectivity + pgsearchd daemon (only when feature enabled)
+    #[cfg(feature = "pg-backend")]
+    {
+        println!("\n[pg-backend]");
+        match pg_config_url() {
+            Err(e) => {
+                mark('✗', &format!("pg config: {}", e));
+                fails += 1;
+            }
+            Ok(_) => {
+                mark('✓', "pg config: env vars present");
+                match pg_connect() {
+                    Ok(mut c) => {
+                        let v: Result<i64, _> = c.query_one("SELECT 1::bigint", &[]).and_then(|r| Ok(r.get(0)));
+                        if v.is_ok() {
+                            mark('✓', "pg connect: SELECT 1 succeeded");
+                            if let Ok(r) = c.query_one("SELECT COUNT(*) FROM msg", &[]) {
+                                let n: i64 = r.get(0);
+                                mark('•', &format!("pg msg rows: {}", n));
+                            }
+                        } else {
+                            mark('⚠', "pg connect: SELECT 1 failed");
+                            warns += 1;
+                        }
+                    }
+                    Err(e) => {
+                        mark('✗', &format!("pg connect failed: {}", e));
+                        fails += 1;
+                    }
+                }
+                #[cfg(unix)]
+                {
+                    if let Ok(sock) = pgsearchd_socket_path() {
+                        if sock.exists() {
+                            mark('✓', &format!("pgsearchd socket: {}", sock.display()));
+                        } else {
+                            mark('⚠', &format!("pgsearchd socket missing ({}). Run: crs pgsearchd", sock.display()));
+                            warns += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     println!();
     println!("==> Summary: {} fail / {} warn", fails, warns);
     if fails > 0 {
@@ -1187,6 +1573,414 @@ fn cmd_prune_vec(dry_run: bool) -> Result<()> {
     Ok(())
 }
 
+// ─────────────────────────── PG backend (feature-gated) ───────────────────────────
+//
+// Talks to a remote PostgreSQL + pgvector instance. Connection details from env vars:
+//   CRS_PG_URL                           full libpq connection string (overrides components)
+//   CRS_PG_HOST / PORT / USER / PASSWORD / DB    individual components
+// CRS_PG_PASSWORD is REQUIRED — there is no default. CRS_PG_DB defaults to `archive_main`,
+// HOST/PORT/USER default to localhost/5432/archive.
+//
+// Schema expected on the PG side:
+//   CREATE TABLE msg (
+//     id BIGSERIAL PRIMARY KEY,
+//     session_id TEXT, project TEXT, seq INTEGER,
+//     ts TIMESTAMPTZ, role TEXT, tool_name TEXT, content TEXT,
+//     content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('simple', content)) STORED,
+//     embedding vector(1024)
+//   );
+//   CREATE INDEX msg_tsv_gin ON msg USING gin(content_tsv);
+//   CREATE INDEX msg_embedding_hnsw ON msg USING hnsw(embedding vector_cosine_ops);
+//   CREATE UNIQUE INDEX msg_session_seq ON msg(session_id, seq);
+//
+// See references/pg-backend.md for full setup.
+
+#[cfg(feature = "pg-backend")]
+const PG_EMBED_MODEL: &str = "bge-m3";
+#[cfg(feature = "pg-backend")]
+const PG_VEC_DIM: usize = 1024;
+
+#[cfg(feature = "pg-backend")]
+fn pg_config_url() -> Result<String> {
+    if let Ok(url) = env::var("CRS_PG_URL") {
+        if !url.is_empty() {
+            return Ok(url);
+        }
+    }
+    let host = env::var("CRS_PG_HOST").unwrap_or_else(|_| "localhost".to_string());
+    let port = env::var("CRS_PG_PORT").unwrap_or_else(|_| "5432".to_string());
+    let user = env::var("CRS_PG_USER").unwrap_or_else(|_| "archive".to_string());
+    let pass = env::var("CRS_PG_PASSWORD").map_err(|_| {
+        anyhow!("CRS_PG_PASSWORD env var required (or set CRS_PG_URL). See references/pg-backend.md")
+    })?;
+    let db = env::var("CRS_PG_DB").unwrap_or_else(|_| "archive_main".to_string());
+    Ok(format!(
+        "host={host} port={port} user={user} password={pass} dbname={db} sslmode=require"
+    ))
+}
+
+#[cfg(feature = "pg-backend")]
+fn embed_pg_query(client: &reqwest::blocking::Client, text: &str) -> Result<Vec<f32>> {
+    let body = serde_json::json!({ "model": PG_EMBED_MODEL, "input": text });
+    let resp: EmbedResponse = client.post(OLLAMA_URL).json(&body).send()?.error_for_status()?.json()?;
+    let v = resp.embeddings.into_iter().next().ok_or_else(|| anyhow!("ollama returned no embedding"))?;
+    if v.len() != PG_VEC_DIM {
+        bail!("expected {}-dim, got {}", PG_VEC_DIM, v.len());
+    }
+    Ok(v)
+}
+
+#[cfg(feature = "pg-backend")]
+fn pg_connect() -> Result<postgres::Client> {
+    // TLS via native-tls. Server cert must validate against system trust roots
+    // (e.g. Let's Encrypt cert on your VPS hostname).
+    let native = native_tls::TlsConnector::new()?;
+    let tls = postgres_native_tls::MakeTlsConnector::new(native);
+    let url = pg_config_url()?;
+    Ok(postgres::Client::connect(&url, tls)?)
+}
+
+#[cfg(feature = "pg-backend")]
+fn pg_latest_msg_ts(slug: &str) -> Result<i64> {
+    let mut pg = pg_connect()?;
+    let row = pg.query_opt(
+        "SELECT EXTRACT(EPOCH FROM MAX(ts))::bigint FROM msg WHERE project = $1",
+        &[&slug],
+    )?;
+    Ok(row.and_then(|r| r.get::<_, Option<i64>>(0)).unwrap_or(0))
+}
+
+#[cfg(feature = "pg-backend")]
+fn vec_literal(v: &[f32]) -> String {
+    let mut s = String::with_capacity(v.len() * 12 + 2);
+    s.push('[');
+    for (i, f) in v.iter().enumerate() {
+        if i > 0 { s.push(','); }
+        s.push_str(&f.to_string());
+    }
+    s.push(']');
+    s
+}
+
+#[cfg(feature = "pg-backend")]
+#[derive(Debug, Clone)]
+struct PgRow {
+    ts: Option<chrono::DateTime<Utc>>,
+    project: String,
+    session_id: String,
+    role: String,
+    tool_name: Option<String>,
+    content: String,
+    score: Option<f64>,
+}
+
+#[cfg(feature = "pg-backend")]
+fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
+    let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
+    let rows = client.query(
+        "SELECT ts, project, session_id, role, tool_name, content
+         FROM msg
+         WHERE content_tsv @@ plainto_tsquery('simple', $1)
+           AND ($2::text IS NULL OR project LIKE $2)
+         ORDER BY ts DESC
+         LIMIT $3",
+        &[&query, &proj_like, &(limit as i64)],
+    )?;
+    Ok(rows.iter().map(|r| PgRow {
+        ts: r.get(0),
+        project: r.get(1),
+        session_id: r.get(2),
+        role: r.get(3),
+        tool_name: r.get(4),
+        content: r.get(5),
+        score: None,
+    }).collect())
+}
+
+#[cfg(feature = "pg-backend")]
+fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
+    let emb = embed_pg_query(http, query)?;
+    let lit = vec_literal(&emb);
+    let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
+    let sql = format!(
+        "SELECT ts, project, session_id, role, tool_name, content,
+                embedding <=> '{lit}'::vector AS dist
+         FROM msg
+         WHERE embedding IS NOT NULL
+           AND ($1::text IS NULL OR project LIKE $1)
+         ORDER BY embedding <=> '{lit}'::vector
+         LIMIT $2"
+    );
+    let rows = client.query(&sql, &[&proj_like, &(limit as i64)])?;
+    Ok(rows.iter().map(|r| PgRow {
+        ts: r.get(0),
+        project: r.get(1),
+        session_id: r.get(2),
+        role: r.get(3),
+        tool_name: r.get(4),
+        content: r.get(5),
+        score: Some(r.get::<_, f64>(6)),
+    }).collect())
+}
+
+#[cfg(feature = "pg-backend")]
+fn pg_hybrid(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
+    // RRF (Reciprocal Rank Fusion) k=60, weight vec=0.7, fts=0.3
+    let fts = pg_fts(client, query, project, limit * 3)?;
+    let vec = pg_vec(client, http, query, project, limit * 3)?;
+    use std::collections::HashMap;
+    type Key = (Option<chrono::DateTime<Utc>>, String, String);
+    let key = |r: &PgRow| -> Key { (r.ts, r.role.clone(), r.content.clone()) };
+    let mut scores: HashMap<Key, f64> = HashMap::new();
+    let mut keep: HashMap<Key, PgRow> = HashMap::new();
+    let k = 60.0_f64;
+    for (rank, r) in fts.into_iter().enumerate() {
+        let kk = key(&r);
+        *scores.entry(kk.clone()).or_insert(0.0) += 0.3 / (k + rank as f64 + 1.0);
+        keep.insert(kk, r);
+    }
+    for (rank, r) in vec.into_iter().enumerate() {
+        let kk = key(&r);
+        *scores.entry(kk.clone()).or_insert(0.0) += 0.7 / (k + rank as f64 + 1.0);
+        keep.insert(kk, r);
+    }
+    let mut merged: Vec<PgRow> = keep.into_values().collect();
+    merged.sort_by(|a, b| {
+        let sa = scores.get(&key(a)).copied().unwrap_or(0.0);
+        let sb = scores.get(&key(b)).copied().unwrap_or(0.0);
+        sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal)
+    });
+    merged.truncate(limit);
+    Ok(merged)
+}
+
+#[cfg(feature = "pg-backend")]
+fn fmt_pg_row(r: &PgRow, snippet: usize) -> String {
+    let body: String = r.content.chars().take(snippet).collect::<String>().replace('\n', " ").replace('\t', " ");
+    let ts_str = match r.ts {
+        Some(t) => t.format("%Y-%m-%dT%H:%M").to_string(),
+        None    => "----------------".to_string(),
+    };
+    let proj_short: String = r.project.trim_start_matches('-').chars().take(40).collect();
+    let tag = match r.tool_name.as_deref() {
+        Some(t) if !t.is_empty() && t != "-" => format!("{}/{}", r.role, t),
+        _ => r.role.clone(),
+    };
+    match r.score {
+        Some(s) => format!("{}  [{}]  {}  (d={:.3})  {}", ts_str, proj_short, tag, s, body),
+        None    => format!("{}  [{}]  {}  {}",            ts_str, proj_short, tag, body),
+    }
+}
+
+// ── pgsearchd daemon socket protocol (unix-only) ──
+//
+// Request (one line JSON, terminated by \n):
+//   {"mode": "fts|vec|hybrid", "query": "...", "limit": 10}
+// Response (one line JSON, terminated by \n):
+//   {"rows": [{"ts": "...", "role": "...", "content": "...", "score": null|f}], "query_ms": N}
+
+#[cfg(all(feature = "pg-backend", unix))]
+fn pgsearchd_socket_path() -> Result<std::path::PathBuf> {
+    let cache = dirs::cache_dir().ok_or_else(|| anyhow!("$HOME / cache dir unresolved"))?;
+    let dir = cache.join("pgsearchd");
+    std::fs::create_dir_all(&dir).ok();
+    Ok(dir.join("pgsearchd.sock"))
+}
+
+#[cfg(all(feature = "pg-backend", unix))]
+type PgPool = r2d2::Pool<r2d2_postgres::PostgresConnectionManager<postgres_native_tls::MakeTlsConnector>>;
+
+#[cfg(all(feature = "pg-backend", unix))]
+fn build_pool(size: u32) -> Result<PgPool> {
+    let native = native_tls::TlsConnector::new()?;
+    let tls = postgres_native_tls::MakeTlsConnector::new(native);
+    let url = pg_config_url()?;
+    let cfg: postgres::Config = url.parse().context("bad PG config")?;
+    let mgr = r2d2_postgres::PostgresConnectionManager::new(cfg, tls);
+    Ok(r2d2::Pool::builder()
+        .max_size(size)
+        .min_idle(Some(size))                                              // pre-fill
+        .idle_timeout(Some(std::time::Duration::from_secs(300)))           // 5min
+        .max_lifetime(Some(std::time::Duration::from_secs(1800)))          // 30min recycle
+        .build(mgr)?)
+}
+
+#[cfg(all(feature = "pg-backend", unix))]
+fn rows_to_json(rows: &[PgRow]) -> Vec<serde_json::Value> {
+    rows.iter().map(|r| serde_json::json!({
+        "ts": r.ts.map(|t| t.to_rfc3339()),
+        "project": r.project,
+        "session_id": r.session_id,
+        "role": r.role,
+        "tool_name": r.tool_name,
+        "content": r.content,
+        "score": r.score,
+    })).collect()
+}
+
+#[cfg(all(feature = "pg-backend", unix))]
+fn rows_from_json(v: &serde_json::Value) -> Vec<PgRow> {
+    v.as_array().map(|arr| arr.iter().filter_map(|r| {
+        Some(PgRow {
+            ts: r.get("ts").and_then(|x| x.as_str()).and_then(|s| {
+                chrono::DateTime::parse_from_rfc3339(s).ok().map(|t| t.with_timezone(&Utc))
+            }),
+            project: r.get("project").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+            session_id: r.get("session_id").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+            role: r.get("role").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+            tool_name: r.get("tool_name").and_then(|x| x.as_str()).map(|s| s.to_string()),
+            content: r.get("content").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+            score: r.get("score").and_then(|x| x.as_f64()),
+        })
+    }).collect()).unwrap_or_default()
+}
+
+#[cfg(all(feature = "pg-backend", unix))]
+fn handle_client(
+    stream: std::os::unix::net::UnixStream,
+    pool: PgPool,
+    http: std::sync::Arc<reqwest::blocking::Client>,
+) -> Result<()> {
+    use std::io::{BufRead, BufReader, Write};
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut writer = stream;
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    let req: serde_json::Value = serde_json::from_str(&line)?;
+    let mode = req.get("mode").and_then(|v| v.as_str()).unwrap_or("fts");
+    let query = req.get("query").and_then(|v| v.as_str()).unwrap_or("");
+    let project = req.get("project").and_then(|v| v.as_str());
+    let limit = req.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
+
+    let t0 = std::time::Instant::now();
+    let mut conn = pool.get()?;
+    let rows = match mode {
+        "vec" => pg_vec(&mut *conn, &http, query, project, limit)?,
+        "hybrid" => pg_hybrid(&mut *conn, &http, query, project, limit)?,
+        _ => pg_fts(&mut *conn, query, project, limit)?,
+    };
+    let query_ms = t0.elapsed().as_millis();
+
+    let resp = serde_json::json!({"rows": rows_to_json(&rows), "query_ms": query_ms});
+    writeln!(writer, "{}", resp)?;
+    writer.flush()?;
+    Ok(())
+}
+
+#[cfg(all(feature = "pg-backend", unix))]
+fn cmd_pgsearchd(pool_size: u32) -> Result<()> {
+    let sock = pgsearchd_socket_path()?;
+    let _ = std::fs::remove_file(&sock);
+    let listener = std::os::unix::net::UnixListener::bind(&sock)?;
+    // chmod 600 — user-only access
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&sock, std::fs::Permissions::from_mode(0o600))?;
+    eprintln!("pgsearchd: listening on {}", sock.display());
+
+    let pool = build_pool(pool_size)?;
+    let http = std::sync::Arc::new(http_client()?);
+
+    // Pre-warm pool (force TLS handshakes now, not on first query)
+    let warm_t0 = std::time::Instant::now();
+    let mut handles = vec![];
+    for _ in 0..pool_size {
+        let pool = pool.clone();
+        handles.push(std::thread::spawn(move || pool.get().map(|c| drop(c))));
+    }
+    for h in handles { let _ = h.join(); }
+    eprintln!("pgsearchd: pool warmed ({} conns) in {}ms", pool_size, warm_t0.elapsed().as_millis());
+
+    for stream in listener.incoming() {
+        let stream = stream.context("accept")?;
+        let pool = pool.clone();
+        let http = http.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = handle_client(stream, pool, http) {
+                eprintln!("pgsearchd: client error: {}", e);
+            }
+        });
+    }
+    Ok(())
+}
+
+#[cfg(all(feature = "pg-backend", unix))]
+fn try_daemon(mode: &str, query: &str, project: Option<&str>, limit: usize) -> Option<(Vec<PgRow>, u128)> {
+    use std::io::{BufRead, BufReader, Write};
+    let sock_path = pgsearchd_socket_path().ok()?;
+    if !sock_path.exists() { return None; }
+    let stream = std::os::unix::net::UnixStream::connect(&sock_path).ok()?;
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(60))).ok();
+    let mut reader = BufReader::new(stream.try_clone().ok()?);
+    let mut writer = stream;
+    let req = serde_json::json!({
+        "mode": mode, "query": query, "project": project, "limit": limit,
+    });
+    writeln!(writer, "{}", req).ok()?;
+    writer.flush().ok()?;
+    let mut line = String::new();
+    reader.read_line(&mut line).ok()?;
+    let resp: serde_json::Value = serde_json::from_str(&line).ok()?;
+    let rows = rows_from_json(resp.get("rows")?);
+    let query_ms = resp.get("query_ms").and_then(|v| v.as_u64())? as u128;
+    Some((rows, query_ms))
+}
+
+#[cfg(all(feature = "pg-backend", not(unix)))]
+fn try_daemon(_mode: &str, _query: &str, _project: Option<&str>, _limit: usize) -> Option<(Vec<PgRow>, u128)> {
+    None  // pgsearchd is unix-only; non-unix always falls through to direct connect
+}
+
+/// Shared search dispatcher used by pgsearch / csearch / vsearch.
+/// Tries daemon first, falls back to direct PG connection.
+#[cfg(feature = "pg-backend")]
+fn pg_search_dispatch(mode: &str, query: &str, project: Option<&str>, limit: usize, no_daemon: bool)
+    -> Result<(Vec<PgRow>, u128, u128, &'static str)>
+{
+    let total_t0 = std::time::Instant::now();
+    if !no_daemon {
+        if let Some((rows, q)) = try_daemon(mode, query, project, limit) {
+            let total = total_t0.elapsed().as_millis();
+            return Ok((rows, total.saturating_sub(q), q, "daemon"));
+        }
+    }
+    let t0 = std::time::Instant::now();
+    let mut pg = pg_connect()?;
+    let connect_ms = t0.elapsed().as_millis();
+    let http = http_client()?;
+    let t1 = std::time::Instant::now();
+    let rows = match mode {
+        "vec" => pg_vec(&mut pg, &http, query, project, limit)?,
+        "hybrid" => pg_hybrid(&mut pg, &http, query, project, limit)?,
+        _ => pg_fts(&mut pg, query, project, limit)?,
+    };
+    let query_ms = t1.elapsed().as_millis();
+    Ok((rows, connect_ms, query_ms, "direct"))
+}
+
+#[cfg(feature = "pg-backend")]
+fn cmd_pgsearch(query: &str, mode_fts: bool, mode_vec: bool, mode_hybrid: bool, limit: usize, as_json: bool, no_daemon: bool) -> Result<()> {
+    let mode = if mode_vec { "vec" } else if mode_hybrid { "hybrid" } else { let _ = mode_fts; "fts" };
+    let (rows, connect_ms, query_ms, source) = pg_search_dispatch(mode, query, None, limit, no_daemon)?;
+
+    if as_json {
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!({
+            "mode": mode,
+            "source": source,
+            "count": rows.len(),
+            "connect_ms": connect_ms,
+            "query_ms": query_ms,
+            "results": rows_to_json(&rows),
+        }))?);
+    } else {
+        for r in &rows {
+            println!("{}", fmt_pg_row(r, 180));
+        }
+        eprintln!("\n# {}: {} rows  source={}  connect={}ms  query={}ms",
+            mode, rows.len(), source, connect_ms, query_ms);
+    }
+    Ok(())
+}
+
 // ─────────────────────────── main ───────────────────────────
 
 fn main() -> Result<()> {
@@ -1205,5 +1999,9 @@ fn main() -> Result<()> {
         Cmd::EmbedText { text } => cmd_embed_text(&text),
         Cmd::Doctor => cmd_doctor(),
         Cmd::PruneVec { dry_run } => cmd_prune_vec(dry_run),
+        #[cfg(feature = "pg-backend")]
+        Cmd::Pgsearch { query, fts, vec, hybrid, limit, json, no_daemon } => cmd_pgsearch(&query, fts, vec, hybrid, limit, json, no_daemon),
+        #[cfg(all(feature = "pg-backend", unix))]
+        Cmd::Pgsearchd { pool_size, foreground: _ } => cmd_pgsearchd(pool_size),
     }
 }

@@ -1,8 +1,8 @@
 # PostgreSQL + pgvector backend
 
-The skill's default backend is local SQLite + sqlite-vec. The **PostgreSQL + pgvector** backend is for when you want **cross-device** access — query the same archive from any laptop, phone tunnel, or remote shell — at the cost of a TLS round-trip per query (~150-300ms vs sub-ms local).
+The skill's default backend is local SQLite + sqlite-vec. The **PostgreSQL + pgvector** backend is for when you want **cross-device** access — query the same archive from any laptop, phone tunnel, or remote shell — at the cost of a TLS round-trip per query (~280-400ms warm via daemon vs sub-10ms local).
 
-Migration done by user `jrjohn` 2026-05-14: ~138K rows + 1024-dim bge-m3 embeddings from Mac sqlite → bluesea PG (Oracle Cloud ap-singapore-1). `crs` Rust binary refactored so `csearch / vsearch / vsearch-since / build / embed-missing` all target PG.
+Same `crs` source supports both backends via a Cargo feature flag (`pg-backend`). Default `cargo build --release` produces a sqlite-only binary; `cargo build --release --features pg-backend` produces a PG-routed binary that adds the `pgsearch` / `pgsearchd` subcommands and re-routes `csearch` / `vsearch` / `vsearch-since` / `build` / `embed-missing` through PostgreSQL. The two builds are mutually exclusive at runtime (whichever you build determines the backend); switching is a 10-30s `cargo build`.
 
 ## When to use which
 
@@ -10,10 +10,8 @@ Migration done by user `jrjohn` 2026-05-14: ~138K rows + 1024-dim bge-m3 embeddi
 |---|---|
 | Single device | Multi-device (laptop + iMac + remote shell) |
 | Don't want a server | Already have a VPS / cloud box |
-| Sub-ms latency mandatory | OK with 150-300ms via daemon |
+| Sub-10ms latency mandatory | OK with 280-400ms via daemon, ~1s direct |
 | Privacy-paranoid (archive has credentials) | OK extending trust boundary to that server |
-
-The two backends are **mutually exclusive at the `crs` binary level** — whichever you compile is the active one. Switching requires `cargo build --release` after editing source constants.
 
 ## Architecture
 
@@ -147,59 +145,61 @@ For dynamic home IPs: use a DDNS hostname instead, then either (a) refresh cloud
 
 ### 1. Build `crs` for PG mode
 
-The `crs` Rust source has PG mode hard-coded via constants. Edit `src/main.rs`:
+Connection details are read from env vars (no hardcoded credentials in the source — that would publish your password to whoever clones the repo). Either set `CRS_PG_URL` to a full libpq connection string, or set the components individually:
 
-```rust
-const PG_HOST: &str = "<your.domain>";
-const PG_PORT: u16 = 5432;
-const PG_USER: &str = "archive";
-const PG_PASS: &str = "<the 32-char password>";
-const PG_DB: &str = "archive_main";
-const PG_EMBED_MODEL: &str = "bge-m3";
-const PG_VEC_DIM: usize = 1024;
+```bash
+export CRS_PG_HOST=arcana.example.com
+export CRS_PG_PORT=5432
+export CRS_PG_USER=archive
+export CRS_PG_DB=archive_main
+export CRS_PG_PASSWORD='<the 32-char password>'
+# OR (overrides all above):
+export CRS_PG_URL='host=arcana.example.com port=5432 user=archive password=<...> dbname=archive_main sslmode=require'
 ```
+
+`CRS_PG_PASSWORD` is **required** when feature is enabled — `crs` will refuse to start without it. The other components have safe defaults (`localhost` / `5432` / `archive` / `archive_main`).
+
+Build:
 
 ```bash
 cd ~/claude-archive/crs
-cargo build --release
-# binary at target/release/crs
+cargo build --release --features pg-backend
+# binary at target/release/crs — now has Pgsearch + Pgsearchd subcommands
+
+# Or use the installer:
+cd <skill>/scripts && ./install.sh --with-pg
 ```
 
-### 2. Daemon (avoids 600ms TLS handshake per query)
+Verify the build picked up the feature:
 
 ```bash
-# Run foreground to test
-~/claude-archive/crs/target/release/crs pgsearchd
-
-# launchd plist for KeepAlive (macOS)
-cat > ~/Library/LaunchAgents/com.jrjohn.pgsearchd.plist <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key><string>com.jrjohn.pgsearchd</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Users/jrjohn/claude-archive/crs/target/release/crs</string>
-        <string>pgsearchd</string>
-    </array>
-    <key>RunAtLoad</key><true/>
-    <key>KeepAlive</key>
-    <dict><key>SuccessfulExit</key><false/></dict>
-    <key>ThrottleInterval</key><integer>10</integer>
-    <key>StandardOutPath</key><string>/Users/jrjohn/claude-archive/pgsearchd.log</string>
-    <key>StandardErrorPath</key><string>/Users/jrjohn/claude-archive/pgsearchd.log</string>
-</dict>
-</plist>
-EOF
-launchctl load ~/Library/LaunchAgents/com.jrjohn.pgsearchd.plist
+crs --help | grep pgsearch
+# should list: pgsearch, pgsearchd
 ```
 
-Daemon listens on `~/Library/Caches/pgsearchd/pgsearchd.sock` (chmod 600).
+### 2. Daemon (avoids ~700ms TLS handshake per query)
 
-### 3. Build cron (same as sqlite — unchanged plist)
+The `pgsearchd` subcommand listens on `~/Library/Caches/pgsearchd/pgsearchd.sock` (chmod 600) and holds an r2d2 pool of pre-warmed TLS connections to PG. Every `csearch` / `vsearch` / `pgsearch` invocation auto-detects the socket and tunnels its query through it — saving the ~700ms TLS handshake on every run. Without the daemon each query reconnects fresh; the binary still works, just slower.
 
-`com.jrjohn.claude-archive.plist` runs `crs build` every 15 min. The binary now writes to PG instead of sqlite — no plist change needed.
+```bash
+# Run foreground to test (Ctrl-C to stop)
+crs pgsearchd
+
+# launchd plist for KeepAlive on macOS — install.sh --with-pg writes this
+# template into ~/Library/LaunchAgents/com.<USERNAME>.pgsearchd.plist:
+#   <key>EnvironmentVariables</key><dict>
+#     <key>CRS_PG_HOST</key><string>arcana.example.com</string>
+#     <key>CRS_PG_PASSWORD</key><string>...</string>
+#   </dict>
+# Edit the placeholders, then:
+launchctl load ~/Library/LaunchAgents/com.<USERNAME>.pgsearchd.plist
+```
+
+Daemon listens on `$XDG_CACHE_HOME/pgsearchd/pgsearchd.sock` (defaults to `~/Library/Caches/...` on macOS, `~/.cache/...` on Linux), chmod 600.
+
+### 3. Build cron (same plist as sqlite — re-points to PG-built binary)
+
+`com.<USERNAME>.claude-archive.plist` runs `crs build` every 15 min. When `crs` is built with `--features pg-backend`, that subcommand writes to PG instead of local sqlite — same plist, different binary behavior.
 
 ### 4. Initial seed
 
@@ -254,18 +254,26 @@ tail -f ~/claude-archive/build.log
 # Wait 15 min, expect: "+N rows" lines if jsonl changed
 ```
 
-## Performance numbers (real-world, Mac→Singapore ~150ms RTT)
+## Performance numbers (real-world, 2026-05-14, Mac → Singapore arcana.boo, ~50ms RTT)
 
-| Operation | Sqlite (local) | PG via daemon | PG direct (no daemon) |
+| Operation | Sqlite (local) | PG via daemon | PG direct (--no-daemon) |
 |---|---|---|---|
-| csearch (FTS) cold | <50ms | ~270ms | ~830ms |
-| csearch warm | <10ms | ~250ms | n/a |
-| vsearch (vec + Ollama embed) | ~150ms | ~600-900ms | ~1500ms |
-| pgsearch --hybrid | n/a | ~1000ms | ~1700ms |
+| csearch (FTS / pg_fts) cold | <50ms | ~700ms | ~1100ms |
+| csearch warm | <10ms | ~280ms | ~970ms |
+| vsearch (vec + Ollama embed) cold | ~600ms | ~500ms (after pre-warm) | ~1100ms |
+| vsearch warm | ~150ms | **~380-500ms** | ~970ms |
+| pgsearch --hybrid warm | n/a | ~600-800ms | ~1500ms |
 | build incremental (100 new rows) | ~1s | ~10s | ~10s |
 | embed-missing (8 workers) | ~50/s | ~5/s | ~5/s |
 
-Embed is the bottleneck for vec (Ollama call ~100-200ms each). FTS is dominated by network RTT.
+Daemon JSON breakdown via `crs pgsearch --vec --json '...'`:
+
+```
+source=daemon   connect=  1ms  query= 380ms      ← unix socket → pre-warmed pool
+source=direct   connect=613ms  query= 390ms      ← every call: fresh TLS handshake
+```
+
+Daemon path saves the ~700ms handshake per query; the remaining ~380ms is Ollama bge-m3 embed (~150ms) + PG HNSW search + network round-trip. Cold path costs you the warm-up (Ollama loads model into memory, HNSW pages in).
 
 ## Failure modes / rollback
 
