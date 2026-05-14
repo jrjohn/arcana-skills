@@ -15,6 +15,7 @@
     6. Register Scheduled Task ClaudeArchiveIngest (every 15 min → crs.exe build)
     7. Register SessionStart hook (crs.exe gen-recent)
     7b. Install + register PreToolUse archive-preflight hook (Bash + Read)
+    7c. Install + register UserPromptSubmit auto-vsearch-on-prompt hook
     8. First ingest run
     9. Smoke test
 
@@ -194,6 +195,61 @@ foreach ($matcher in 'Bash','Read') {
 }
 ($obj | ConvertTo-Json -Depth 10) | Set-Content -Path $Settings -Encoding UTF8
 
+# 7c. Install + register auto-vsearch-on-prompt UserPromptSubmit hook
+#     - Pattern-matches identity / history / status / question keywords in the
+#       prompt and pre-runs vsearch, injecting top hits as additionalContext.
+#     - Also pre-sets the preflight sentinel so subsequent sqlite3 / memory
+#       grep / SSH log queries unblock automatically.
+#     - Don't clobber a customized auto-vsearch-on-prompt.ps1 (preserve user
+#       customizations, e.g. an extra trigger branch).
+$AutoVsearch = Join-Path $HooksDir 'auto-vsearch-on-prompt.ps1'
+$AutoVsearchSrc = Join-Path $SkillDir 'scripts\auto-vsearch-on-prompt.ps1'
+if (Test-Path $AutoVsearch) {
+    $srcHash = (Get-FileHash $AutoVsearchSrc).Hash
+    $dstHash = (Get-FileHash $AutoVsearch).Hash
+    if ($srcHash -eq $dstHash) {
+        Write-Host "    auto-vsearch-on-prompt hook unchanged: $AutoVsearch"
+    } else {
+        Write-Host "    !! $AutoVsearch exists and differs from skill version — leaving as-is"
+        Write-Host "       (your version may have local customizations like a luminous-skill"
+        Write-Host "       trigger; diff manually if needed)"
+    }
+} else {
+    Write-Host "==> installing auto-vsearch-on-prompt hook → $AutoVsearch"
+    Copy-Item -Force $AutoVsearchSrc $AutoVsearch
+}
+
+# Re-load $obj to pick up PreToolUse edits above
+$obj = Get-Content -Path $Settings -Raw | ConvertFrom-Json
+if (-not $obj.PSObject.Properties['hooks']) {
+    $obj | Add-Member -NotePropertyName hooks -NotePropertyValue ([PSCustomObject]@{})
+}
+if (-not $obj.hooks.PSObject.Properties['UserPromptSubmit']) {
+    $obj.hooks | Add-Member -NotePropertyName UserPromptSubmit -NotePropertyValue @()
+}
+
+$autoVsearchCmd = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$AutoVsearch`""
+$alreadyRegistered = $false
+foreach ($entry in @($obj.hooks.UserPromptSubmit)) {
+    foreach ($h in @($entry.hooks)) {
+        if ($h.command -and ($h.command -like '*auto-vsearch-on-prompt.ps1*')) {
+            $alreadyRegistered = $true
+        }
+    }
+}
+if ($alreadyRegistered) {
+    Write-Host "    UserPromptSubmit auto-vsearch hook already registered (skip)"
+} else {
+    $newUps = [PSCustomObject]@{
+        hooks = @(
+            [PSCustomObject]@{ type = 'command'; command = $autoVsearchCmd; timeout = 5 }
+        )
+    }
+    $obj.hooks.UserPromptSubmit = @($obj.hooks.UserPromptSubmit) + $newUps
+    Write-Host "==> registering UserPromptSubmit auto-vsearch hook"
+    ($obj | ConvertTo-Json -Depth 10) | Set-Content -Path $Settings -Encoding UTF8
+}
+
 # 8. First ingest
 Write-Host "==> First ingest ..."
 & $Bin build --no-embed
@@ -208,6 +264,7 @@ Write-Host "✓ Base install complete." -ForegroundColor Green
 Write-Host "  - 15-min ingest:        Get-ScheduledTask -TaskName ClaudeArchiveIngest"
 Write-Host "  - SessionStart hook:    crs.exe gen-recent"
 Write-Host "  - PreToolUse hook:      $Preflight (Bash + Read; vsearch/csearch preflight)"
+Write-Host "  - UserPromptSubmit:     $AutoVsearch (auto-vsearch on identity/history/status prompts)"
 Write-Host "  - interactive:          csearch.ps1 / vsearch.ps1 / crs csearch / crs vsearch"
 Write-Host ""
 Write-Host "Optional next step (semantic search via Ollama + bge-m3):"

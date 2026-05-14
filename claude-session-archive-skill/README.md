@@ -188,7 +188,7 @@ Honest read on where the design wins and where it doesn't. Personal-grade tool �
 | Latency — PG mode | **6 / 10** | csearch ~315 ms / vsearch ~1.1 s end-to-end. Pure server query ~6 ms / ~200 ms — the rest is WAN RTT Mac↔VPS. Floor is geographic, not algorithmic. |
 | Ops complexity — sqlite | **9 / 10** | One binary + cron + Ollama. `install.sh && forget`. No moving parts. |
 | Ops complexity — PG | **5 / 10** | Container + TLS cert + Let's Encrypt renewal hook + password rotation + pgsearchd daemon + monitoring. Real maintenance surface. |
-| Cross-platform parity | **7 / 10** | macOS / Linux / Windows installers all exist. Windows preflight stuck at v1.10.0; auto-vsearch hook macOS-only; pgsearchd unix-socket-only (Windows PG falls back to per-query connect). |
+| Cross-platform parity | **8 / 10** | macOS / Linux / Windows installers all exist. v1.14 brings preflight + auto-vsearch hook to Windows parity (7 rules + 30-min sentinel TTL + PS UserPromptSubmit hook). Remaining gap: pgsearchd is unix-socket-only (Windows PG falls back to per-query connect, ~700ms TLS handshake each call — pure OS limitation, no fix in scope). |
 | Cross-machine recall | **7 / 10** | PG mode solves it (every machine queries same archive); sqlite mode is strictly single-machine. No export / import / sync tool — you're either all-in on PG or you re-ingest per machine. |
 | Discipline enforcement | **9 / 10** | 3-layer hook stack: preflight (`PreToolUse` Bash+Read), auto-vsearch (`UserPromptSubmit`), sentinel TTL 30 min. Survives `/compact` — prose memory loss doesn't bypass mechanical rules. |
 | Failure visibility | **7 / 10** | `crs doctor` catches storage / embed lag / hook registration / Ollama health. Doesn't catch: duplicate hook registration (just hit 2026-05-14), pgsearchd daemon crashed-then-respawning-loop, embedding-cache miss patterns. |
@@ -222,7 +222,7 @@ Honest evaluation as of 2026-05-14. Use this to decide whether the operational c
 5. **Ollama is a single point of failure** for vsearch / auto_recent / auto-vsearch hook. Daemon down → semantic stack stalls. No alert path. (FTS / csearch keep working.)
 6. **No backup automation.** Sqlite mode: `cp sessions.db` is the entire "backup tool". PG mode: `pg_dump` cron is not part of the installer — you have to wire it manually.
 7. **Auto-vsearch hook regex is too broad.** Trigger set includes generic interrogatives (`怎麼`, `為什麼`, `請問`, `可以嗎`, `能不能`) → ~80 % of prompts fire vsearch. Cheap (~1.1 s) but not free. Plan to tighten.
-8. **Windows is a second-class citizen.** Preflight hook (`archive-preflight.ps1`) stuck at v1.10.0 behavior (missing v1.11 hard-deny of `sqlite3 LIKE`, missing v1.13 PG-backend daemon support). Auto-vsearch hook is bash-only — no `.ps1` equivalent.
+8. **Windows PG mode pays per-query TLS handshake.** `pgsearchd` daemon is unix-socket-only; Windows PG users skip the daemon and pay ~700 ms TLS handshake on every csearch / vsearch. Pure OS limitation (no Windows unix-domain-socket support in the `postgres` Rust crate path we use). All other v1.14 discipline-layer features (preflight rules, auto-vsearch hook, sentinel TTL) are at full parity.
 9. **`pgsearchd` resets HNSW `ef_search` per query** (via `SET hnsw.ef_search = N`). Plain `SET` (not `SET LOCAL`) means the value persists on the pooled connection — currently fine since every vsearch resets to the same value, but a future query type that needs a different `ef_search` would conflict.
 10. **First-time backfill is long and quiet.** 100 k rows × ~9-12 emb/sec ≈ 2-3 hr on Apple Silicon (Metal); 3-5× slower in Docker. No progress notification surfaces — user sees `backfill.log` only if they look.
 11. **No cross-machine sync for sqlite mode.** No `crs export` / `import` / `sync`. Switching machines = re-ingest from scratch, or migrate to PG.
@@ -239,13 +239,29 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 | 3 | **`pg_dump` cron in installer** (PG mode) — daily backup to local file or S3, with rotation. | Medium | Small |
 | 4 | **`crs doctor`: duplicate hook detection** — scan `settings.json` for repeated hook commands. | Medium (UX) | Small |
 | 5 | **Tighten `ARCHIVE_TRIGGER` regex** in `auto-vsearch-on-prompt.sh` — strip generic interrogatives, keep only history-intent keywords. | Medium (cost) | Small |
-| 6 | **Windows preflight + auto-vsearch parity** — port v1.11 hard-deny rules and `.ps1` UserPromptSubmit hook. | Medium | Medium |
+| ~~6~~ | ~~Windows preflight + auto-vsearch parity~~ — **shipped in v1.14.0** | ✓ | — |
 | 7 | **Optional: `pgsearchd` deployment on VPS** + thin RPC client on Mac. Cuts vsearch e2e ~1.1 s → ~400 ms (saves WAN RTT). | Medium | Medium |
 | 8 | **Linux systemd-timer alternative** to cron (parity with launchd). | Low | Medium |
 | 9 | **Docker semantic variant healthcheck wait** — poll `:11434` before kicking off backfill. | Low | Small |
 | 10 | **Unfreeze `OLLAMA_VER`** in `install-semantic.sh` — fetch latest release tag at install time. | Low | Small |
 
 ## What's new
+
+### v1.14.0 — Windows discipline layer at parity (preflight v1.13 rules + UserPromptSubmit)
+
+Closes the longest-standing Windows gap. `archive-preflight.ps1` jumped from v1.9.0 behavior (4 rules, no TTL) to full v1.13 behavior:
+
+- **Hard-deny `sqlite3 SEARCH`** against `sessions.db` regardless of sentinel — `LIKE`, `MATCH`, `msg_fts`, `GLOB` patterns blocked at the hook layer. Metadata queries (`COUNT` / `PRAGMA` / `.schema` / `msg_vec` maintenance) still allowed when sentinel valid.
+- **30-min sentinel TTL.** `Test-SentinelValid` checks `LastWriteTime` against `[DateTime]::Now`, auto-removes stale sentinels. Forces re-vsearch after compact / idle gap; `auto-vsearch-on-prompt.ps1` refreshes sentinel on every archive-intent prompt so active sessions don't notice the TTL.
+- **SSH log investigation rule** — `ssh ... grep/cat/tail ... /var/log/...` denied until sentinel valid.
+- **Local log grep rule** — same logic for local `grep/cat/tail` on `/var/log/` or `*.log`.
+- **`git log --grep / -S` rule** — investigative git history search denied until sentinel valid.
+- **New `auto-vsearch-on-prompt.ps1`** (UserPromptSubmit hook, PowerShell port of the bash version). Detects archive-intent keywords (identity / history / status / question), runs `crs.exe vsearch` cross-project, injects top 8 hits as `additionalContext`, pre-sets the sentinel. Archive-only — no luminous-skill bundling (separate concerns, separate hooks).
+- **`install.ps1` step 7c** registers the new UserPromptSubmit hook idempotently, with the same "preserve user customization on hash mismatch" guard as the bash installer.
+
+PG-backend daemon (`pgsearchd`) remains unix-socket-only — Windows PG mode falls back to per-query TCP+TLS (~700 ms handshake each call). Pure OS limitation, no fix in scope.
+
+Untested on Windows by the author (no Windows daily-driver). Verify by re-running `install.ps1` after upgrade and exercising each rule manually. Cross-platform parity score lifted 7 → 8.
 
 ### v1.13.3 — pg_vec HNSW plan fix (vsearch 9–13 s → 1.1 s)
 
