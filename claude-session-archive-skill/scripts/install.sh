@@ -5,20 +5,26 @@
 # Builds the Rust binary `crs` (single ~5 MB self-contained binary, bundles
 # SQLite + FTS5 + sqlite-vec) and wires up the 15-min ingest schedule.
 #
+# Default backend is local SQLite + sqlite-vec (single-machine, sub-ms).
+# Pass --with-pg (or set WITH_PG=1) to build the optional `pg-backend` feature
+# instead — routes csearch / vsearch / vsearch-since / build / embed-missing
+# through a remote PostgreSQL + pgvector instance. See references/pg-backend.md.
+#
 # Steps:
 #   1. Verify cargo is present (rustup needed)
 #   2. mkdirs ~/claude-archive ~/bin
-#   3. Copy crs source → cargo build --release
+#   3. Copy crs source → cargo build --release [--features pg-backend]
 #   4. ~/bin/crs symlink + PATH on shell rc (zsh / bash / sh)
 #   5. ~/.sqliterc tuning
 #   6. Install gen-recent-context.sh
 #   7. Schedule 15-min ingest:
 #        macOS  → launchd plist
 #        Linux  → crontab entry
+#   7b. (--with-pg only) install + load pgsearchd launchd plist on macOS
 #   8.  Register SessionStart hook in ~/.claude/settings.json (needs jq)
 #   8b. Install + register PreToolUse archive-preflight hook (Bash + Read)
 #   8c. Install + register UserPromptSubmit auto-vsearch-on-prompt hook
-#   9.  First ingest run
+#   9.  First ingest run (skipped under --with-pg if CRS_PG_PASSWORD not set)
 #  10. Smoke test
 #
 # Idempotent: re-running rebuilds + re-points hooks safely.
@@ -27,6 +33,18 @@
 # semantic vsearch. Pure FTS5 csearch works without it.
 
 set -e
+
+# Parse flags
+WITH_PG="${WITH_PG:-0}"
+for arg in "$@"; do
+    case "$arg" in
+        --with-pg) WITH_PG=1 ;;
+        --help|-h)
+            sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+            exit 0
+            ;;
+    esac
+done
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARCHIVE_DIR="$HOME/claude-archive"
@@ -41,6 +59,11 @@ echo "    skill source: $SKILL_DIR"
 echo "    archive dir:  $ARCHIVE_DIR"
 echo "    crs binary:   $BIN"
 echo "    platform:     $PLATFORM"
+if [ "$WITH_PG" = "1" ]; then
+    echo "    backend:      pg-backend (remote PostgreSQL+pgvector)"
+else
+    echo "    backend:      sqlite (default, local)"
+fi
 
 # 1. Sanity: cargo present
 if ! command -v cargo >/dev/null 2>&1; then
@@ -94,8 +117,15 @@ cp "$SKILL_DIR/scripts/crs/Cargo.lock"  "$SRC_DIR/Cargo.lock" 2>/dev/null || tru
 cp "$SKILL_DIR/scripts/crs/src/main.rs" "$SRC_DIR/src/main.rs"
 [ -f "$SKILL_DIR/scripts/crs/.gitignore" ] && cp "$SKILL_DIR/scripts/crs/.gitignore" "$SRC_DIR/.gitignore"
 
-echo "==> cargo build --release  (first time ~2-5 min, deps cached afterwards)"
-( cd "$SRC_DIR" && cargo build --release )
+if [ "$WITH_PG" = "1" ]; then
+    BUILD_FLAGS="--release --features pg-backend"
+    echo "==> cargo build $BUILD_FLAGS  (first time ~3-7 min, includes postgres deps)"
+else
+    BUILD_FLAGS="--release"
+    echo "==> cargo build --release  (first time ~2-5 min, deps cached afterwards)"
+fi
+# shellcheck disable=SC2086
+( cd "$SRC_DIR" && cargo build $BUILD_FLAGS )
 echo "    built: $(du -h "$BIN" | cut -f1) at $BIN"
 
 # 4. Symlink to ~/bin/crs + ensure ~/bin on PATH
@@ -153,6 +183,35 @@ case "$PLATFORM" in
         echo "       $BIN build"
         ;;
 esac
+
+# 7b. (--with-pg only) install pgsearchd daemon launchd plist on macOS.
+#     The daemon holds an r2d2 connection pool over a unix socket so each
+#     csearch/vsearch skips the ~700ms TLS handshake. Without it, every
+#     query reconnects fresh.
+if [ "$WITH_PG" = "1" ] && [ "$PLATFORM" = "Darwin" ]; then
+    USER_SHORT=$(whoami)
+    PGD_PLIST="$HOME/Library/LaunchAgents/com.${USER_SHORT}.pgsearchd.plist"
+    PGD_TEMPLATE="$SKILL_DIR/scripts/pgsearchd.plist.template"
+    if [ -f "$PGD_PLIST" ]; then
+        echo "==> pgsearchd plist already present: $PGD_PLIST"
+        echo "    (leaving as-is so your CRS_PG_PASSWORD env value is preserved.)"
+        echo "    To regenerate from template: rm \"$PGD_PLIST\" then re-run."
+    else
+        echo "==> writing pgsearchd plist template: $PGD_PLIST"
+        sed "s|<USERNAME>|${USER_SHORT}|g" "$PGD_TEMPLATE" > "$PGD_PLIST"
+        chmod 600 "$PGD_PLIST"
+        echo "    !! Edit $PGD_PLIST and replace these placeholders:"
+        echo "         CRS_PG_HOST       (default: arcana.example.com)"
+        echo "         CRS_PG_PASSWORD   (REPLACE_WITH_YOUR_PG_PASSWORD)"
+        echo "       Then load:"
+        echo "         launchctl load \"$PGD_PLIST\""
+    fi
+elif [ "$WITH_PG" = "1" ] && [ "$PLATFORM" = "Linux" ]; then
+    echo "==> Linux pgsearchd: write a systemd user unit or an &-backgrounded launcher."
+    echo "    The crs binary's pgsearchd subcommand listens on a unix socket at"
+    echo "    \$XDG_CACHE_HOME/pgsearchd/pgsearchd.sock (defaults to ~/.cache/...)."
+    echo "    Set CRS_PG_PASSWORD (and friends) in the unit file's Environment="
+fi
 
 # 8. Register SessionStart hook
 if command -v jq >/dev/null 2>&1; then
@@ -250,8 +309,14 @@ else
 fi
 
 # 9. First ingest
-echo "==> first ingest"
-"$BIN" build --no-embed
+if [ "$WITH_PG" = "1" ] && [ -z "${CRS_PG_PASSWORD:-}" ]; then
+    echo "==> skipping first ingest (--with-pg + CRS_PG_PASSWORD not set)"
+    echo "    Set CRS_PG_PASSWORD in your shell + the launchd plist, then run:"
+    echo "      $BIN build"
+else
+    echo "==> first ingest"
+    "$BIN" build --no-embed
+fi
 
 # 10. Smoke test
 echo
@@ -265,6 +330,17 @@ echo "  - SessionStart hook:    $BIN gen-recent"
 echo "  - PreToolUse hook:      $PREFLIGHT (Bash + Read; vsearch/csearch preflight)"
 echo "  - UserPromptSubmit:     $AUTO_VSEARCH (auto-vsearch on identity/history/status prompts)"
 echo "  - interactive:          crs csearch / crs vsearch / crs vsearch-since"
+if [ "$WITH_PG" = "1" ]; then
+    echo
+    echo "PG backend (--with-pg) extras:"
+    echo "  - pgsearch subcommand: crs pgsearch [--vec|--fts|--hybrid] '<query>'"
+    if [ "$PLATFORM" = "Darwin" ]; then
+        echo "  - pgsearchd daemon:    com.$(whoami).pgsearchd  (load + check launchctl list)"
+    fi
+    echo "  - required env vars:   CRS_PG_PASSWORD (and CRS_PG_HOST/PORT/USER/DB if non-default)"
+    echo "                         OR CRS_PG_URL='host=... port=... user=... password=... dbname=... sslmode=require'"
+    echo "  - server schema + setup: see references/pg-backend.md"
+fi
 echo
 echo "Optional next step (semantic search via Ollama + bge-m3):"
 echo "  ./install-semantic.sh           # native Ollama (~125 MB) + ~1.2 GB model"

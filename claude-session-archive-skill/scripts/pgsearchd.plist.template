@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template for ~/Library/LaunchAgents/com.<USERNAME>.pgsearchd.plist
+  Persistent r2d2 connection pool (size 4) over unix socket
+  ~/Library/Caches/pgsearchd/pgsearchd.sock — eliminates the ~700ms
+  TLS handshake on every csearch / vsearch.
+  Only used when crs is built with --features pg-backend.
+
+  install.sh --with-pg writes/loads this automatically. Manual setup:
+    1. Replace <USERNAME> with `whoami`.
+    2. Set CRS_PG_PASSWORD (and optionally CRS_PG_HOST/USER/DB) below.
+    3. launchctl load ~/Library/LaunchAgents/com.<USERNAME>.pgsearchd.plist
+
+  CRS_PG_PASSWORD is loaded into the daemon process — chmod the plist
+  600 if it contains the credential, or use an EnvironmentFile pattern.
+  See references/pg-backend.md for production credential handling.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.<USERNAME>.pgsearchd</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/<USERNAME>/claude-archive/crs/target/release/crs</string>
+    <string>pgsearchd</string>
+    <string>--pool-size</string><string>4</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CRS_PG_HOST</key><string>arcana.example.com</string>
+    <key>CRS_PG_PORT</key><string>5432</string>
+    <key>CRS_PG_USER</key><string>archive</string>
+    <key>CRS_PG_DB</key><string>archive_main</string>
+    <!-- IMPORTANT: replace with your real password, then chmod 600 this file -->
+    <key>CRS_PG_PASSWORD</key><string>REPLACE_WITH_YOUR_PG_PASSWORD</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>             <!-- restart on crash -->
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>/Users/<USERNAME>/claude-archive/pgsearchd.log</string>
+  <key>StandardErrorPath</key><string>/Users/<USERNAME>/claude-archive/pgsearchd.err</string>
+</dict>
+</plist>

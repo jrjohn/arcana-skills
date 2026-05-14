@@ -3,7 +3,33 @@ name = "crs"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+# Default build: local SQLite + sqlite-vec backend (single-machine, sub-ms).
+default = []
+
+# Optional: route csearch / vsearch / vsearch-since / build / embed-missing
+# through a remote PostgreSQL + pgvector instance instead of local SQLite.
+# Adds Pgsearch / Pgsearchd subcommands. See references/pg-backend.md.
+#
+#   cargo build --release --features pg-backend
+#
+# Required env vars when running:
+#   CRS_PG_PASSWORD   (required)
+#   CRS_PG_HOST       (default: localhost)
+#   CRS_PG_PORT       (default: 5432)
+#   CRS_PG_USER       (default: archive)
+#   CRS_PG_DB         (default: archive_main)
+# OR CRS_PG_URL       (full libpq connection string overrides components)
+pg-backend = [
+    "dep:postgres",
+    "dep:postgres-native-tls",
+    "dep:native-tls",
+    "dep:r2d2",
+    "dep:r2d2_postgres",
+]
+
 [dependencies]
+# Always required (sqlite ingest, embed Ollama HTTP, CLI, etc.)
 rusqlite = { version = "0.32", features = ["bundled"] }
 sqlite-vec = "0.1"
 zerocopy = "0.7"
@@ -15,6 +41,13 @@ rayon = "1.10"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 anyhow = "1"
 dirs = "5"
+
+# Optional: only compiled when --features pg-backend
+postgres = { version = "0.19", features = ["with-chrono-0_4"], optional = true }
+postgres-native-tls = { version = "0.5", optional = true }
+native-tls = { version = "0.2", optional = true }
+r2d2 = { version = "0.8", optional = true }
+r2d2_postgres = { version = "0.18", optional = true }
 
 [profile.release]
 opt-level = 3
