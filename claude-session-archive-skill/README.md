@@ -5,11 +5,11 @@ Cross-session full-text + semantic history of every Claude Code conversation, st
 - **Memory** = curated signal (identity / traps / invariants — small)
 - **This archive** = verbatim log (every command + result, every chat — large, query on demand)
 
-Backed by SQLite FTS5 (lexical) and optionally Ollama + sqlite-vec (semantic, **bge-m3** 1024-dim, multilingual SOTA). Sub-10ms lexical / ~150ms semantic. Updates every 15 minutes via launchd / Task Scheduler / cron.
+Backed by SQLite FTS5 (lexical) and optionally Ollama + sqlite-vec (semantic, **bge-m3** 1024-dim, multilingual SOTA). Single-machine mode: csearch ~6ms / vsearch ~300ms (embed-bound). Updates every 15 minutes via launchd / Task Scheduler / cron.
 
 Deployment is **Rust (`crs`) — single ~5 MB self-contained binary** that bundles SQLite + FTS5 + sqlite-vec. No Python venv anywhere. Prerequisite: a `cargo` toolchain (rustup) on the install machine — the binary is then portable.
 
-**Optional remote PG backend** (since v1.13): `cargo build --release --features pg-backend` (or `install.sh --with-pg`) re-routes csearch / vsearch / vsearch-since / build / embed-missing through a remote PostgreSQL 17 + pgvector instance. Adds `pgsearch` / `pgsearchd` subcommands; daemon holds an r2d2 connection pool over a unix socket so each query skips the ~700ms TLS handshake. Use this when you want the same archive across multiple machines. Default sqlite build is single-machine and faster (~10ms vs ~280ms warm). See `references/pg-backend.md` for full setup.
+**Optional remote PG backend** (since v1.13): `cargo build --release --features pg-backend` (or `install.sh --with-pg`) re-routes csearch / vsearch / vsearch-since / build / embed-missing through a remote PostgreSQL 17 + pgvector instance. Adds `pgsearch` / `pgsearchd` subcommands; daemon holds an r2d2 connection pool over a unix socket so each query skips the ~700ms TLS handshake. Use this when you want the same archive across multiple machines. Performance trade-off: csearch ~315ms / vsearch ~1.1s end-to-end (WAN RTT-bound, not algorithm-bound — pure server query is ~6ms / ~200ms after v1.13.3's HNSW plan fix). Default sqlite build remains single-machine and 3-10× faster locally. See `references/pg-backend.md` for full setup.
 
 ## What it gives you
 
@@ -177,62 +177,96 @@ Pair the two for a full reset:
 crs prune-vec && crs embed-missing && crs doctor
 ```
 
-## Trade-offs (pros / cons)
+## Architecture scorecard (v1.13.3, 2026-05-14)
 
-Honest evaluation as of 2026-05-04 (v1.7.3). Use this to decide whether the operational cost matches your recall needs.
+Honest read on where the design wins and where it doesn't. Personal-grade tool — graded against the bar of "daily driver for a single power user", not production multi-tenant infra.
+
+| Dimension | Score | Why |
+|---|---|---|
+| Search correctness (recall) | **9 / 10** | `bge-m3` 1024-dim multilingual, GIN + HNSW indexes both index-hit (after v1.13.3 plan fix). Role-filter + content-dedup at SQL layer (v1.13.2) drops ~30% noise rows. False positives rare. |
+| Latency — sqlite mode | **9 / 10** | csearch ~6 ms, vsearch ~300 ms (embed dominates; Mac M4 + Metal bge-m3 ~110 ms). No network, no TLS. |
+| Latency — PG mode | **6 / 10** | csearch ~315 ms / vsearch ~1.1 s end-to-end. Pure server query ~6 ms / ~200 ms — the rest is WAN RTT Mac↔VPS. Floor is geographic, not algorithmic. |
+| Ops complexity — sqlite | **9 / 10** | One binary + cron + Ollama. `install.sh && forget`. No moving parts. |
+| Ops complexity — PG | **5 / 10** | Container + TLS cert + Let's Encrypt renewal hook + password rotation + pgsearchd daemon + monitoring. Real maintenance surface. |
+| Cross-platform parity | **7 / 10** | macOS / Linux / Windows installers all exist. Windows preflight stuck at v1.10.0; auto-vsearch hook macOS-only; pgsearchd unix-socket-only (Windows PG falls back to per-query connect). |
+| Cross-machine recall | **7 / 10** | PG mode solves it (every machine queries same archive); sqlite mode is strictly single-machine. No export / import / sync tool — you're either all-in on PG or you re-ingest per machine. |
+| Discipline enforcement | **9 / 10** | 3-layer hook stack: preflight (`PreToolUse` Bash+Read), auto-vsearch (`UserPromptSubmit`), sentinel TTL 30 min. Survives `/compact` — prose memory loss doesn't bypass mechanical rules. |
+| Failure visibility | **7 / 10** | `crs doctor` catches storage / embed lag / hook registration / Ollama health. Doesn't catch: duplicate hook registration (just hit 2026-05-14), pgsearchd daemon crashed-then-respawning-loop, embedding-cache miss patterns. |
+| Security at rest | **4 / 10** | `chmod 600` only. Full credentials / tokens / private chat captured verbatim. Disk theft = full exposure. No encryption, no key rotation, no redaction layer. |
+| Discoverability (docs) | **6 / 10** | README + SKILL.md combined ~800 lines. Runbook is complete but heavy to skim; new readers struggle to find "the 30-second pitch" amid the changelog. |
+| **Overall (personal-grade)** | **~7.5 / 10** | Solid daily driver. Not production-grade — no encryption, no backup automation, no alerting. The single-user trust model is load-bearing. |
+
+## Trade-offs (pros / cons, v1.13.3)
+
+Honest evaluation as of 2026-05-14. Use this to decide whether the operational cost matches your recall needs.
 
 ### Pros
 
 1. **Zero-maintenance background ingest.** launchd / Task Scheduler / cron every 15 min — no user friction once installed.
-2. **Single Rust binary (~5 MB)** — bundles SQLite + FTS5 + sqlite-vec. No Python venv, no `pip install`. `cargo build` once on each new machine and ship the binary.
-3. **Cross-platform parity.** macOS / Linux / Windows each have base + native-Ollama + Docker-Ollama installers.
-4. **Three-tier graceful degradation.** `csearch` (always works, FTS lexical) → `vsearch` (semantic, optional) → `auto_recent.md` (Memory autoload). Each tier independently useful.
-5. **Newest-first embed ordering.** Today's conversations become vsearchable in minutes, not hours, even during long initial backfills.
-6. **Cross-language matching.** `bge-m3` (1024-dim multilingual SOTA) — "防火牆規則調整" matches "firewall policy edit" without a thesaurus.
+2. **Single Rust binary (~5 MB)** — bundles SQLite + FTS5 + sqlite-vec. No Python venv, no `pip install`. `cargo build` once on each new machine, then portable.
+3. **Two interchangeable backends, one source.** Cargo feature flag (`--features pg-backend`) toggles sqlite (default, fast local) vs PostgreSQL+pgvector (cross-machine). No code fork, no second binary.
+4. **Three-layer discipline enforcement** that survives `/compact`: preflight hook (denies raw sqlite3 SEARCH + memory grep), auto-vsearch hook (proactive injection), sentinel TTL (forces re-vsearch after idle gap). Codified in hooks, not just prose.
+5. **Newest-first embed ordering.** Today's conversations become vsearchable in minutes, not hours, during long backfills.
+6. **Cross-language matching.** `bge-m3` (1024-dim multilingual SOTA) — `防火牆規則調整` matches `firewall policy edit` without a thesaurus.
 7. **Idempotent installer.** Re-running rebuilds + re-wires hooks safely; no "uninstall first" dance.
-8. **Memory ↔ DB separation is enforced by design.** Memory holds curated signal (small, high-density); DB holds verbatim log (large, queried on demand). Documented + reflected in `auto_recent.md` generation logic.
+8. **PG mode has a persistent daemon** (`pgsearchd`, r2d2 over unix socket) — every query skips the ~700 ms TLS handshake. Saves Mac↔VPS handshake on every csearch / vsearch.
+9. **`crs doctor` catches the common silent failures** (embed lag, stale rowids, missing schedule, Ollama down, dead pgsearchd socket). Exit code 0/1/2 for cron-friendly CI.
+10. **SQL-level dedup + role filter** (v1.13.2 / v1.13.3) cuts ~30 % of noise rows from auto-vsearch hook output. HNSW plan now actually hit, not Seq Scan.
 
 ### Cons
 
-1. **🔥 No health check / dashboard / alert.** A latent bug let `embed-missing` silently skip every new row for 6 days on at least one machine (the `pending = total - done` arithmetic broke once `msg_vec` accumulated stale rowids — fixed in v1.7.1/v1.7.2). FTS stayed current but vsearch returned only 4/28-and-older results. Detection took manual user-side curiosity. **No `crs doctor` subcommand exists yet.**
-2. **Privacy / encryption.** DB captures every tool output verbatim — passwords, API tokens, IPs, MACs. Protection is `chmod 600` only; no encryption at rest. Loss / theft of the disk is a credential-disclosure event.
-3. **Monotonic disk growth.** "Never delete old rows" is a stated invariant. 100k rows ≈ 731 MB. No retention policy, even opt-in. Move to external storage when tight.
-4. **Embedding lag.** `vsearch` needs an ingest tick (≤ 15 min) to include the *current* session. `csearch` (FTS) is updated synchronously and has no lag. Documented in v1.7.3.
-5. **`msg_vec` accumulates stale rowids.** When `msg.rowid` is reused after a re-ingest, the old vector lingers. Currently v1.7.2 papers over collisions with `INSERT OR REPLACE`, but **no `crs prune-vec` subcommand exists** to clean the stale tail. On one machine: `max(msg.rowid) = 513116` vs `count(msg) = 112304` → ~400k rowid gap, of which ~5k vec rows are orphans.
-6. **Ollama is a single point of failure for vsearch / auto_recent.** Daemon down → semantic stack stalls. No alert path. (FTS keeps working.)
-7. **No cross-machine transfer story.** No `crs export` / `crs import` / `crs sync`. Switching machines = re-ingest from scratch. Deliberate, but undocumented as a constraint.
-8. **First-time backfill is long and silent.** 100k rows × ~9-12 emb/sec ≈ 2-3 hr on Apple Silicon (Metal); ~3-5× slower in Docker. No progress notification surfaces — user sees `backfill.log` only if they look.
-9. **Errors fail silently.** Ingest / backfill failures land in log files but don't surface to the user. The 6-day vsearch outage in (1) is a direct consequence.
+1. **PG-mode latency floor is geographic.** vsearch e2e ~1.1 s is dominated by WAN RTT Mac↔VPS, not algorithm. Sub-second only achievable by deploying pgsearchd on the same LAN as PG, or running sqlite locally.
+2. **No encryption at rest.** DB captures every tool output verbatim — passwords, API tokens, IPs, MACs, private conversation. Protection is `chmod 600` only. Loss / theft of the disk is a credential-disclosure event.
+3. **Monotonic disk growth.** Stated invariant: never delete old rows. 100 k rows ≈ 731 MB. No retention policy, even opt-in.
+4. **Embedding lag.** `vsearch` needs an ingest tick (≤ 15 min) to include the *current* session's messages. `csearch` (FTS) is updated synchronously.
+5. **Ollama is a single point of failure** for vsearch / auto_recent / auto-vsearch hook. Daemon down → semantic stack stalls. No alert path. (FTS / csearch keep working.)
+6. **No backup automation.** Sqlite mode: `cp sessions.db` is the entire "backup tool". PG mode: `pg_dump` cron is not part of the installer — you have to wire it manually.
+7. **Auto-vsearch hook regex is too broad.** Trigger set includes generic interrogatives (`怎麼`, `為什麼`, `請問`, `可以嗎`, `能不能`) → ~80 % of prompts fire vsearch. Cheap (~1.1 s) but not free. Plan to tighten.
+8. **Windows is a second-class citizen.** Preflight hook (`archive-preflight.ps1`) stuck at v1.10.0 behavior (missing v1.11 hard-deny of `sqlite3 LIKE`, missing v1.13 PG-backend daemon support). Auto-vsearch hook is bash-only — no `.ps1` equivalent.
+9. **`pgsearchd` resets HNSW `ef_search` per query** (via `SET hnsw.ef_search = N`). Plain `SET` (not `SET LOCAL`) means the value persists on the pooled connection — currently fine since every vsearch resets to the same value, but a future query type that needs a different `ef_search` would conflict.
+10. **First-time backfill is long and quiet.** 100 k rows × ~9-12 emb/sec ≈ 2-3 hr on Apple Silicon (Metal); 3-5× slower in Docker. No progress notification surfaces — user sees `backfill.log` only if they look.
+11. **No cross-machine sync for sqlite mode.** No `crs export` / `import` / `sync`. Switching machines = re-ingest from scratch, or migrate to PG.
+12. **Trigger regex catches the hook duplicate-registration risk.** Same hook can be registered twice in `settings.json` (one with `~/...` and one with `/Users/.../`); `crs doctor` doesn't currently flag this. Hit 2026-05-14 — manual fix.
 
-## Install hardening — proposed roadmap
+## Remaining roadmap
 
-Concrete improvements identified during the 2026-05-04 audit. Not yet implemented; ordered by ROI.
+Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's still open:
 
 | # | Item | Impact | Effort |
 |---|---|---|---|
-| **1** | **`crs doctor` subcommand** — single command checks: cargo / sqlite3 / jq present, DB perms, launchd / Task / cron registered + last-run-success, SessionStart hook present, Ollama reachable, `bge-m3` pulled, `msg` vs `msg_vec` ratio, stale rowid count, embed backlog size. Catches the silent-failure class that bit us 2026-05-04. | High | Medium |
-| **2** | **`crs prune-vec` subcommand** — `DELETE FROM msg_vec WHERE rowid NOT IN (SELECT rowid FROM msg)`. Run periodically or on demand. Prevents stale buildup; complements v1.7.2's `INSERT OR REPLACE`. | High | Small |
-| **3** | **Prerequisite checks fail early in installers.** macOS/Linux: probe `jq`. Windows: probe `sqlite3.exe`. If missing, print exact install command and exit before half-running. | High (UX) | Small |
-| **4** | **Unfreeze `OLLAMA_VER=v0.21.2`** in `install-semantic.sh`. Either fetch latest tag from GitHub Releases API or accept `OLLAMA_VER=…` env override (default = latest). | Medium | Small |
-| **5** | **`uninstall.sh` / `uninstall.ps1`** — tear down launchd / Task / hook / symlink. Currently users with cold feet have to reverse-engineer the install steps. | Medium | Medium |
-| **6** | **README operations section** — "How to verify the archive is healthy" with `crs doctor` + manual SQL probes. Surfaces this whole doc as a runbook, not just a feature list. | Medium (transparency) | Small |
-| **7** | **Shell-rc detection in `install.sh`** — `$SHELL` env var isn't reliable across login styles; switch to inspecting which rc files exist + are non-empty, and add an explicit `source $RC` hint at the end. | Low | Small |
-| **8** | **Linux systemd-timer alternative** to cron (parity with launchd). Detect at install time, prefer systemd if `systemctl --user` works, fall back to cron. | Low | Medium |
-| **9** | **Windows path-with-spaces hardening** in `install.ps1` — explicit `"..."` quoting around `$Archive`, `$Bin`, `$BinDir`. Some users have `Documents and Settings`-era profile names that bite later. | Low | Small |
-| **10** | **Docker semantic variant healthcheck wait.** Currently the install kicks off backfill before the container's `:11434` is necessarily ready; add a poll loop with timeout. | Low | Small |
-
-### Suggested first batch (v1.8.0 candidate)
-
-Items **1, 2, 3, 6** together close the operational visibility gap that produced the 2026-05-04 silent-failure incident:
-
-- `crs doctor` (#1) — proactive catch.
-- `crs prune-vec` (#2) — root-cause cleanup tool.
-- Installer prereq checks (#3) — fail-early UX.
-- README ops section (#6) — make all the above discoverable.
-
-Estimated 1-2 hours total for someone with the codebase loaded. Other items can ship piecemeal in later patch releases.
+| 1 | **Encrypt-at-rest option** — `sqlite-cipher` or PG TDE. Make this opt-in via `install.sh --encrypted`; key in macOS Keychain / Windows DPAPI / Linux secret-service. | High (security) | Large |
+| 2 | **`uninstall.sh` / `uninstall.ps1`** — tear down launchd / Task / hook / symlink / pgsearchd plist. | Medium | Medium |
+| 3 | **`pg_dump` cron in installer** (PG mode) — daily backup to local file or S3, with rotation. | Medium | Small |
+| 4 | **`crs doctor`: duplicate hook detection** — scan `settings.json` for repeated hook commands. | Medium (UX) | Small |
+| 5 | **Tighten `ARCHIVE_TRIGGER` regex** in `auto-vsearch-on-prompt.sh` — strip generic interrogatives, keep only history-intent keywords. | Medium (cost) | Small |
+| 6 | **Windows preflight + auto-vsearch parity** — port v1.11 hard-deny rules and `.ps1` UserPromptSubmit hook. | Medium | Medium |
+| 7 | **Optional: `pgsearchd` deployment on VPS** + thin RPC client on Mac. Cuts vsearch e2e ~1.1 s → ~400 ms (saves WAN RTT). | Medium | Medium |
+| 8 | **Linux systemd-timer alternative** to cron (parity with launchd). | Low | Medium |
+| 9 | **Docker semantic variant healthcheck wait** — poll `:11434` before kicking off backfill. | Low | Small |
+| 10 | **Unfreeze `OLLAMA_VER`** in `install-semantic.sh` — fetch latest release tag at install time. | Low | Small |
 
 ## What's new
+
+### v1.13.3 — pg_vec HNSW plan fix (vsearch 9–13 s → 1.1 s)
+
+v1.13.2 added `role IN ('user','assistant')` as an inline `WHERE` filter on `msg`. The filter matches ~71 % of rows, so the planner judged Seq Scan + sort cheaper than HNSW + filter and dropped index use entirely. `EXPLAIN ANALYZE` confirmed Seq Scan over 98 k rows + top-N heapsort = 6.275 s server-side.
+
+Fix: `MATERIALIZED` HNSW-first CTE (same pattern as pg_fts in v1.13.1) — HNSW returns ~40 candidates, role-filter applies on the small set, then `DISTINCT ON (content) ORDER BY content, dist` for dedup. Also raises `hnsw.ef_search = max(over_fetch, 100)` so the index walk actually surfaces enough candidates (default 40 too small for over_fetch=100+). Server-side now 210 ms; end-to-end from Mac through TLS via pgsearchd daemon ~1.1 s (was 9–13 s).
+
+### v1.13.2 — pg_fts / pg_vec role filter + content dedup
+
+UserPromptSubmit auto-vsearch hook was wasting token slots on (a) `tool_use` / `tool_result` rows where role is not user/assistant, (b) duplicate content (same prompt or system event stored multiple times — user row + `queue-operation` row + `ai-title` row, all embedded identically).
+
+Fix at SQL layer (benefits manual `vsearch` / `csearch` CLI too):
+
+- **pg_vec**: `WHERE role IN ('user','assistant')` inside the HNSW pipeline + `ROW_NUMBER() OVER (PARTITION BY content)` dedup with over-fetch.
+- **pg_fts**: same role filter inside the existing `MATERIALIZED` hits CTE + `DISTINCT ON (content) ORDER BY content, ts DESC` dedup.
+
+vsearch top-8 now returns 8 distinct user prompts (previously 3-4 distinct due to TOOL_RESULT noise crowding out real hits). Note: v1.13.2 inadvertently killed HNSW index use; corrected in v1.13.3.
+
+### v1.13.1 — pg_fts MATERIALIZED CTE — force GIN scan
+
+`csearch` (pg_fts mode) was hitting 432 ms server-side because the planner picked a B-tree `msg_ts_idx` backward scan + per-row tsvector filter, ignoring the GIN index on `content_tsv`. Wrapping the filter+match in a `MATERIALIZED` CTE forces the planner to evaluate the GIN scan first, then sort the small hit set by `ts DESC`. Server-side dropped 432 ms → 6 ms (72×). End-to-end ~315 ms over WAN.
 
 ### v1.13.0 — PG backend behind Cargo feature flag + credential scrub + pgsearchd plist template
 
