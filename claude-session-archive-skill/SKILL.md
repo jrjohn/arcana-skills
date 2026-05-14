@@ -1,7 +1,7 @@
 ---
 name: claude-session-archive-skill
-description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into a local SQLite FTS5 database (~/claude-archive/sessions.db) every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. Two query modes: `csearch` (FTS5 lexical, exact phrase / boolean / prefix) and optionally `vsearch` (semantic via Ollama + sqlite-vec + bge-m3 — multilingual SOTA, concept queries, synonym / cross-language matching, strong Chinese). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec semantic stack, (d) tune SQLite performance, or (e) troubleshoot FTS5 syntax / ingest issues.
-version: 1.10.0
+description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into an archive DB every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. **Two interchangeable backends**: (1) sqlite + sqlite-vec at `~/claude-archive/sessions.db` (default, single-device, sub-ms local) — (2) PostgreSQL + pgvector on a remote VPS (cross-device via TLS, ~270ms via daemon, see references/pg-backend.md). Two query modes: `csearch` (FTS5 lexical, exact phrase / boolean / prefix) and `vsearch` (semantic via Ollama + bge-m3 — multilingual SOTA, concept queries, synonym / cross-language matching, strong Chinese). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec / pgvector semantic stack, (d) migrate from sqlite to PG backend, (e) tune SQLite performance, or (f) troubleshoot FTS5 syntax / ingest issues.
+version: 1.12.0
 allowed-tools:
   - Read
   - Write
@@ -47,6 +47,26 @@ msg(session_id, project, seq, ts, role, tool_name, content)  -- main table
 msg_fts                                                      -- FTS5 over content
 ingest_state(file_path, mtime, lines)                        -- incremental tracking
 ```
+
+## Backends — sqlite (default) vs PostgreSQL+pgvector
+
+The skill ships with **two interchangeable backends**. Same `csearch / vsearch / build` interface; different storage layer underneath.
+
+| | **sqlite + sqlite-vec** (default) | **PostgreSQL + pgvector** |
+|---|---|---|
+| Where | Local `~/claude-archive/sessions.db` | Remote PG container (e.g. cloud VPS) |
+| Latency | <10ms (lexical), ~150ms (vec, incl. local Ollama) | ~270ms via daemon, ~830ms direct |
+| Multi-device | ❌ single machine | ✅ query from any client over TLS |
+| Server cost | $0 | VPS / cloud box |
+| Setup time | 5 min (`scripts/install.sh`) | 1-2 hr (server + TLS + firewall) |
+| Trust boundary | Local-only | Extends to that server |
+| Best for | Single-laptop user, paranoid privacy, low latency | Multi-device, OK extending trust to server |
+
+The two are **mutually exclusive at the `crs` binary level** — you build one or the other. Switching is `git checkout` + `cargo build --release`.
+
+For PG mode: full setup steps, performance numbers, security trade-offs, and rollback in [`references/pg-backend.md`](references/pg-backend.md).
+
+The rest of this SKILL.md describes the sqlite default. Most commands (`csearch / vsearch / vsearch-since / pgsearch / build / embed-missing`) work identically against either backend — only the storage layer changes.
 
 ## Quick install — pick your OS
 
