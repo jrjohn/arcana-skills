@@ -1676,22 +1676,30 @@ struct PgRow {
 
 #[cfg(feature = "pg-backend")]
 fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
-    // MATERIALIZED CTE forces planner to use GIN index on content_tsv.
-    // Without it, PG sees `ORDER BY ts DESC LIMIT 10` and tries to walk
-    // msg_ts_idx backward + filter — scans thousands of rows before hitting
-    // a high-selectivity FTS match (observed: 432ms server, 16K rows filtered).
-    // With MATERIALIZED CTE, GIN runs first (selective), then sort+limit on
-    // the small result set (~10-50ms server-side).
+    // MATERIALIZED CTE forces planner to use GIN index on content_tsv (otherwise
+    // PG walks msg_ts_idx backward + filter, scanning thousands of rows; observed
+    // 432ms server, 16K filter rows). With CTE, GIN runs first → small result →
+    // sort/dedup (~6ms server-side).
+    //
+    // Plus two filters baked in:
+    //   role IN ('user','assistant')        — skip meta events
+    //   DISTINCT ON content (newest kept)   — dedup same-content rows
     let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
     let rows = client.query(
         "WITH hits AS MATERIALIZED (
              SELECT ts, project, session_id, role, tool_name, content
              FROM msg
              WHERE content_tsv @@ plainto_tsquery('simple', $1)
+               AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
+         ),
+         deduped AS (
+             SELECT DISTINCT ON (content)
+                    ts, project, session_id, role, tool_name, content
+             FROM hits ORDER BY content, ts DESC
          )
          SELECT ts, project, session_id, role, tool_name, content
-         FROM hits ORDER BY ts DESC LIMIT $3",
+         FROM deduped ORDER BY ts DESC LIMIT $3",
         &[&query, &proj_like, &(limit as i64)],
     )?;
     Ok(rows.iter().map(|r| PgRow {
@@ -1707,19 +1715,36 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
 
 #[cfg(feature = "pg-backend")]
 fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
+    // Two filters baked in:
+    //   role IN ('user','assistant')   — skip meta events (queue-operation,
+    //     last-prompt, agent-name, ai-title, subagent-stream-progress, etc.)
+    //     that have no real content and just dilute the top-N.
+    //   DEDUP by content (ROW_NUMBER PARTITION BY content) — same prompt is
+    //     often stored multiple times (user row + queue-operation row, etc.).
+    //     Over-fetch by 5× to compensate, then take rn=1 per content.
     let emb = embed_pg_query(http, query)?;
     let lit = vec_literal(&emb);
     let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
+    let over_fetch = ((limit * 5).max(20)) as i64;
     let sql = format!(
-        "SELECT ts, project, session_id, role, tool_name, content,
-                embedding <=> '{lit}'::vector AS dist
-         FROM msg
-         WHERE embedding IS NOT NULL
-           AND ($1::text IS NULL OR project LIKE $1)
-         ORDER BY embedding <=> '{lit}'::vector
-         LIMIT $2"
+        "SELECT ts, project, session_id, role, tool_name, content, dist
+         FROM (
+             SELECT ts, project, session_id, role, tool_name, content,
+                    embedding <=> '{lit}'::vector AS dist,
+                    ROW_NUMBER() OVER (PARTITION BY content
+                                       ORDER BY embedding <=> '{lit}'::vector) AS rn
+             FROM msg
+             WHERE embedding IS NOT NULL
+               AND role IN ('user', 'assistant')
+               AND ($1::text IS NULL OR project LIKE $1)
+             ORDER BY embedding <=> '{lit}'::vector
+             LIMIT $2
+         ) ranked
+         WHERE rn = 1
+         ORDER BY dist
+         LIMIT $3"
     );
-    let rows = client.query(&sql, &[&proj_like, &(limit as i64)])?;
+    let rows = client.query(&sql, &[&proj_like, &over_fetch, &(limit as i64)])?;
     Ok(rows.iter().map(|r| PgRow {
         ts: r.get(0),
         project: r.get(1),
