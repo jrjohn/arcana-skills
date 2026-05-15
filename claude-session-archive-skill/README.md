@@ -19,6 +19,8 @@ csearch ZyXEL                                 # cross-project keyword
 csearch '"auto-power-down"' network           # phrase, project-filtered
 csearch 'Sophos AND SEDService' network       # boolean
 csearch 'somnic*'                             # prefix
+csearch --full '"Domain Name Server"' network # full content (no 180-char cap), v1.16+
+csearch --with-id '"Ss25181598"'              # prefix hits with id=<rowid> sid=<8-char>, v1.16+
 ```
 
 ### `vsearch` — semantic (optional Step 2)
@@ -50,7 +52,7 @@ The installer registers a **`PreToolUse` hook** on `Bash` and `Read` that enforc
 
 | Action | Outcome |
 |---|---|
-| `sqlite3 ... sessions.db` with `LIKE` / `MATCH` / `msg_fts` / `GLOB` | ❌ **always denied** — use `csearch` (FTS5) instead. csearch returns ts + project + role + ~258 chars per hit, covers credential / history / context lookups. |
+| `sqlite3 ... sessions.db` with `LIKE` / `MATCH` / `msg_fts` / `GLOB` | ❌ **always denied** — use `csearch` (FTS5) instead. csearch returns ts + project + role + ~180 chars per hit by default; add `--full` for verbatim content and `--with-id` for level-2 drill-down to PG (v1.16+). |
 
 **Tier B — sentinel-gated (any `vsearch`/`csearch` in last 30 min unlocks):**
 
@@ -273,6 +275,27 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 | 10 | **Unfreeze `OLLAMA_VER`** in `install-semantic.sh` — fetch latest release tag at install time. | Low | Small |
 
 ## What's new
+
+### v1.16.0 — `csearch --full` + `--with-id` (level-2 drill-down)
+
+Default `csearch` truncates each hit to ~180 chars — fine for scanning, painful when the matched keyword is buried in a long `tool_result` or OCR'd screenshot. Two new flags on `crs csearch`:
+
+- **`--full`** — skip the snippet cap and print the entire `content` (newlines/tabs still flattened to spaces, so each hit is still single-line and pipeable). For OCR rows this is often >1 KB; for long tool_result rows it can be 10 KB+.
+- **`--with-id`** — prefix each hit with `id=<rowid> sid=<session_id[..8]>`. `id` is `msg.id` for normal rows or `image_ocr.id` for OCR rows — the role tag disambiguates. `sid` lets you find the original JSONL filename (if still within `cleanupPeriodDays`).
+
+Workflow:
+```bash
+csearch --with-id '"FortiGate API token"' network
+# 2026-05-15T07:54  [...network]  id=138495 sid=452a597e  user  [TOOL_RESULT] ...
+
+psql -h arcana.boo -U archive -d archive_main \
+  -c "SELECT content FROM msg WHERE id = 138495"
+# verbatim, no truncation, original newlines intact
+```
+
+Both flags are additive — `csearch --full --with-id` works. Default output unchanged. The pgsearchd daemon JSON protocol gained an `id` field, so **daemon restart is required after upgrade** (`launchctl kickstart -k gui/$(id -u)/com.jrjohn.pgsearchd`); existing clients without the field gracefully degrade to `id=-`. sqlite backend uses `msg.rowid`, no daemon involved.
+
+Motivation: Critical guidance #7 has said for two releases "extend the CLI rather than bypass the hook" but the most common drill-down case (one big tool_result, can't see past 180 chars) had no dedicated flag — users were nudged toward jq-on-raw-JSONL, which only works for sessions newer than `cleanupPeriodDays` (default 30). These flags close the gap without weakening the hook.
 
 ### v1.14.0 — Windows discipline layer at parity (preflight v1.13 rules + UserPromptSubmit)
 

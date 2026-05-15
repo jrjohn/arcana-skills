@@ -164,6 +164,44 @@ csearch --limit 50 'shaper AND quota' network    # boolean + larger result set
 csearch --limit 100 '"per-ip-70m"' network        # exact phrase
 ```
 
+### Level-2 drill-down → `csearch --full` / `--with-id` (v1.16+)
+
+Default `csearch` truncates each hit to ~180 chars (snippet) for compact listing. When the truncated snippet doesn't hold what you need — long tool_result with the keyword buried mid-row, full OCR text of a screenshot, complete error log — use the level-2 flags:
+
+```bash
+# Show full content (no 180-char cap; newlines/tabs still flattened to spaces)
+csearch --full --limit 3 '"Domain Name Server"' network
+
+# Show row id + session_id prefix, so you can SELECT-by-primary-key later
+csearch --with-id '"Ss25181598"'
+
+# Combo — full content + drill-down id
+csearch --full --with-id --limit 1 '"FortiGate API token"' network
+```
+
+Output shape with `--with-id`:
+```
+2026-05-15T07:54  [...network]  id=9 sid=c0530c3c  image_ocr  <body>
+```
+`id` is `msg.id` for normal rows or `image_ocr.id` for OCR rows; the role tag disambiguates which table. `sid` is the first 8 chars of `session_id`, enough to grep the original JSONL filename (`~/.claude/projects/<slug>/<sid>*.jsonl`) if it's still within `cleanupPeriodDays` (default 30).
+
+Once you have the id, fetch verbatim from PG (no truncation, includes original newlines):
+```bash
+psql -h arcana.boo -U archive -d archive_main \
+  -c "SELECT content FROM msg WHERE id = 138495"
+# Or for an image_ocr row:
+psql -h arcana.boo -U archive -d archive_main \
+  -c "SELECT content FROM image_ocr WHERE id = 9"
+```
+
+When to use which:
+- **default csearch** (snippet) — listing / scanning multiple hits to pick the relevant one
+- **`--full`** — you've already narrowed to 1-3 hits, need the full text inline (no extra psql round-trip)
+- **`--with-id`** — pivoting to other tooling: psql SELECT, joining `image_ocr.parent_seq` back to `msg`, building a citation
+- **`--full --with-id`** — exporting a single row in a self-contained form
+
+The flags work in both sqlite and PG backends. In sqlite mode `id` is `msg.rowid`; in PG mode it's the `BIGSERIAL id` column.
+
 The hook still allows **metadata-only** sqlite3 (COUNT / PRAGMA / .schema / sqlite_master / msg_vec maintenance) when the sentinel is valid — e.g. checking embed backfill progress:
 
 ```bash
@@ -281,7 +319,7 @@ csearch 'local-in-deny-broadcast' network      # ✗ error: "no such column: in"
 
 **6. Memory file is a stale index, not source of truth (since v1.9.0 — enforced by hook).** `~/.claude/projects/*/memory/*.md` is hand-curated — only what someone bothered to write down. For roster / device / credential / history queries, the canonical source is the archive (full transcripts). The `archive-preflight.sh` hook denies `grep`/`Read` on memory files until `vsearch`/`csearch` runs once in the session, preventing the antipattern of grepping memory and silently missing data that's actually in the archive. `MEMORY.md` itself is exempted (it's auto-loaded by the system anyway). Once the sentinel is set, memory access is unblocked for the rest of the session — useful for "I just discussed this in this session" lookups.
 
-**7. csearch is the only content-search interface (since v1.11.0 — enforced by hook).** Raw `sqlite3 ... sessions.db` with `LIKE`, `MATCH`, `msg_fts`, or `GLOB` is hard-blocked by the preflight hook regardless of sentinel state. Use `csearch '<fts5-query>' [project] [--limit N]` instead — it's faster (FTS5 vs LIKE), supports phrase/boolean syntax, returns ~258 chars per hit covering credential / history / context lookups. Metadata queries (COUNT / PRAGMA / .schema / msg_vec) still allowed for backfill checks. If csearch's defaults don't cover your case, extend `scripts/crs/src/main.rs` (add `--full`, `--rowid`, time-range filter, etc.) — don't bypass the hook.
+**7. csearch is the only content-search interface (since v1.11.0 — enforced by hook).** Raw `sqlite3 ... sessions.db` with `LIKE`, `MATCH`, `msg_fts`, or `GLOB` is hard-blocked by the preflight hook regardless of sentinel state. Use `csearch '<fts5-query>' [project] [--limit N]` instead — it's faster (FTS5 vs LIKE), supports phrase/boolean syntax, returns ~180 chars/hit by default and supports `--full` for verbatim content + `--with-id` for level-2 drill-down (since v1.16.0). Metadata queries (COUNT / PRAGMA / .schema / msg_vec) still allowed for backfill checks. If csearch's defaults still don't cover your case (time-range filter, JSON output, etc.), extend `scripts/crs/src/main.rs` — don't bypass the hook.
 
 **8. Sentinel has a 30-minute TTL (since v1.11.0).** The preflight sentinel expires 30 min after creation; refreshed on every vsearch/csearch. Motivation: post-compact, the model loses procedural memory of having run vsearch but `session_id` (and thus the sentinel file) persists. Without TTL, an idle gap or compact would leave the sentinel valid forever, allowing the model to skip vsearch in violation of the rule's intent. `auto-vsearch-on-prompt.sh` refreshes the sentinel on every prompt that matches archive-intent keywords, so active conversations rarely hit the TTL.
 
@@ -395,7 +433,7 @@ claude-session-archive-skill/
 
 ## Author / version
 
-- 2026-05-14 v1.14.0 **Windows discipline-layer parity (preflight v1.13 rules + UserPromptSubmit hook).** Closes the longest-standing Windows gap. `archive-preflight.ps1` lifted from v1.9.0 era (4 rules, no TTL) to full v1.13 behavior: hard-deny `sqlite3 SEARCH` (LIKE / MATCH / msg_fts / GLOB) regardless of sentinel, 30-min sentinel TTL via `LastWriteTime` vs `[DateTime]::Now`, SSH log-investigation rule (`ssh ... grep|tail|cat ... /var/log/*`), local log grep rule, `git log --grep / -S` rule. New `auto-vsearch-on-prompt.ps1` UserPromptSubmit hook — pattern-matches identity/history/status/question keywords (`.NN`, `工號`, `是誰`, `上次`, `修了嗎`, `為什麼`, etc.), runs `crs.exe vsearch` cross-project, injects top 8 hits as `additionalContext`, pre-sets the preflight sentinel. Archive-only (no luminous bundling — separate concerns ship separate hooks). `install.ps1` step 7c registers the new UserPromptSubmit hook idempotently with the same hash-based "preserve user customization" guard as bash installer. PG-backend daemon (`pgsearchd`) remains unix-socket-only — Windows PG users pay ~700ms TLS handshake per query (pure OS limitation). **Untested on Windows by the author** (no Windows daily-driver); verify by re-running `install.ps1` + exercising each rule manually. Cross-platform parity score 7→8.
+- 2026-05-15 v1.16.0 **csearch level-2 drill-down — `--full` + `--with-id`.** Adds two flags to `crs csearch` for cases where the default ~180-char snippet doesn't hold what you need: `--full` skips snippet truncation (newlines/tabs still flattened to spaces for single-line output), `--with-id` prefixes each hit with `id=<rowid> sid=<session_id[..8]>` so the caller can pivot to `SELECT content FROM msg WHERE id = N` (or `image_ocr WHERE id = N`) without grep round-trips. Motivation: long tool_result rows / OCR'd screenshots / error-log captures often have the matched keyword buried mid-row past the snippet cap — previously the only fix was extending the CLI (per Critical guidance #7) or going via JSONL, which only works for files within `cleanupPeriodDays` (default 30). Implementation touches both backends: sqlite SELECT now pulls `m.rowid, m.session_id` and does truncation in Rust (was `substr(...,1,180)` in SQL); PG `PgRow` struct gains `id: Option<i64>` field, `pg_fts` / `pg_vec` CTEs propagate id from `msg` and `image_ocr` tables (NULL-safe for image_ocr rows where id refers to the OCR table, not msg), `rows_to_json` / `rows_from_json` round-trip the new field through the pgsearchd daemon JSON protocol — so daemon restart is required after upgrade (`launchctl kickstart -k gui/$(id -u)/com.jrjohn.pgsearchd`). `cmd_csearch` PG branch keeps `fmt_pg_row` unchanged for the default path, falls into an inline format block only when `--full` or `--with-id` is set. `fmt_pg_row` itself untouched — vsearch / pgsearch CLI surfaces unaffected. No CLAUDE.md / preflight hook changes; csearch remains the only sanctioned content-search interface. Closes the longest-standing Windows gap. `archive-preflight.ps1` lifted from v1.9.0 era (4 rules, no TTL) to full v1.13 behavior: hard-deny `sqlite3 SEARCH` (LIKE / MATCH / msg_fts / GLOB) regardless of sentinel, 30-min sentinel TTL via `LastWriteTime` vs `[DateTime]::Now`, SSH log-investigation rule (`ssh ... grep|tail|cat ... /var/log/*`), local log grep rule, `git log --grep / -S` rule. New `auto-vsearch-on-prompt.ps1` UserPromptSubmit hook — pattern-matches identity/history/status/question keywords (`.NN`, `工號`, `是誰`, `上次`, `修了嗎`, `為什麼`, etc.), runs `crs.exe vsearch` cross-project, injects top 8 hits as `additionalContext`, pre-sets the preflight sentinel. Archive-only (no luminous bundling — separate concerns ship separate hooks). `install.ps1` step 7c registers the new UserPromptSubmit hook idempotently with the same hash-based "preserve user customization" guard as bash installer. PG-backend daemon (`pgsearchd`) remains unix-socket-only — Windows PG users pay ~700ms TLS handshake per query (pure OS limitation). **Untested on Windows by the author** (no Windows daily-driver); verify by re-running `install.ps1` + exercising each rule manually. Cross-platform parity score 7→8.
 
 - 2026-05-14 v1.13.3 **pg_vec HNSW plan fix (vsearch 9–13s → 1.1s).** v1.13.2's `role IN ('user','assistant')` inline `WHERE` matched ~71% of rows; planner dropped HNSW use, went Seq Scan + sort over 98k rows = 6.275s server-side. Fix: `MATERIALIZED` HNSW-first CTE — HNSW returns ~40 candidates, role-filter on small set, then `DISTINCT ON (content) ORDER BY content, dist` for dedup. Also raises `hnsw.ef_search = max(over_fetch, 100)` so the index walk actually surfaces enough candidates. Server-side 210ms; e2e ~1.1s (was 9–13s).
 
