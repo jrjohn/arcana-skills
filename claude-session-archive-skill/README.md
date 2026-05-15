@@ -137,6 +137,33 @@ Adds concept / cross-language / synonym matching on top of `csearch`. Downloads 
 
 After install, `crs vsearch` (or `vsearch.ps1` on Windows) works against the populated `msg_vec` table. See `references/semantic-search.md` for trade-offs.
 
+## Image OCR — searchable screenshots (since v1.15, PG-backend)
+
+Pre-v1.15, image content blocks pasted into Claude Code were stored as 4 KB-truncated opaque JSON in `msg.content` — so verbatim text visible only in a screenshot was lost to `csearch` / `vsearch`. After v1.15 the ingest replaces image blocks with `[IMG:<sha256>]` sentinels, and an OCR pass writes recognized text into two new tables:
+
+- `image_ocr_cache(sha256 PK, ocr_text, engine, ...)` — global, SHA256-keyed, **dedup across machines**
+- `image_ocr(session_id, parent_seq, image_index, sha256, content tsv + vector)` — per-message OCR rows, joined into `csearch` / `vsearch` via `UNION ALL`
+
+OCR engine is OS-native + free per platform:
+
+| OS | Engine | Multi-language? |
+|---|---|---|
+| macOS | `VNRecognizeTextRequest` (Apple Vision) | zh-Hant + en, auto |
+| Windows | `Windows.Media.Ocr` (built into Win10+) | system display languages |
+| Linux | `tesseract chi_tra+eng` | `apt install tesseract-ocr-chi-tra` |
+
+`install.sh` / `install.ps1` (with `--with-pg` on macOS/Linux) build the OCR helper, apply `sql/image_ocr.sql` schema migration via `psql`, and the existing 15-min `crs build` cron picks up OCR work automatically at its tail (calls `cmd_ocr_missing` after `cmd_embed_missing`). Cross-machine dedup means the same screenshot pasted on Mac + Windows is OCR'd once, then reused.
+
+Both `vsearch` and `csearch` include `image_ocr` results by default, tagged `role=image_ocr` in output. `vsearch` applies a mild rank de-emphasis (cosine distance × 1.10) so UI-screenshot noise like `Submit / Cancel` doesn't crowd out narrative msg rows, while still letting data-heavy screenshots surface when their raw similarity is competitive. Opt out per-query with `--no-img`:
+
+```bash
+csearch '"PRXWN"' network          # finds Dell part numbers visible ONLY in screenshots
+vsearch '部門名單' network --no-img # skip image_ocr — only real conversations
+crs ocr-missing                    # one-shot OCR pass (also runs at tail of crs build)
+```
+
+Image bytes are also persisted content-addressed at `~/claude-archive/images/<sha[..2]>/<sha>.<ext>` (naturally deduplicated) for re-OCR / audit. See `SKILL.md` for the v1.15 section with verification commands.
+
 ## Operations — verify it's healthy
 
 After install (or whenever vsearch / auto_recent feels stale), run:

@@ -86,6 +86,42 @@ Copy-Item -Force (Join-Path $SkillDir 'scripts\sqliterc.template') (Join-Path $e
 Copy-Item -Force (Join-Path $SkillDir 'scripts\gen-recent-context.ps1') (Join-Path $Archive 'gen-recent-context.ps1')
 Write-Host "    crs.exe + csearch.ps1 + vsearch.ps1 + .sqliterc + gen-recent-context.ps1 installed"
 
+# 4b. (v1.15+) Install Windows OCR helper (Windows.Media.Ocr via PowerShell)
+#     Built into Windows 10+ — no install, no engine to ship. The PS1 helper
+#     uses WinRT projection to invoke OcrEngine on the image file.
+Write-Host "==> Installing Windows OCR helper (Windows.Media.Ocr)"
+$OcrBinDir = Join-Path $Archive 'bin'
+$ImagesDir = Join-Path $Archive 'images'
+New-Item -ItemType Directory -Force -Path $OcrBinDir, $ImagesDir | Out-Null
+Copy-Item -Force (Join-Path $SkillDir 'scripts\ocr-win.ps1') (Join-Path $OcrBinDir 'ocr-win.ps1')
+Write-Host "    OCR helper: $OcrBinDir\ocr-win.ps1"
+
+# Verify pwsh 7+ is available — Windows.Media.Ocr WinRT projection needs it
+$pwshPath = (Get-Command pwsh -ErrorAction SilentlyContinue)?.Source
+if (-not $pwshPath) {
+    Write-Host "    !! pwsh (PowerShell 7+) missing — install: winget install --id Microsoft.PowerShell" -ForegroundColor Yellow
+    Write-Host "       OCR helper won't work under Windows PowerShell 5.x (built-in)"
+} else {
+    Write-Host "    pwsh: $pwshPath"
+}
+
+# 4c. (PG-backend) Apply image_ocr schema migration via psql, if reachable
+$psql = (Get-Command psql -ErrorAction SilentlyContinue)?.Source
+if ($psql -and $env:CRS_PG_PASSWORD) {
+    $pgHost = if ($env:CRS_PG_HOST) { $env:CRS_PG_HOST } else { 'localhost' }
+    $pgPort = if ($env:CRS_PG_PORT) { $env:CRS_PG_PORT } else { '5432' }
+    $pgUser = if ($env:CRS_PG_USER) { $env:CRS_PG_USER } else { 'archive' }
+    $pgDb   = if ($env:CRS_PG_DB)   { $env:CRS_PG_DB   } else { 'archive_main' }
+    $sqlFile = Join-Path $SkillDir 'sql\image_ocr.sql'
+    Write-Host "==> applying image_ocr schema to PG (idempotent)"
+    $env:PGPASSWORD = $env:CRS_PG_PASSWORD
+    & $psql -h $pgHost -p $pgPort -U $pgUser -d $pgDb -v ON_ERROR_STOP=1 -f $sqlFile | Out-Null
+    Write-Host "    image_ocr_cache + image_ocr tables ready on $pgHost/$pgDb"
+} else {
+    Write-Host "    !! psql or CRS_PG_PASSWORD missing — apply image_ocr schema manually:" -ForegroundColor Yellow
+    Write-Host "       psql ... -f $SkillDir\sql\image_ocr.sql"
+}
+
 # 5. Add %USERPROFILE%\bin to user PATH if missing
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 if ($userPath -notlike "*$BinDir*") {

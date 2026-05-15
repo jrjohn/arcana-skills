@@ -1,7 +1,7 @@
 ---
 name: claude-session-archive-skill
 description: Cross-platform (macOS / Linux / Windows) cross-session full-text + semantic history of every Claude Code conversation. Ingests all ~/.claude/projects/*/*.jsonl into an archive DB every 15 minutes (launchd on macOS, Task Scheduler on Windows, cron / systemd on Linux), so any new session can recall verbatim what you did before — across all projects, all sessions, all tool_use inputs and tool_result outputs. **Two interchangeable backends, same source, Cargo feature flag**: (1) DEFAULT `cargo build --release` → sqlite + sqlite-vec at `~/claude-archive/sessions.db` (single-device, sub-10ms local). (2) `cargo build --release --features pg-backend` (or `install.sh --with-pg`) → PostgreSQL 17 + pgvector on a remote VPS, accessed via local `pgsearchd` daemon over a unix-socket r2d2 connection pool (cross-device, ~280-400ms warm via daemon, ~1s direct without). See references/pg-backend.md. Two query modes: `csearch` (FTS5 lexical / PG GIN, exact phrase / boolean / prefix) and `vsearch` (semantic via Ollama + bge-m3 — multilingual SOTA, concept queries, synonym / cross-language matching, strong Chinese). Activates when user wants to (a) install the archive on a new machine (macOS/Linux/Windows), (b) query past sessions ("上週/昨天/之前做了什麼", "csearch ...", "vsearch ...", "查歷史對話 / past conversations / semantic search"), (c) install or troubleshoot Ollama / sqlite-vec / pgvector / pgsearchd daemon stack, (d) migrate from sqlite to PG backend (rebuild with --features pg-backend), (e) tune SQLite performance, or (f) troubleshoot FTS5 syntax / ingest issues.
-version: 1.14.0
+version: 1.15.0
 allowed-tools:
   - Read
   - Write
@@ -171,6 +171,45 @@ sqlite3 ~/claude-archive/sessions.db "SELECT (SELECT COUNT(*) FROM msg) AS msg, 
 ```
 
 Need more chars per hit, time-range filtering, or other features csearch doesn't yet support? Extend the csearch CLI in `scripts/crs/src/main.rs`, don't bypass the hook.
+
+## Image OCR — make screenshots searchable (v1.15+, PG-backend)
+
+Previously, a pasted screenshot's verbatim text was *not* searchable: image content blocks were stored as 4 KB-truncated opaque JSON in `msg.content`. After v1.15 the ingest emits `[IMG:<sha256>]` sentinels, and `crs build` runs an OCR pass that writes results into two new tables:
+
+```sql
+image_ocr_cache(sha256 PK, ocr_text, engine, ...)      -- cross-machine dedup, SHA256-keyed
+image_ocr(session_id, parent_seq, image_index,         -- per-message rows, searchable
+          sha256, content TEXT, content_tsv tsvector, embedding vector(1024), ...)
+```
+
+**Pipeline per platform** (built into the OS, free):
+
+| OS | Engine | Helper |
+|---|---|---|
+| macOS | `VNRecognizeTextRequest` (Apple Vision) | `~/claude-archive/bin/ocr-mac` (Swift, ~40 LOC) |
+| Windows | `Windows.Media.Ocr` (Win10+) | `~/claude-archive/bin/ocr-win.ps1` (PowerShell + WinRT) |
+| Linux | `tesseract chi_tra+eng` | `~/claude-archive/bin/ocr-linux.sh` |
+
+**Cross-machine dedup**: SHA256 is global. The first machine to OCR a given image populates `image_ocr_cache`; every other machine (or a rebuild of the same machine) reuses the cached text and skips the OCR call. Image bytes also saved content-addressed at `~/claude-archive/images/<sha[..2]>/<sha>.<ext>` for re-OCR / audit.
+
+**Search integration**: both `vsearch` and `csearch` UNION ALL `image_ocr` rows by default (`role=image_ocr` in output). `vsearch` applies a ~0.91× rank de-emphasis (cosine distance × 1.10) so UI-screenshot noise like "Submit / Cancel" doesn't crowd out real conversation, while data-heavy screenshots (logs, tables) can still appear in top-N when their raw distance is competitive. (Originally 1.25; tuned to 1.10 after observing log-only screenshots got buried beyond rank 300.) Opt out per-query with `--no-img`:
+
+```bash
+csearch '"PRXWN"' network           # includes image_ocr hits (default)
+vsearch '部門名單' network --no-img  # exclude image_ocr — only real messages
+crs ocr-missing                     # standalone OCR pass (also runs at tail of crs build)
+```
+
+**Schema**: applied automatically by `install.sh --with-pg` / `install.ps1` via `sql/image_ocr.sql` (idempotent `CREATE TABLE IF NOT EXISTS`).
+
+**Verification**:
+```bash
+# After installing v1.15 and waiting for one 15-min ingest cycle:
+csearch '[IMG:' network                  # parents with images
+SELECT count(*) FROM image_ocr_cache;    # > 0 once any image was OCR'd
+SELECT count(*) FROM image_ocr;          # > 0 per-message OCR rows
+csearch '"<unique-string-only-visible-in-screenshot>"'  # role=image_ocr hit
+```
 
 ## Auto-context for Memory (`gen-recent-context.sh` + SessionStart hook)
 

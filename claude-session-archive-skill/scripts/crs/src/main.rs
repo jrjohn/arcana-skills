@@ -16,11 +16,13 @@
 //   pgsearchd     Run pgsearch daemon (persistent r2d2 connection pool over unix socket)
 
 use anyhow::{Context, Result, anyhow, bail};
+use base64::Engine as _;
 use chrono::{Local, Utc};
 use clap::{Parser, Subcommand};
 use rusqlite::{Connection, OpenFlags, params};
 use serde::Deserialize;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
@@ -62,6 +64,9 @@ enum Cmd {
         project: Option<String>,
         #[arg(long, default_value = "20")]
         limit: usize,
+        /// Exclude image_ocr rows from results (default: include with rank de-emphasis)
+        #[arg(long = "no-img")]
+        no_img: bool,
     },
     /// Semantic KNN search
     Vsearch {
@@ -69,6 +74,9 @@ enum Cmd {
         project: Option<String>,
         #[arg(long, default_value = "10")]
         limit: usize,
+        /// Exclude image_ocr rows from results (default: include with rank de-emphasis)
+        #[arg(long = "no-img")]
+        no_img: bool,
     },
     /// Time-bounded semantic search (used by gen-recent)
     VsearchSince {
@@ -105,6 +113,15 @@ enum Cmd {
     },
     /// Embed one string and print first 5 dims (debug helper)
     EmbedText { text: String },
+    /// OCR image content blocks referenced by [IMG:<sha>] sentinels in msg.content,
+    /// inserting results into image_ocr_cache + image_ocr. Mirrors embed-missing.
+    #[cfg(feature = "pg-backend")]
+    OcrMissing {
+        #[arg(long, default_value = "2")]
+        workers: usize,
+        #[arg(long, default_value = "0")]
+        limit: usize,
+    },
     /// Health check — verify install state, schedule, hooks, model, DB consistency
     Doctor,
     /// Prune stale rowids from msg_vec (rowid present in msg_vec but not in msg)
@@ -134,6 +151,9 @@ enum Cmd {
         /// Skip daemon, force direct TLS connection
         #[arg(long)]
         no_daemon: bool,
+        /// Exclude image_ocr rows from results (default: include with rank de-emphasis)
+        #[arg(long = "no-img")]
+        no_img: bool,
     },
     /// Run pgsearch daemon (r2d2 connection pool over unix socket). (pg-backend + unix)
     #[cfg(all(feature = "pg-backend", unix))]
@@ -241,7 +261,7 @@ fn vec_to_blob(v: &[f32]) -> Vec<u8> {
 // ─────────────────────────── csearch ───────────────────────────
 
 #[cfg(not(feature = "pg-backend"))]
-fn cmd_csearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
+fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, _no_img: bool) -> Result<()> {
     let conn = open_db_readonly()?;
     let sql = match project {
         Some(_) => {
@@ -296,8 +316,8 @@ fn cmd_csearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
 }
 
 #[cfg(feature = "pg-backend")]
-fn cmd_csearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
-    let (rows, _conn_ms, _q_ms, _src) = pg_search_dispatch("fts", query, project, limit, false)?;
+fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, no_img: bool) -> Result<()> {
+    let (rows, _conn_ms, _q_ms, _src) = pg_search_dispatch("fts", query, project, limit, false, !no_img)?;
     if rows.is_empty() { eprintln!("(no results)"); return Ok(()); }
     for r in &rows { println!("{}", fmt_pg_row(r, 180)); }
     Ok(())
@@ -306,7 +326,7 @@ fn cmd_csearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
 // ─────────────────────────── vsearch ───────────────────────────
 
 #[cfg(not(feature = "pg-backend"))]
-fn cmd_vsearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
+fn cmd_vsearch(query: &str, project: Option<&str>, limit: usize, _no_img: bool) -> Result<()> {
     let conn = open_db_with_vec()?;
     let client = http_client()?;
     let qemb = embed_text(&client, query)?;
@@ -347,8 +367,8 @@ fn cmd_vsearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
 }
 
 #[cfg(feature = "pg-backend")]
-fn cmd_vsearch(query: &str, project: Option<&str>, limit: usize) -> Result<()> {
-    let (rows, _conn_ms, _q_ms, _src) = pg_search_dispatch("vec", query, project, limit, false)?;
+fn cmd_vsearch(query: &str, project: Option<&str>, limit: usize, no_img: bool) -> Result<()> {
+    let (rows, _conn_ms, _q_ms, _src) = pg_search_dispatch("vec", query, project, limit, false, !no_img)?;
     for r in &rows { println!("{}", fmt_pg_row(r, 200)); }
     Ok(())
 }
@@ -720,6 +740,30 @@ fn truncate_chars(s: &str, max: usize) -> String {
     s.chars().take(max).collect()
 }
 
+/// Compute the `[IMG:<sha256-hex>]` sentinel for a Claude image content block.
+/// Returns None if the block isn't a parseable inline-base64 image.
+/// URL-sourced images (`source.type == "url"`) get an `[IMG_URL:<url>]` sentinel
+/// instead, since there's no bytes to OCR locally.
+fn image_block_sentinel(obj: &serde_json::Map<String, Value>) -> Option<String> {
+    let source = obj.get("source")?.as_object()?;
+    let src_type = source.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    match src_type {
+        "base64" => {
+            let data = source.get("data").and_then(|v| v.as_str())?;
+            let bytes = base64::engine::general_purpose::STANDARD.decode(data).ok()?;
+            let mut hasher = Sha256::new();
+            hasher.update(&bytes);
+            let hex = hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>();
+            Some(format!("[IMG:{}]", hex))
+        }
+        "url" => {
+            let url = source.get("url").and_then(|v| v.as_str())?;
+            Some(format!("[IMG_URL:{}]", url))
+        }
+        _ => None,
+    }
+}
+
 /// Flatten a Claude Code JSONL record into (role, tool_name, text).
 /// Mirrors the Python `flatten_content` precisely, including the quirk where
 /// "[TOOL_RESULT] " is inserted at the very front of the parts list.
@@ -785,6 +829,20 @@ fn flatten_content(rec: &Value) -> (String, Option<String>, String) {
                         "thinking" => {
                             let t = obj.get("thinking").and_then(|v| v.as_str()).unwrap_or("");
                             parts.push(format!("[THINKING] {}", t));
+                        }
+                        "image" => {
+                            // Replace heavy base64 with a short sentinel keyed by SHA256
+                            // of the decoded image bytes. Enables image_ocr lookup later
+                            // without bloating msg.content. Out-of-band base64 stays in
+                            // JSONL on disk; cmd_ocr_missing re-reads it on demand.
+                            if let Some(sentinel) = image_block_sentinel(obj) {
+                                parts.push(sentinel);
+                            } else {
+                                // Unparseable image block — fall back to JSON dump,
+                                // truncated so a giant base64 string doesn't blow up content.
+                                let s = serde_json::to_string(block).unwrap_or_default();
+                                parts.push(truncate_chars(&s, 4000));
+                            }
                         }
                         _ => {
                             let s = serde_json::to_string(block).unwrap_or_default();
@@ -1030,9 +1088,65 @@ fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize) -> Result<()> {
         }
     }
 
+    // OCR pass — soft-fail (OCR helpers may be missing on a fresh install).
+    // Run after embed-missing so newly-OCR'd image_ocr rows get embedded on
+    // the next cycle.
+    if let Err(e) = cmd_ocr_missing(workers.max(2), 0) {
+        eprintln!("(ocr warning: {})", e);
+    }
+    // Embed any image_ocr rows we just created.
+    if !no_embed && ollama_up() {
+        if let Err(e) = embed_image_ocr_missing(workers) {
+            eprintln!("(image_ocr embed warning: {})", e);
+        }
+    }
+
     if !no_refresh {
         refresh_all_recent_contexts();
     }
+    Ok(())
+}
+
+/// Backfill embeddings on image_ocr rows whose embedding is still NULL.
+/// Reuses the same Ollama bge-m3 model as msg embeddings.
+#[cfg(feature = "pg-backend")]
+fn embed_image_ocr_missing(workers: usize) -> Result<()> {
+    let mut pg = pg_connect()?;
+    let pending: i64 = pg.query_one(
+        "SELECT COUNT(*) FROM image_ocr WHERE embedding IS NULL AND length(content) >= 3",
+        &[],
+    )?.get(0);
+    if pending <= 0 { return Ok(()); }
+    let rows = pg.query(
+        "SELECT id, content FROM image_ocr
+         WHERE embedding IS NULL AND length(content) >= 3
+         ORDER BY id DESC",
+        &[],
+    )?;
+    let jobs: Vec<(i64, String)> = rows.iter().map(|r| (r.get(0), r.get(1))).collect();
+    drop(pg);
+
+    println!("image_ocr embed: {} jobs over {} workers", jobs.len(), workers);
+    use rayon::prelude::*;
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
+    let pg_mu = Mutex::new(pg_connect()?);
+    pool.install(|| {
+        jobs.par_iter().for_each(|(id, content)| {
+            let client = match http_client() { Ok(c) => c, Err(_) => return };
+            let snippet: String = content.chars().take(8000).collect();
+            match embed_text(&client, &snippet) {
+                Ok(v) => {
+                    let lit = vec_literal(&v);
+                    let sql = format!("UPDATE image_ocr SET embedding = '{lit}'::vector WHERE id = $1");
+                    let mut p = pg_mu.lock().unwrap();
+                    if let Err(e) = p.execute(&sql, &[id]) {
+                        eprintln!("image_ocr update id={} err={}", id, e);
+                    }
+                }
+                Err(e) => eprintln!("image_ocr embed id={} err={}", id, e),
+            }
+        });
+    });
     Ok(())
 }
 
@@ -1248,6 +1362,375 @@ fn cmd_embed_text(text: &str) -> Result<()> {
     let client = http_client()?;
     let v = embed_text(&client, text)?;
     println!("dim={} first5={:?}", v.len(), &v[..5.min(v.len())]);
+    Ok(())
+}
+
+// ─────────────────────────── ocr-missing (PG-backend) ───────────────────────────
+
+/// Dispatch to the platform OCR helper CLI and return recognized text.
+///
+/// Looks for binaries under `~/claude-archive/bin/`:
+///   macOS   → ocr-mac        (Swift / Vision)
+///   Windows → ocr-win.ps1    (pwsh + Windows.Media.Ocr)
+///   Linux   → ocr-linux.sh   (tesseract chi_tra+eng)
+#[cfg(feature = "pg-backend")]
+fn run_ocr_cli(image_path: &Path) -> Result<String> {
+    let bin_dir = home().join("claude-archive/bin");
+
+    #[cfg(target_os = "macos")]
+    let (cmd, args): (PathBuf, Vec<std::ffi::OsString>) = (
+        bin_dir.join("ocr-mac"),
+        vec![image_path.as_os_str().to_os_string()],
+    );
+
+    #[cfg(target_os = "windows")]
+    let (cmd, args): (PathBuf, Vec<std::ffi::OsString>) = (
+        PathBuf::from("pwsh"),
+        vec![
+            std::ffi::OsString::from("-NoLogo"),
+            std::ffi::OsString::from("-NoProfile"),
+            std::ffi::OsString::from("-File"),
+            bin_dir.join("ocr-win.ps1").as_os_str().to_os_string(),
+            std::ffi::OsString::from("-Path"),
+            image_path.as_os_str().to_os_string(),
+        ],
+    );
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let (cmd, args): (PathBuf, Vec<std::ffi::OsString>) = (
+        bin_dir.join("ocr-linux.sh"),
+        vec![image_path.as_os_str().to_os_string()],
+    );
+
+    let out = std::process::Command::new(&cmd).args(&args).output()
+        .with_context(|| format!("running OCR CLI {}", cmd.display()))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        bail!("OCR CLI exit {}: {}", out.status, stderr.trim());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+/// Extension from media_type, defaulting to ".bin" for unknown types.
+#[cfg(feature = "pg-backend")]
+fn ext_for_media_type(mt: &str) -> &'static str {
+    match mt {
+        "image/png"  => "png",
+        "image/jpeg" => "jpg",
+        "image/gif"  => "gif",
+        "image/webp" => "webp",
+        "image/bmp"  => "bmp",
+        "image/tiff" => "tiff",
+        _ => "bin",
+    }
+}
+
+/// Extract base64 image blocks from a single JSONL line, returning a Vec of
+/// (sha256_hex, media_type, raw_bytes) preserving the order they appear.
+#[cfg(feature = "pg-backend")]
+fn extract_image_blocks(line: &str) -> Vec<(String, String, Vec<u8>)> {
+    let rec: Value = match serde_json::from_str(line) { Ok(v) => v, Err(_) => return Vec::new() };
+    let content = match rec.get("content").or_else(|| rec.get("message").and_then(|m| m.get("content"))) {
+        Some(c) => c,
+        None => return Vec::new(),
+    };
+    let arr = match content.as_array() { Some(a) => a, None => return Vec::new() };
+
+    let mut out = Vec::new();
+    for block in arr {
+        let obj = match block.as_object() { Some(o) => o, None => continue };
+        if obj.get("type").and_then(|v| v.as_str()) != Some("image") { continue; }
+        let source = match obj.get("source").and_then(|v| v.as_object()) { Some(s) => s, None => continue };
+        if source.get("type").and_then(|v| v.as_str()) != Some("base64") { continue; }
+        let data = match source.get("data").and_then(|v| v.as_str()) { Some(d) => d, None => continue };
+        let media_type = source.get("media_type").and_then(|v| v.as_str()).unwrap_or("image/png").to_string();
+        let bytes = match base64::engine::general_purpose::STANDARD.decode(data) { Ok(b) => b, Err(_) => continue };
+        let mut h = Sha256::new();
+        h.update(&bytes);
+        let hex = h.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>();
+        out.push((hex, media_type, bytes));
+    }
+    out
+}
+
+/// Save image bytes to the content-addressed store at
+/// ~/claude-archive/images/<sha[..2]>/<sha>.<ext>, returning the path.
+/// Idempotent: skips write if file already present with matching length.
+#[cfg(feature = "pg-backend")]
+fn save_image_bytes(sha: &str, media_type: &str, bytes: &[u8]) -> Result<PathBuf> {
+    let bucket = &sha[..2];
+    let dir = home().join("claude-archive/images").join(bucket);
+    fs::create_dir_all(&dir)?;
+    let path = dir.join(format!("{}.{}", sha, ext_for_media_type(media_type)));
+    if let Ok(meta) = fs::metadata(&path) {
+        if meta.len() as usize == bytes.len() { return Ok(path); }
+    }
+    fs::write(&path, bytes)?;
+    Ok(path)
+}
+
+/// Find the JSONL path for a (project, session_id) pair.
+/// Project slug is the directory name under ~/.claude/projects/.
+#[cfg(feature = "pg-backend")]
+fn jsonl_path_for(project: &str, session_id: &str) -> PathBuf {
+    home().join(".claude/projects").join(project).join(format!("{}.jsonl", session_id))
+}
+
+#[cfg(feature = "pg-backend")]
+fn ocr_engine_name() -> &'static str {
+    if cfg!(target_os = "macos") { "apple-vision" }
+    else if cfg!(target_os = "windows") { "windows-media-ocr" }
+    else { "tesseract" }
+}
+
+#[cfg(feature = "pg-backend")]
+fn cmd_ocr_missing(workers: usize, limit: usize) -> Result<()> {
+    use std::collections::HashMap;
+
+    let mut pg = pg_connect()?;
+
+    // Quick stats
+    let cache_total: i64 = pg.query_one("SELECT COUNT(*) FROM image_ocr_cache", &[])?.get(0);
+    let ocr_total:   i64 = pg.query_one("SELECT COUNT(*) FROM image_ocr", &[])?.get(0);
+    println!("image_ocr_cache: {} rows / image_ocr: {} rows (before)", cache_total, ocr_total);
+
+    // Find msg rows that mention [IMG:...] and are not yet fully OCR'd.
+    // We over-select (some rows might already be partially done); per-image
+    // dedup happens at the (session_id, parent_seq, image_index) UNIQUE constraint.
+    let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
+    let select_sql = format!(
+        "SELECT id, session_id, project, seq, ts, content
+         FROM msg
+         WHERE content LIKE '%[IMG:%'
+         ORDER BY id DESC {}",
+        limit_clause
+    );
+    let candidates = pg.query(&select_sql, &[])?;
+    if candidates.is_empty() {
+        println!("ocr-missing: no [IMG:...] sentinels in msg.content — nothing to do");
+        return Ok(());
+    }
+
+    // Pre-fetch which (session_id, parent_seq, image_index) already exist in image_ocr
+    let existing_rows = pg.query(
+        "SELECT session_id, parent_seq, image_index FROM image_ocr",
+        &[],
+    )?;
+    let mut done_set: HashSet<(String, i32, i32)> = HashSet::new();
+    for r in existing_rows {
+        done_set.insert((r.get(0), r.get(1), r.get(2)));
+    }
+
+    // Pre-fetch cache for fast skip on miss-detection
+    let cache_rows = pg.query("SELECT sha256, ocr_text FROM image_ocr_cache", &[])?;
+    let mut cache: HashMap<String, String> = HashMap::new();
+    for r in cache_rows {
+        cache.insert(r.get(0), r.get(1));
+    }
+    drop(pg);
+
+    // Plan: per-candidate work units
+    struct WorkItem {
+        session_id: String,
+        project: String,
+        parent_seq: i32,
+        ts: Option<chrono::DateTime<Utc>>,
+        image_index: i32,
+        sha: String,
+        cached_text: Option<String>,
+    }
+
+    let mut work: Vec<WorkItem> = Vec::new();
+
+    // For sentinel detection on msg.content side, we scan substring matches
+    // and pair each with image_index based on its order in that message.
+    for row in &candidates {
+        let session_id: String = row.get(1);
+        let project:    String = row.get(2);
+        let parent_seq: i32    = row.get(3);
+        let ts: Option<chrono::DateTime<Utc>> = row.get(4);
+        let content:    String = row.get(5);
+
+        // Find all [IMG:<64-hex>] substrings in order.
+        let mut shas_in_msg: Vec<String> = Vec::new();
+        let bytes = content.as_bytes();
+        let mut i = 0;
+        while i + 5 < bytes.len() {
+            if &bytes[i..i+5] == b"[IMG:" {
+                // Expect 64 hex chars then ']'
+                if i + 5 + 64 < bytes.len() && bytes[i + 5 + 64] == b']' {
+                    let hex = &content[i+5..i+5+64];
+                    if hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                        shas_in_msg.push(hex.to_ascii_lowercase());
+                        i += 5 + 64 + 1;
+                        continue;
+                    }
+                }
+            }
+            i += 1;
+        }
+        if shas_in_msg.is_empty() { continue; }
+
+        for (image_index, sha) in shas_in_msg.into_iter().enumerate() {
+            let key = (session_id.clone(), parent_seq, image_index as i32);
+            if done_set.contains(&key) { continue; }
+            let cached_text = cache.get(&sha).cloned();
+            work.push(WorkItem {
+                session_id: session_id.clone(),
+                project: project.clone(),
+                parent_seq,
+                ts,
+                image_index: image_index as i32,
+                sha,
+                cached_text,
+            });
+        }
+    }
+
+    if work.is_empty() {
+        println!("ocr-missing: nothing pending (all [IMG:...] already in image_ocr)");
+        return Ok(());
+    }
+    let cached_hits = work.iter().filter(|w| w.cached_text.is_some()).count();
+    println!("ocr-missing: {} pending (cache hits: {}, fresh OCR: {})",
+        work.len(), cached_hits, work.len() - cached_hits);
+
+    // For "fresh OCR" items we need raw bytes — load JSONL once per session.
+    // Cache hits are processed in one shot at the end (no file IO needed).
+    // We do this serially per session for simplicity, parallel inside via rayon
+    // is overkill for screenshot OCR (low volume, Apple Vision is already fast).
+
+    use std::collections::BTreeMap;
+    // Group fresh-OCR work by (project, session_id) so we read each JSONL once.
+    let mut fresh_by_session: BTreeMap<(String, String), Vec<usize>> = BTreeMap::new();
+    let mut cached_indices: Vec<usize> = Vec::new();
+    for (idx, w) in work.iter().enumerate() {
+        if w.cached_text.is_some() {
+            cached_indices.push(idx);
+        } else {
+            fresh_by_session
+                .entry((w.project.clone(), w.session_id.clone()))
+                .or_default()
+                .push(idx);
+        }
+    }
+
+    // Concurrent OCR using rayon, but only across distinct JSONL files
+    // (so within a file we keep a single pass). For our use case each session
+    // typically has 0-3 images, so this isn't a big win — but matches the
+    // existing embed-missing rayon pattern for consistency.
+    use rayon::prelude::*;
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
+    let pg_mu = Mutex::new(pg_connect()?);
+    let host = whoami_short();
+
+    // Phase 1: process cached hits (no IO besides INSERTs)
+    {
+        let mut p = pg_mu.lock().unwrap();
+        let mut tx = p.transaction()?;
+        let stmt = tx.prepare(
+            "INSERT INTO image_ocr (session_id, project, parent_seq, image_index, sha256, ts, content)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (session_id, parent_seq, image_index) DO NOTHING",
+        )?;
+        for idx in &cached_indices {
+            let w = &work[*idx];
+            let text = w.cached_text.as_ref().unwrap();
+            tx.execute(&stmt, &[
+                &w.session_id, &w.project, &w.parent_seq, &w.image_index,
+                &w.sha, &w.ts, &text,
+            ])?;
+        }
+        drop(stmt);
+        tx.commit()?;
+        if !cached_indices.is_empty() {
+            println!("  inserted {} image_ocr rows from cache", cached_indices.len());
+        }
+    }
+
+    // Phase 2: fresh OCR per session JSONL, parallel across sessions
+    let session_work: Vec<((String, String), Vec<usize>)> = fresh_by_session.into_iter().collect();
+    pool.install(|| {
+        session_work.par_iter().for_each(|((project, session_id), indices)| {
+            let jsonl_path = jsonl_path_for(project, session_id);
+            if !jsonl_path.exists() {
+                eprintln!("  !! JSONL not found: {} (skipping {} items)", jsonl_path.display(), indices.len());
+                return;
+            }
+
+            // Group target work by parent_seq so we walk the file once
+            let mut by_seq: BTreeMap<i32, Vec<usize>> = BTreeMap::new();
+            for idx in indices {
+                by_seq.entry(work[*idx].parent_seq).or_default().push(*idx);
+            }
+
+            let f = match fs::File::open(&jsonl_path) {
+                Ok(f) => f,
+                Err(e) => { eprintln!("  !! cannot open {}: {}", jsonl_path.display(), e); return; }
+            };
+            let reader = BufReader::new(f);
+
+            for (seq, line_res) in reader.lines().enumerate() {
+                let line = match line_res { Ok(l) => l, Err(_) => continue };
+                let seq_i = seq as i32;
+                let targets = match by_seq.get(&seq_i) { Some(t) => t, None => continue };
+
+                let blocks = extract_image_blocks(&line);
+                if blocks.is_empty() {
+                    eprintln!("  !! no image blocks at {}:{} (sentinels expected {})", jsonl_path.display(), seq, targets.len());
+                    continue;
+                }
+
+                for idx in targets {
+                    let w = &work[*idx];
+                    let want = w.image_index as usize;
+                    let (sha, media_type, bytes) = match blocks.get(want) {
+                        Some(t) => t,
+                        None => { eprintln!("  !! image_index {} not found in seq {} of {}", want, seq, jsonl_path.display()); continue; }
+                    };
+                    if sha != &w.sha {
+                        eprintln!("  !! sha mismatch at {} seq {} idx {}: expected {} got {}", jsonl_path.display(), seq, want, w.sha, sha);
+                        continue;
+                    }
+
+                    let saved = match save_image_bytes(sha, media_type, bytes) {
+                        Ok(p) => p,
+                        Err(e) => { eprintln!("  !! save_image_bytes({}): {}", sha, e); continue; }
+                    };
+
+                    let ocr_text = match run_ocr_cli(&saved) {
+                        Ok(t) => t,
+                        Err(e) => { eprintln!("  !! OCR {}: {}", sha, e); continue; }
+                    };
+                    let ocr_text = ocr_text.trim().to_string();
+                    let width: Option<i32> = None;   // could probe with image crate later
+                    let height: Option<i32> = None;
+                    let byte_size: i32 = bytes.len() as i32;
+
+                    let mut p = pg_mu.lock().unwrap();
+                    let mut tx = match p.transaction() { Ok(t) => t, Err(e) => { eprintln!("  !! begin tx: {}", e); continue; } };
+                    let r1 = tx.execute(
+                        "INSERT INTO image_ocr_cache (sha256, media_type, width, height, byte_size, ocr_text, engine, ocr_host)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                         ON CONFLICT (sha256) DO NOTHING",
+                        &[&w.sha, media_type, &width, &height, &byte_size, &ocr_text, &ocr_engine_name(), &host],
+                    );
+                    if let Err(e) = r1 { eprintln!("  !! insert cache {}: {}", w.sha, e); let _ = tx.rollback(); continue; }
+                    let r2 = tx.execute(
+                        "INSERT INTO image_ocr (session_id, project, parent_seq, image_index, sha256, ts, content)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7)
+                         ON CONFLICT (session_id, parent_seq, image_index) DO NOTHING",
+                        &[&w.session_id, &w.project, &w.parent_seq, &w.image_index, &w.sha, &w.ts, &ocr_text],
+                    );
+                    if let Err(e) = r2 { eprintln!("  !! insert image_ocr {}: {}", w.sha, e); let _ = tx.rollback(); continue; }
+                    if let Err(e) = tx.commit() { eprintln!("  !! commit {}: {}", w.sha, e); continue; }
+                    println!("  + {} ({} bytes, {} chars OCR)", &w.sha[..12], byte_size, ocr_text.len());
+                }
+            }
+        });
+    });
+
+    println!("ocr-missing: done.");
     Ok(())
 }
 
@@ -1675,7 +2158,7 @@ struct PgRow {
 }
 
 #[cfg(feature = "pg-backend")]
-fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
+fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, limit: usize, include_img: bool) -> Result<Vec<PgRow>> {
     // MATERIALIZED CTE forces planner to use GIN index on content_tsv (otherwise
     // PG walks msg_ts_idx backward + filter, scanning thousands of rows; observed
     // 432ms server, 16K filter rows). With CTE, GIN runs first → small result →
@@ -1684,8 +2167,39 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
     // Plus two filters baked in:
     //   role IN ('user','assistant')        — skip meta events
     //   DISTINCT ON content (newest kept)   — dedup same-content rows
+    //
+    // v1.15+: optionally UNION ALL with image_ocr (role='image_ocr'), default ON.
+    // FTS path doesn't have a numeric rank, so de-emphasis is implicit (ts DESC
+    // sort + DISTINCT ON content puts older noise behind newer real msgs).
     let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
-    let rows = client.query(
+    let sql = if include_img {
+        "WITH msg_hits AS MATERIALIZED (
+             SELECT ts, project, session_id, role, tool_name, content
+             FROM msg
+             WHERE content_tsv @@ plainto_tsquery('simple', $1)
+               AND role IN ('user', 'assistant')
+               AND ($2::text IS NULL OR project LIKE $2)
+         ),
+         img_hits AS MATERIALIZED (
+             SELECT ts, project, session_id,
+                    'image_ocr'::text AS role, NULL::text AS tool_name, content
+             FROM image_ocr
+             WHERE content_tsv @@ plainto_tsquery('simple', $1)
+               AND ($2::text IS NULL OR project LIKE $2)
+         ),
+         hits AS (
+             SELECT * FROM msg_hits
+             UNION ALL
+             SELECT * FROM img_hits
+         ),
+         deduped AS (
+             SELECT DISTINCT ON (content)
+                    ts, project, session_id, role, tool_name, content
+             FROM hits ORDER BY content, ts DESC
+         )
+         SELECT ts, project, session_id, role, tool_name, content
+         FROM deduped ORDER BY ts DESC LIMIT $3"
+    } else {
         "WITH hits AS MATERIALIZED (
              SELECT ts, project, session_id, role, tool_name, content
              FROM msg
@@ -1699,9 +2213,9 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
              FROM hits ORDER BY content, ts DESC
          )
          SELECT ts, project, session_id, role, tool_name, content
-         FROM deduped ORDER BY ts DESC LIMIT $3",
-        &[&query, &proj_like, &(limit as i64)],
-    )?;
+         FROM deduped ORDER BY ts DESC LIMIT $3"
+    };
+    let rows = client.query(sql, &[&query, &proj_like, &(limit as i64)])?;
     Ok(rows.iter().map(|r| PgRow {
         ts: r.get(0),
         project: r.get(1),
@@ -1714,7 +2228,7 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
 }
 
 #[cfg(feature = "pg-backend")]
-fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
+fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize, include_img: bool) -> Result<Vec<PgRow>> {
     // HNSW-first plan (MATERIALIZED) — without this, the planner picks Seq Scan
     // when filters are added alongside ORDER BY embedding <=> v, blowing
     // execution from ~20ms (HNSW) to ~6s (seq scan + sort over 100k+ rows).
@@ -1743,27 +2257,69 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
     // connection but every vsearch resets to the same value, so no leak.
     let ef = std::cmp::max(over_fetch as i32, 100);
     client.execute(&format!("SET hnsw.ef_search = {ef}"), &[]).ok();
-    let sql = format!(
-        "WITH knn AS MATERIALIZED (
-             SELECT ts, project, session_id, role, tool_name, content,
-                    embedding <=> '{lit}'::vector AS dist
-             FROM msg
-             WHERE embedding IS NOT NULL
-               AND ($1::text IS NULL OR project LIKE $1)
-             ORDER BY embedding <=> '{lit}'::vector
-             LIMIT $2
-         ),
-         filt AS (SELECT * FROM knn WHERE role IN ('user', 'assistant')),
-         dedup AS (
-             SELECT DISTINCT ON (content) ts, project, session_id, role, tool_name, content, dist
-             FROM filt
-             ORDER BY content, dist
-         )
-         SELECT ts, project, session_id, role, tool_name, content, dist
-         FROM dedup
-         ORDER BY dist
-         LIMIT $3"
-    );
+    // v1.15+: image_ocr UNION'd in with dist × 1.10 (~score × 0.91 de-emphasis)
+    // so UI-screenshot noise doesn't crowd out real conversation rows while
+    // still letting data-heavy screenshots (logs, tables) appear in top-N
+    // when their raw distance is competitive. Tuned down from 1.25 after
+    // observing DNS-log screenshot rank #344 with 1.25 — too aggressive.
+    let sql = if include_img {
+        format!(
+            "WITH msg_knn AS MATERIALIZED (
+                 SELECT ts, project, session_id, role, tool_name, content,
+                        embedding <=> '{lit}'::vector AS dist
+                 FROM msg
+                 WHERE embedding IS NOT NULL
+                   AND ($1::text IS NULL OR project LIKE $1)
+                 ORDER BY embedding <=> '{lit}'::vector
+                 LIMIT $2
+             ),
+             img_knn AS MATERIALIZED (
+                 SELECT ts, project, session_id,
+                        'image_ocr'::text AS role, NULL::text AS tool_name, content,
+                        (embedding <=> '{lit}'::vector) * 1.10 AS dist
+                 FROM image_ocr
+                 WHERE embedding IS NOT NULL
+                   AND ($1::text IS NULL OR project LIKE $1)
+                 ORDER BY embedding <=> '{lit}'::vector
+                 LIMIT $2
+             ),
+             knn AS (
+                 SELECT * FROM msg_knn UNION ALL SELECT * FROM img_knn
+             ),
+             filt AS (SELECT * FROM knn WHERE role IN ('user', 'assistant', 'image_ocr')),
+             dedup AS (
+                 SELECT DISTINCT ON (content) ts, project, session_id, role, tool_name, content, dist
+                 FROM filt
+                 ORDER BY content, dist
+             )
+             SELECT ts, project, session_id, role, tool_name, content, dist
+             FROM dedup
+             ORDER BY dist
+             LIMIT $3"
+        )
+    } else {
+        format!(
+            "WITH knn AS MATERIALIZED (
+                 SELECT ts, project, session_id, role, tool_name, content,
+                        embedding <=> '{lit}'::vector AS dist
+                 FROM msg
+                 WHERE embedding IS NOT NULL
+                   AND ($1::text IS NULL OR project LIKE $1)
+                 ORDER BY embedding <=> '{lit}'::vector
+                 LIMIT $2
+             ),
+             filt AS (SELECT * FROM knn WHERE role IN ('user', 'assistant')),
+             dedup AS (
+                 SELECT DISTINCT ON (content) ts, project, session_id, role, tool_name, content, dist
+                 FROM filt
+                 ORDER BY content, dist
+             )
+             SELECT ts, project, session_id, role, tool_name, content, dist
+             FROM dedup
+             ORDER BY dist
+             LIMIT $3"
+        )
+    };
     let rows = client.query(&sql, &[&proj_like, &over_fetch, &(limit as i64)])?;
     Ok(rows.iter().map(|r| PgRow {
         ts: r.get(0),
@@ -1777,10 +2333,12 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
 }
 
 #[cfg(feature = "pg-backend")]
-fn pg_hybrid(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
+fn pg_hybrid(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize, include_img: bool) -> Result<Vec<PgRow>> {
     // RRF (Reciprocal Rank Fusion) k=60, weight vec=0.7, fts=0.3
-    let fts = pg_fts(client, query, project, limit * 3)?;
-    let vec = pg_vec(client, http, query, project, limit * 3)?;
+    // image_ocr rows already de-emphasized inside pg_vec (dist × 1.10); FTS path
+    // relies on ts-DESC + DISTINCT ON dedup for natural de-emphasis.
+    let fts = pg_fts(client, query, project, limit * 3, include_img)?;
+    let vec = pg_vec(client, http, query, project, limit * 3, include_img)?;
     use std::collections::HashMap;
     type Key = (Option<chrono::DateTime<Utc>>, String, String);
     let key = |r: &PgRow| -> Key { (r.ts, r.role.clone(), r.content.clone()) };
@@ -1904,13 +2462,15 @@ fn handle_client(
     let query = req.get("query").and_then(|v| v.as_str()).unwrap_or("");
     let project = req.get("project").and_then(|v| v.as_str());
     let limit = req.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
+    // include_img defaults to TRUE (v1.15+) when absent — older clients keep working.
+    let include_img = req.get("include_img").and_then(|v| v.as_bool()).unwrap_or(true);
 
     let t0 = std::time::Instant::now();
     let mut conn = pool.get()?;
     let rows = match mode {
-        "vec" => pg_vec(&mut *conn, &http, query, project, limit)?,
-        "hybrid" => pg_hybrid(&mut *conn, &http, query, project, limit)?,
-        _ => pg_fts(&mut *conn, query, project, limit)?,
+        "vec" => pg_vec(&mut *conn, &http, query, project, limit, include_img)?,
+        "hybrid" => pg_hybrid(&mut *conn, &http, query, project, limit, include_img)?,
+        _ => pg_fts(&mut *conn, query, project, limit, include_img)?,
     };
     let query_ms = t0.elapsed().as_millis();
 
@@ -1957,7 +2517,7 @@ fn cmd_pgsearchd(pool_size: u32) -> Result<()> {
 }
 
 #[cfg(all(feature = "pg-backend", unix))]
-fn try_daemon(mode: &str, query: &str, project: Option<&str>, limit: usize) -> Option<(Vec<PgRow>, u128)> {
+fn try_daemon(mode: &str, query: &str, project: Option<&str>, limit: usize, include_img: bool) -> Option<(Vec<PgRow>, u128)> {
     use std::io::{BufRead, BufReader, Write};
     let sock_path = pgsearchd_socket_path().ok()?;
     if !sock_path.exists() { return None; }
@@ -1967,6 +2527,7 @@ fn try_daemon(mode: &str, query: &str, project: Option<&str>, limit: usize) -> O
     let mut writer = stream;
     let req = serde_json::json!({
         "mode": mode, "query": query, "project": project, "limit": limit,
+        "include_img": include_img,
     });
     writeln!(writer, "{}", req).ok()?;
     writer.flush().ok()?;
@@ -1979,19 +2540,19 @@ fn try_daemon(mode: &str, query: &str, project: Option<&str>, limit: usize) -> O
 }
 
 #[cfg(all(feature = "pg-backend", not(unix)))]
-fn try_daemon(_mode: &str, _query: &str, _project: Option<&str>, _limit: usize) -> Option<(Vec<PgRow>, u128)> {
+fn try_daemon(_mode: &str, _query: &str, _project: Option<&str>, _limit: usize, _include_img: bool) -> Option<(Vec<PgRow>, u128)> {
     None  // pgsearchd is unix-only; non-unix always falls through to direct connect
 }
 
 /// Shared search dispatcher used by pgsearch / csearch / vsearch.
 /// Tries daemon first, falls back to direct PG connection.
 #[cfg(feature = "pg-backend")]
-fn pg_search_dispatch(mode: &str, query: &str, project: Option<&str>, limit: usize, no_daemon: bool)
+fn pg_search_dispatch(mode: &str, query: &str, project: Option<&str>, limit: usize, no_daemon: bool, include_img: bool)
     -> Result<(Vec<PgRow>, u128, u128, &'static str)>
 {
     let total_t0 = std::time::Instant::now();
     if !no_daemon {
-        if let Some((rows, q)) = try_daemon(mode, query, project, limit) {
+        if let Some((rows, q)) = try_daemon(mode, query, project, limit, include_img) {
             let total = total_t0.elapsed().as_millis();
             return Ok((rows, total.saturating_sub(q), q, "daemon"));
         }
@@ -2002,18 +2563,18 @@ fn pg_search_dispatch(mode: &str, query: &str, project: Option<&str>, limit: usi
     let http = http_client()?;
     let t1 = std::time::Instant::now();
     let rows = match mode {
-        "vec" => pg_vec(&mut pg, &http, query, project, limit)?,
-        "hybrid" => pg_hybrid(&mut pg, &http, query, project, limit)?,
-        _ => pg_fts(&mut pg, query, project, limit)?,
+        "vec" => pg_vec(&mut pg, &http, query, project, limit, include_img)?,
+        "hybrid" => pg_hybrid(&mut pg, &http, query, project, limit, include_img)?,
+        _ => pg_fts(&mut pg, query, project, limit, include_img)?,
     };
     let query_ms = t1.elapsed().as_millis();
     Ok((rows, connect_ms, query_ms, "direct"))
 }
 
 #[cfg(feature = "pg-backend")]
-fn cmd_pgsearch(query: &str, mode_fts: bool, mode_vec: bool, mode_hybrid: bool, limit: usize, as_json: bool, no_daemon: bool) -> Result<()> {
+fn cmd_pgsearch(query: &str, mode_fts: bool, mode_vec: bool, mode_hybrid: bool, limit: usize, as_json: bool, no_daemon: bool, no_img: bool) -> Result<()> {
     let mode = if mode_vec { "vec" } else if mode_hybrid { "hybrid" } else { let _ = mode_fts; "fts" };
-    let (rows, connect_ms, query_ms, source) = pg_search_dispatch(mode, query, None, limit, no_daemon)?;
+    let (rows, connect_ms, query_ms, source) = pg_search_dispatch(mode, query, None, limit, no_daemon, !no_img)?;
 
     if as_json {
         println!("{}", serde_json::to_string_pretty(&serde_json::json!({
@@ -2040,8 +2601,8 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Build { no_embed, no_refresh, workers } => cmd_build(no_embed, no_refresh, workers),
-        Cmd::Csearch { query, project, limit } => cmd_csearch(&query, project.as_deref(), limit),
-        Cmd::Vsearch { query, project, limit } => cmd_vsearch(&query, project.as_deref(), limit),
+        Cmd::Csearch { query, project, limit, no_img } => cmd_csearch(&query, project.as_deref(), limit, no_img),
+        Cmd::Vsearch { query, project, limit, no_img } => cmd_vsearch(&query, project.as_deref(), limit, no_img),
         Cmd::VsearchSince { query, project, hours, limit, min_len, max_len, max_distance, max_snippet, knn } => {
             let lines = cmd_vsearch_since(&query, &project, hours, limit, min_len, max_len, max_distance, max_snippet, knn)?;
             for l in lines { println!("{}", l); }
@@ -2053,7 +2614,14 @@ fn main() -> Result<()> {
         Cmd::Doctor => cmd_doctor(),
         Cmd::PruneVec { dry_run } => cmd_prune_vec(dry_run),
         #[cfg(feature = "pg-backend")]
-        Cmd::Pgsearch { query, fts, vec, hybrid, limit, json, no_daemon } => cmd_pgsearch(&query, fts, vec, hybrid, limit, json, no_daemon),
+        Cmd::OcrMissing { workers, limit } => {
+            cmd_ocr_missing(workers, limit)?;
+            // Also backfill embeddings on any new image_ocr rows
+            if ollama_up() { let _ = embed_image_ocr_missing(workers); }
+            Ok(())
+        }
+        #[cfg(feature = "pg-backend")]
+        Cmd::Pgsearch { query, fts, vec, hybrid, limit, json, no_daemon, no_img } => cmd_pgsearch(&query, fts, vec, hybrid, limit, json, no_daemon, no_img),
         #[cfg(all(feature = "pg-backend", unix))]
         Cmd::Pgsearchd { pool_size, foreground: _ } => cmd_pgsearchd(pool_size),
     }
