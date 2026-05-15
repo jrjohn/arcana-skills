@@ -67,6 +67,12 @@ enum Cmd {
         /// Exclude image_ocr rows from results (default: include with rank de-emphasis)
         #[arg(long = "no-img")]
         no_img: bool,
+        /// Print full content (no snippet truncation; newlines/tabs still flattened to spaces)
+        #[arg(long)]
+        full: bool,
+        /// Prefix each hit with `id=<rowid> sid=<session_id[..8]>` for level-2 drill-down
+        #[arg(long = "with-id")]
+        with_id: bool,
     },
     /// Semantic KNN search
     Vsearch {
@@ -261,65 +267,97 @@ fn vec_to_blob(v: &[f32]) -> Vec<u8> {
 // ─────────────────────────── csearch ───────────────────────────
 
 #[cfg(not(feature = "pg-backend"))]
-fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, _no_img: bool) -> Result<()> {
+fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, _no_img: bool, full: bool, with_id: bool) -> Result<()> {
     let conn = open_db_readonly()?;
+    // Always pull the full content + rowid + session_id; truncation now happens in
+    // Rust so `--full` can opt out of it. Newline/tab flattening still done in SQL.
     let sql = match project {
         Some(_) => {
-            "SELECT substr(m.ts,1,16), m.project, m.role, COALESCE(m.tool_name,'-'), \
-             substr(replace(replace(m.content, X'0A',' '), X'09',' '),1,180) \
+            "SELECT m.rowid, m.session_id, substr(m.ts,1,16), m.project, m.role, COALESCE(m.tool_name,'-'), \
+             replace(replace(m.content, X'0A',' '), X'09',' ') \
              FROM msg m WHERE m.rowid IN (SELECT rowid FROM msg_fts WHERE content MATCH ?1) \
              AND m.project LIKE ?2 ORDER BY m.ts DESC LIMIT ?3"
         }
         None => {
-            "SELECT substr(m.ts,1,16), m.project, m.role, COALESCE(m.tool_name,'-'), \
-             substr(replace(replace(m.content, X'0A',' '), X'09',' '),1,180) \
+            "SELECT m.rowid, m.session_id, substr(m.ts,1,16), m.project, m.role, COALESCE(m.tool_name,'-'), \
+             replace(replace(m.content, X'0A',' '), X'09',' ') \
              FROM msg m WHERE m.rowid IN (SELECT rowid FROM msg_fts WHERE content MATCH ?1) \
              ORDER BY m.ts DESC LIMIT ?2"
         }
     };
     let mut stmt = conn.prepare(sql)?;
     let proj_pat = project.map(|p| format!("%{}%", p));
+    let map_row = |r: &rusqlite::Row<'_>| -> rusqlite::Result<(i64, String, String, String, String, String, String)> {
+        Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+            r.get::<_, String>(4)?,
+            r.get::<_, String>(5)?,
+            r.get::<_, String>(6)?,
+        ))
+    };
     let rows = if let Some(pat) = &proj_pat {
-        stmt.query_map(params![query, pat, limit as i64], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, String>(3)?,
-                r.get::<_, String>(4)?,
-            ))
-        })?
-        .collect::<Result<Vec<_>, _>>()?
+        stmt.query_map(params![query, pat, limit as i64], map_row)?
+            .collect::<Result<Vec<_>, _>>()?
     } else {
-        stmt.query_map(params![query, limit as i64], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, String>(3)?,
-                r.get::<_, String>(4)?,
-            ))
-        })?
-        .collect::<Result<Vec<_>, _>>()?
+        stmt.query_map(params![query, limit as i64], map_row)?
+            .collect::<Result<Vec<_>, _>>()?
     };
 
     if rows.is_empty() {
         eprintln!("(no results)");
         return Ok(());
     }
-    for (ts, proj, role, tool, content) in rows {
+    for (rowid, sid, ts, proj, role, tool, content) in rows {
         let proj_short = proj.trim_start_matches('-').chars().take(40).collect::<String>();
         let tag = if tool == "-" { role } else { format!("{}/{}", role, tool) };
-        println!("{}  [{}]  {}  {}", ts, proj_short, tag, content.trim());
+        let body = content.trim();
+        let body = if full {
+            body.to_string()
+        } else {
+            body.chars().take(180).collect::<String>()
+        };
+        if with_id {
+            let sid_short: String = sid.chars().take(8).collect();
+            println!("{}  [{}]  id={} sid={}  {}  {}", ts, proj_short, rowid, sid_short, tag, body);
+        } else {
+            println!("{}  [{}]  {}  {}", ts, proj_short, tag, body);
+        }
     }
     Ok(())
 }
 
 #[cfg(feature = "pg-backend")]
-fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, no_img: bool) -> Result<()> {
+fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, no_img: bool, full: bool, with_id: bool) -> Result<()> {
     let (rows, _conn_ms, _q_ms, _src) = pg_search_dispatch("fts", query, project, limit, false, !no_img)?;
     if rows.is_empty() { eprintln!("(no results)"); return Ok(()); }
-    for r in &rows { println!("{}", fmt_pg_row(r, 180)); }
+    if !full && !with_id {
+        for r in &rows { println!("{}", fmt_pg_row(r, 180)); }
+        return Ok(());
+    }
+    // --full or --with-id path: inline format so we can show id+sid and/or skip the snippet cap.
+    for r in &rows {
+        let ts_str = match r.ts {
+            Some(t) => t.format("%Y-%m-%dT%H:%M").to_string(),
+            None    => "----------------".to_string(),
+        };
+        let proj_short: String = r.project.trim_start_matches('-').chars().take(40).collect();
+        let tag = match r.tool_name.as_deref() {
+            Some(t) if !t.is_empty() && t != "-" => format!("{}/{}", r.role, t),
+            _ => r.role.clone(),
+        };
+        let body_raw = r.content.replace('\n', " ").replace('\t', " ");
+        let body = if full { body_raw } else { body_raw.chars().take(180).collect() };
+        if with_id {
+            let id_str = r.id.map(|n| n.to_string()).unwrap_or_else(|| "-".to_string());
+            let sid_short: String = r.session_id.chars().take(8).collect();
+            println!("{}  [{}]  id={} sid={}  {}  {}", ts_str, proj_short, id_str, sid_short, tag, body);
+        } else {
+            println!("{}  [{}]  {}  {}", ts_str, proj_short, tag, body);
+        }
+    }
     Ok(())
 }
 
@@ -2148,6 +2186,7 @@ fn vec_literal(v: &[f32]) -> String {
 #[cfg(feature = "pg-backend")]
 #[derive(Debug, Clone)]
 struct PgRow {
+    id: Option<i64>,
     ts: Option<chrono::DateTime<Utc>>,
     project: String,
     session_id: String,
@@ -2174,14 +2213,14 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
     let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
     let sql = if include_img {
         "WITH msg_hits AS MATERIALIZED (
-             SELECT ts, project, session_id, role, tool_name, content
+             SELECT id, ts, project, session_id, role, tool_name, content
              FROM msg
              WHERE content_tsv @@ plainto_tsquery('simple', $1)
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
          ),
          img_hits AS MATERIALIZED (
-             SELECT ts, project, session_id,
+             SELECT id, ts, project, session_id,
                     'image_ocr'::text AS role, NULL::text AS tool_name, content
              FROM image_ocr
              WHERE content_tsv @@ plainto_tsquery('simple', $1)
@@ -2194,14 +2233,14 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
          ),
          deduped AS (
              SELECT DISTINCT ON (content)
-                    ts, project, session_id, role, tool_name, content
+                    id, ts, project, session_id, role, tool_name, content
              FROM hits ORDER BY content, ts DESC
          )
-         SELECT ts, project, session_id, role, tool_name, content
+         SELECT id, ts, project, session_id, role, tool_name, content
          FROM deduped ORDER BY ts DESC LIMIT $3"
     } else {
         "WITH hits AS MATERIALIZED (
-             SELECT ts, project, session_id, role, tool_name, content
+             SELECT id, ts, project, session_id, role, tool_name, content
              FROM msg
              WHERE content_tsv @@ plainto_tsquery('simple', $1)
                AND role IN ('user', 'assistant')
@@ -2209,20 +2248,21 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
          ),
          deduped AS (
              SELECT DISTINCT ON (content)
-                    ts, project, session_id, role, tool_name, content
+                    id, ts, project, session_id, role, tool_name, content
              FROM hits ORDER BY content, ts DESC
          )
-         SELECT ts, project, session_id, role, tool_name, content
+         SELECT id, ts, project, session_id, role, tool_name, content
          FROM deduped ORDER BY ts DESC LIMIT $3"
     };
     let rows = client.query(sql, &[&query, &proj_like, &(limit as i64)])?;
     Ok(rows.iter().map(|r| PgRow {
-        ts: r.get(0),
-        project: r.get(1),
-        session_id: r.get(2),
-        role: r.get(3),
-        tool_name: r.get(4),
-        content: r.get(5),
+        id: r.get(0),
+        ts: r.get(1),
+        project: r.get(2),
+        session_id: r.get(3),
+        role: r.get(4),
+        tool_name: r.get(5),
+        content: r.get(6),
         score: None,
     }).collect())
 }
@@ -2265,7 +2305,7 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
     let sql = if include_img {
         format!(
             "WITH msg_knn AS MATERIALIZED (
-                 SELECT ts, project, session_id, role, tool_name, content,
+                 SELECT id, ts, project, session_id, role, tool_name, content,
                         embedding <=> '{lit}'::vector AS dist
                  FROM msg
                  WHERE embedding IS NOT NULL
@@ -2274,7 +2314,7 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
                  LIMIT $2
              ),
              img_knn AS MATERIALIZED (
-                 SELECT ts, project, session_id,
+                 SELECT id, ts, project, session_id,
                         'image_ocr'::text AS role, NULL::text AS tool_name, content,
                         (embedding <=> '{lit}'::vector) * 1.10 AS dist
                  FROM image_ocr
@@ -2288,11 +2328,11 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
              ),
              filt AS (SELECT * FROM knn WHERE role IN ('user', 'assistant', 'image_ocr')),
              dedup AS (
-                 SELECT DISTINCT ON (content) ts, project, session_id, role, tool_name, content, dist
+                 SELECT DISTINCT ON (content) id, ts, project, session_id, role, tool_name, content, dist
                  FROM filt
                  ORDER BY content, dist
              )
-             SELECT ts, project, session_id, role, tool_name, content, dist
+             SELECT id, ts, project, session_id, role, tool_name, content, dist
              FROM dedup
              ORDER BY dist
              LIMIT $3"
@@ -2300,7 +2340,7 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
     } else {
         format!(
             "WITH knn AS MATERIALIZED (
-                 SELECT ts, project, session_id, role, tool_name, content,
+                 SELECT id, ts, project, session_id, role, tool_name, content,
                         embedding <=> '{lit}'::vector AS dist
                  FROM msg
                  WHERE embedding IS NOT NULL
@@ -2310,11 +2350,11 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
              ),
              filt AS (SELECT * FROM knn WHERE role IN ('user', 'assistant')),
              dedup AS (
-                 SELECT DISTINCT ON (content) ts, project, session_id, role, tool_name, content, dist
+                 SELECT DISTINCT ON (content) id, ts, project, session_id, role, tool_name, content, dist
                  FROM filt
                  ORDER BY content, dist
              )
-             SELECT ts, project, session_id, role, tool_name, content, dist
+             SELECT id, ts, project, session_id, role, tool_name, content, dist
              FROM dedup
              ORDER BY dist
              LIMIT $3"
@@ -2322,13 +2362,14 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
     };
     let rows = client.query(&sql, &[&proj_like, &over_fetch, &(limit as i64)])?;
     Ok(rows.iter().map(|r| PgRow {
-        ts: r.get(0),
-        project: r.get(1),
-        session_id: r.get(2),
-        role: r.get(3),
-        tool_name: r.get(4),
-        content: r.get(5),
-        score: Some(r.get::<_, f64>(6)),
+        id: r.get(0),
+        ts: r.get(1),
+        project: r.get(2),
+        session_id: r.get(3),
+        role: r.get(4),
+        tool_name: r.get(5),
+        content: r.get(6),
+        score: Some(r.get::<_, f64>(7)),
     }).collect())
 }
 
@@ -2419,6 +2460,7 @@ fn build_pool(size: u32) -> Result<PgPool> {
 #[cfg(all(feature = "pg-backend", unix))]
 fn rows_to_json(rows: &[PgRow]) -> Vec<serde_json::Value> {
     rows.iter().map(|r| serde_json::json!({
+        "id": r.id,
         "ts": r.ts.map(|t| t.to_rfc3339()),
         "project": r.project,
         "session_id": r.session_id,
@@ -2433,6 +2475,7 @@ fn rows_to_json(rows: &[PgRow]) -> Vec<serde_json::Value> {
 fn rows_from_json(v: &serde_json::Value) -> Vec<PgRow> {
     v.as_array().map(|arr| arr.iter().filter_map(|r| {
         Some(PgRow {
+            id: r.get("id").and_then(|x| x.as_i64()),
             ts: r.get("ts").and_then(|x| x.as_str()).and_then(|s| {
                 chrono::DateTime::parse_from_rfc3339(s).ok().map(|t| t.with_timezone(&Utc))
             }),
@@ -2601,7 +2644,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Build { no_embed, no_refresh, workers } => cmd_build(no_embed, no_refresh, workers),
-        Cmd::Csearch { query, project, limit, no_img } => cmd_csearch(&query, project.as_deref(), limit, no_img),
+        Cmd::Csearch { query, project, limit, no_img, full, with_id } => cmd_csearch(&query, project.as_deref(), limit, no_img, full, with_id),
         Cmd::Vsearch { query, project, limit, no_img } => cmd_vsearch(&query, project.as_deref(), limit, no_img),
         Cmd::VsearchSince { query, project, hours, limit, min_len, max_len, max_distance, max_snippet, knn } => {
             let lines = cmd_vsearch_since(&query, &project, hours, limit, min_len, max_len, max_distance, max_snippet, knn)?;
