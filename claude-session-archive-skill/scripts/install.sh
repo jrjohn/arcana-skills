@@ -148,6 +148,73 @@ case ":$PATH:" in
         ;;
 esac
 
+# 4b. (v1.15+) OCR helpers — make screenshot text searchable in csearch/vsearch.
+#     OCR engine is OS-native + free:
+#       macOS  → Swift CLI wrapping VNRecognizeTextRequest (Apple Vision)
+#       Linux  → tesseract chi_tra+eng (system package required)
+#     A 4 KB-truncated image JSON in msg.content is replaced by a short
+#     [IMG:<sha256>] sentinel; `crs build` and `crs ocr-missing` walk those,
+#     OCR the original bytes from the JSONL, write rows into image_ocr
+#     (per-message) + image_ocr_cache (cross-machine SHA256-dedup).
+mkdir -p "$ARCHIVE_DIR/bin" "$ARCHIVE_DIR/images"
+case "$PLATFORM" in
+    Darwin)
+        if command -v swiftc >/dev/null 2>&1; then
+            echo "==> building macOS OCR helper (Swift + Vision)"
+            ( cd "$SKILL_DIR/scripts/ocr-mac" && swiftc -O main.swift -o "$ARCHIVE_DIR/bin/ocr-mac" )
+            echo "    built: $ARCHIVE_DIR/bin/ocr-mac"
+        else
+            echo "    !! swiftc missing — install Xcode Command Line Tools (xcode-select --install)"
+            echo "       skipping OCR helper build; screenshot text won't be searchable"
+        fi
+        ;;
+    Linux)
+        cp "$SKILL_DIR/scripts/ocr-linux.sh" "$ARCHIVE_DIR/bin/ocr-linux.sh"
+        chmod +x "$ARCHIVE_DIR/bin/ocr-linux.sh"
+        if command -v tesseract >/dev/null 2>&1; then
+            if tesseract --list-langs 2>&1 | grep -qE '\bchi_tra\b|\bchi_sim\b'; then
+                echo "    OCR: tesseract present + Chinese pack installed"
+            else
+                echo "    !! tesseract present but no Chinese language pack — install:"
+                echo "         apt:    apt install tesseract-ocr-chi-tra"
+                echo "         fedora: dnf install tesseract-langpack-chi_tra"
+            fi
+        else
+            echo "    !! tesseract not installed — screenshots won't be searchable until you install:"
+            echo "         apt:    apt install tesseract-ocr tesseract-ocr-chi-tra"
+            echo "         fedora: dnf install tesseract tesseract-langpack-chi_tra"
+        fi
+        ;;
+esac
+
+# 4c. (--with-pg only) Apply image_ocr schema migration to bluesea PG.
+#     Idempotent — safe to re-run on existing installs.
+if [ "$WITH_PG" = "1" ]; then
+    if command -v psql >/dev/null 2>&1; then
+        : "${CRS_PG_HOST:=localhost}"
+        : "${CRS_PG_PORT:=5432}"
+        : "${CRS_PG_USER:=archive}"
+        : "${CRS_PG_DB:=archive_main}"
+        if [ -n "${CRS_PG_PASSWORD:-}" ]; then
+            echo "==> applying image_ocr schema to PG (idempotent)"
+            PGPASSWORD="$CRS_PG_PASSWORD" psql -h "$CRS_PG_HOST" -p "$CRS_PG_PORT" \
+                -U "$CRS_PG_USER" -d "$CRS_PG_DB" \
+                -v ON_ERROR_STOP=1 \
+                -f "$SKILL_DIR/sql/image_ocr.sql" >/dev/null
+            echo "    image_ocr_cache + image_ocr tables ready on $CRS_PG_HOST/$CRS_PG_DB"
+        else
+            echo "    !! CRS_PG_PASSWORD not set — apply schema manually after first build:"
+            echo "         psql -h \$CRS_PG_HOST -U \$CRS_PG_USER -d \$CRS_PG_DB \\"
+            echo "              -f $SKILL_DIR/sql/image_ocr.sql"
+        fi
+    else
+        echo "    !! psql not on PATH — schema migration must be applied manually:"
+        echo "       brew install libpq  # macOS"
+        echo "       apt install postgresql-client  # Linux"
+        echo "    then: psql ... -f $SKILL_DIR/sql/image_ocr.sql"
+    fi
+fi
+
 # 5. ~/.sqliterc tuning
 cp "$SKILL_DIR/scripts/sqliterc.template" "$HOME/.sqliterc"
 echo "    sqliterc: $HOME/.sqliterc"
