@@ -34,15 +34,23 @@ Inside Claude:
 > User: "上週那個 FortiGate shaper 怎麼設的？"
 > Claude: *(silently runs `vsearch '上週 FortiGate shaper 設定' network`, reads the actual session, reports back)*
 
-### Preflight order — vsearch first
+### Preflight order — vsearch first for concept queries, csearch first for literals
 
-**Claude defaults to `vsearch` and only falls back to `csearch` for explicit literals.** Reasons:
+Two-pronged routing rule, **not "vsearch always"** (that's a common misread):
 
-- vsearch tolerates fuzzy / cross-language phrasing — most user recall queries don't quote the exact original keyword
+**Use `vsearch` when** the user's recall query is paraphrased / fuzzy / cross-language:
+- vsearch tolerates fuzzy phrasing — most "上次怎麼處理 X 的" recalls don't quote the exact original keyword
 - `bge-m3` matches Chinese ↔ English concepts (e.g. `防火牆規則調整` → `firewall policy edit`) without a thesaurus
-- A miss on csearch produces zero hits silently; a miss on vsearch still surfaces nearby semantic neighbours, which is more useful when the user is fishing
+- A vsearch miss still surfaces nearby semantic neighbours, useful when fishing
 
-Skip vsearch and go straight to csearch only when the query is a precise literal — IP / hostname / file path / FTS5 boolean syntax / known key name. Pin this rule in `~/.claude/CLAUDE.md` (see snippet in `SKILL.md`).
+**Use `csearch` first when** the query contains a specific literal — IP / hostname / file path / FTS5 boolean syntax / known key name / employee ID / device name:
+- csearch is `ORDER BY ts DESC` — the **most recent** mention of that literal comes back at the top, which is almost always what you want for "what is X?" / "current status of X?" queries
+- vsearch has **no temporal axis** (ordering is cosine distance only), so older generic hits can outrank newer specific ones for the same literal
+- IPs / paths with `.`, `/`, `:`, `-` must be FTS5 phrase-quoted: `csearch '"192.168.11.41"' network` (not `csearch 192.168.11.41`)
+
+> ⚠️ **Anti-pattern observed in the wild (2026-05-18): `vsearch '<IP> 是哪台設備'`.** The "是哪台設備" meta words dilute the embedding away from the IP, returning generic device-list hits instead of the historical discussion of that specific IP. Cost the model 5+ unnecessary device-probe steps and produced the wrong identification. Fix: use `csearch '"<IP>"' [project]` for literal IP lookups — it's ts DESC, IP-exact, and returns the most recent definition first.
+
+Pin this two-pronged rule in `~/.claude/CLAUDE.md` (see snippet in `SKILL.md`).
 
 ### Preflight enforcement (since v1.9.0, hardened in v1.11.0) — `archive-preflight.sh` hook
 
@@ -275,6 +283,15 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 | 10 | **Unfreeze `OLLAMA_VER`** in `install-semantic.sh` — fetch latest release tag at install time. | Low | Small |
 
 ## What's new
+
+### v1.16.1 — Docs: csearch-first for literal IPs (anti-pattern called out)
+
+Pure docs patch; no binary or hook changes. Adds an anti-pattern callout in SKILL.md ("Daily usage patterns") and the README "Preflight order" section, covering a real failure mode observed 2026-05-18: the model ran `vsearch '192.168.11.41 是哪台設備'` to identify a device, got generic device-list hits at top, missed the specific EqualLogic discussion buried at d=0.404, and burned 5+ probe steps to land on the wrong identification (iDRAC instead of EqualLogic — both share Dell's NetBSD/Rapid Logic embedded stack, so fingerprinting alone couldn't tell them apart). Two underlying causes documented:
+
+1. **Wrong tool choice.** Literal IPs / hostnames / IDs are exactly when csearch should fire first (per the hierarchy table that already existed). The "vsearch first" prose was being over-applied. Fix: SKILL.md "When to pick which" now explicitly highlights `csearch` returns newest-first via `ORDER BY ts DESC`, and `vsearch` has no temporal weighting.
+2. **vsearch blind spot for "latest state of X" on known literals.** Added as a third bullet to the "sweet spot vs blind spot" list: ordering is cosine distance only, so older generic hits can outrank newer specific ones for the same literal — exactly the wrong behavior for "what is .41 now?" / "current password for X?" / "latest config of Y?" questions.
+
+The fix is to surface the ORDER BY contrast explicitly, name the failing query text in a callout block, and route literal-IP/literal-name lookups to csearch by default. No binary changes; existing CLI surfaces unchanged.
 
 ### v1.16.0 — `csearch --full` + `--with-id` (level-2 drill-down)
 
