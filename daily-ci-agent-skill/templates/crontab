@@ -1,0 +1,3 @@
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+0 9 * * * root /usr/local/bin/daily-run.sh >> /var/log/daily-run.log 2>&1
