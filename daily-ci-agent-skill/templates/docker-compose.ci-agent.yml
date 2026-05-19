@@ -1,0 +1,30 @@
+services:
+  daily-ci-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: daily-ci-agent:latest
+    container_name: daily-ci-agent
+    restart: unless-stopped
+    networks:
+      - devops_default
+    volumes:
+      - daily-ci-agent-claude:/root/.claude
+      - /data/ci-reports:/data/ci-reports
+    environment:
+      - GH_TOKEN=${GH_TOKEN:-}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
+      - TZ=Asia/Taipei
+    healthcheck:
+      test: ["CMD", "test", "-S", "/var/log/daily-run.log"]
+      interval: 5m
+      timeout: 10s
+      retries: 2
+      start_period: 30s
+
+volumes:
+  daily-ci-agent-claude:
+
+networks:
+  devops_default:
+    external: true

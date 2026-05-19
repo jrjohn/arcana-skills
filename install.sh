@@ -48,6 +48,7 @@ SKILLS=(
     "claude-session-archive-skill"
     "mis-management-skill"
     "luminous-skill"
+    "daily-ci-agent-skill"
 )
 
 # Config paths
