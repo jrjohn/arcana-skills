@@ -48,6 +48,28 @@ references/
   customization.md                    ← change cron / services / repos / report sink
 ```
 
+## Lib/SDK bump policy
+
+The agent tracks **latest published Release**, NOT "latest stable channel". Prerelease labels are excluded with a regex applied to the upstream tag name (case-insensitive):
+
+```
+(beta|rc[0-9]*|alpha|preview|snapshot|-dp[0-9]+|-m[0-9]+|[.-]dev|nightly|canary)
+```
+
+Examples:
+
+| Dep | Available | Picked |
+|---|---|---|
+| ESP-IDF | v6.0.1, v6.0, v6.0-rc1, v6.0-beta2 | **v6.0.1** |
+| Android compileSdk | 37 (DP/Beta), 36, 35 | **36** |
+| Android Gradle Plugin | 9.3.0-alpha06, 9.2.0, 8.x | **9.2.0** |
+
+**Renovate-aware fallback** (see `templates/daily.md` Phase 0 + Phase 2):
+- If Renovate App has open PRs OR a PR in last 30 days → agent only **reports drift**; Renovate handles the actual PR
+- If Renovate is INACTIVE → agent self-opens PRs (one dep per PR, branch `bump/<dep>-<ver>`), capped at 3 patch + 1 minor + 0 major per day. Major bumps + Android SDK + ESP-IDF major always go to `## Needs human review`.
+
+Lesson from 2026-05-20 (jrjohn): "defer everything to Renovate" failed silently when Renovate App wasn't installed. The Renovate-INACTIVE fallback path is what keeps lib drift visible.
+
 ## Quick start
 
 ```bash

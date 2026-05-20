@@ -52,7 +52,15 @@ Use `jq` to parse JSON cleanly.
 
 ### 3. Image upgrade check (Docker Hub registry)
 
-For each tracked image, query Docker Hub for the latest stable tag and diff vs. currently running:
+**Policy: latest Release excluding prerelease labels.** Filter candidate tag names with this regex (case-insensitive):
+
+```
+(beta|rc[0-9]*|alpha|preview|snapshot|-dp[0-9]+|-m[0-9]+|[.-]dev|nightly|canary)
+```
+
+then pick the highest remaining version. Don't just take "latest" tag — Docker Hub `:latest` sometimes lags actual newest release.
+
+For each tracked image, query Docker Hub for tags and diff vs. currently running:
 
 ```bash
 # Sample for sonarqube (current 26.2.0):
