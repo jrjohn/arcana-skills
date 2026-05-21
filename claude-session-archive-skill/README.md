@@ -123,6 +123,29 @@ cd scripts
 
 `install.ps1` does: cargo build crs.exe → mkdirs → copy sqliterc / csearch.ps1 / vsearch.ps1 / gen-recent-context.ps1 → register Scheduled Task `ClaudeArchiveIngest` (15 min, runs `crs.exe build`) → register SessionStart hook (`crs.exe gen-recent`) → install + register PreToolUse `archive-preflight.ps1` hook (Bash + Read) in `%USERPROFILE%\.claude\settings.json` → first ingest.
 
+### Cloud / containerized agent (Docker) — v1.18+
+
+For an unattended Claude CLI in a container (e.g. self-hosted VPS cron agent), with Ollama in a sibling container and shared PG used by other clients:
+
+```bash
+# Inside the container (rsync the skill in first if not bind-mounted):
+cd /root/.claude/skills/claude-session-archive-skill/scripts
+./install-container.sh                   # build + symlink + hooks + cron.d + doctor
+# Then customize the agent CLAUDE.md template:
+cp ../templates/CLAUDE.md.cloud-agent.template /root/.claude/CLAUDE.md
+# (edit the {{PLACEHOLDERS}})
+```
+
+`install-container.sh` differs from `install.sh` in three ways:
+
+- Uses `/etc/cron.d/crs-build` (templated from `templates/crs-build.cron`) instead of launchd / systemd timer
+- **Skips** pgsearchd daemon — direct PG connection over Docker network is already sub-10ms LAN; daemon adds complexity without speedup
+- Idempotently merges hooks into existing `settings.json` via `jq` (preserves user-added hooks)
+
+Requires `OLLAMA_HOST` (e.g. `http://ollama:11434`) and `CRS_PG_URL` in container env — typically baked into `docker-compose.yml`'s `environment:` block. v1.17.1+ `crs` honors `OLLAMA_HOST`; earlier versions had the URL hardcoded to localhost.
+
+Full walkthrough (architecture diff, 8 real-world gotchas, cross-machine archive design notes) → `references/cloud-deployment.md`. Generalized CLAUDE.md template (agent identity / hard constraints / sub-agent rules / project-filter discipline / 4-phase SOP / over-engineering anti-patterns) → `templates/CLAUDE.md.cloud-agent.template`.
+
 ### Then (all platforms)
 
 Paste the snippet from `SKILL.md` into `~/.claude/CLAUDE.md` (or `%USERPROFILE%\.claude\CLAUDE.md` on Windows) so future Claude sessions know to query the DB.
@@ -283,6 +306,30 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 | 10 | **Unfreeze `OLLAMA_VER`** in `install-semantic.sh` — fetch latest release tag at install time. | Low | Small |
 
 ## What's new
+
+### v1.18.0 — Cloud / containerized agent deployment, first-class
+
+The question came up: should the cloud deploy be a separate skill (`claude-session-cloud-archive-skill`)? Walking the project's own technical-decision SOP (first-principle decomposition):
+
+- **Shared between local and cloud (100%)**: query CLI surface (vsearch / csearch / `--snippet` / `--with-id`), `crs` source, SQL schema, FTS5 syntax, preflight hook concept
+- **Diverges (~25%)**: install steps (cron.d vs launchd / Scheduled Task), env-var pattern (`OLLAMA_HOST` vs localhost-default), and the CLAUDE.md content owners deploy
+- **Diverge category**: all install / config — not runtime
+
+Splitting into two skills would have meant two SKILL.md / two README.md / two changelog series / push every fix twice — pure maintenance burden. The smallest fix that achieves "make cloud deploys reuse the local know-how" is three new files in the existing skill:
+
+- `references/cloud-deployment.md` — when-to-use, architecture-diff table, manual install walkthrough, 8 real-world gotchas (Text-file-busy on running-binary `cp`, `pkill -f` self-kill via own cmdline matching, defunct zombies from no PID-1 reaper, vsearch leading-dash project arg eaten by clap, `crs doctor` cosmetic "localhost:11434" display, ssh-docker-exec quoting depth, container TZ vs cron schedule, multi-network Docker DNS resolution), cross-machine archive design notes
+- `scripts/install-container.sh` — idempotent jq-merge into `settings.json`; skips pgsearchd; renders `/etc/cron.d/crs-build` from `templates/crs-build.cron` with env substitution; leaves CLAUDE.md alone (template is the seed)
+- `templates/CLAUDE.md.cloud-agent.template` — generalized version of what landed on bluesea daily-ci-agent: agent identity / endpoints / preflight enforcement / FTS5 cheatsheet / vsearch-vs-csearch decision table / "DB is historical snapshot, NOT live state" warning / strict project filter / hard constraints / sub-agent (Task tool) discipline / report-with-evidence-links style / 4-phase SOP / over-engineering anti-patterns / high-risk escalation list
+
+Built on the v1.17.1 `OLLAMA_HOST` env support — without that, containerized deploys couldn't work. SKILL.md description gains "containerized / cloud-agent" trigger keywords; README + SKILL get a parallel "Cloud / containerized agent" install section. No binary, hook, or schema changes — purely additive deployment ergonomics.
+
+### v1.17.1 — Ollama URL env override
+
+Hardcoded `const OLLAMA_URL = "http://localhost:11434/api/embed"` broke every deployment where Ollama isn't on localhost. Mac dev machines hide this — they all run Ollama locally. The moment crs runs in a Docker container with Ollama in a sibling container, every `vsearch` / embed call fails with `error sending request for url (http://localhost:11434/api/embed)`.
+
+Fix: replace the `const` with `fn ollama_url() -> String` honoring `CRS_OLLAMA_URL` (full URL incl. `/api/embed`) first, then `OLLAMA_HOST` (host root, append `/api/embed` — matches Ollama's own convention so any container with `OLLAMA_HOST` already set just works), then the localhost default. Caught while wiring the bluesea daily-ci-agent (Oracle Cloud aarch64 Rocky 9 container) to shared archive_main PG: `OLLAMA_HOST=http://ollama:11434` was already in the container env but crs ignored it. After patch, container-internal `vsearch` resolves embeds via Docker DNS to the `ollama` sibling correctly.
+
+Note `crs doctor` still prints "Ollama reachable at localhost:11434" — that's a hardcoded display label, not a measurement of the configured endpoint. v1.18+ docs call this out as a known cosmetic.
 
 ### v1.17.0 — csearch default flipped to full content; `--snippet` opt-in
 

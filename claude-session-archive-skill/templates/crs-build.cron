@@ -1,0 +1,13 @@
+# /etc/cron.d/crs-build — ingest container session jsonl into shared archive_main every 15 min
+# Reads ~/.claude/projects/*/*.jsonl → bge-m3 embed → PG archive_main.
+# Mirrors Mac launchd / Linux systemd timer cadence so cross-machine vsearch stays current.
+#
+# CUSTOMIZE the env vars below before installing. Cron does NOT inherit shell environment.
+
+OLLAMA_HOST=http://ollama:11434
+CRS_PG_URL=postgres://USER:PASSWORD@PG_HOST:5432/archive_main?sslmode=require
+PATH=/usr/local/bin:/usr/bin:/bin
+HOME=/root
+
+# Min Hour DoM Mon DoW User Command
+*/15 * * * * claude-agent /usr/local/bin/crs build >> /root/claude-archive/crs-build.log 2>&1
