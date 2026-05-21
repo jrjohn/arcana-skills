@@ -67,7 +67,12 @@ enum Cmd {
         /// Exclude image_ocr rows from results (default: include with rank de-emphasis)
         #[arg(long = "no-img")]
         no_img: bool,
-        /// Print full content (no snippet truncation; newlines/tabs still flattened to spaces)
+        /// Truncate to 180-char snippet per hit. Use for credential / short-token lookups
+        /// where full content is noise. Default since v1.17 is full content.
+        #[arg(long)]
+        snippet: bool,
+        /// Deprecated since v1.17 — full is now the default, this flag is a no-op kept
+        /// for backwards compat with old scripts / docs.
         #[arg(long)]
         full: bool,
         /// Prefix each hit with `id=<rowid> sid=<session_id[..8]>` for level-2 drill-down
@@ -267,7 +272,7 @@ fn vec_to_blob(v: &[f32]) -> Vec<u8> {
 // ─────────────────────────── csearch ───────────────────────────
 
 #[cfg(not(feature = "pg-backend"))]
-fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, _no_img: bool, full: bool, with_id: bool) -> Result<()> {
+fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, _no_img: bool, snippet: bool, with_id: bool) -> Result<()> {
     let conn = open_db_readonly()?;
     // Always pull the full content + rowid + session_id; truncation now happens in
     // Rust so `--full` can opt out of it. Newline/tab flattening still done in SQL.
@@ -314,10 +319,10 @@ fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, _no_img: bool, 
         let proj_short = proj.trim_start_matches('-').chars().take(40).collect::<String>();
         let tag = if tool == "-" { role } else { format!("{}/{}", role, tool) };
         let body = content.trim();
-        let body = if full {
-            body.to_string()
-        } else {
+        let body = if snippet {
             body.chars().take(180).collect::<String>()
+        } else {
+            body.to_string()
         };
         if with_id {
             let sid_short: String = sid.chars().take(8).collect();
@@ -330,14 +335,14 @@ fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, _no_img: bool, 
 }
 
 #[cfg(feature = "pg-backend")]
-fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, no_img: bool, full: bool, with_id: bool) -> Result<()> {
+fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, no_img: bool, snippet: bool, with_id: bool) -> Result<()> {
     let (rows, _conn_ms, _q_ms, _src) = pg_search_dispatch("fts", query, project, limit, false, !no_img)?;
     if rows.is_empty() { eprintln!("(no results)"); return Ok(()); }
-    if !full && !with_id {
+    if snippet && !with_id {
         for r in &rows { println!("{}", fmt_pg_row(r, 180)); }
         return Ok(());
     }
-    // --full or --with-id path: inline format so we can show id+sid and/or skip the snippet cap.
+    // Default (full content) or --with-id path: inline format so we can show id+sid and/or skip the snippet cap.
     for r in &rows {
         let ts_str = match r.ts {
             Some(t) => t.format("%Y-%m-%dT%H:%M").to_string(),
@@ -349,7 +354,7 @@ fn cmd_csearch(query: &str, project: Option<&str>, limit: usize, no_img: bool, f
             _ => r.role.clone(),
         };
         let body_raw = r.content.replace('\n', " ").replace('\t', " ");
-        let body = if full { body_raw } else { body_raw.chars().take(180).collect() };
+        let body = if snippet { body_raw.chars().take(180).collect() } else { body_raw };
         if with_id {
             let id_str = r.id.map(|n| n.to_string()).unwrap_or_else(|| "-".to_string());
             let sid_short: String = r.session_id.chars().take(8).collect();
@@ -2644,7 +2649,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Build { no_embed, no_refresh, workers } => cmd_build(no_embed, no_refresh, workers),
-        Cmd::Csearch { query, project, limit, no_img, full, with_id } => cmd_csearch(&query, project.as_deref(), limit, no_img, full, with_id),
+        Cmd::Csearch { query, project, limit, no_img, snippet, full: _full_deprecated, with_id } => cmd_csearch(&query, project.as_deref(), limit, no_img, snippet, with_id),
         Cmd::Vsearch { query, project, limit, no_img } => cmd_vsearch(&query, project.as_deref(), limit, no_img),
         Cmd::VsearchSince { query, project, hours, limit, min_len, max_len, max_distance, max_snippet, knn } => {
             let lines = cmd_vsearch_since(&query, &project, hours, limit, min_len, max_len, max_distance, max_snippet, knn)?;
