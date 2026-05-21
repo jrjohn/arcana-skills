@@ -15,11 +15,11 @@ Deployment is **Rust (`crs`) — single ~5 MB self-contained binary** that bundl
 
 ### `csearch` — FTS5 lexical (always available)
 ```bash
-csearch ZyXEL                                 # cross-project keyword
+csearch ZyXEL                                 # cross-project keyword (full content per hit, v1.17+)
 csearch '"auto-power-down"' network           # phrase, project-filtered
 csearch 'Sophos AND SEDService' network       # boolean
 csearch 'somnic*'                             # prefix
-csearch --full '"Domain Name Server"' network # full content (no 180-char cap), v1.16+
+csearch --snippet '"Ss25181598"' network      # 180-char short form (credential / many-hit scan), v1.17+
 csearch --with-id '"Ss25181598"'              # prefix hits with id=<rowid> sid=<8-char>, v1.16+
 ```
 
@@ -60,7 +60,7 @@ The installer registers a **`PreToolUse` hook** on `Bash` and `Read` that enforc
 
 | Action | Outcome |
 |---|---|
-| `sqlite3 ... sessions.db` with `LIKE` / `MATCH` / `msg_fts` / `GLOB` | ❌ **always denied** — use `csearch` (FTS5) instead. csearch returns ts + project + role + ~180 chars per hit by default; add `--full` for verbatim content and `--with-id` for level-2 drill-down to PG (v1.16+). |
+| `sqlite3 ... sessions.db` with `LIKE` / `MATCH` / `msg_fts` / `GLOB` | ❌ **always denied** — use `csearch` (FTS5) instead. csearch returns ts + project + role + **full content per hit by default** (v1.17+); add `--snippet` for the 180-char short form and `--with-id` for level-2 drill-down to PG (v1.16+). |
 
 **Tier B — sentinel-gated (any `vsearch`/`csearch` in last 30 min unlocks):**
 
@@ -284,6 +284,19 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.17.0 — csearch default flipped to full content; `--snippet` opt-in
+
+Design rationale: vsearch is already the first-pass filter (semantic ranking + short snippets to judge relevance). By the time you reach csearch you've decided what to fetch — re-truncating to 180 chars forces a `--full` round-trip the workflow doesn't want.
+
+- **Default is now full content** per hit (newlines/tabs still flattened to spaces for single-line output).
+- **`--snippet`** — opt-in 180-char short form, for credential lookups or many-hit scanning.
+- **`--full`** — still accepted, now a no-op so v1.16-era scripts and docs keep working.
+- **`--with-id`** — unchanged from v1.16.
+
+Implementation: 5-spot patch to `crs/src/main.rs`. The `Csearch` arg struct gains `snippet: bool` and demotes `full` to a deprecated no-op; both `cmd_csearch` impls (sqlite + pg) flip the truncation predicate (`if !full → cut` becomes `if snippet → cut`); dispatch renames the binding. No SQL or daemon-protocol changes — truncation has lived client-side since v1.16, so the binary swap suffices and **no daemon restart is required for functional reasons** (`launchctl kickstart -k gui/$(id -u)/com.jrjohn.pgsearchd` only needed cosmetically to bring the daemon onto the new binary).
+
+CLAUDE.md updated in three spots (csearch section, credential lookup section, "why not bypass hook" wording). SKILL.md and this README rewritten in `Daily usage patterns`, `Level-2 drill-down → Output verbosity`, and Critical guidance #7 to describe full-by-default. The historical v1.16.0 entry is preserved verbatim — its `--full` flag is what made this flip a 5-spot diff (truncation was already moved into Rust, not SQL).
+
 ### v1.16.1 — Docs: csearch-first for literal IPs (anti-pattern called out)
 
 Pure docs patch; no binary or hook changes. Adds an anti-pattern callout in SKILL.md ("Daily usage patterns") and the README "Preflight order" section, covering a real failure mode observed 2026-05-18: the model ran `vsearch '192.168.11.41 是哪台設備'` to identify a device, got generic device-list hits at top, missed the specific EqualLogic discussion buried at d=0.404, and burned 5+ probe steps to land on the wrong identification (iDRAC instead of EqualLogic — both share Dell's NetBSD/Rapid Logic embedded stack, so fingerprinting alone couldn't tell them apart). Two underlying causes documented:
@@ -368,7 +381,7 @@ The 2026-05-14 PG migration (v1.12.0) shipped with `csearch / vsearch / vsearch-
 
 Two independent fixes prompted by a 2026-05-11 post-compact incident where Claude went straight to `sqlite3 ... LIKE '%X%'` for a credential lookup instead of csearch:
 
-- **Hard-deny `sqlite3 SEARCH` on `sessions.db`.** Patterns `LIKE`, `MATCH`, `msg_fts`, `GLOB` are now blocked **regardless of sentinel state**. csearch is the only supported interface for content search. Motivation: CLAUDE.md prose said "vsearch first" but its credential-lookup section literally used raw `sqlite3 LIKE` as the example — that pattern survived compact as the model's procedural muscle memory. Moving the rule from prose into the hook + rewriting all credential examples to use csearch closes the gap. csearch returns ts + project + role + ~258 chars per hit (covers 99% of credential/history/context lookups); if your case needs more, extend the csearch CLI rather than bypass the hook. Metadata queries (`COUNT`, `PRAGMA`, `.schema`, `msg_vec` maintenance) remain allowed for backfill checks.
+- **Hard-deny `sqlite3 SEARCH` on `sessions.db`.** Patterns `LIKE`, `MATCH`, `msg_fts`, `GLOB` are now blocked **regardless of sentinel state**. csearch is the only supported interface for content search. Motivation: CLAUDE.md prose said "vsearch first" but its credential-lookup section literally used raw `sqlite3 LIKE` as the example — that pattern survived compact as the model's procedural muscle memory. Moving the rule from prose into the hook + rewriting all credential examples to use csearch closes the gap. csearch returns ts + project + role + ~258 chars per hit at this revision (covers 99% of credential/history/context lookups); if your case needs more, extend the csearch CLI rather than bypass the hook. Metadata queries (`COUNT`, `PRAGMA`, `.schema`, `msg_vec` maintenance) remain allowed for backfill checks. _(Note: v1.17 flipped this default to full content; see the v1.17.0 changelog entry below.)_
 - **30-minute sentinel TTL.** The sentinel file (`/tmp/claude-archive-preflight-<sid>`) now expires 30 minutes after creation. `sentinel_valid()` checks mtime, auto-removes stale files. Motivation: post-compact, the model loses procedural memory of having run vsearch but `session_id` (and thus sentinel) persists — without TTL, the hook would allow Tier-B operations forever based on a vsearch from hours ago. `auto-vsearch-on-prompt.sh` refreshes the sentinel on every archive-intent prompt, so active conversations don't notice the TTL; it only kicks in after compact / idle gaps.
 - **CLAUDE.md credential section rewritten** to follow `vsearch → csearch` 2-tier hierarchy, with all `sqlite3 LIKE` examples removed and a "禁用 raw sqlite3 搜尋" callout listing the hard-denied patterns.
 

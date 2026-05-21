@@ -24,7 +24,7 @@ Permanent, local, full-text searchable history of every Claude Code session you'
 | User invokes `/claude-session-archive-skill` or types `csearch ...` and it errors | Diagnose: archive not installed yet → walk through install. Already installed → check FTS5 syntax. |
 | User on a fresh Mac wants the archive set up | Walk through Steps 1-6 in `references/installation-guide.md` |
 | User reports queries are slow or DB grew large | See `references/tuning.md` |
-| User asks a one-shot historical question ("when did port X get shut down?", "what password did we use for device Y?") | Use `csearch '<phrase>' [project]` — phrase/boolean FTS5 search returns ts + project + role + 258 chars per hit, covers credential/history lookups. Raw `sqlite3 LIKE / MATCH` against sessions.db is **forbidden** by hook; csearch is the supported interface. See `references/fts5-syntax.md` |
+| User asks a one-shot historical question ("when did port X get shut down?", "what password did we use for device Y?") | Use `csearch '<phrase>' [project]` — phrase/boolean FTS5 search returns ts + project + role + full content per hit (v1.17+; add `--snippet` for 180-char short form, `--with-id` for level-2 drill-down). Raw `sqlite3 LIKE / MATCH` against sessions.db is **forbidden** by hook; csearch is the supported interface. See `references/fts5-syntax.md` |
 
 ## How it works (architecture)
 
@@ -168,19 +168,22 @@ csearch --limit 50 'shaper AND quota' network    # boolean + larger result set
 csearch --limit 100 '"per-ip-70m"' network        # exact phrase
 ```
 
-### Level-2 drill-down → `csearch --full` / `--with-id` (v1.16+)
+### Output verbosity → `--snippet` / `--with-id` (v1.17+)
 
-Default `csearch` truncates each hit to ~180 chars (snippet) for compact listing. When the truncated snippet doesn't hold what you need — long tool_result with the keyword buried mid-row, full OCR text of a screenshot, complete error log — use the level-2 flags:
+`csearch` defaults to **full content** per hit (v1.17+). Rationale: vsearch is the first-pass filter (semantic ranking + short snippets to judge relevance); by the time you reach csearch you've already decided what to look for, so re-truncating to a snippet just forces a follow-up round-trip. Use these flags when you actually want less:
 
 ```bash
-# Show full content (no 180-char cap; newlines/tabs still flattened to spaces)
-csearch --full --limit 3 '"Domain Name Server"' network
+# Default — full content per hit (newlines/tabs flattened to spaces for single-line output)
+csearch --limit 3 '"Domain Name Server"' network
 
-# Show row id + session_id prefix, so you can SELECT-by-primary-key later
-csearch --with-id '"Ss25181598"'
+# 180-char snippet per hit — credential / short-token lookups, when scanning many hits
+csearch --snippet --limit 20 '"Ss25181598"' network
 
-# Combo — full content + drill-down id
-csearch --full --with-id --limit 1 '"FortiGate API token"' network
+# Add row id + session_id prefix — for SELECT-by-primary-key later
+csearch --with-id '"Ss25181598"' network
+
+# `--full` is still accepted but is a no-op since v1.17 (default is already full)
+csearch --full --limit 1 '"FortiGate API token"' network
 ```
 
 Output shape with `--with-id`:
@@ -189,7 +192,7 @@ Output shape with `--with-id`:
 ```
 `id` is `msg.id` for normal rows or `image_ocr.id` for OCR rows; the role tag disambiguates which table. `sid` is the first 8 chars of `session_id`, enough to grep the original JSONL filename (`~/.claude/projects/<slug>/<sid>*.jsonl`) if it's still within `cleanupPeriodDays` (default 30).
 
-Once you have the id, fetch verbatim from PG (no truncation, includes original newlines):
+Once you have the id, fetch verbatim from PG (preserves original newlines unlike csearch which flattens them):
 ```bash
 psql -h arcana.boo -U archive -d archive_main \
   -c "SELECT content FROM msg WHERE id = 138495"
@@ -199,10 +202,10 @@ psql -h arcana.boo -U archive -d archive_main \
 ```
 
 When to use which:
-- **default csearch** (snippet) — listing / scanning multiple hits to pick the relevant one
-- **`--full`** — you've already narrowed to 1-3 hits, need the full text inline (no extra psql round-trip)
+- **default csearch** — almost everything. Full content, scan inline.
+- **`--snippet`** — credential queries (short tokens, many hits to scan), or compact tables
 - **`--with-id`** — pivoting to other tooling: psql SELECT, joining `image_ocr.parent_seq` back to `msg`, building a citation
-- **`--full --with-id`** — exporting a single row in a self-contained form
+- **`--snippet --with-id`** — compact listing with drill-down id
 
 The flags work in both sqlite and PG backends. In sqlite mode `id` is `msg.rowid`; in PG mode it's the `BIGSERIAL id` column.
 
@@ -323,7 +326,7 @@ csearch 'local-in-deny-broadcast' network      # ✗ error: "no such column: in"
 
 **6. Memory file is a stale index, not source of truth (since v1.9.0 — enforced by hook).** `~/.claude/projects/*/memory/*.md` is hand-curated — only what someone bothered to write down. For roster / device / credential / history queries, the canonical source is the archive (full transcripts). The `archive-preflight.sh` hook denies `grep`/`Read` on memory files until `vsearch`/`csearch` runs once in the session, preventing the antipattern of grepping memory and silently missing data that's actually in the archive. `MEMORY.md` itself is exempted (it's auto-loaded by the system anyway). Once the sentinel is set, memory access is unblocked for the rest of the session — useful for "I just discussed this in this session" lookups.
 
-**7. csearch is the only content-search interface (since v1.11.0 — enforced by hook).** Raw `sqlite3 ... sessions.db` with `LIKE`, `MATCH`, `msg_fts`, or `GLOB` is hard-blocked by the preflight hook regardless of sentinel state. Use `csearch '<fts5-query>' [project] [--limit N]` instead — it's faster (FTS5 vs LIKE), supports phrase/boolean syntax, returns ~180 chars/hit by default and supports `--full` for verbatim content + `--with-id` for level-2 drill-down (since v1.16.0). Metadata queries (COUNT / PRAGMA / .schema / msg_vec) still allowed for backfill checks. If csearch's defaults still don't cover your case (time-range filter, JSON output, etc.), extend `scripts/crs/src/main.rs` — don't bypass the hook.
+**7. csearch is the only content-search interface (since v1.11.0 — enforced by hook).** Raw `sqlite3 ... sessions.db` with `LIKE`, `MATCH`, `msg_fts`, or `GLOB` is hard-blocked by the preflight hook regardless of sentinel state. Use `csearch '<fts5-query>' [project] [--limit N]` instead — it's faster (FTS5 vs LIKE), supports phrase/boolean syntax, and **returns full content per hit by default** (v1.17+). Use `--snippet` for the 180-char short form (credential/scanning) and `--with-id` for level-2 drill-down (rowid + session_id, since v1.16.0). Metadata queries (COUNT / PRAGMA / .schema / msg_vec) still allowed for backfill checks. If csearch's defaults still don't cover your case (time-range filter, JSON output, etc.), extend `scripts/crs/src/main.rs` — don't bypass the hook.
 
 **8. Sentinel has a 30-minute TTL (since v1.11.0).** The preflight sentinel expires 30 min after creation; refreshed on every vsearch/csearch. Motivation: post-compact, the model loses procedural memory of having run vsearch but `session_id` (and thus the sentinel file) persists. Without TTL, an idle gap or compact would leave the sentinel valid forever, allowing the model to skip vsearch in violation of the rule's intent. `auto-vsearch-on-prompt.sh` refreshes the sentinel on every prompt that matches archive-intent keywords, so active conversations rarely hit the TTL.
 
@@ -338,7 +341,7 @@ Paste this near the top so every Claude session knows about the archive **and** 
 >
 > Hook (`~/.claude/hooks/archive-preflight.sh`) 在 sentinel valid 前會擋下：對 `~/claude-archive/sessions.db` 的 raw `sqlite3`（含 metadata）、對 `~/.claude/projects/*/memory/*.md` 的 grep/Read、`ssh ... grep ... /var/log/...` 遠端 log 翻找、本機 log grep、`git log --grep`。跑過 `vsearch` / `csearch` 寫 sentinel 解鎖。
 >
-> **無條件 deny**（v1.11+）：raw `sqlite3 ... sessions.db` 帶 `LIKE / MATCH / msg_fts / GLOB` — 無論 sentinel 狀態。改用 `csearch '<fts5-query>' [project]`（FTS5，~258 chars/hit，支援 phrase / boolean / `--limit N`）。
+> **無條件 deny**（v1.11+）：raw `sqlite3 ... sessions.db` 帶 `LIKE / MATCH / msg_fts / GLOB` — 無論 sentinel 狀態。改用 `csearch '<fts5-query>' [project]`（FTS5，預設 full content/hit，支援 phrase / boolean / `--limit N` / `--snippet` / `--with-id`）。
 >
 > **Sentinel TTL 30 分鐘**（v1.11+）：過期自動 cleanup + deny，主要關掉 compact 後 model 失憶但 sentinel 殘留的 gap。
 >
@@ -436,6 +439,8 @@ claude-session-archive-skill/
 ```
 
 ## Author / version
+
+- 2026-05-21 v1.17.0 **csearch default flipped to full content; `--snippet` opt-in for 180-char form.** Design rationale: vsearch is already the first-pass filter (semantic ranking + short snippets to judge relevance). By the time you reach csearch you've decided what to fetch — re-truncating to 180 chars forces a `--full` round-trip and re-query that the workflow doesn't want. So v1.17 flips the default: csearch prints the entire `content` per hit (newlines/tabs still flattened to spaces for single-line output). New `--snippet` flag returns the 180-char short form for credential / many-hit scanning. `--full` is still accepted (no-op) so existing scripts and v1.16-era docs keep working. Implementation touches 5 spots in `crs/src/main.rs`: `Csearch` struct gains `snippet: bool` and demotes `full` to a deprecated no-op, both `cmd_csearch` impls (sqlite + pg) flip the truncation predicate (`if !full → cut` becomes `if snippet → cut`), and the dispatch arm renames the binding. No SQL or daemon-protocol changes (truncation has lived client-side since v1.16), so **no daemon restart required** — `launchctl kickstart` only needed to bring the daemon onto the new binary cosmetically. CLAUDE.md updated in three spots (csearch section, credential lookup section, "why not bypass hook" wording). SKILL.md / README.md / Critical guidance #7 rewritten to describe full-by-default. Historical v1.16.0 entry preserved verbatim — its `--full` flag is what made this flip cheap (truncation was already in Rust, not SQL).
 
 - 2026-05-18 v1.16.1 **Docs — csearch-first for literal IPs (anti-pattern: vsearch + meta-phrasing).** Pure documentation patch; no binary or hook changes. Adds an explicit anti-pattern callout in SKILL.md ("Daily usage patterns") and README.md ("Preflight order") covering a real failure mode observed 2026-05-18: when asked to identify `.41` in the network, the model ran `vsearch '192.168.11.41 是哪台設備'` (meta-phrased), got generic device-list hits at top-5 (cosine d=0.34-0.35), missed the specific EqualLogic discussion buried at d=0.404, and burned 5+ probe steps (SSH banner / port scan / HTTP fingerprint) to arrive at the wrong identification (iDRAC instead of EqualLogic — both share Dell's NetBSD/Rapid Logic stack). Two underlying causes: (a) wrong tool choice (literal IP is exactly when csearch should fire first, per the existing hierarchy table, but the prose framing of "vsearch first" was being applied too broadly), (b) lack of explicit docs about ORDER BY: `csearch` is `ORDER BY ts DESC` (newest definition of a literal comes back at top — exactly what "what is X?" wants), `vsearch` is `ORDER BY embedding <=> v` with no temporal axis (older generic hits can outrank newer specific ones for the same literal). The fix is to surface the ORDER BY contrast explicitly, name the anti-pattern with the failing query text, and add a third bullet to "vsearch blind spot" specifically for "latest state of X" queries on known literals. Pinning the rule both in SKILL.md (skill-side discipline) and README.md (reader's first impression) closes the prose-only gap without changing any binary behavior.
 
