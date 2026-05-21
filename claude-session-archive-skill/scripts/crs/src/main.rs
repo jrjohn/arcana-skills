@@ -31,7 +31,19 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
 
-const OLLAMA_URL: &str = "http://localhost:11434/api/embed";
+const OLLAMA_URL_DEFAULT: &str = "http://localhost:11434/api/embed";
+
+fn ollama_url() -> String {
+    // Env override priority: CRS_OLLAMA_URL (full URL incl. /api/embed)
+    //   > OLLAMA_HOST (host root, append /api/embed)
+    //   > default localhost. Lets containerized deploys point at e.g. http://ollama:11434
+    if let Ok(u) = std::env::var("CRS_OLLAMA_URL") { return u; }
+    if let Ok(h) = std::env::var("OLLAMA_HOST") {
+        let trimmed = h.trim_end_matches('/');
+        return format!("{}/api/embed", trimmed);
+    }
+    OLLAMA_URL_DEFAULT.to_string()
+}
 const MODEL: &str = "bge-m3";
 const VEC_DIM: usize = 1024;
 
@@ -248,7 +260,7 @@ fn http_client() -> Result<reqwest::blocking::Client> {
 
 fn embed_text(client: &reqwest::blocking::Client, text: &str) -> Result<Vec<f32>> {
     let body = serde_json::json!({ "model": MODEL, "input": text });
-    let resp: EmbedResponse = client.post(OLLAMA_URL).json(&body).send()?.error_for_status()?.json()?;
+    let resp: EmbedResponse = client.post(&ollama_url()).json(&body).send()?.error_for_status()?.json()?;
     let v = resp
         .embeddings
         .into_iter()
@@ -2148,7 +2160,7 @@ fn pg_config_url() -> Result<String> {
 #[cfg(feature = "pg-backend")]
 fn embed_pg_query(client: &reqwest::blocking::Client, text: &str) -> Result<Vec<f32>> {
     let body = serde_json::json!({ "model": PG_EMBED_MODEL, "input": text });
-    let resp: EmbedResponse = client.post(OLLAMA_URL).json(&body).send()?.error_for_status()?.json()?;
+    let resp: EmbedResponse = client.post(&ollama_url()).json(&body).send()?.error_for_status()?.json()?;
     let v = resp.embeddings.into_iter().next().ok_or_else(|| anyhow!("ollama returned no embedding"))?;
     if v.len() != PG_VEC_DIM {
         bail!("expected {}-dim, got {}", PG_VEC_DIM, v.len());
