@@ -197,6 +197,61 @@ That string is a hardcoded label in the doctor output, **not** a measurement of 
 
 `*/15 * * * *` fires every 15 min in **container TZ**. Ubuntu default is UTC; you probably want `TZ=Asia/Taipei` or your local zone set in `docker-compose.yml`. Otherwise reports timestamp in UTC, schedule fires at UTC :00 :15 :30 :45 — possibly fine but check.
 
+### Ollama "Stopping..." cascade — cron stacking + memory + KEEP_ALIVE
+
+**Symptom**: `top` shows ollama at 200%+ CPU and double-digit cumulative hours, but `ollama ps` says model is `"Stopping..."`. `vsearch` returns nothing. `docker logs ollama` is full of `aborting embedding request due to client closing the connection` at 60s intervals. Inside the daily-ci-agent container, `ps auxf` shows multiple `[crs] <defunct>` zombies plus 5–10 stacked `crs build` cron invocations.
+
+**Root cause cascade** (production bluesea, 2026-05-25):
+
+1. `crs build` cron fires every 15 min but a slow build runs >15 min (Ollama embed backlog, network blip, etc.). Cron has no overlap protection by default → second/third/fourth invocations stack.
+2. All those `crs build` processes hammer Ollama embed in parallel.
+3. Ollama container's memory limit (often 2 GB out of the box) is too tight: `bge-m3` model is 1.1 GB itself, plus per-request inference state. Memory pressure trips Ollama into trying to unload the model.
+4. Default `OLLAMA_KEEP_ALIVE=5m` makes the model also try to unload on its own idle timer if any pause occurs.
+5. With in-flight requests pinned to the model, the unload hangs → state stuck at `"Stopping..."` forever → all new requests time out at the client side (60s default) → daemons retry → more pressure.
+
+**Fix** (apply all three):
+
+```bash
+# 1. cron stacking + parallelism cap — see templates/crs-build.cron
+#    --workers 2 is the critical bit: crs default is 8 parallel embed
+#    workers, which on a CPU-only ARM host with bge-m3 (~340ms / embed)
+#    overwhelms Ollama and recreates the cascade even with the other
+#    three fixes in place.
+*/15 * * * * claude-agent /usr/bin/flock -n /tmp/crs-build.lock \
+    /usr/local/bin/crs build --workers 2 >> ... 2>&1
+
+# 2. Ollama docker-compose service — keep model loaded, give it headroom
+services:
+  ollama:
+    environment:
+      - OLLAMA_KEEP_ALIVE=-1  # model stays resident; no idle unload
+    deploy:
+      resources:
+        limits:
+          memory: 4G          # 2G is too tight for bge-m3 + concurrent embeds
+
+# 3. Apply: docker compose up -d ollama
+```
+
+**Why --workers 2 matters more than you'd expect**: a single CPU-bound bge-m3 embed takes ~340ms once the model is warm. With `--workers 8` (default), `crs build` opens 8 concurrent embed requests; each gets a fraction of the CPU and serialises behind the others inside Ollama's runner. End-to-end latency per request climbs past 60s → client (crs) hits its 60s timeout → marks request as `err=error sending request` → retries → backlog grows faster than it drains. `--workers 2` keeps per-request latency under the client timeout. Bump higher only with measured headroom (e.g. Ollama on GPU).
+
+**Recovery from the stuck state**:
+
+```bash
+# kill stacked crs builds inside the agent container
+sudo docker exec <agent-container> pkill -f "crs build"
+# restart ollama to clear "Stopping..." state
+sudo docker restart ollama
+# verify: should respond fast (first embed ~10–15s for model load, then <500ms)
+sudo docker exec <agent-container> curl -s -X POST http://ollama:11434/api/embed \
+  -d '{"model":"bge-m3","input":"healthcheck"}' --max-time 30 -w '\nhttp=%{http_code} t=%{time_total}s\n' -o /dev/null
+```
+
+**Monitoring**: any of these is the alarm:
+- `top` shows `ollama` CPU% pinned high for >10 min with no `vsearch` activity
+- `sudo docker logs ollama --tail 50 | grep "aborting embedding"` returns multiple lines
+- `sudo docker exec <agent-container> ps auxf | grep '<defunct>'` returns multiple zombies
+
 ### Container DNS for sibling Docker services
 
 `getent hosts ollama` only works if the container is on the **same Docker network** as `ollama`. Multi-network containers (e.g. `daily-ci-agent` on `devops_default` + `zeroclaw_default`) work fine — sibling resolves on either network. But a container only on `bridge` (default) can't reach a container on a user-defined network. Inspect with:

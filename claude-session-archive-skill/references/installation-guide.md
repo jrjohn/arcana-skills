@@ -66,7 +66,7 @@ What it does:
 6. Copy `gen-recent-context.sh` to `~/claude-archive/`
 7. Schedule the 15-min ingest:
    - **macOS**: writes `~/Library/LaunchAgents/com.<USER>.claude-archive.plist` calling `crs build`, runs `launchctl load`
-   - **Linux**: adds `*/15 * * * * ~/claude-archive/crs/target/release/crs build` to crontab
+   - **Linux**: adds `*/15 * * * * /usr/bin/flock -n /tmp/crs-build.lock ~/claude-archive/crs/target/release/crs build` to crontab. The `flock -n` prevents the next cron tick from stacking when a slow build (Ollama unhealthy, embed backlog) overruns 15 min — see cloud-deployment.md "Ollama Stopping cascade" gotcha for what happens without it.
 8. Register `crs gen-recent` as a SessionStart hook in `~/.claude/settings.json` (skipped if already present; needs `jq`)
 8b. Install `archive-preflight.sh` to `~/.claude/hooks/` and register it as a PreToolUse hook for both `Bash` and `Read` matchers (gates raw `sqlite3` against the archive DB and `grep`/`Read` on memory files until `vsearch`/`csearch` runs once per session — see README "Preflight enforcement" section)
 9. First ingest (`crs build --no-embed`) — populates `msg` + `msg_fts`

@@ -10,4 +10,12 @@ PATH=/usr/local/bin:/usr/bin:/bin
 HOME=/root
 
 # Min Hour DoM Mon DoW User Command
-*/15 * * * * claude-agent /usr/local/bin/crs build >> /root/claude-archive/crs-build.log 2>&1
+# flock -n: skip this run if previous crs build is still going. Without flock,
+# a slow build (Ollama unhealthy, embed backlog) lets cron stack — multiple
+# crs build processes hammer Ollama in parallel and trigger the Stopping
+# cascade. See cloud-deployment.md "Ollama Stopping cascade" gotcha.
+# --workers 2: cap parallel embed requests to 2. crs default is 8, which on a
+# CPU-only ARM host with bge-m3 overwhelms Ollama and recreates the cascade
+# even with flock + KEEP_ALIVE=-1 + 4G memory all in place. Bump back up only
+# if Ollama is on GPU and you've measured headroom.
+*/15 * * * * claude-agent /usr/bin/flock -n /tmp/crs-build.lock /usr/local/bin/crs build --workers 2 >> /root/claude-archive/crs-build.log 2>&1
