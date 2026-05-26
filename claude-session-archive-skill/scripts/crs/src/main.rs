@@ -439,7 +439,10 @@ fn cmd_vsearch(query: &str, project: Option<&str>, limit: usize, _no_img: bool) 
 
 #[cfg(feature = "pg-backend")]
 fn cmd_vsearch(query: &str, project: Option<&str>, limit: usize, no_img: bool) -> Result<()> {
-    let (rows, _conn_ms, _q_ms, _src) = pg_search_dispatch("vec", query, project, limit, false, !no_img)?;
+    // hybrid (RRF: vec 0.7 + fts 0.3) so a query containing a literal identifier
+    // (工號/IP/hostname) still surfaces the exact-match row even when semantic
+    // phrasing pulls a generic roster/list above it. ~150ms slower than pure vec.
+    let (rows, _conn_ms, _q_ms, _src) = pg_search_dispatch("hybrid", query, project, limit, false, !no_img)?;
     for r in &rows { println!("{}", fmt_pg_row(r, 200)); }
     Ok(())
 }

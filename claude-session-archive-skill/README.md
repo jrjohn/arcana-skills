@@ -45,7 +45,7 @@ Two-pronged routing rule, **not "vsearch always"** (that's a common misread):
 
 **Use `csearch` first when** the query contains a specific literal — IP / hostname / file path / FTS5 boolean syntax / known key name / employee ID / device name:
 - csearch is `ORDER BY ts DESC` — the **most recent** mention of that literal comes back at the top, which is almost always what you want for "what is X?" / "current status of X?" queries
-- vsearch has **no temporal axis** (ordering is cosine distance only), so older generic hits can outrank newer specific ones for the same literal
+- vsearch (pg-backend) is **hybrid** (RRF vec 0.7 + fts 0.3, since v1.19) — the fts arm helps surface a literal token, but it has **no clean temporal axis** and meta-phrasing still dilutes it, so for a precise literal csearch is still the right first call. (sqlite backend vsearch is pure cosine.) Whichever you use, **scan all returned rows — the answer is often rank 2-4, not 1.**
 - IPs / paths with `.`, `/`, `:`, `-` must be FTS5 phrase-quoted: `csearch '"192.168.11.41"' network` (not `csearch 192.168.11.41`)
 
 > ⚠️ **Anti-pattern observed in the wild (2026-05-18): `vsearch '<IP> 是哪台設備'`.** The "是哪台設備" meta words dilute the embedding away from the IP, returning generic device-list hits instead of the historical discussion of that specific IP. Cost the model 5+ unnecessary device-probe steps and produced the wrong identification. Fix: use `csearch '"<IP>"' [project]` for literal IP lookups — it's ts DESC, IP-exact, and returns the most recent definition first.
@@ -306,6 +306,10 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 | 10 | **Unfreeze `OLLAMA_VER`** in `install-semantic.sh` — fetch latest release tag at install time. | Low | Small |
 
 ## What's new
+
+### v1.19.0 — vsearch → hybrid ranking (pg-backend)
+
+`cmd_vsearch` (pg-backend) now routes through `pg_hybrid` (RRF, vec 0.7 + fts 0.3) instead of pure `pg_vec`. The `pg_hybrid` fn already existed (only `pgsearch --hybrid` reached it); the wrapper now wires it into the everyday `vsearch` command. Motivation: a query carrying a literal identifier (employee ID / IP / hostname) mixed with semantic phrasing could bury the exact-match row — verified 2026-05-26, `vsearch '品質法規部 軟體工程課 成員 18003 姓名'` ranked a generic roster table #1 and the row defining "18003 = Galen 楊傑能" at #3. The fts arm now boosts literal-token matches into the candidate set. **Honest limits** (documented, not silently fixed): hybrid is not a silver bullet — meta-phrasing still dilutes both arms, and the fts arm is `ts DESC` (not relevance rank) so a topic heavily discussed today can still bury an older canonical definition. Root cause remains query discipline: keep the query focused, drop meta words, **scan all returned rows (answer is often rank 2-4)**, and for a precise literal prefer `csearch` (ts DESC, IP-exact). Cost: ~150ms over pure vec (one extra FTS query). sqlite backend unchanged (pure cosine).
 
 ### v1.18.0 — Cloud / containerized agent deployment, first-class
 
