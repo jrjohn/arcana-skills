@@ -69,6 +69,13 @@ enum Cmd {
         /// Embed-missing parallelism
         #[arg(long, default_value = "8")]
         workers: usize,
+        /// Comma-separated project-name prefixes to constrain the post-ingest
+        /// embed-missing phase. Without this, embed-missing picks every
+        /// row with embedding IS NULL globally (cross-host contention).
+        /// Example for Mac:     '-Users-jrjohn'
+        /// Example for bluesea: '-root,-workspace-arcana-book,-data'
+        #[arg(long = "project-prefix")]
+        project_prefix: Option<String>,
     },
     /// FTS5 lexical search
     Csearch {
@@ -133,6 +140,10 @@ enum Cmd {
         workers: usize,
         #[arg(long, default_value = "0")]
         limit: usize,
+        /// Comma-separated project-name prefixes to constrain which rows to
+        /// embed. Without this, picks every msg with embedding IS NULL.
+        #[arg(long = "project-prefix")]
+        project_prefix: Option<String>,
     },
     /// Embed one string and print first 5 dims (debug helper)
     EmbedText { text: String },
@@ -144,6 +155,11 @@ enum Cmd {
         workers: usize,
         #[arg(long, default_value = "0")]
         limit: usize,
+        /// Comma-separated project-name prefixes — same semantics as
+        /// embed-missing. Limits OCR to rows whose jsonl is on the
+        /// local filesystem (Mac vs bluesea split).
+        #[arg(long = "project-prefix")]
+        project_prefix: Option<String>,
     },
     /// Health check — verify install state, schedule, hooks, model, DB consistency
     Doctor,
@@ -1020,6 +1036,27 @@ fn refresh_all_recent_contexts() {
     }
 }
 
+/// Translate `--project-prefix '-a,-b'` into ("AND (project LIKE $N OR project LIKE $N+1 OR ...)", ["a%", "b%", ...])
+/// Returns (clause, bind_strings) — placeholder uses 1-based PG syntax `${start_idx + i}`.
+/// If prefix is None or empty, returns ("", vec![]).
+fn project_prefix_filter_pg(prefix: Option<&str>, start_idx: usize) -> (String, Vec<String>) {
+    match prefix {
+        Some(s) if !s.trim().is_empty() => {
+            let parts: Vec<String> = s.split(',')
+                .map(|p| p.trim())
+                .filter(|p| !p.is_empty())
+                .map(|p| format!("{}%", p))
+                .collect();
+            if parts.is_empty() { return (String::new(), vec![]); }
+            let ors: Vec<String> = (0..parts.len())
+                .map(|i| format!("project LIKE ${}", start_idx + i))
+                .collect();
+            (format!(" AND ({})", ors.join(" OR ")), parts)
+        }
+        _ => (String::new(), vec![]),
+    }
+}
+
 fn ollama_up() -> bool {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(2))
@@ -1033,7 +1070,7 @@ fn ollama_up() -> bool {
 }
 
 #[cfg(not(feature = "pg-backend"))]
-fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize) -> Result<()> {
+fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize, project_prefix: Option<String>) -> Result<()> {
     let archive = home().join("claude-archive");
     fs::create_dir_all(&archive)?;
     let conn = Connection::open(db_path())?;
@@ -1075,7 +1112,7 @@ fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize) -> Result<()> {
 
     if !no_embed {
         if ollama_up() {
-            if let Err(e) = cmd_embed_missing(workers, 0) {
+            if let Err(e) = cmd_embed_missing(workers, 0, project_prefix.clone()) {
                 eprintln!("(embed warning: {})", e);
             }
         } else {
@@ -1090,7 +1127,7 @@ fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize) -> Result<()> {
 }
 
 #[cfg(feature = "pg-backend")]
-fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize) -> Result<()> {
+fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize, project_prefix: Option<String>) -> Result<()> {
     let archive = home().join("claude-archive");
     fs::create_dir_all(&archive)?;
 
@@ -1135,7 +1172,7 @@ fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize) -> Result<()> {
 
     if !no_embed {
         if ollama_up() {
-            if let Err(e) = cmd_embed_missing(workers, 0) {
+            if let Err(e) = cmd_embed_missing(workers, 0, project_prefix.clone()) {
                 eprintln!("(embed warning: {})", e);
             }
         } else {
@@ -1146,7 +1183,7 @@ fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize) -> Result<()> {
     // OCR pass — soft-fail (OCR helpers may be missing on a fresh install).
     // Run after embed-missing so newly-OCR'd image_ocr rows get embedded on
     // the next cycle.
-    if let Err(e) = cmd_ocr_missing(workers.max(2), 0) {
+    if let Err(e) = cmd_ocr_missing(workers.max(2), 0, project_prefix.clone()) {
         eprintln!("(ocr warning: {})", e);
     }
     // Embed any image_ocr rows we just created.
@@ -1275,8 +1312,16 @@ fn ingest_file_pg(pg: &mut postgres::Client, path: &Path) -> Result<usize> {
 // ─────────────────────────── embed-missing ───────────────────────────
 
 #[cfg(not(feature = "pg-backend"))]
-fn cmd_embed_missing(workers: usize, limit: usize) -> Result<()> {
+fn cmd_embed_missing(workers: usize, limit: usize, project_prefix: Option<String>) -> Result<()> {
     let conn = open_db_with_vec()?;
+
+    // SQLite path doesn't support PG's `~`; translate prefix list to OR'd LIKE clauses.
+    let prefix_parts: Vec<String> = project_prefix.as_deref().unwrap_or("").split(',')
+        .map(|p| p.trim()).filter(|p| !p.is_empty()).map(|p| format!("{}%", p)).collect();
+    let prefix_clause = if prefix_parts.is_empty() { String::new() } else {
+        let ors: Vec<String> = (0..prefix_parts.len()).map(|_| "m.project LIKE ?".to_string()).collect();
+        format!(" AND ({})", ors.join(" OR "))
+    };
 
     let total: i64 = conn.query_row("SELECT COUNT(*) FROM msg", [], |r| r.get(0))?;
     let done: i64 = conn.query_row("SELECT COUNT(*) FROM msg_vec", [], |r| r.get(0))?;
@@ -1295,13 +1340,14 @@ fn cmd_embed_missing(workers: usize, limit: usize) -> Result<()> {
     let select_sql = format!(
         "SELECT m.rowid, m.content FROM msg m \
          LEFT JOIN msg_vec v ON v.rowid = m.rowid \
-         WHERE v.rowid IS NULL AND length(m.content) >= 5 \
+         WHERE v.rowid IS NULL AND length(m.content) >= 5{} \
          ORDER BY m.rowid DESC {}",
-        limit_clause
+        prefix_clause, limit_clause
     );
     let mut stmt = conn.prepare(&select_sql)?;
+    let prefix_refs: Vec<&dyn rusqlite::ToSql> = prefix_parts.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
     let jobs: Vec<(i64, String)> = stmt
-        .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
+        .query_map(prefix_refs.as_slice(), |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
         .collect::<Result<_, _>>()?;
     drop(stmt);
 
@@ -1352,32 +1398,44 @@ fn cmd_embed_missing(workers: usize, limit: usize) -> Result<()> {
 }
 
 #[cfg(feature = "pg-backend")]
-fn cmd_embed_missing(workers: usize, limit: usize) -> Result<()> {
+fn cmd_embed_missing(workers: usize, limit: usize, project_prefix: Option<String>) -> Result<()> {
     let mut pg = pg_connect()?;
+
+    // Build filter clause + bind list. Without a prefix, embed-missing picks
+    // every unembedded row globally (which is what causes Mac↔bluesea
+    // cross-pollination on the shared PG).
+    let (prefix_clause, prefix_binds) = project_prefix_filter_pg(project_prefix.as_deref(), 1);
 
     let total:   i64 = pg.query_one("SELECT COUNT(*) FROM msg", &[])?.get(0);
     let done:    i64 = pg.query_one("SELECT COUNT(*) FROM msg WHERE embedding IS NOT NULL", &[])?.get(0);
-    let pending: i64 = pg.query_one(
-        "SELECT COUNT(*) FROM msg WHERE embedding IS NULL AND length(content) >= 5",
-        &[],
-    )?.get(0);
+    // pending count respects the same prefix filter so the "nothing to embed"
+    // short-circuit doesn't fire when there's legit work for our prefix.
+    let pending_sql = format!(
+        "SELECT COUNT(*) FROM msg WHERE embedding IS NULL AND length(content) >= 5{}",
+        prefix_clause
+    );
+    let prefix_params: Vec<&(dyn postgres::types::ToSql + Sync)> =
+        prefix_binds.iter().map(|s| s as &(dyn postgres::types::ToSql + Sync)).collect();
+    let pending: i64 = pg.query_one(&pending_sql, &prefix_params[..])?.get(0);
     if pending <= 0 {
-        println!("nothing to embed: total={} done={} pending={}", total, done, pending);
+        println!("nothing to embed: total={} done={} pending={} (prefix={:?})",
+                 total, done, pending, project_prefix);
         return Ok(());
     }
 
     let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
     let select_sql = format!(
         "SELECT id, content FROM msg
-         WHERE embedding IS NULL AND length(content) >= 5
+         WHERE embedding IS NULL AND length(content) >= 5{}
          ORDER BY id DESC {}",
-        limit_clause
+        prefix_clause, limit_clause
     );
-    let rows = pg.query(&select_sql, &[])?;
+    let rows = pg.query(&select_sql, &prefix_params[..])?;
     let jobs: Vec<(i64, String)> = rows.iter().map(|r| (r.get(0), r.get(1))).collect();
     drop(pg);
 
-    println!("embed-missing: {} jobs over {} workers (newest-first)", jobs.len(), workers);
+    println!("embed-missing: {} jobs over {} workers (newest-first, prefix={:?})",
+             jobs.len(), workers, project_prefix);
 
     use rayon::prelude::*;
     let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
@@ -1539,7 +1597,7 @@ fn ocr_engine_name() -> &'static str {
 }
 
 #[cfg(feature = "pg-backend")]
-fn cmd_ocr_missing(workers: usize, limit: usize) -> Result<()> {
+fn cmd_ocr_missing(workers: usize, limit: usize, project_prefix: Option<String>) -> Result<()> {
     use std::collections::HashMap;
 
     let mut pg = pg_connect()?;
@@ -1549,6 +1607,12 @@ fn cmd_ocr_missing(workers: usize, limit: usize) -> Result<()> {
     let ocr_total:   i64 = pg.query_one("SELECT COUNT(*) FROM image_ocr", &[])?.get(0);
     println!("image_ocr_cache: {} rows / image_ocr: {} rows (before)", cache_total, ocr_total);
 
+    // Same prefix filter as embed-missing — bluesea must not try to OCR
+    // images from -Users-jrjohn-* msgs whose jsonl lives on Mac (and vice
+    // versa). Without this, the foreign host prints "JSONL not found"
+    // warnings every cron cycle.
+    let (prefix_clause, prefix_binds) = project_prefix_filter_pg(project_prefix.as_deref(), 1);
+
     // Find msg rows that mention [IMG:...] and are not yet fully OCR'd.
     // We over-select (some rows might already be partially done); per-image
     // dedup happens at the (session_id, parent_seq, image_index) UNIQUE constraint.
@@ -1556,11 +1620,13 @@ fn cmd_ocr_missing(workers: usize, limit: usize) -> Result<()> {
     let select_sql = format!(
         "SELECT id, session_id, project, seq, ts, content
          FROM msg
-         WHERE content LIKE '%[IMG:%'
+         WHERE content LIKE '%[IMG:%'{}
          ORDER BY id DESC {}",
-        limit_clause
+        prefix_clause, limit_clause
     );
-    let candidates = pg.query(&select_sql, &[])?;
+    let prefix_params: Vec<&(dyn postgres::types::ToSql + Sync)> =
+        prefix_binds.iter().map(|s| s as &(dyn postgres::types::ToSql + Sync)).collect();
+    let candidates = pg.query(&select_sql, &prefix_params[..])?;
     if candidates.is_empty() {
         println!("ocr-missing: no [IMG:...] sentinels in msg.content — nothing to do");
         return Ok(());
@@ -2660,7 +2726,7 @@ fn cmd_pgsearch(query: &str, mode_fts: bool, mode_vec: bool, mode_hybrid: bool, 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
-        Cmd::Build { no_embed, no_refresh, workers } => cmd_build(no_embed, no_refresh, workers),
+        Cmd::Build { no_embed, no_refresh, workers, project_prefix } => cmd_build(no_embed, no_refresh, workers, project_prefix),
         Cmd::Csearch { query, project, limit, no_img, snippet, full: _full_deprecated, with_id } => cmd_csearch(&query, project.as_deref(), limit, no_img, snippet, with_id),
         Cmd::Vsearch { query, project, limit, no_img } => cmd_vsearch(&query, project.as_deref(), limit, no_img),
         Cmd::VsearchSince { query, project, hours, limit, min_len, max_len, max_distance, max_snippet, knn } => {
@@ -2669,13 +2735,13 @@ fn main() -> Result<()> {
             Ok(())
         }
         Cmd::GenRecent { force } => cmd_gen_recent(force),
-        Cmd::EmbedMissing { workers, limit } => cmd_embed_missing(workers, limit),
+        Cmd::EmbedMissing { workers, limit, project_prefix } => cmd_embed_missing(workers, limit, project_prefix),
         Cmd::EmbedText { text } => cmd_embed_text(&text),
         Cmd::Doctor => cmd_doctor(),
         Cmd::PruneVec { dry_run } => cmd_prune_vec(dry_run),
         #[cfg(feature = "pg-backend")]
-        Cmd::OcrMissing { workers, limit } => {
-            cmd_ocr_missing(workers, limit)?;
+        Cmd::OcrMissing { workers, limit, project_prefix } => {
+            cmd_ocr_missing(workers, limit, project_prefix)?;
             // Also backfill embeddings on any new image_ocr rows
             if ollama_up() { let _ = embed_image_ocr_missing(workers); }
             Ok(())
