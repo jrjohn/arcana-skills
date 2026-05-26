@@ -69,6 +69,8 @@ The skill ships with **two interchangeable backends, same source, Cargo feature 
 
 In `pg-backend` mode, `cmd_csearch` / `cmd_vsearch` / `cmd_vsearch_since` / `cmd_build` / `cmd_embed_missing` all route to PG. Two extra subcommands appear (`pgsearch`, `pgsearchd`) for direct PG queries and the long-running daemon. **Local sqlite is unused for search** in this mode — `~/claude-archive/sessions.db` may not even exist.
 
+**Since v1.20, `cmd_build` + `cmd_embed_missing` (unix) route their PG ops *through the pgsearchd daemon pool* (typed RPCs over the unix socket), not bare `pg_connect()`** — this fixes the embed-missing SSLRead hang (idle bare connection evicted by NAT). It is **no-fallback**: build requires the daemon to be up. **Consequence for cloud/container deploys** — earlier docs said cloud deploys may "skip pgsearchd and connect direct"; that is still true for *search* (daemon is a latency optimization there), but a host running `crs build` against PG now **must** run pgsearchd, and the daemon socket owner must match the build user (e.g. daemon and cron both as `claude-agent`). Search-only consumers can still go direct.
+
 PG mode requires env vars (`CRS_PG_PASSWORD` is mandatory, others have defaults). Connection details are read at runtime — **no credentials are hardcoded in the source**.
 
 For PG mode: full setup steps, env var schema, server-side compose, TLS cert management, performance numbers, security trade-offs, and rollback are in [`references/pg-backend.md`](references/pg-backend.md).
