@@ -229,9 +229,26 @@ case "$PLATFORM" in
     Darwin)
         USER_SHORT=$(whoami)
         PLIST="$HOME/Library/LaunchAgents/com.${USER_SHORT}.claude-archive.plist"
-        echo "==> registering launchd plist: $PLIST"
-        sed "s|<USERNAME>|${USER_SHORT}|g" \
-            "$SKILL_DIR/scripts/launchd.plist.template" > "$PLIST"
+        if [ -f "$PLIST" ] && [ "$WITH_PG" = "1" ]; then
+            # Don't clobber a plist that already has the real CRS_PG_PASSWORD substituted.
+            # (Same protection logic as the pgsearchd block below.)
+            echo "==> claude-archive plist already present: $PLIST"
+            echo "    (leaving as-is so your CRS_PG_PASSWORD env value is preserved.)"
+            echo "    To regenerate from template: rm \"$PLIST\" then re-run."
+        else
+            echo "==> registering launchd plist: $PLIST"
+            sed "s|<USERNAME>|${USER_SHORT}|g" \
+                "$SKILL_DIR/scripts/launchd.plist.template" > "$PLIST"
+            if [ "$WITH_PG" = "1" ]; then
+                chmod 600 "$PLIST"
+                echo "    !! Edit $PLIST and replace these placeholders:"
+                echo "         CRS_PG_HOST       (default: arcana.example.com)"
+                echo "         CRS_PG_PASSWORD   (REPLACE_WITH_YOUR_PG_PASSWORD)"
+                echo "       Otherwise every launchd tick exits 1 with"
+                echo "         'Error: CRS_PG_PASSWORD env var required'"
+                echo "       and build.err silently accumulates while no new rows ingest/embed."
+            fi
+        fi
         launchctl unload "$PLIST" 2>/dev/null || true
         launchctl load "$PLIST"
         echo "    launchd loaded"
@@ -385,10 +402,92 @@ else
     "$BIN" build --no-embed
 fi
 
-# 10. Smoke test
+# 10. Smoke test — verify the install actually works end-to-end, not just that
+#     binaries dropped into place. Without this it's possible to "succeed" the
+#     install and silently fail every launchd tick (real 2026-05-26 incident:
+#     plist missing CRS_PG_PASSWORD → build.err piled up 270KB while no rows
+#     ingested or embedded for days, only discovered when bluesea cron started
+#     hammering Mac-originating rows with slow ARM Ollama and triggered a
+#     model-Stopping cascade).
 echo
 echo "==> smoke test:"
 "$BIN" --help | head -3
+
+SMOKE_FAIL=0
+echo
+echo "==> validation: launchd / cron status"
+case "$PLATFORM" in
+    Darwin)
+        if launchctl list 2>/dev/null | grep -q "com.${USER_SHORT}.claude-archive"; then
+            EXIT_CODE=$(launchctl list 2>/dev/null | awk -v n="com.${USER_SHORT}.claude-archive" '$3==n {print $2}')
+            if [ "$EXIT_CODE" = "0" ] || [ -z "$EXIT_CODE" ]; then
+                echo "    ✓ launchd: loaded (last exit $EXIT_CODE)"
+            else
+                echo "    ✗ launchd: loaded but last exit was $EXIT_CODE — check ~/claude-archive/build.err"
+                tail -5 "$HOME/claude-archive/build.err" 2>/dev/null | sed 's/^/        /'
+                SMOKE_FAIL=1
+            fi
+        else
+            echo "    ✗ launchd: com.${USER_SHORT}.claude-archive not loaded"
+            SMOKE_FAIL=1
+        fi
+        ;;
+    Linux)
+        if crontab -l 2>/dev/null | grep -q "claude-archive\|crs build"; then
+            echo "    ✓ cron: entry present"
+        else
+            echo "    ✗ cron: no entry for crs build"
+            SMOKE_FAIL=1
+        fi
+        ;;
+esac
+
+echo
+echo "==> validation: single crs build run (--no-embed, fast)"
+if "$BIN" build --no-embed >/tmp/crs-smoke.$$.log 2>&1; then
+    echo "    ✓ crs build --no-embed succeeded"
+    grep -E "PG total|DB total|touched" /tmp/crs-smoke.$$.log | sed 's/^/        /'
+else
+    echo "    ✗ crs build --no-embed FAILED:"
+    sed 's/^/        /' /tmp/crs-smoke.$$.log | tail -10
+    SMOKE_FAIL=1
+fi
+rm -f /tmp/crs-smoke.$$.log
+
+if [ "$WITH_PG" = "1" ] && [ -n "${CRS_PG_PASSWORD:-}" ]; then
+    echo
+    echo "==> validation: PG round-trip via pgsearch"
+    if "$BIN" pgsearch "the" --limit 1 >/dev/null 2>&1; then
+        echo "    ✓ PG reachable, query returned"
+    else
+        echo "    ✗ PG query failed — check CRS_PG_PASSWORD and the plist's EnvironmentVariables"
+        SMOKE_FAIL=1
+    fi
+fi
+
+if command -v curl >/dev/null 2>&1 && curl -sf --max-time 2 http://localhost:11434/api/tags >/dev/null 2>&1; then
+    echo
+    echo "==> validation: Ollama embed round-trip"
+    EMBED_RESP=$(curl -s -X POST http://localhost:11434/api/embed \
+        -H 'Content-Type: application/json' \
+        -d '{"model":"bge-m3","input":"install validation probe"}' \
+        --max-time 30 2>&1)
+    if echo "$EMBED_RESP" | grep -q '"embeddings"'; then
+        echo "    ✓ Ollama bge-m3 returned an embedding"
+    else
+        echo "    ✗ Ollama at localhost:11434 responded but no embedding:"
+        echo "$EMBED_RESP" | head -3 | sed 's/^/        /'
+        echo "        Run: ollama pull bge-m3"
+        SMOKE_FAIL=1
+    fi
+fi
+
+if [ "$SMOKE_FAIL" = "1" ]; then
+    echo
+    echo "✗ Install completed but validation found problems above."
+    echo "  Fix them before relying on the 15-min ingest / vsearch."
+    exit 2
+fi
 
 echo
 echo "✓ Base install complete."
