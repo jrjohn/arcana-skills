@@ -6,6 +6,19 @@
   Then:
     launchctl load ~/Library/LaunchAgents/com.<USERNAME>.claude-archive.plist
   install.sh handles this automatically — including the cargo build of `crs`.
+
+  EnvironmentVariables block: only consulted by crs when built with
+  --features pg-backend (i.e. when this is wired to the shared archive_main
+  PG, not the local SQLite). Without it, every launchd tick fires `crs build`
+  with no CRS_PG_PASSWORD in env → crs exits 1 with
+    "Error: CRS_PG_PASSWORD env var required (or set CRS_PG_URL)"
+  build.err silently accumulates while no new rows ingest or embed.
+  Mirrors the pgsearchd plist's env block — keep both in sync if you
+  ever rotate the password.
+
+  install.sh --with-pg leaves REPLACE_WITH_YOUR_PG_PASSWORD as-is; chmod
+  the plist 600 and substitute manually. See references/pg-backend.md for
+  production credential handling (env.sh + wrapper script alternative).
 -->
 <plist version="1.0">
 <dict>
@@ -15,6 +28,17 @@
     <string>/Users/<USERNAME>/claude-archive/crs/target/release/crs</string>
     <string>build</string>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- Harmless on a SQLite-only install; required when crs was built with -->
+    <!-- --features pg-backend. -->
+    <key>CRS_PG_HOST</key><string>arcana.example.com</string>
+    <key>CRS_PG_PORT</key><string>5432</string>
+    <key>CRS_PG_USER</key><string>archive</string>
+    <key>CRS_PG_DB</key><string>archive_main</string>
+    <!-- IMPORTANT: replace with your real password, then chmod 600 this file -->
+    <key>CRS_PG_PASSWORD</key><string>REPLACE_WITH_YOUR_PG_PASSWORD</string>
+  </dict>
   <key>StartInterval</key><integer>900</integer>     <!-- every 15 minutes -->
   <key>RunAtLoad</key><true/>
   <key>StandardOutPath</key><string>/Users/<USERNAME>/claude-archive/build.log</string>
