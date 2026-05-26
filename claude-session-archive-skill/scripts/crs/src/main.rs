@@ -1129,7 +1129,101 @@ fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize, project_prefix: O
     Ok(())
 }
 
-#[cfg(feature = "pg-backend")]
+// ── PG build via daemon pool (unix) ──
+// Every PG op in the build path goes through the pgsearchd daemon's resident,
+// keepalive'd r2d2 pool over the unix socket — NO bare pg_connect(). This is the
+// fix for the embed-missing SSLRead hang (bare keepalive-less connection idle
+// during ollama → NAT-evicted → next op blocks ~2h). Daemon down ⇒ Err (no
+// fallback by design; a build that can't reach the pool stops instead of
+// silently re-opening the broken connection type).
+//
+// Exception (deliberate, out of the 3-RPC spec): the OCR sub-pass below
+// (cmd_ocr_missing / embed_image_ocr_missing) still uses direct connections.
+// On this Mac OCR backlog is 0 and those paths short-circuit on empty work
+// without a long idle gap, so they don't trigger the hang. Routing OCR's
+// multi-table writes through the daemon is a separate, larger change.
+#[cfg(all(feature = "pg-backend", unix))]
+fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize, project_prefix: Option<String>) -> Result<()> {
+    let archive = home().join("claude-archive");
+    fs::create_dir_all(&archive)?;
+
+    // Pull existing ingest_state mtimes up front (one RPC) so per-file mtime
+    // gating happens client-side with no per-file PG round trip. Also creates
+    // the ingest_state table daemon-side if missing.
+    let state_resp = daemon_rpc(&serde_json::json!({"mode": "ingest_state_select"}))?;
+    let mut state_mtimes: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    if let Some(arr) = state_resp.get("rows").and_then(|v| v.as_array()) {
+        for r in arr {
+            if let (Some(fp), Some(mt)) = (
+                r.get("file_path").and_then(|v| v.as_str()),
+                r.get("mtime").and_then(|v| v.as_f64()),
+            ) {
+                state_mtimes.insert(fp.to_string(), mt);
+            }
+        }
+    }
+
+    let files = collect_jsonl_files()?;
+    let mut total_new = 0usize;
+    let mut touched = 0usize;
+    for path in &files {
+        match ingest_file_pg_daemon(path, &state_mtimes) {
+            Ok(0) => {}
+            Ok(n) => {
+                touched += 1;
+                total_new += n;
+                let proj_part = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("?");
+                let file_part = path.file_name().and_then(|s| s.to_str()).unwrap_or("?");
+                println!("  +{:6}  {}/{}", n, proj_part, file_part);
+            }
+            Err(e) => eprintln!("  !! {}: {}", path.display(), e),
+        }
+    }
+
+    let stats = daemon_rpc(&serde_json::json!({"mode": "build_stats"}))?;
+    let total    = stats.get("total").and_then(|v| v.as_i64()).unwrap_or(0);
+    let sess     = stats.get("sessions").and_then(|v| v.as_i64()).unwrap_or(0);
+    let proj     = stats.get("projects").and_then(|v| v.as_i64()).unwrap_or(0);
+    let emb_done = stats.get("embedded").and_then(|v| v.as_i64()).unwrap_or(0);
+    let db_size  = stats.get("db_size").and_then(|v| v.as_str()).unwrap_or("?");
+
+    println!("\ntouched {} files, +{} rows", touched, total_new);
+    println!("PG total: {} rows / {} sessions / {} projects / {} with embedding",
+             total, sess, proj, emb_done);
+    println!("PG db size: {}", db_size);
+
+    if !no_embed {
+        if ollama_up() {
+            if let Err(e) = cmd_embed_missing(workers, 0, project_prefix.clone()) {
+                eprintln!("(embed warning: {})", e);
+            }
+        } else {
+            println!("(skip embedding: ollama not reachable)");
+        }
+    }
+
+    // OCR pass — soft-fail (OCR helpers may be missing on a fresh install).
+    // Run after embed-missing so newly-OCR'd image_ocr rows get embedded on
+    // the next cycle.
+    if let Err(e) = cmd_ocr_missing(workers.max(2), 0, project_prefix.clone()) {
+        eprintln!("(ocr warning: {})", e);
+    }
+    // Embed any image_ocr rows we just created.
+    if !no_embed && ollama_up() {
+        if let Err(e) = embed_image_ocr_missing(workers) {
+            eprintln!("(image_ocr embed warning: {})", e);
+        }
+    }
+
+    if !no_refresh {
+        refresh_all_recent_contexts();
+    }
+    Ok(())
+}
+
+// Non-unix PG build: pgsearchd (and the daemon RPC path) is unix-only, so on
+// non-unix with pg-backend we retain the original direct-connect build.
+#[cfg(all(feature = "pg-backend", not(unix)))]
 fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize, project_prefix: Option<String>) -> Result<()> {
     let archive = home().join("claude-archive");
     fs::create_dir_all(&archive)?;
@@ -1182,24 +1276,87 @@ fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize, project_prefix: O
             println!("(skip embedding: ollama not reachable)");
         }
     }
-
-    // OCR pass — soft-fail (OCR helpers may be missing on a fresh install).
-    // Run after embed-missing so newly-OCR'd image_ocr rows get embedded on
-    // the next cycle.
     if let Err(e) = cmd_ocr_missing(workers.max(2), 0, project_prefix.clone()) {
         eprintln!("(ocr warning: {})", e);
     }
-    // Embed any image_ocr rows we just created.
     if !no_embed && ollama_up() {
         if let Err(e) = embed_image_ocr_missing(workers) {
             eprintln!("(image_ocr embed warning: {})", e);
         }
     }
-
     if !no_refresh {
         refresh_all_recent_contexts();
     }
     Ok(())
+}
+
+/// Parse one JSONL file client-side and ship its rows to the daemon's
+/// ingest_rows RPC (one transaction per file, daemon-side, on the pool).
+/// mtime gate uses the pre-fetched ingest_state map — no per-file PG read.
+#[cfg(all(feature = "pg-backend", unix))]
+fn ingest_file_pg_daemon(
+    path: &Path,
+    state_mtimes: &std::collections::HashMap<String, f64>,
+) -> Result<usize> {
+    let session_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+    let project = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+    let mtime: f64 = fs::metadata(path)?
+        .modified()?
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_secs_f64();
+    let path_str = path.to_string_lossy().to_string();
+
+    // mtime gate (skip if unchanged) — now from the pre-fetched map.
+    if let Some(prev) = state_mtimes.get(&path_str) {
+        if (prev - mtime).abs() < 1e-6 { return Ok(0); }
+    }
+
+    let f = fs::File::open(path)?;
+    let reader = BufReader::new(f);
+
+    let san = |s: &str| s.replace('\u{0000}', "");
+    let session_id_s = san(&session_id);
+    let project_s = san(&project);
+
+    let mut rows: Vec<serde_json::Value> = Vec::new();
+    for (seq, line) in reader.lines().enumerate() {
+        let raw = match line { Ok(l) => l, Err(_) => continue };
+        if raw.is_empty() { continue; }
+        let rec: Value = match serde_json::from_str(&raw) { Ok(v) => v, Err(_) => continue };
+        let ts_raw = rec.get("timestamp").and_then(|v| v.as_str())
+            .or_else(|| rec.get("ts").and_then(|v| v.as_str()))
+            .unwrap_or("");
+        let (role, tool_name, content) = flatten_content(&rec);
+        let trimmed = content.trim();
+        if trimmed.is_empty() { continue; }
+        let bounded = truncate_chars(trimmed, 200_000);
+        // Normalize ts to RFC3339 for the wire (daemon re-parses). Drop unparseable.
+        let ts_str: Option<String> = if !ts_raw.is_empty() {
+            chrono::DateTime::parse_from_rfc3339(ts_raw).ok()
+                .map(|t| t.with_timezone(&Utc).to_rfc3339())
+        } else { None };
+        rows.push(serde_json::json!({
+            "session_id": session_id_s,
+            "project": project_s,
+            "seq": seq as i64,
+            "ts": ts_str,
+            "role": san(&role),
+            "tool_name": tool_name.as_deref().map(san),
+            "content": san(&bounded),
+        }));
+    }
+
+    // Even with zero parseable rows we still upsert ingest_state so the mtime
+    // gate fires next cycle (matches old ingest_file_pg semantics).
+    let req = serde_json::json!({
+        "mode": "ingest_rows",
+        "file_path": path_str,
+        "mtime": mtime,
+        "rows": rows,
+    });
+    let resp = daemon_rpc(&req)?;
+    let inserted = resp.get("inserted").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    Ok(inserted)
 }
 
 /// Backfill embeddings on image_ocr rows whose embedding is still NULL.
@@ -1245,7 +1402,9 @@ fn embed_image_ocr_missing(workers: usize) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "pg-backend")]
+// Direct-connect ingest — only used on non-unix (unix goes through the daemon
+// via ingest_file_pg_daemon).
+#[cfg(all(feature = "pg-backend", not(unix)))]
 fn ingest_file_pg(pg: &mut postgres::Client, path: &Path) -> Result<usize> {
     let session_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
     let project = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
@@ -1400,19 +1559,113 @@ fn cmd_embed_missing(workers: usize, limit: usize, project_prefix: Option<String
     Ok(())
 }
 
-#[cfg(feature = "pg-backend")]
+// Number of (id, vec) embed results to accumulate before flushing one
+// embed_update RPC to the daemon. Batching avoids a socket round-trip per row
+// (460 backlog × 1 RPC each = 460 round-trips) while keeping each transaction
+// small enough to commit quickly.
+#[cfg(all(feature = "pg-backend", unix))]
+const EMBED_FLUSH_BATCH: usize = 50;
+
+/// PG embed-missing — now routed entirely through the pgsearchd daemon pool.
+///
+/// Old design used bare pg_connect() (a keepalive-less Mutex<Client> shared
+/// across rayon workers). While a worker was off in ollama for seconds, that
+/// connection sat idle and got NAT-evicted; the next UPDATE blocked in SSLRead
+/// for ~2h = the build hang. Now: embed_select to fetch jobs, workers embed in
+/// parallel, results batch-flush via embed_update over the daemon's resident
+/// keepalive'd pool. No bare connection anywhere ⇒ no hang. Daemon down ⇒ Err.
+#[cfg(all(feature = "pg-backend", unix))]
+fn cmd_embed_missing(workers: usize, limit: usize, project_prefix: Option<String>) -> Result<()> {
+    // Typed prefix list (bare prefixes; daemon parameterizes them server-side).
+    let prefixes: Vec<&str> = project_prefix.as_deref().unwrap_or("")
+        .split(',').map(|p| p.trim()).filter(|p| !p.is_empty()).collect();
+
+    let select_req = serde_json::json!({
+        "mode": "embed_select",
+        "prefixes": prefixes,
+        "limit": limit,
+    });
+    let resp = daemon_rpc(&select_req)?;
+    let jobs: Vec<(i64, String)> = resp.get("rows").and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|r| {
+            let id = r.get("id").and_then(|x| x.as_i64())?;
+            let content = r.get("content").and_then(|x| x.as_str())?.to_string();
+            Some((id, content))
+        }).collect())
+        .unwrap_or_default();
+
+    if jobs.is_empty() {
+        println!("nothing to embed (prefix={:?})", project_prefix);
+        return Ok(());
+    }
+
+    println!("embed-missing: {} jobs over {} workers (newest-first, prefix={:?}, via daemon)",
+             jobs.len(), workers, project_prefix);
+
+    use rayon::prelude::*;
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
+    let batch: Mutex<Vec<(i64, Vec<f32>)>> = Mutex::new(Vec::with_capacity(EMBED_FLUSH_BATCH));
+    let counter = Mutex::new(0u64);
+    let total_updated = Mutex::new(0i64);
+
+    // Flush helper: drain accumulated (id, vec) pairs to one embed_update RPC.
+    let flush = |buf: Vec<(i64, Vec<f32>)>| -> Result<i64> {
+        if buf.is_empty() { return Ok(0); }
+        let updates: Vec<serde_json::Value> = buf.iter()
+            .map(|(id, v)| serde_json::json!({"id": id, "vec": v}))
+            .collect();
+        let req = serde_json::json!({"mode": "embed_update", "updates": updates});
+        let resp = daemon_rpc(&req)?;
+        Ok(resp.get("updated").and_then(|v| v.as_i64()).unwrap_or(0))
+    };
+
+    pool.install(|| {
+        jobs.par_iter().for_each(|(id, content)| {
+            let client = http_client().expect("http client");
+            let snippet: String = content.chars().take(8000).collect();
+            match embed_text(&client, &snippet) {
+                Ok(v) => {
+                    let to_flush: Option<Vec<(i64, Vec<f32>)>> = {
+                        let mut b = batch.lock().unwrap();
+                        b.push((*id, v));
+                        if b.len() >= EMBED_FLUSH_BATCH {
+                            Some(std::mem::take(&mut *b))
+                        } else { None }
+                    };
+                    if let Some(buf) = to_flush {
+                        match flush(buf) {
+                            Ok(n) => { *total_updated.lock().unwrap() += n; }
+                            Err(e) => eprintln!("embed_update flush err={}", e),
+                        }
+                    }
+                }
+                Err(e) => eprintln!("embed id={} err={}", id, e),
+            }
+            let mut n = counter.lock().unwrap();
+            *n += 1;
+            if *n % 200 == 0 {
+                println!("  progress {}/{}", *n, jobs.len());
+            }
+        });
+    });
+
+    // Final flush of the tail (< EMBED_FLUSH_BATCH leftovers).
+    let tail = std::mem::take(&mut *batch.lock().unwrap());
+    match flush(tail) {
+        Ok(n) => { *total_updated.lock().unwrap() += n; }
+        Err(e) => eprintln!("embed_update final flush err={}", e),
+    }
+
+    println!("done. updated {} rows.", *total_updated.lock().unwrap());
+    Ok(())
+}
+
+// Non-unix fallback: pgsearchd (and thus the daemon RPC path) is unix-only.
+// On non-unix with pg-backend, retain the direct-connect embed-missing.
+#[cfg(all(feature = "pg-backend", not(unix)))]
 fn cmd_embed_missing(workers: usize, limit: usize, project_prefix: Option<String>) -> Result<()> {
     let mut pg = pg_connect()?;
-
-    // Build filter clause + bind list. Without a prefix, embed-missing picks
-    // every unembedded row globally (which is what causes Mac↔bluesea
-    // cross-pollination on the shared PG).
     let (prefix_clause, prefix_binds) = project_prefix_filter_pg(project_prefix.as_deref(), 1);
-
-    let total:   i64 = pg.query_one("SELECT COUNT(*) FROM msg", &[])?.get(0);
-    let done:    i64 = pg.query_one("SELECT COUNT(*) FROM msg WHERE embedding IS NOT NULL", &[])?.get(0);
-    // pending count respects the same prefix filter so the "nothing to embed"
-    // short-circuit doesn't fire when there's legit work for our prefix.
     let pending_sql = format!(
         "SELECT COUNT(*) FROM msg WHERE embedding IS NULL AND length(content) >= 5{}",
         prefix_clause
@@ -1421,11 +1674,9 @@ fn cmd_embed_missing(workers: usize, limit: usize, project_prefix: Option<String
         prefix_binds.iter().map(|s| s as &(dyn postgres::types::ToSql + Sync)).collect();
     let pending: i64 = pg.query_one(&pending_sql, &prefix_params[..])?.get(0);
     if pending <= 0 {
-        println!("nothing to embed: total={} done={} pending={} (prefix={:?})",
-                 total, done, pending, project_prefix);
+        println!("nothing to embed (prefix={:?})", project_prefix);
         return Ok(());
     }
-
     let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
     let select_sql = format!(
         "SELECT id, content FROM msg
@@ -1439,12 +1690,10 @@ fn cmd_embed_missing(workers: usize, limit: usize, project_prefix: Option<String
 
     println!("embed-missing: {} jobs over {} workers (newest-first, prefix={:?})",
              jobs.len(), workers, project_prefix);
-
     use rayon::prelude::*;
     let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
     let pg_mu = Mutex::new(pg_connect()?);
     let counter = Mutex::new(0u64);
-
     pool.install(|| {
         jobs.par_iter().for_each(|(id, content)| {
             let client = http_client().expect("http client");
@@ -1462,12 +1711,9 @@ fn cmd_embed_missing(workers: usize, limit: usize, project_prefix: Option<String
             }
             let mut n = counter.lock().unwrap();
             *n += 1;
-            if *n % 200 == 0 {
-                println!("  progress {}/{}", *n, jobs.len());
-            }
+            if *n % 200 == 0 { println!("  progress {}/{}", *n, jobs.len()); }
         });
     });
-
     println!("done.");
     Ok(())
 }
@@ -2533,7 +2779,15 @@ fn build_pool(size: u32) -> Result<PgPool> {
     let native = native_tls::TlsConnector::new()?;
     let tls = postgres_native_tls::MakeTlsConnector::new(native);
     let url = pg_config_url()?;
-    let cfg: postgres::Config = url.parse().context("bad PG config")?;
+    let mut cfg: postgres::Config = url.parse().context("bad PG config")?;
+    // Client-side TCP keepalive. Without this, a pooled connection that sits idle
+    // (e.g. an embed-missing worker spends seconds in ollama between PG UPDATEs)
+    // can be silently evicted by an intermediate NAT (home router / FG / ISP CGN),
+    // and the *next* socket op blocks in SSLRead until the OS TCP timeout (~2h on
+    // macOS) = the build hang this refactor exists to kill. keepalives_idle=30s
+    // forces probes that detect/refresh the connection long before NAT eviction.
+    cfg.keepalives(true);
+    cfg.keepalives_idle(std::time::Duration::from_secs(30));
     let mgr = r2d2_postgres::PostgresConnectionManager::new(cfg, tls);
     Ok(r2d2::Pool::builder()
         .max_size(size)
@@ -2584,10 +2838,54 @@ fn handle_client(
     use std::io::{BufRead, BufReader, Write};
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut writer = stream;
+    // Build-path write RPCs can carry large payloads (whole-file row batches,
+    // embed-update batches with 1024-dim vectors). A single read_line on a
+    // small-stack thread is fine, but be explicit that we read one \n-terminated
+    // JSON request regardless of size.
     let mut line = String::new();
     reader.read_line(&mut line)?;
     let req: serde_json::Value = serde_json::from_str(&line)?;
     let mode = req.get("mode").and_then(|v| v.as_str()).unwrap_or("fts");
+
+    // ── Build-path typed write RPCs (added for the build→daemon pool refactor) ──
+    // These keep ALL build PG operations on the daemon's resident, keepalive'd
+    // pool instead of bare pg_connect() — the fix for the embed-missing SSLRead
+    // hang. Typed (not raw SQL over socket) to avoid injection.
+    match mode {
+        "embed_select" => {
+            let resp = rpc_embed_select(&pool, &req)?;
+            writeln!(writer, "{}", resp)?;
+            writer.flush()?;
+            return Ok(());
+        }
+        "embed_update" => {
+            let resp = rpc_embed_update(&pool, &req)?;
+            writeln!(writer, "{}", resp)?;
+            writer.flush()?;
+            return Ok(());
+        }
+        "ingest_rows" => {
+            let resp = rpc_ingest_rows(&pool, &req)?;
+            writeln!(writer, "{}", resp)?;
+            writer.flush()?;
+            return Ok(());
+        }
+        "ingest_state_select" => {
+            let resp = rpc_ingest_state_select(&pool, &req)?;
+            writeln!(writer, "{}", resp)?;
+            writer.flush()?;
+            return Ok(());
+        }
+        "build_stats" => {
+            let resp = rpc_build_stats(&pool, &req)?;
+            writeln!(writer, "{}", resp)?;
+            writer.flush()?;
+            return Ok(());
+        }
+        _ => {}
+    }
+
+    // ── Search RPCs (original behavior) ──
     let query = req.get("query").and_then(|v| v.as_str()).unwrap_or("");
     let project = req.get("project").and_then(|v| v.as_str());
     let limit = req.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
@@ -2607,6 +2905,159 @@ fn handle_client(
     writeln!(writer, "{}", resp)?;
     writer.flush()?;
     Ok(())
+}
+
+// ── Daemon-side build-path RPC handlers ──────────────────────────────────────
+//
+// All run on the resident r2d2 pool (keepalive'd, TLS pre-warmed). They never
+// open a bare connection. Each takes the parsed request Value and returns the
+// JSON response Value.
+
+/// embed_select — return up to `limit` unembedded msg rows (newest-first),
+/// honoring the same prefix/length filter cmd_embed_missing used to apply
+/// client-side. Typed: prefix arrives as an array of bare project prefixes
+/// (no SQL), turned into parameterized `project LIKE $n` clauses server-side.
+#[cfg(all(feature = "pg-backend", unix))]
+fn rpc_embed_select(pool: &PgPool, req: &serde_json::Value) -> Result<serde_json::Value> {
+    let limit = req.get("limit").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    let prefixes: Vec<String> = req.get("prefixes")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|x| x.as_str().map(|s| format!("{}%", s))).collect())
+        .unwrap_or_default();
+
+    let prefix_clause = if prefixes.is_empty() {
+        String::new()
+    } else {
+        let ors: Vec<String> = (0..prefixes.len()).map(|i| format!("project LIKE ${}", i + 1)).collect();
+        format!(" AND ({})", ors.join(" OR "))
+    };
+    let binds: Vec<&(dyn postgres::types::ToSql + Sync)> =
+        prefixes.iter().map(|s| s as &(dyn postgres::types::ToSql + Sync)).collect();
+
+    let mut conn = pool.get()?;
+    let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
+    let sql = format!(
+        "SELECT id, content FROM msg
+         WHERE embedding IS NULL AND length(content) >= 5{}
+         ORDER BY id DESC {}",
+        prefix_clause, limit_clause
+    );
+    let rows = conn.query(&sql, &binds[..])?;
+    let out: Vec<serde_json::Value> = rows.iter().map(|r| {
+        let id: i64 = r.get(0);
+        let content: String = r.get(1);
+        serde_json::json!({"id": id, "content": content})
+    }).collect();
+    Ok(serde_json::json!({"rows": out}))
+}
+
+/// embed_update — batch UPDATE msg.embedding for (id, vec) pairs. Each vec is a
+/// JSON array of f32; serialized to a pgvector literal server-side. One pooled
+/// connection, one transaction for the whole batch.
+#[cfg(all(feature = "pg-backend", unix))]
+fn rpc_embed_update(pool: &PgPool, req: &serde_json::Value) -> Result<serde_json::Value> {
+    let updates = req.get("updates").and_then(|v| v.as_array())
+        .ok_or_else(|| anyhow!("embed_update: missing 'updates' array"))?;
+    let mut conn = pool.get()?;
+    let mut tx = conn.transaction()?;
+    let mut updated = 0i64;
+    for u in updates {
+        let id = match u.get("id").and_then(|v| v.as_i64()) { Some(i) => i, None => continue };
+        let vec: Vec<f32> = match u.get("vec").and_then(|v| v.as_array()) {
+            Some(a) => a.iter().filter_map(|x| x.as_f64().map(|f| f as f32)).collect(),
+            None => continue,
+        };
+        if vec.len() != PG_VEC_DIM { eprintln!("embed_update skip id={} bad dim={}", id, vec.len()); continue; }
+        let lit = vec_literal(&vec);
+        let sql = format!("UPDATE msg SET embedding = '{lit}'::vector WHERE id = $1");
+        match tx.execute(&sql, &[&id]) {
+            Ok(n) => updated += n as i64,
+            Err(e) => eprintln!("embed_update id={} err={}", id, e),
+        }
+    }
+    tx.commit()?;
+    Ok(serde_json::json!({"updated": updated}))
+}
+
+/// ingest_state_select — return all (file_path, mtime) pairs so the build can do
+/// its mtime gate client-side without a per-file PG round trip.
+#[cfg(all(feature = "pg-backend", unix))]
+fn rpc_ingest_state_select(pool: &PgPool, _req: &serde_json::Value) -> Result<serde_json::Value> {
+    let mut conn = pool.get()?;
+    // Ensure ingest_state exists (moved here from the old client-side cmd_build).
+    conn.batch_execute(
+        "CREATE TABLE IF NOT EXISTS ingest_state (
+            file_path TEXT PRIMARY KEY,
+            mtime DOUBLE PRECISION NOT NULL,
+            lines BIGINT NOT NULL
+        );",
+    )?;
+    let rows = conn.query("SELECT file_path, mtime FROM ingest_state", &[])?;
+    let out: Vec<serde_json::Value> = rows.iter().map(|r| {
+        let fp: String = r.get(0);
+        let mtime: f64 = r.get(1);
+        serde_json::json!({"file_path": fp, "mtime": mtime})
+    }).collect();
+    Ok(serde_json::json!({"rows": out}))
+}
+
+/// ingest_rows — insert a whole file's parsed rows + upsert its ingest_state in
+/// one transaction. Typed: rows arrive as structured fields, never raw SQL.
+#[cfg(all(feature = "pg-backend", unix))]
+fn rpc_ingest_rows(pool: &PgPool, req: &serde_json::Value) -> Result<serde_json::Value> {
+    let file_path = req.get("file_path").and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("ingest_rows: missing 'file_path'"))?;
+    let file_mtime = req.get("mtime").and_then(|v| v.as_f64())
+        .ok_or_else(|| anyhow!("ingest_rows: missing 'mtime'"))?;
+    let rows = req.get("rows").and_then(|v| v.as_array())
+        .ok_or_else(|| anyhow!("ingest_rows: missing 'rows' array"))?;
+
+    let mut conn = pool.get()?;
+    let mut tx = conn.transaction()?;
+    let mut inserted = 0usize;
+    {
+        let stmt = tx.prepare(
+            "INSERT INTO msg (session_id, project, seq, ts, role, tool_name, content)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (session_id, seq) DO NOTHING",
+        )?;
+        for r in rows {
+            let session_id = r.get("session_id").and_then(|v| v.as_str()).unwrap_or("");
+            let project    = r.get("project").and_then(|v| v.as_str()).unwrap_or("");
+            let seq        = r.get("seq").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let role       = r.get("role").and_then(|v| v.as_str()).unwrap_or("");
+            let tool_name  = r.get("tool_name").and_then(|v| v.as_str());
+            let content    = r.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let ts_opt: Option<chrono::DateTime<Utc>> = r.get("ts").and_then(|v| v.as_str())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok().map(|t| t.with_timezone(&Utc)));
+            tx.execute(&stmt, &[
+                &session_id, &project, &seq, &ts_opt, &role, &tool_name, &content,
+            ])?;
+            inserted += 1;
+        }
+    }
+    tx.execute(
+        "INSERT INTO ingest_state (file_path, mtime, lines) VALUES ($1, $2, $3)
+         ON CONFLICT (file_path) DO UPDATE SET mtime = EXCLUDED.mtime, lines = EXCLUDED.lines",
+        &[&file_path, &file_mtime, &(inserted as i64)],
+    )?;
+    tx.commit()?;
+    Ok(serde_json::json!({"inserted": inserted}))
+}
+
+/// build_stats — the summary counts cmd_build prints after ingest.
+#[cfg(all(feature = "pg-backend", unix))]
+fn rpc_build_stats(pool: &PgPool, _req: &serde_json::Value) -> Result<serde_json::Value> {
+    let mut conn = pool.get()?;
+    let total: i64 = conn.query_one("SELECT COUNT(*) FROM msg", &[])?.get(0);
+    let sess:  i64 = conn.query_one("SELECT COUNT(DISTINCT session_id) FROM msg", &[])?.get(0);
+    let proj:  i64 = conn.query_one("SELECT COUNT(DISTINCT project) FROM msg", &[])?.get(0);
+    let emb_done: i64 = conn.query_one("SELECT COUNT(*) FROM msg WHERE embedding IS NOT NULL", &[])?.get(0);
+    let db_size: String = conn.query_one("SELECT pg_size_pretty(pg_database_size(current_database()))", &[])?.get(0);
+    Ok(serde_json::json!({
+        "total": total, "sessions": sess, "projects": proj,
+        "embedded": emb_done, "db_size": db_size,
+    }))
 }
 
 #[cfg(all(feature = "pg-backend", unix))]
@@ -2671,6 +3122,43 @@ fn try_daemon(mode: &str, query: &str, project: Option<&str>, limit: usize, incl
 #[cfg(all(feature = "pg-backend", not(unix)))]
 fn try_daemon(_mode: &str, _query: &str, _project: Option<&str>, _limit: usize, _include_img: bool) -> Option<(Vec<PgRow>, u128)> {
     None  // pgsearchd is unix-only; non-unix always falls through to direct connect
+}
+
+/// Build-path daemon RPC client: send one typed JSON request, return the parsed
+/// JSON response. Unlike try_daemon (search, soft-fails to Option), this is the
+/// only path for build writes — daemon unreachable ⇒ Err (NO fallback to bare
+/// pg_connect, by design: a build that can't reach the pool should stop, not
+/// silently open a keepalive-less connection that re-introduces the hang).
+///
+/// read_timeout is generous because embed_update batches and large ingest_rows
+/// payloads can take longer server-side than a small search query.
+#[cfg(all(feature = "pg-backend", unix))]
+fn daemon_rpc(req: &serde_json::Value) -> Result<serde_json::Value> {
+    use std::io::{BufRead, BufReader, Write};
+    let sock_path = pgsearchd_socket_path()?;
+    if !sock_path.exists() {
+        bail!("pgsearchd socket not found at {} — daemon not running (build requires it; no direct-connect fallback)", sock_path.display());
+    }
+    let stream = std::os::unix::net::UnixStream::connect(&sock_path)
+        .with_context(|| format!("connecting to pgsearchd socket {}", sock_path.display()))?;
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(300))).ok();
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut writer = stream;
+    writeln!(writer, "{}", req)?;
+    writer.flush()?;
+    let mut line = String::new();
+    let n = reader.read_line(&mut line)?;
+    if n == 0 {
+        bail!("pgsearchd closed connection without a response (mode={:?})", req.get("mode"));
+    }
+    let resp: serde_json::Value = serde_json::from_str(&line)
+        .with_context(|| "parsing pgsearchd response")?;
+    Ok(resp)
+}
+
+#[cfg(all(feature = "pg-backend", not(unix)))]
+fn daemon_rpc(_req: &serde_json::Value) -> Result<serde_json::Value> {
+    bail!("daemon RPC requires unix socket (pgsearchd is unix-only)")
 }
 
 /// Shared search dispatcher used by pgsearch / csearch / vsearch.
