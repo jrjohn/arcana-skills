@@ -55,8 +55,8 @@ The skill ships with **two interchangeable backends, same source, Cargo feature 
 | | **sqlite + sqlite-vec** (default) | **PostgreSQL + pgvector** (`pg-backend` feature) |
 |---|---|---|
 | Where | Local `~/claude-archive/sessions.db` | Remote PG 17 + pgvector (e.g. cloud VPS) |
-| Latency (warm) | csearch <10ms / vsearch ~150ms (local Ollama) | csearch ~280ms / vsearch ~380ms via `pgsearchd` |
-| Latency (no daemon) | n/a — always local | csearch ~970ms / vsearch ~1100ms (TLS handshake every call) |
+| Latency (warm) | csearch <10ms / vsearch ~150ms (local Ollama) | csearch ~280ms / vsearch ~530ms via `pgsearchd` (hybrid: vec + fts, ~150ms over pure vec) |
+| Latency (no daemon) | n/a — always local | csearch ~970ms / vsearch ~1250ms (TLS handshake every call) |
 | Build cmd | `cargo build --release` | `cargo build --release --features pg-backend` |
 | Multi-device | ❌ single machine | ✅ query from any client over TLS |
 | Server cost | $0 | VPS / cloud box |
@@ -164,7 +164,7 @@ vsearch 'wireless AP keeps disconnecting' network
 
 When to pick which:
 - **csearch** — you remember a specific phrase / IP / hostname / file path / FTS5 syntax. **Returns newest-first** (`ORDER BY ts DESC` is baked in), so the most recent definition / status of the device or topic comes back at the top.
-- **vsearch** — you forgot the exact wording, or need synonym / cross-language matching (Chinese ↔ English, etc.). **No date weighting** — pure cosine distance, so an older generic hit can outrank a newer specific hit.
+- **vsearch** — you forgot the exact wording, or need synonym / cross-language matching (Chinese ↔ English, etc.). **pg-backend: hybrid ranking** (RRF, vec 0.7 + fts 0.3) — vec recall keeps concept/cross-language strength, the fts arm surfaces rows containing a literal token (工號/IP) even when semantic phrasing would bury them. (sqlite backend is still pure cosine.) **Not a silver bullet**: meta-phrasing still dilutes both arms, and the fts arm is `ts DESC` (not relevance rank) so a topic heavily discussed *today* can bury the older canonical definition. **Always scan all returned rows, not just the first** — the row holding the answer is often rank 2-4, not 1.
 - **csearch + date filter SQL** — time-bounded questions ("what did we do today / yesterday / last Thursday?")
 
 > ⚠️ **Anti-pattern: vsearch literal IP/name with meta-phrasing.**

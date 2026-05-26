@@ -272,20 +272,6 @@ When multiple Claude CLI clients (your Mac + cloud agent + maybe a CI runner) wr
 
 4. **Embedding cost amortization** — each new row ≈ 150ms embed time. With many clients ingesting concurrently into the same DB, Ollama is the bottleneck if you have only one instance. For >5 clients, consider running Ollama on the same host as PG for LAN embed speed, and have remote clients lean on the daemon path.
 
-5. **Embed/OCR work-stealing (`--project-prefix` is mandatory for shared PG)** — `crs build`'s post-ingest `embed-missing` and `ocr-missing` phases scan the *entire* `msg` table for unembedded rows by default. With shared PG, that means Mac Metal Ollama burns cycles on bluesea's container sessions, bluesea ARM Ollama tries (and fails — 60s timeout cascade) to embed Mac sessions, and ocr-missing prints noisy `JSONL not found: /root/.claude/projects/-Users-jrjohn-...` warnings every cron cycle because each host looks for the OTHER host's local jsonl. Use `--project-prefix=...` on every host:
-   - Mac launchd wrapper: `crs build --project-prefix=-Users-jrjohn`
-   - bluesea cron: `crs build --workers 1 --project-prefix=-root,-workspace-arcana-book`
-   - Prefix is matched as `project LIKE prefix || '%'`, comma-separated for multiple. Search (vsearch/csearch) is unaffected — partition only constrains *write* workers.
-
-6. **PG `tcp_keepalives_idle = 60`** (server-side) — without this, idle TCP between batch INSERTs gets evicted by intermediate NAT (home router, FG, ISP CGN, cloud SLB) and `crs build` hangs forever in `ESTABLISHED` state with no kernel-level detection until 2-hour keepalive default. Set on the PG host (no client changes needed):
-   ```sql
-   ALTER SYSTEM SET tcp_keepalives_idle = 60;
-   ALTER SYSTEM SET tcp_keepalives_interval = 10;
-   ALTER SYSTEM SET tcp_keepalives_count = 6;
-   SELECT pg_reload_conf();
-   ```
-   Verify with a fresh **TCP** connection (`psql -h 127.0.0.1`); Unix-socket sessions always read 0 per PG docs — that's not a bug.
-
 ## Next steps after install
 
 - Edit `templates/CLAUDE.md.cloud-agent.template` and drop into your container's claude-home as `CLAUDE.md`
