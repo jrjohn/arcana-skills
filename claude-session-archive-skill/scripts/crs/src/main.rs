@@ -1147,6 +1147,18 @@ fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize, project_prefix: O
     let archive = home().join("claude-archive");
     fs::create_dir_all(&archive)?;
 
+    // CRS_BUILD_DIRECT=1 → bare direct-connect build (no daemon RPC). Set on
+    // macOS, where the daemon pool path hangs: a pooled connection sits idle
+    // (pool warm / between RPCs), an intermediate NAT evicts it, and macOS has
+    // no working TCP keepalive (verified: 0 probes via tcpdump) nor
+    // tcp_user_timeout to detect it → the next op blocks in SSLRead ~forever.
+    // The bare path avoids idle: ingest holds ONE connection doing continuous
+    // INSERTs, and embed-missing (direct) holds NO connection during the ollama
+    // phase. bluesea (LAN, no NAT) leaves this unset and uses the daemon pool.
+    if build_direct() {
+        return cmd_build_direct(no_embed, no_refresh, workers, project_prefix);
+    }
+
     // Pull existing ingest_state mtimes up front (one RPC) so per-file mtime
     // gating happens client-side with no per-file PG round trip. Also creates
     // the ingest_state table daemon-side if missing.
@@ -1218,6 +1230,123 @@ fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize, project_prefix: O
     if !no_refresh {
         refresh_all_recent_contexts();
     }
+    Ok(())
+}
+
+// CRS_BUILD_DIRECT=1 selects the bare direct-connect build path (macOS).
+#[cfg(all(feature = "pg-backend", unix))]
+fn build_direct() -> bool {
+    std::env::var("CRS_BUILD_DIRECT").map(|v| v == "1" || v == "true").unwrap_or(false)
+}
+
+// Bare direct-connect build (macOS / CRS_BUILD_DIRECT). Ingest holds ONE
+// connection doing continuous INSERTs (no idle gap → never NAT-evicted
+// mid-build); embed runs through cmd_embed_missing's direct branch which holds
+// no connection during the ollama phase.
+#[cfg(all(feature = "pg-backend", unix))]
+fn cmd_build_direct(no_embed: bool, no_refresh: bool, workers: usize, project_prefix: Option<String>) -> Result<()> {
+    let mut pg = AsyncPg::connect()?;
+    let files = collect_jsonl_files()?;
+    let mut total_new = 0usize;
+    let mut touched = 0usize;
+    for path in &files {
+        match ingest_file_async(&mut pg, path) {
+            Ok(0) => {}
+            Ok(n) => {
+                touched += 1;
+                total_new += n;
+                let proj_part = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("?");
+                let file_part = path.file_name().and_then(|s| s.to_str()).unwrap_or("?");
+                println!("  +{:6}  {}/{}", n, proj_part, file_part);
+            }
+            Err(e) => eprintln!("  !! {}: {}", path.display(), e),
+        }
+    }
+    drop(pg); // release before the long embed phase — no idle connection lingering
+    println!("\ntouched {} files, +{} rows (direct)", touched, total_new);
+
+    if !no_embed {
+        if ollama_up() {
+            if let Err(e) = cmd_embed_missing(workers, 0, project_prefix.clone()) {
+                eprintln!("(embed warning: {})", e);
+            }
+        } else {
+            println!("(skip embedding: ollama not reachable)");
+        }
+    }
+    if let Err(e) = cmd_ocr_missing(workers.max(2), 0, project_prefix.clone()) {
+        eprintln!("(ocr warning: {})", e);
+    }
+    if !no_embed && ollama_up() {
+        if let Err(e) = embed_image_ocr_missing(workers) {
+            eprintln!("(image_ocr embed warning: {})", e);
+        }
+    }
+    if !no_refresh {
+        refresh_all_recent_contexts();
+    }
+    Ok(())
+}
+
+// Bare direct-connect embed-missing with the idle fix (macOS / CRS_BUILD_DIRECT).
+// The original bare embed kept one Mutex<pg_connect> alive across all rayon
+// workers — it sat idle during each worker's ollama call (seconds) and got
+// NAT-evicted, hanging the next UPDATE in SSLRead. Here NO connection is held
+// during embedding: (1) query jobs on a fresh conn then drop it, (2) embed all
+// (rayon) holding nothing, (3) batch-UPDATE on a fresh short-lived connection.
+#[cfg(all(feature = "pg-backend", unix))]
+fn cmd_embed_missing_direct(workers: usize, limit: usize, project_prefix: Option<String>) -> Result<()> {
+    let (prefix_clause, prefix_binds) = project_prefix_filter_pg(project_prefix.as_deref(), 1);
+    let prefix_params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
+        prefix_binds.iter().map(|s| s as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
+
+    let mut pg = AsyncPg::connect()?;
+    let pending_sql = format!(
+        "SELECT COUNT(*) FROM msg WHERE embedding IS NULL AND length(content) >= 5{}",
+        prefix_clause
+    );
+    let pending: i64 = pg.query_one(&pending_sql, &prefix_params[..])?.get(0);
+    if pending <= 0 {
+        println!("nothing to embed (prefix={:?})", project_prefix);
+        return Ok(());
+    }
+    let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
+    let select_sql = format!(
+        "SELECT id, content FROM msg WHERE embedding IS NULL AND length(content) >= 5{} ORDER BY id DESC {}",
+        prefix_clause, limit_clause
+    );
+    let rows = pg.query(&select_sql, &prefix_params[..])?;
+    let jobs: Vec<(i64, String)> = rows.iter().map(|r| (r.get(0), r.get(1))).collect();
+    drop(pg); // ← no connection held during the embed phase
+
+    println!("embed-missing (direct): {} jobs over {} workers", jobs.len(), workers);
+    use rayon::prelude::*;
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
+    let results: Vec<(i64, Vec<f32>)> = pool.install(|| {
+        jobs.par_iter().filter_map(|(id, content)| {
+            let client = http_client().ok()?;
+            let snippet: String = content.chars().take(8000).collect();
+            match embed_text(&client, &snippet) {
+                Ok(v) => Some((*id, v)),
+                Err(e) => { eprintln!("embed id={} err={}", id, e); None }
+            }
+        }).collect()
+    });
+
+    // Batch UPDATE through AsyncPg (each batch one timed tx with reconnect-retry).
+    // No connection is held during the rayon embed phase above; we open a fresh one
+    // here only for the writes.
+    const UPD_BATCH: usize = 100;
+    let mut pg = AsyncPg::connect()?;
+    let mut updated = 0usize;
+    for batch in results.chunks(UPD_BATCH) {
+        if let Err(e) = pg.update_embeddings(batch) {
+            eprintln!("update batch err={}", e);
+        }
+        updated += batch.len();
+        println!("  updated {}/{}", updated, results.len());
+    }
+    println!("done. updated {} rows.", updated);
     Ok(())
 }
 
@@ -1346,16 +1475,40 @@ fn ingest_file_pg_daemon(
         }));
     }
 
-    // Even with zero parseable rows we still upsert ingest_state so the mtime
-    // gate fires next cycle (matches old ingest_file_pg semantics).
-    let req = serde_json::json!({
-        "mode": "ingest_rows",
-        "file_path": path_str,
-        "mtime": mtime,
-        "rows": rows,
-    });
-    let resp = daemon_rpc(&req)?;
-    let inserted = resp.get("inserted").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    // Chunk rows by accumulated content bytes (~128KB) so each ingest_rows RPC
+    // stays well under the socket buffer and each daemon-side transaction stays
+    // small over the WAN. A single whole-file RPC (this session: 2213 rows ×
+    // up to 200K chars = tens of MB on one JSON line) deadlocked daemon↔PG in
+    // v1.20 (SSLRead / idle-in-transaction). The LAST chunk carries final:true,
+    // which is what upserts ingest_state (mtime gate) — so even a zero-row file
+    // still sends one final chunk to record its mtime.
+    const INGEST_CHUNK_BYTES: usize = 128 * 1024;
+    let mut inserted = 0usize;
+    let mut chunk: Vec<serde_json::Value> = Vec::new();
+    let mut chunk_bytes = 0usize;
+    let send = |chunk: &[serde_json::Value], is_final: bool| -> Result<usize> {
+        let req = serde_json::json!({
+            "mode": "ingest_rows",
+            "file_path": path_str,
+            "mtime": mtime,
+            "rows": chunk,
+            "final": is_final,
+        });
+        let resp = daemon_rpc(&req)?;
+        Ok(resp.get("inserted").and_then(|v| v.as_u64()).unwrap_or(0) as usize)
+    };
+    for row in rows.into_iter() {
+        let rb = row.get("content").and_then(|v| v.as_str()).map(|s| s.len()).unwrap_or(0);
+        if chunk_bytes + rb > INGEST_CHUNK_BYTES && !chunk.is_empty() {
+            inserted += send(&chunk, false)?;
+            chunk.clear();
+            chunk_bytes = 0;
+        }
+        chunk_bytes += rb;
+        chunk.push(row);
+    }
+    // Final chunk (always sent — even if empty — to upsert ingest_state).
+    inserted += send(&chunk, true)?;
     Ok(inserted)
 }
 
@@ -1404,7 +1557,11 @@ fn embed_image_ocr_missing(workers: usize) -> Result<()> {
 
 // Direct-connect ingest — only used on non-unix (unix goes through the daemon
 // via ingest_file_pg_daemon).
-#[cfg(all(feature = "pg-backend", not(unix)))]
+// Bare direct-connect ingest (continuous INSERT on a caller-held connection).
+// Used by non-unix builds and by the macOS CRS_BUILD_DIRECT path.
+#[cfg(feature = "pg-backend")]
+// Used by the non-unix direct build; the unix build goes through ingest_file_async.
+#[allow(dead_code)]
 fn ingest_file_pg(pg: &mut postgres::Client, path: &Path) -> Result<usize> {
     let session_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
     let project = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
@@ -1423,51 +1580,124 @@ fn ingest_file_pg(pg: &mut postgres::Client, path: &Path) -> Result<usize> {
     let f = fs::File::open(path)?;
     let reader = BufReader::new(f);
 
-    let mut tx = pg.transaction()?;
+    // Batched commit: commit every COMMIT_BATCH rows on a fresh transaction
+    // rather than accumulating the whole file in one transaction. A single big
+    // transaction over the WAN accumulates uncommitted rows + WAL and stalls
+    // near the tail (observed: rows 0-542 INSERT fine, row 543 hangs). Smaller
+    // transactions keep each commit cheap. Ingest is idempotent (ON CONFLICT DO
+    // NOTHING on session_id,seq) so a partial commit just resumes next run.
+    const COMMIT_BATCH: usize = 100;
+    let insert_sql =
+        "INSERT INTO msg (session_id, project, seq, ts, role, tool_name, content)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (session_id, seq) DO NOTHING";
+    let san = |s: &str| s.replace('\u{0000}', "");
+    let session_id_s = san(&session_id);
+    let project_s = san(&project);
     let mut new_rows = 0usize;
-    {
-        let stmt = tx.prepare(
-            "INSERT INTO msg (session_id, project, seq, ts, role, tool_name, content)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (session_id, seq) DO NOTHING",
-        )?;
-        let san = |s: &str| s.replace('\u{0000}', "");
-        let session_id_s = san(&session_id);
-        let project_s = san(&project);
-        for (seq, line) in reader.lines().enumerate() {
-            let raw = match line { Ok(l) => l, Err(_) => continue };
-            if raw.is_empty() { continue; }
-            let rec: Value = match serde_json::from_str(&raw) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            let ts_raw = rec.get("timestamp").and_then(|v| v.as_str())
-                .or_else(|| rec.get("ts").and_then(|v| v.as_str()))
-                .unwrap_or("");
-            let (role, tool_name, content) = flatten_content(&rec);
-            let trimmed = content.trim();
-            if trimmed.is_empty() { continue; }
-            let bounded = truncate_chars(trimmed, 200_000);
-            let ts_opt: Option<chrono::DateTime<Utc>> = if !ts_raw.is_empty() {
-                chrono::DateTime::parse_from_rfc3339(ts_raw).ok().map(|t| t.with_timezone(&Utc))
-            } else { None };
-            let role_s = san(&role);
-            let tool_s = tool_name.as_deref().map(san);
-            let content_s = san(&bounded);
-            tx.execute(&stmt, &[
-                &session_id_s, &project_s, &(seq as i32), &ts_opt,
-                &role_s, &tool_s, &content_s,
-            ])?;
-            new_rows += 1;
+    let mut in_batch = 0usize;
+    let mut tx = pg.transaction()?;
+    for (seq, line) in reader.lines().enumerate() {
+        let raw = match line { Ok(l) => l, Err(_) => continue };
+        if raw.is_empty() { continue; }
+        let rec: Value = match serde_json::from_str(&raw) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let ts_raw = rec.get("timestamp").and_then(|v| v.as_str())
+            .or_else(|| rec.get("ts").and_then(|v| v.as_str()))
+            .unwrap_or("");
+        let (role, tool_name, content) = flatten_content(&rec);
+        let trimmed = content.trim();
+        if trimmed.is_empty() { continue; }
+        let bounded = truncate_chars(trimmed, 200_000);
+        let ts_opt: Option<chrono::DateTime<Utc>> = if !ts_raw.is_empty() {
+            chrono::DateTime::parse_from_rfc3339(ts_raw).ok().map(|t| t.with_timezone(&Utc))
+        } else { None };
+        let role_s = san(&role);
+        let tool_s = tool_name.as_deref().map(san);
+        let content_s = san(&bounded);
+        tx.execute(insert_sql, &[
+            &session_id_s, &project_s, &(seq as i32), &ts_opt,
+            &role_s, &tool_s, &content_s,
+        ])?;
+        new_rows += 1;
+        in_batch += 1;
+        if in_batch >= COMMIT_BATCH {
+            tx.commit()?;
+            tx = pg.transaction()?;
+            in_batch = 0;
         }
     }
 
+    // Final batch: remaining rows + ingest_state, committed together.
     tx.execute(
         "INSERT INTO ingest_state (file_path, mtime, lines) VALUES ($1, $2, $3)
          ON CONFLICT (file_path) DO UPDATE SET mtime = EXCLUDED.mtime, lines = EXCLUDED.lines",
         &[&path_str, &mtime, &(new_rows as i64)],
     )?;
     tx.commit()?;
+    Ok(new_rows)
+}
+
+// Async counterpart of ingest_file_pg for the macOS direct build. Same mtime gate
+// + (session_id, seq) idempotency, but each COMMIT_BATCH is flushed through
+// AsyncPg::ingest_batch (timeout + reconnect-retry) so a server-killed or stalled
+// connection is detected and retried instead of hanging forever in SSLRead.
+#[cfg(all(feature = "pg-backend", unix))]
+fn ingest_file_async(pg: &mut AsyncPg, path: &Path) -> Result<usize> {
+    let session_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+    let project = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+    let mtime: f64 = fs::metadata(path)?
+        .modified()?
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_secs_f64();
+    let path_str = path.to_string_lossy().to_string();
+
+    if let Some(r) = pg.query_opt("SELECT mtime FROM ingest_state WHERE file_path = $1", &[&path_str])? {
+        let prev: f64 = r.get(0);
+        if (prev - mtime).abs() < 1e-6 { return Ok(0); }
+    }
+
+    let san = |s: &str| s.replace('\u{0000}', "");
+    let session_id_s = san(&session_id);
+    let project_s = san(&project);
+
+    let f = fs::File::open(path)?;
+    let reader = BufReader::new(f);
+    const COMMIT_BATCH: usize = 100;
+    let mut batch: Vec<AsyncIngestRow> = Vec::with_capacity(COMMIT_BATCH);
+    let mut new_rows = 0usize;
+    for (seq, line) in reader.lines().enumerate() {
+        let raw = match line { Ok(l) => l, Err(_) => continue };
+        if raw.is_empty() { continue; }
+        let rec: Value = match serde_json::from_str(&raw) { Ok(v) => v, Err(_) => continue };
+        let ts_raw = rec.get("timestamp").and_then(|v| v.as_str())
+            .or_else(|| rec.get("ts").and_then(|v| v.as_str()))
+            .unwrap_or("");
+        let (role, tool_name, content) = flatten_content(&rec);
+        let trimmed = content.trim();
+        if trimmed.is_empty() { continue; }
+        let bounded = truncate_chars(trimmed, 200_000);
+        let ts_opt: Option<chrono::DateTime<Utc>> = if !ts_raw.is_empty() {
+            chrono::DateTime::parse_from_rfc3339(ts_raw).ok().map(|t| t.with_timezone(&Utc))
+        } else { None };
+        batch.push(AsyncIngestRow {
+            seq: seq as i32,
+            ts: ts_opt,
+            role: san(&role),
+            tool: tool_name.as_deref().map(san),
+            content: san(&bounded),
+        });
+        new_rows += 1;
+        if batch.len() >= COMMIT_BATCH {
+            pg.ingest_batch(&session_id_s, &project_s, &batch, None)?;
+            batch.clear();
+        }
+    }
+    // Final flush: remaining rows + ingest_state upsert, committed together (always
+    // runs, even with an empty tail, so the mtime gate is recorded).
+    pg.ingest_batch(&session_id_s, &project_s, &batch, Some((&path_str, mtime, new_rows as i64)))?;
     Ok(new_rows)
 }
 
@@ -1576,6 +1806,12 @@ const EMBED_FLUSH_BATCH: usize = 50;
 /// keepalive'd pool. No bare connection anywhere ⇒ no hang. Daemon down ⇒ Err.
 #[cfg(all(feature = "pg-backend", unix))]
 fn cmd_embed_missing(workers: usize, limit: usize, project_prefix: Option<String>) -> Result<()> {
+    // macOS bare path: no connection held during embed (idle fix). See
+    // cmd_embed_missing_direct. bluesea (LAN) falls through to the daemon path.
+    if build_direct() {
+        return cmd_embed_missing_direct(workers, limit, project_prefix);
+    }
+
     // Typed prefix list (bare prefixes; daemon parameterizes them server-side).
     let prefixes: Vec<&str> = project_prefix.as_deref().unwrap_or("")
         .split(',').map(|p| p.trim()).filter(|p| !p.is_empty()).collect();
@@ -2493,6 +2729,205 @@ fn pg_connect() -> Result<postgres::Client> {
     Ok(postgres::Client::connect(&url, tls)?)
 }
 
+// ───────── async PG with a userspace timeout (macOS direct-build path) ─────────
+// macOS has no TCP_USER_TIMEOUT and its postgres TCP keepalive emits no probes
+// (verified: tcpdump shows 0 probes), so a connection the server kills
+// (statement_timeout / idle_in_transaction_session_timeout) or that the WAN path
+// silently drops leaves the *sync* client blocked forever inside SSLRead — the
+// documented rust-postgres infinite-read-timeout hang. tokio::time::timeout gives
+// a real userspace deadline: dropping the future cancels the await, so we detect
+// the dead connection, reconnect, and retry (ingest is idempotent via ON CONFLICT).
+// Scoped to the build_direct path only; search / daemon keep the sync client.
+#[cfg(all(feature = "pg-backend", unix))]
+struct AsyncPg {
+    rt: tokio::runtime::Runtime,
+    client: tokio_postgres::Client,
+    url: String,
+}
+
+#[cfg(all(feature = "pg-backend", unix))]
+impl AsyncPg {
+    const OP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+    const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
+    fn connect() -> Result<Self> {
+        let url = pg_config_url()?;
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+        let client = Self::dial(&rt, &url)?;
+        Ok(Self { rt, client, url })
+    }
+
+    // Open one connection and spawn its driver onto the current-thread runtime.
+    // The driver task only advances while we are inside block_on, which is exactly
+    // when queries run — fine for this sequential single-connection ingest.
+    fn dial(rt: &tokio::runtime::Runtime, url: &str) -> Result<tokio_postgres::Client> {
+        let native = native_tls::TlsConnector::new()?;
+        let tls = postgres_native_tls::MakeTlsConnector::new(native);
+        let url = url.to_string();
+        rt.block_on(async move {
+            let connect = tokio_postgres::connect(&url, tls);
+            let (client, conn) = match tokio::time::timeout(Self::CONNECT_TIMEOUT, connect).await {
+                Ok(r) => r?,
+                Err(_) => anyhow::bail!("pg connect timed out after {:?}", Self::CONNECT_TIMEOUT),
+            };
+            tokio::spawn(async move { let _ = conn.await; });
+            Ok::<_, anyhow::Error>(client)
+        })
+    }
+
+    fn reconnect(&mut self) -> Result<()> {
+        self.client = Self::dial(&self.rt, &self.url)?;
+        Ok(())
+    }
+
+    // Run `f` (which drives a block_on to completion → owned Result, no future
+    // escapes). On timeout/error: reconnect and run once more. `f` borrows &self
+    // (shared rt + client); reconnect is &mut, sequenced after f returns, so the
+    // borrows never overlap.
+    fn attempt<T>(&mut self, f: impl Fn(&Self) -> Result<T>) -> Result<T> {
+        match f(self) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                eprintln!("  (pg retry after: {e})");
+                self.reconnect()?;
+                f(self)
+            }
+        }
+    }
+
+    fn query_opt(&mut self, sql: &str, params: &[&(dyn tokio_postgres::types::ToSql + Sync)])
+        -> Result<Option<tokio_postgres::Row>> {
+        self.attempt(|s| s.rt.block_on(async {
+            match tokio::time::timeout(Self::OP_TIMEOUT, s.client.query_opt(sql, params)).await {
+                Ok(Ok(v)) => Ok(v),
+                Ok(Err(e)) => Err(anyhow::anyhow!("pg query_opt: {e}")),
+                Err(_) => Err(anyhow::anyhow!("pg query_opt timed out after {:?}", Self::OP_TIMEOUT)),
+            }
+        }))
+    }
+    fn query(&mut self, sql: &str, params: &[&(dyn tokio_postgres::types::ToSql + Sync)])
+        -> Result<Vec<tokio_postgres::Row>> {
+        self.attempt(|s| s.rt.block_on(async {
+            match tokio::time::timeout(Self::OP_TIMEOUT, s.client.query(sql, params)).await {
+                Ok(Ok(v)) => Ok(v),
+                Ok(Err(e)) => Err(anyhow::anyhow!("pg query: {e}")),
+                Err(_) => Err(anyhow::anyhow!("pg query timed out after {:?}", Self::OP_TIMEOUT)),
+            }
+        }))
+    }
+    fn query_one(&mut self, sql: &str, params: &[&(dyn tokio_postgres::types::ToSql + Sync)])
+        -> Result<tokio_postgres::Row> {
+        self.attempt(|s| s.rt.block_on(async {
+            match tokio::time::timeout(Self::OP_TIMEOUT, s.client.query_one(sql, params)).await {
+                Ok(Ok(v)) => Ok(v),
+                Ok(Err(e)) => Err(anyhow::anyhow!("pg query_one: {e}")),
+                Err(_) => Err(anyhow::anyhow!("pg query_one timed out after {:?}", Self::OP_TIMEOUT)),
+            }
+        }))
+    }
+
+    // Insert a batch of msg rows + (optionally) the ingest_state upsert, all inside
+    // ONE server transaction wrapped in a single timeout. On timeout/error the whole
+    // batch is reconnected + retried — safe because INSERT is ON CONFLICT DO NOTHING
+    // and the state upsert is idempotent. Keeping each tx small (≤ COMMIT_BATCH rows)
+    // also keeps every statement well under the server's 120s statement_timeout and
+    // never leaves a transaction idle past the 60s idle_in_transaction timeout.
+    fn ingest_batch(
+        &mut self,
+        session_id: &str,
+        project: &str,
+        rows: &[AsyncIngestRow],
+        final_state: Option<(&str, f64, i64)>,
+    ) -> Result<()> {
+        if rows.is_empty() && final_state.is_none() { return Ok(()); }
+        self.attempt(|s| s.rt.block_on(async {
+            // ONE multi-row INSERT per batch = one WAN round trip instead of one per
+            // row (the row-at-a-time version made a build over the WAN impractically
+            // slow). A single INSERT statement is atomic even under autocommit, so no
+            // explicit transaction is needed, and retry stays safe via ON CONFLICT.
+            let fut = async {
+                if !rows.is_empty() {
+                    use std::fmt::Write as _;
+                    let mut sql = String::from(
+                        "INSERT INTO msg (session_id, project, seq, ts, role, tool_name, content) VALUES ");
+                    let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
+                        Vec::with_capacity(rows.len() * 7);
+                    let mut n = 1;
+                    for (i, r) in rows.iter().enumerate() {
+                        if i > 0 { sql.push(','); }
+                        let _ = write!(sql, "(${},${},${},${},${},${},${})",
+                            n, n + 1, n + 2, n + 3, n + 4, n + 5, n + 6);
+                        n += 7;
+                        params.push(&session_id);
+                        params.push(&project);
+                        params.push(&r.seq);
+                        params.push(&r.ts);
+                        params.push(&r.role);
+                        params.push(&r.tool);
+                        params.push(&r.content);
+                    }
+                    sql.push_str(" ON CONFLICT (session_id, seq) DO NOTHING");
+                    s.client.execute(sql.as_str(), &params).await?;
+                }
+                if let Some((path, mtime, lines)) = final_state {
+                    s.client.execute(
+                        "INSERT INTO ingest_state (file_path, mtime, lines) VALUES ($1,$2,$3)
+                         ON CONFLICT (file_path) DO UPDATE SET mtime=EXCLUDED.mtime, lines=EXCLUDED.lines",
+                        &[&path, &mtime, &lines],
+                    ).await?;
+                }
+                Ok::<(), tokio_postgres::Error>(())
+            };
+            match tokio::time::timeout(Self::OP_TIMEOUT, fut).await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(e)) => Err(anyhow::anyhow!("pg ingest_batch: {e}")),
+                Err(_) => Err(anyhow::anyhow!("pg ingest_batch timed out after {:?}", Self::OP_TIMEOUT)),
+            }
+        }))
+    }
+
+    // Batch-UPDATE embeddings as ONE multi-row UPDATE ... FROM (VALUES ...) = one
+    // WAN round trip per batch (timeout + reconnect-retry). Vectors are rendered as
+    // text literals and cast to ::vector server-side.
+    fn update_embeddings(&mut self, batch: &[(i64, Vec<f32>)]) -> Result<()> {
+        if batch.is_empty() { return Ok(()); }
+        let lits: Vec<String> = batch.iter().map(|(_, v)| vec_literal(v)).collect();
+        self.attempt(|s| s.rt.block_on(async {
+            let fut = async {
+                use std::fmt::Write as _;
+                let mut sql = String::from("UPDATE msg SET embedding = v.emb::vector FROM (VALUES ");
+                let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
+                    Vec::with_capacity(batch.len() * 2);
+                let mut n = 1;
+                for (i, ((id, _), lit)) in batch.iter().zip(lits.iter()).enumerate() {
+                    if i > 0 { sql.push(','); }
+                    let _ = write!(sql, "(${}::bigint,${}::text)", n, n + 1);
+                    n += 2;
+                    params.push(id);
+                    params.push(lit);
+                }
+                sql.push_str(") AS v(id, emb) WHERE msg.id = v.id");
+                s.client.execute(sql.as_str(), &params).await?;
+                Ok::<(), tokio_postgres::Error>(())
+            };
+            match tokio::time::timeout(Self::OP_TIMEOUT, fut).await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(e)) => Err(anyhow::anyhow!("pg update_embeddings: {e}")),
+                Err(_) => Err(anyhow::anyhow!("pg update_embeddings timed out after {:?}", Self::OP_TIMEOUT)),
+            }
+        }))
+    }
+}
+
+#[cfg(all(feature = "pg-backend", unix))]
+struct AsyncIngestRow {
+    seq: i32,
+    ts: Option<chrono::DateTime<Utc>>,
+    role: String,
+    tool: Option<String>,
+    content: String,
+}
+
 #[cfg(feature = "pg-backend")]
 fn pg_latest_msg_ts(slug: &str) -> Result<i64> {
     let mut pg = pg_connect()?;
@@ -3011,6 +3446,12 @@ fn rpc_ingest_rows(pool: &PgPool, req: &serde_json::Value) -> Result<serde_json:
         .ok_or_else(|| anyhow!("ingest_rows: missing 'mtime'"))?;
     let rows = req.get("rows").and_then(|v| v.as_array())
         .ok_or_else(|| anyhow!("ingest_rows: missing 'rows' array"))?;
+    // Chunked ingest: build sends a file's rows across multiple ingest_rows RPCs
+    // (each bounded ~128KB) to avoid a single multi-MB JSON line over the socket
+    // and a single huge cross-WAN transaction (the v1.20 SSLRead/idle-in-txn
+    // deadlock). `final` (default true for backward compat) marks the last chunk,
+    // which also upserts ingest_state so the mtime gate fires next cycle.
+    let is_final = req.get("final").and_then(|v| v.as_bool()).unwrap_or(true);
 
     let mut conn = pool.get()?;
     let mut tx = conn.transaction()?;
@@ -3036,11 +3477,15 @@ fn rpc_ingest_rows(pool: &PgPool, req: &serde_json::Value) -> Result<serde_json:
             inserted += 1;
         }
     }
-    tx.execute(
-        "INSERT INTO ingest_state (file_path, mtime, lines) VALUES ($1, $2, $3)
-         ON CONFLICT (file_path) DO UPDATE SET mtime = EXCLUDED.mtime, lines = EXCLUDED.lines",
-        &[&file_path, &file_mtime, &(inserted as i64)],
-    )?;
+    // Only the final chunk records ingest_state (mtime gate). `lines` is this
+    // chunk's count — informational only; the gate keys on mtime, not lines.
+    if is_final {
+        tx.execute(
+            "INSERT INTO ingest_state (file_path, mtime, lines) VALUES ($1, $2, $3)
+             ON CONFLICT (file_path) DO UPDATE SET mtime = EXCLUDED.mtime, lines = EXCLUDED.lines",
+            &[&file_path, &file_mtime, &(inserted as i64)],
+        )?;
+    }
     tx.commit()?;
     Ok(serde_json::json!({"inserted": inserted}))
 }

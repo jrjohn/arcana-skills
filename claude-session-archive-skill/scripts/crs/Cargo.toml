@@ -26,6 +26,8 @@ pg-backend = [
     "dep:native-tls",
     "dep:r2d2",
     "dep:r2d2_postgres",
+    "dep:tokio",
+    "dep:tokio-postgres",
 ]
 
 [dependencies]
@@ -50,6 +52,11 @@ postgres-native-tls = { version = "0.5", optional = true }
 native-tls = { version = "0.2", optional = true }
 r2d2 = { version = "0.8", optional = true }
 r2d2_postgres = { version = "0.18", optional = true }
+# Async PG path for the macOS direct build: tokio::time::timeout gives a
+# userspace read timeout (macOS lacks TCP_USER_TIMEOUT), so a server-killed or
+# stalled connection is detected + retried instead of hanging in SSLRead.
+tokio = { version = "1", features = ["rt", "net", "time"], optional = true }
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4"], optional = true }
 
 [profile.release]
 opt-level = 3
