@@ -201,6 +201,17 @@ Daemon listens on `$XDG_CACHE_HOME/pgsearchd/pgsearchd.sock` (defaults to `~/Lib
 
 `com.<USERNAME>.claude-archive.plist` runs `crs build` every 15 min. When `crs` is built with `--features pg-backend`, that subcommand writes to PG instead of local sqlite — same plist, different binary behavior.
 
+#### Build path: daemon pool vs `CRS_BUILD_DIRECT`
+
+A pg-backend `crs build` reaches PG one of two ways — pick by whether a build daemon is available:
+
+| Mode | When | How writes happen |
+|------|------|-------------------|
+| **Daemon pool** (default, v1.20.0) | Host runs `pgsearchd` (normal Mac dev setup) | Build sends typed RPCs (`ingest_rows`, `embed_select/update`, …) over the unix socket; **zero** direct PG connections — it borrows the daemon's resident, keepalive'd r2d2 pool. No-fallback by design: daemon unreachable ⇒ build errors (the plist `KeepAlive` keeps pgsearchd up). Socket owner must equal the build user. |
+| **`CRS_BUILD_DIRECT=1`** (v1.21.0) | No build daemon — containers / cron agents / a Mac you don't want to run pgsearchd on | Build connects **straight to PG** via `AsyncPg` (tokio-postgres). Every op is `tokio::time::timeout(30s)` + reconnect-retry (userspace deadline — survives macOS's missing `TCP_USER_TIMEOUT` and WAN drops where the sync client would hang in `SSLRead`). Batched `INSERT` / `UPDATE … FROM (VALUES …)`, one round trip per 100 rows. cfg-gated to unix; the search path is untouched. |
+
+> The containerized daily-ci-agent uses `CRS_BUILD_DIRECT=1` (it has no pgsearchd — see [cloud-deployment.md](cloud-deployment.md)). On a Mac dev box, prefer the daemon pool (pgsearchd is already running for `csearch`/`vsearch`); only set `CRS_BUILD_DIRECT=1` if you deliberately don't run the daemon.
+
 ### 4. Initial seed
 
 Two paths:
