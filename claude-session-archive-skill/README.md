@@ -307,6 +307,12 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.21.0 — async direct-ingest path (`CRS_BUILD_DIRECT=1`) with userspace timeout + batch I/O
+
+The macOS direct build (`CRS_BUILD_DIRECT=1`, build talks straight to the shared PG instead of through the pgsearchd daemon pool) used to **hang forever** over WAN: macOS has no `TCP_USER_TIMEOUT` and the sync postgres client has an infinite read timeout, so when the server kills a connection (`statement_timeout` / `idle_in_transaction`, added by bluesea crash recovery) or the WAN path drops a packet, the next op blocks in `SSLRead` with no way to recover. Row-at-a-time `INSERT` over the WAN was also impractically slow.
+
+Now the direct path uses **`AsyncPg`** (tokio-postgres on a current-thread runtime): every op is wrapped in `tokio::time::timeout(30s)` + reconnect-retry — a userspace deadline that works on macOS where keepalive / `tcp_user_timeout` don't (drop the future, cancel the await, reconnect, retry; ingest is idempotent via `ON CONFLICT`). Plus **multi-row batch** `INSERT` (`ingest_batch`) and `UPDATE … FROM (VALUES …)` (`update_embeddings`) — one round trip per 100-row batch instead of one per row. `Cargo.toml` adds `tokio` (rt/net/time) + `tokio-postgres` (drops the `macros` feature to avoid the tokio-macros 2.7 pin). Validated on macOS: 21,770-row ingest with no hang, batched embed `UPDATE` clean. **cfg-gated to unix and only active under `CRS_BUILD_DIRECT=1`** — the daemon/search path and Linux/container daemon-path builds are unaffected. See the build-path options in [references/pg-backend.md](references/pg-backend.md#build-path-daemon-pool-vs-crs_build_direct).
+
 ### v1.20.0 — build PG ops route through pgsearchd daemon pool (fix embed-missing SSLRead hang)
 
 `crs build`'s ingest + embed-missing previously used bare `pg_connect()` with **no TCP keepalive**. During embed-missing, a connection shared across rayon workers sat idle while workers ran ollama embeds; an intermediate NAT (home router / ISP CGN) evicted the idle connection and the next `UPDATE` blocked in `SSLRead` for ~2h (OS default TCP timeout) — hanging the build and freezing the embed backlog (observed 2026-05-26 on the Mac WAN→PG path; the per-build mkdir lockdir then made every subsequent 15-min run skip, so nothing drained).
