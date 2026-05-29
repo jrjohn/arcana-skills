@@ -49,6 +49,7 @@ SKILLS=(
     "mis-management-skill"
     "luminous-skill"
     "daily-ci-agent-skill"
+    "devops-skill"
 )
 
 # Config paths

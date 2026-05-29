@@ -1,0 +1,112 @@
+// ============================================
+// Generic Jenkins Pipeline Template
+// DevOps Skill
+// ============================================
+
+pipeline {
+    agent any
+
+    environment {
+        REGISTRY = 'localhost:5000'
+        PROJECT_NAME = '{{PROJECT_NAME}}'
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        SONAR_HOST = 'http://sonarqube:9000'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo "Building ${PROJECT_NAME}..."
+                // Override in language-specific Jenkinsfile
+                sh 'echo "Build step - customize per language"'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo "Running tests..."
+                // Override in language-specific Jenkinsfile
+                sh 'echo "Test step - customize per language"'
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: '**/test-results/**/*.xml'
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh 'echo "SonarQube analysis - customize per language"'
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Docker Compose Build') {
+            steps {
+                sh "VERSION=${IMAGE_TAG} docker compose build"
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 1 --severity CRITICAL ${REGISTRY}/${PROJECT_NAME}:${IMAGE_TAG}"
+            }
+        }
+
+        stage('Push') {
+            steps {
+                sh "VERSION=${IMAGE_TAG} docker compose push"
+                sh "docker tag ${REGISTRY}/${PROJECT_NAME}:${IMAGE_TAG} ${REGISTRY}/${PROJECT_NAME}:latest"
+                sh "docker push ${REGISTRY}/${PROJECT_NAME}:latest"
+            }
+        }
+
+        stage('Deploy') {
+            when {
+                branch 'main'
+            }
+            steps {
+                echo "Deploying ${PROJECT_NAME}:${IMAGE_TAG}..."
+                sh "IMAGE_TAG=${IMAGE_TAG} docker compose -f docker-compose.staging.yml up -d"
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline succeeded for ${PROJECT_NAME}:${IMAGE_TAG}"
+        }
+        failure {
+            echo "Pipeline failed for ${PROJECT_NAME}:${IMAGE_TAG}"
+        }
+        always {
+            cleanWs()
+        }
+    }
+}

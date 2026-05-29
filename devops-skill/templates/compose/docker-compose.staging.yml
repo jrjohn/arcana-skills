@@ -1,0 +1,83 @@
+# ============================================
+# Staging Environment Docker Compose
+# {{PROJECT_NAME}} - Blue/Green Deployment
+# ============================================
+
+services:
+  # === Application (Blue) ===
+  app-blue:
+    image: {{REGISTRY}}/{{PROJECT_NAME}}:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: {{PROJECT_NAME}}-blue
+    restart: unless-stopped
+    ports:
+      - "{{APP_PORT}}:{{APP_PORT}}"
+    environment:
+      - NODE_ENV=staging
+      - SPRING_PROFILES_ACTIVE=staging
+      - DATABASE_URL=postgresql://app:${DB_PASSWORD}@db:5432/{{PROJECT_NAME}}_staging
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:{{APP_PORT}}/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - app-net
+
+  # === Application (Green) — for blue/green swap ===
+  # app-green:
+  #   image: {{REGISTRY}}/{{PROJECT_NAME}}:${IMAGE_TAG_GREEN:?IMAGE_TAG_GREEN is required}
+  #   container_name: {{PROJECT_NAME}}-green
+  #   restart: unless-stopped
+  #   ports:
+  #     - "{{APP_PORT_ALT}}:{{APP_PORT}}"
+  #   environment:
+  #     - NODE_ENV=staging
+  #     - DATABASE_URL=postgresql://app:${DB_PASSWORD}@db:5432/{{PROJECT_NAME}}_staging
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:{{APP_PORT}}/health"]
+  #     interval: 15s
+  #     timeout: 5s
+  #     retries: 3
+  #   networks:
+  #     - app-net
+
+  # === Database ===
+  db:
+    image: postgres:16-alpine
+    container_name: {{PROJECT_NAME}}-db-staging
+    restart: unless-stopped
+    volumes:
+      - db_data_staging:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB={{PROJECT_NAME}}_staging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-net
+
+volumes:
+  db_data_staging:
+
+networks:
+  app-net:
+    driver: bridge

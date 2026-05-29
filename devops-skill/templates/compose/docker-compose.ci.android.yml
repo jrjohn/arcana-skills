@@ -1,0 +1,32 @@
+# TESTED: 2026-02-23 | Rocky VM (ARM64) | 94s | QEMU x86_64 emulation
+# ============================================
+# Android CI Build Compose Template
+# ============================================
+# Builds Android APK using Docker with amd64 emulation on ARM64 hosts.
+#
+# Prerequisites (ARM64 hosts only):
+#   sudo docker run --rm --privileged tonistiigi/binfmt --install amd64
+#
+# Usage:
+#   docker compose -f docker-compose.ci.android.yml build
+#   docker compose -f docker-compose.ci.android.yml run --rm android-build
+#
+# APK output: ./app/build/outputs/apk/debug/
+# ============================================
+
+services:
+  android-build:
+    build:
+      context: .
+      dockerfile: Dockerfile.ci
+      platforms:
+        - linux/amd64
+    image: {{REGISTRY}}/arcana/{{APP_NAME}}:${VERSION:-1.0.0}
+    platform: linux/amd64
+    volumes:
+      - .:/project
+      - gradle-cache:/root/.gradle
+    command: ./gradlew assembleDebug --no-daemon
+
+volumes:
+  gradle-cache:

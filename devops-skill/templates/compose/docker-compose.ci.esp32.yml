@@ -1,0 +1,28 @@
+# TESTED: 2026-02-23 | Rocky VM (ARM64) | 370s | espressif/idf:v5.5.2
+# ============================================
+# ESP32 CI Build Compose Template
+# ============================================
+# Uses pre-pulled espressif/idf image (no Dockerfile needed).
+# Image is ~11GB on ARM64 — pre-pull to avoid timeout in CI.
+#
+# Prerequisites:
+#   docker pull espressif/idf:v5.5.2
+#
+# Usage:
+#   docker compose -f docker-compose.ci.esp32.yml run --rm esp32-build
+#
+# Firmware output: ./build/ (on host via volume mount)
+#   - build/{{PROJECT_NAME}}.bin
+#   - build/bootloader/bootloader.bin
+#   - build/partition_table/partition-table.bin
+# ============================================
+
+services:
+  esp32-build:
+    image: espressif/idf:v5.5.2
+    working_dir: /project
+    environment:
+      - HOME=/tmp
+    volumes:
+      - .:/project
+    command: bash -c "rm -rf build && idf.py set-target esp32 build"

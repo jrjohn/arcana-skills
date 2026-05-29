@@ -1,0 +1,81 @@
+// TESTED: harmonyos-app-pipeline — 68s build time (Rocky Linux ARM64, QEMU amd64 emulation)
+// ============================================
+// HarmonyOS Jenkins Pipeline
+// DevOps Skill — Production
+// ============================================
+// Builds HarmonyOS HAP using Docker Compose with
+// linux/amd64 emulation (QEMU) for ARM64 hosts.
+// OHOS SDK 6.0.0.858, dual .npmrc registry config.
+//
+// Prerequisites:
+//   - QEMU binfmt registered on host:
+//     sudo docker run --rm --privileged tonistiigi/binfmt --install amd64
+//   - docker-compose.ci.yml in project root with harmonyos-build service
+//   - Dual .npmrc registry: @aspect → repo.harmonyos.com, default → registry.npmjs.org
+// ============================================
+
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME = '{{APP_NAME}}'
+    }
+
+    options {
+        timeout(time: 90, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
+                    env.VERSION = sh(script: "grep 'versionName' AppScope/app.json5 | head -1 | sed 's/.*\"\\(.*\\)\".*/\\1/' || echo '0.1.0'", returnStdout: true).trim()
+                }
+            }
+        }
+
+        // ========================================
+        // Docker Compose Build + Run
+        // ========================================
+        // Two-step: build the image, then run the HAP build.
+        // Uses docker-compose.ci.yml for CI-specific overrides.
+        // QEMU amd64 emulation is transparent via binfmt.
+        // ========================================
+        stage('Build HAP') {
+            steps {
+                dir("${WORKSPACE}") {
+                    sh 'docker compose -f docker-compose.ci.yml build'
+                    sh 'docker compose -f docker-compose.ci.yml run --rm harmonyos-build'
+                }
+            }
+        }
+
+        stage('Verify HAP') {
+            steps {
+                dir("${WORKSPACE}") {
+                    sh 'ls -la entry/build/default/outputs/default/*.hap 2>/dev/null || echo "HAP not found"'
+                    archiveArtifacts artifacts: 'entry/build/default/outputs/default/*.hap', allowEmptyArchive: true, fingerprint: true
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "HarmonyOS build succeeded: ${APP_NAME} v${VERSION} #${IMAGE_TAG}"
+        }
+        failure {
+            echo "HarmonyOS build FAILED: ${APP_NAME} #${IMAGE_TAG}"
+        }
+        always {
+            dir("${WORKSPACE}") {
+                sh 'docker compose -f docker-compose.ci.yml down --remove-orphans 2>/dev/null || true'
+            }
+        }
+    }
+}

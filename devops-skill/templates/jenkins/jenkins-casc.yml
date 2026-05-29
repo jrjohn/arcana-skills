@@ -1,0 +1,105 @@
+# ============================================
+# Jenkins Configuration as Code (JCasC)
+# DevOps Skill Template
+# ============================================
+
+jenkins:
+  systemMessage: "Jenkins - Managed by DevOps Skill (JCasC)"
+  numExecutors: 4
+  mode: NORMAL
+  scmCheckoutRetryCount: 3
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD:-admin}"
+
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: "DOCKER_REGISTRY"
+            value: "localhost:5000"
+          - key: "SONAR_HOST_URL"
+            value: "http://sonarqube:9000"
+
+unclassified:
+  location:
+    url: "http://localhost:8080/"
+    adminAddress: "admin@example.com"
+
+  sonarGlobalConfiguration:
+    installations:
+      - name: "SonarQube"
+        serverUrl: "http://sonarqube:9000"
+        triggers:
+          skipScmCause: false
+          skipUpstreamCause: false
+
+  globalLibraries:
+    libraries:
+      - name: "shared-pipeline"
+        defaultVersion: "main"
+        implicit: false
+        allowVersionOverride: true
+        includeInChangesets: false
+        retriever:
+          modernSCM:
+            scm:
+              git:
+                remote: "{{SHARED_LIBRARY_REPO}}"
+
+tool:
+  jdk:
+    installations:
+      - name: "jdk-21"
+        properties:
+          - installSource:
+              installers:
+                - jdkInstaller:
+                    id: "jdk-21"
+                    acceptLicense: true
+  maven:
+    installations:
+      - name: "maven-3"
+        properties:
+          - installSource:
+              installers:
+                - maven:
+                    id: "3.9.6"
+
+  nodejs:
+    installations:
+      - name: "node-22"
+        properties:
+          - installSource:
+              installers:
+                - nodeJSInstaller:
+                    id: "22.0.0"
+                    npmPackages: ""
+
+jobs:
+  - script: >
+      folder('{{PROJECT_NAME}}') {
+        displayName('{{PROJECT_NAME}}')
+        description('CI/CD Pipeline for {{PROJECT_NAME}}')
+      }
+  - script: >
+      multibranchPipelineJob('{{PROJECT_NAME}}/pipeline') {
+        branchSources {
+          git {
+            id('{{PROJECT_NAME}}-git')
+            remote('{{GIT_REPO_URL}}')
+          }
+        }
+        orphanedItemStrategy {
+          discardOldItems {
+            numToKeep(5)
+          }
+        }
+      }

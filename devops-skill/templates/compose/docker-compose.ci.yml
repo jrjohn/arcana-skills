@@ -1,0 +1,23 @@
+# TESTED: 2026-02-23 | Rocky VM (ARM64) | All web/cloud pipelines
+# ============================================
+# Generic CI Build + Push Compose Template
+# ============================================
+# Used by: Go, Rust, Node.js, Spring Boot, Python, Vue, React, Angular
+#
+# Usage:
+#   VERSION=1.0.0 docker compose -f docker-compose.ci.yml build
+#   docker push {{REGISTRY}}/arcana/{{APP_NAME}}:${VERSION}
+#
+# Jenkins pipeline pattern:
+#   sh "VERSION=${VERSION} docker compose -f docker-compose.ci.yml build"
+#   sh "docker tag ${REGISTRY}/arcana/${APP_NAME}:${VERSION} ${IMAGE_TAG}:build-${BUILD_NUMBER}"
+#   sh "docker push ${IMAGE_TAG}:${VERSION}"
+#   sh "docker push ${IMAGE_TAG}:build-${BUILD_NUMBER}"
+# ============================================
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.ci
+    image: {{REGISTRY}}/arcana/{{APP_NAME}}:${VERSION:-1.0.0}

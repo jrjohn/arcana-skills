@@ -1,0 +1,68 @@
+# ============================================
+# Prometheus Configuration
+# DevOps Skill Template
+# ============================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Load rules
+rule_files:
+  - "alert_rules.yml"
+
+# Scrape configuration
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Application services
+  - job_name: "app"
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["app:{{APP_PORT}}"]
+        labels:
+          service: "{{PROJECT_NAME}}"
+          environment: "{{ENVIRONMENT}}"
+
+  # Spring Boot Actuator (if applicable)
+  - job_name: "springboot"
+    metrics_path: "/actuator/prometheus"
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["app:8080"]
+        labels:
+          service: "{{PROJECT_NAME}}"
+          framework: "springboot"
+
+  # Jenkins monitoring
+  - job_name: "jenkins"
+    metrics_path: "/prometheus/"
+    static_configs:
+      - targets: ["jenkins:8080"]
+
+  # Node Exporter (host metrics)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # cAdvisor (container metrics)
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # Docker daemon metrics
+  - job_name: "docker"
+    static_configs:
+      - targets: ["host.docker.internal:9323"]

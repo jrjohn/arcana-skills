@@ -1,0 +1,66 @@
+// TESTED: android-app-pipeline | Rocky VM (ARM64) | 94s | 2026-02-23
+// Pattern: agent any + QEMU binfmt + docker compose (linux/amd64) build + run
+// Source: android-app — Gradle 8.11.1, Android SDK 35, QEMU x86_64 emulation
+// Prerequisites:
+//   - QEMU binfmt registered on host:
+//     sudo docker run --rm --privileged tonistiigi/binfmt --install amd64
+//   - docker-compose.ci.yml with platform: linux/amd64 service
+// Note: No push — APK artifact only
+
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME  = "{{APP_NAME}}"
+        VERSION   = "${params.VERSION ?: '0.1.0'}"
+    }
+
+    parameters {
+        string(name: 'VERSION', defaultValue: '0.1.0', description: 'App version')
+    }
+
+    options {
+        timeout(time: 20, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Compose Build') {
+            steps {
+                dir("${WORKSPACE}") {
+                    sh "docker compose -f docker-compose.ci.yml build"
+                }
+            }
+        }
+
+        stage('Gradle assembleDebug') {
+            steps {
+                dir("${WORKSPACE}") {
+                    sh "docker compose -f docker-compose.ci.yml run --rm android-build"
+                }
+            }
+        }
+
+        stage('Archive APK') {
+            steps {
+                archiveArtifacts artifacts: 'app/build/outputs/apk/**/*.apk', fingerprint: true
+            }
+        }
+    }
+
+    post {
+        success { echo "Pipeline SUCCESS - ${APP_NAME}:${VERSION}" }
+        failure { echo "Pipeline FAILED" }
+        always {
+            echo "Build number ${BUILD_NUMBER} done"
+            sh "docker compose -f docker-compose.ci.yml down --remove-orphans || true"
+        }
+    }
+}

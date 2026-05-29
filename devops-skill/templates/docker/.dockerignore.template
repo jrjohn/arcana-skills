@@ -1,0 +1,101 @@
+# Version Control
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.iml
+*.swp
+*.swo
+
+# Node.js
+node_modules
+npm-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+.env
+
+# Java
+target
+*.class
+*.jar
+!target/*.jar
+
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# Go
+vendor/
+*.exe
+*.test
+
+# C/C++ (Embedded)
+*.o
+*.d
+*.elf
+*.map
+build/
+sdkconfig.old
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+packages/
+*.nupkg
+
+# HarmonyOS
+oh_modules/
+build/
+.preview/
+
+# Build output
+dist
+build
+out
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# DevOps
+.devops
+Jenkinsfile
+sonar-project.properties
+
+# Documentation
+*.md
+LICENSE
+docs
+
+# Tests
+test
+tests
+__tests__
+*.test.*
+*.spec.*
+coverage
+.nyc_output
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (NEVER include)
+*.pem
+*.key
+*.cert
+.env.*
+credentials*
+secrets*

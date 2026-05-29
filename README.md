@@ -91,6 +91,13 @@ Interactive mode shows the same status table as the bash version (`[+] new`, `[�
 | `springboot-developer-skill` | Spring Boot development guide (Dual-protocol, OSGi Plugin System) |
 | `windows-developer-skill` | Windows desktop development guide (WinUI 3, CRDT-based offline sync) |
 
+### DevOps & Infrastructure Skills
+
+| Skill | Description |
+|-------|-------------|
+| `devops-skill` | Unified CI/CD infrastructure for multi-language stacks — ships 15 language pipeline templates (Go, Rust, Node, Spring Boot, Python, .NET, Vue, React, Angular, Android, HarmonyOS, ESP32, STM32, iOS, Windows) run as Jenkins **multibranch** pipelines with JCasC, private Docker registry, SonarQube + Architecture Qube quality gates, Nexus proxy repos, Prometheus/Grafana/Loki monitoring, and versioned job-config disaster-recovery backup |
+| `daily-ci-agent-skill` | Containerized Claude CLI that runs daily on a self-hosted VPS — CI/CD health checks, Renovate dependency-PR review, image-upgrade scanning, and a markdown report served via authenticated nginx |
+
 ### Design Skills
 
 | Skill | Description |

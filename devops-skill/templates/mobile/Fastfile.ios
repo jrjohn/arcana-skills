@@ -1,0 +1,68 @@
+# ============================================
+# iOS Fastlane Configuration
+# DevOps Skill Template
+# ============================================
+
+default_platform(:ios)
+
+platform :ios do
+  desc "Run unit tests"
+  lane :test do
+    scan(
+      scheme: "{{SCHEME}}",
+      device: "iPhone 16",
+      clean: true,
+      output_types: "junit",
+      output_files: "test-results.xml"
+    )
+  end
+
+  desc "Build and archive"
+  lane :build do
+    # Increment build number
+    increment_build_number(
+      build_number: ENV["BUILD_NUMBER"] || latest_testflight_build_number + 1
+    )
+
+    # Match certificates and profiles
+    match(
+      type: "appstore",
+      readonly: true
+    )
+
+    # Build
+    gym(
+      scheme: "{{SCHEME}}",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "{{PROJECT_NAME}}.ipa"
+    )
+  end
+
+  desc "Upload to TestFlight"
+  lane :beta do
+    build
+    pilot(
+      skip_waiting_for_build_processing: true,
+      distribute_external: false
+    )
+  end
+
+  desc "Submit to App Store"
+  lane :release do
+    build
+    deliver(
+      submit_for_review: true,
+      automatic_release: false,
+      force: true,
+      skip_metadata: false,
+      skip_screenshots: false
+    )
+  end
+
+  # Error handling
+  error do |lane, exception|
+    puts "Error in lane #{lane}: #{exception.message}"
+  end
+end

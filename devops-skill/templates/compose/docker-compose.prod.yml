@@ -1,0 +1,109 @@
+# ============================================
+# Production Environment Docker Compose
+# {{PROJECT_NAME}}
+# ============================================
+# NOTE: For K8s production, use k8s/ manifests instead.
+# This file is for Docker Compose-based production deployments.
+
+services:
+  # === Application ===
+  app:
+    image: {{REGISTRY}}/{{PROJECT_NAME}}:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: {{PROJECT_NAME}}-app
+    restart: always
+    ports:
+      - "{{APP_PORT}}:{{APP_PORT}}"
+    environment:
+      - NODE_ENV=production
+      - SPRING_PROFILES_ACTIVE=prod
+      - DATABASE_URL=postgresql://app:${DB_PASSWORD}@db:5432/{{PROJECT_NAME}}_prod
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:{{APP_PORT}}/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-net
+
+  # === Database ===
+  db:
+    image: postgres:16-alpine
+    container_name: {{PROJECT_NAME}}-db-prod
+    restart: always
+    volumes:
+      - db_data_prod:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB={{PROJECT_NAME}}_prod
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-net
+
+  # === Nginx Reverse Proxy ===
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: {{PROJECT_NAME}}-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-net
+
+volumes:
+  db_data_prod:
+
+networks:
+  app-net:
+    driver: bridge

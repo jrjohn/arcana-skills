@@ -1,0 +1,72 @@
+# ============================================
+# Android Fastlane Configuration
+# DevOps Skill Template
+# ============================================
+
+default_platform(:android)
+
+platform :android do
+  desc "Run unit tests"
+  lane :test do
+    gradle(
+      task: "test",
+      build_type: "Debug"
+    )
+  end
+
+  desc "Build release APK/AAB"
+  lane :build do
+    # Increment version code
+    android_set_version_code(
+      version_code: ENV["BUILD_NUMBER"] || Time.now.to_i
+    )
+
+    gradle(
+      task: "bundleRelease",
+      properties: {
+        "android.injected.signing.store.file" => ENV["KEYSTORE_PATH"],
+        "android.injected.signing.store.password" => ENV["KEYSTORE_PASSWORD"],
+        "android.injected.signing.key.alias" => ENV["KEY_ALIAS"],
+        "android.injected.signing.key.password" => ENV["KEY_PASSWORD"]
+      }
+    )
+  end
+
+  desc "Deploy to internal testing"
+  lane :internal do
+    build
+    supply(
+      track: "internal",
+      aab: lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH],
+      json_key: ENV["GOOGLE_PLAY_JSON_KEY"],
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+
+  desc "Promote to beta"
+  lane :beta do
+    supply(
+      track: "internal",
+      track_promote_to: "beta",
+      json_key: ENV["GOOGLE_PLAY_JSON_KEY"],
+      skip_upload_changelogs: false
+    )
+  end
+
+  desc "Promote to production"
+  lane :release do
+    supply(
+      track: "beta",
+      track_promote_to: "production",
+      json_key: ENV["GOOGLE_PLAY_JSON_KEY"],
+      rollout: "0.1"  # 10% staged rollout
+    )
+  end
+
+  # Error handling
+  error do |lane, exception|
+    puts "Error in lane #{lane}: #{exception.message}"
+  end
+end

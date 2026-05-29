@@ -1,0 +1,359 @@
+// ============================================
+// Cloud Deployment Pipeline (Angular + Backend)
+// DevOps Skill — Multi-Repo with Remote Deploy
+// ============================================
+// Migrated from Freestyle to Declarative Pipeline
+// Supports: Multi-SCM, Angular build, Docker push,
+//           SSH deploy to remote VM with health check
+// ============================================
+
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'Target environment')
+        choice(name: 'ANGULAR_CONFIG', choices: ['qa', 'production', 'china'], description: 'Angular build configuration')
+        string(name: 'NODE_MEM', defaultValue: '6144', description: 'Node.js max old space size (MB)')
+        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip tests (emergency deploy only)')
+    }
+
+    environment {
+        PROJECT_NAME    = '{{PROJECT_NAME}}'
+        IMAGE_TAG       = "${env.BUILD_NUMBER}"
+        REGISTRY_CRED   = credentials('docker-registry-url')
+        APP_PORT        = '{{APP_PORT}}'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timestamps()
+    }
+
+    stages {
+        // ========================================
+        // Stage 1: Multi-Repo Checkout
+        // ========================================
+        stage('Checkout') {
+            steps {
+                // Clean workspace
+                cleanWs()
+
+                // Checkout cloud config repo
+                dir('cloud') {
+                    git branch: 'master',
+                        credentialsId: '{{GIT_CREDENTIALS_ID}}',
+                        url: '{{CLOUD_REPO_URL}}'
+                }
+
+                // Checkout backend repo
+                dir('backend') {
+                    git branch: 'master',
+                        credentialsId: '{{GIT_CREDENTIALS_ID}}',
+                        url: '{{BACKEND_REPO_URL}}'
+                }
+
+                // Checkout frontend repo
+                dir('frontend') {
+                    git branch: 'master',
+                        credentialsId: '{{GIT_CREDENTIALS_ID}}',
+                        url: '{{FRONTEND_REPO_URL}}'
+                }
+
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: 'cd frontend && git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                }
+            }
+        }
+
+        // ========================================
+        // Stage 2: Angular Frontend Build
+        // ========================================
+        stage('Frontend Build') {
+            steps {
+                dir('frontend') {
+                    sh """
+                        npm ci
+                        node --max_old_space_size=${params.NODE_MEM} \\
+                            ./node_modules/@angular/cli/bin/ng build \\
+                            --configuration ${params.ANGULAR_CONFIG}
+                    """
+                }
+            }
+        }
+
+        // ========================================
+        // Stage 3: Test (Skip for emergency deploy)
+        // ========================================
+        stage('Test') {
+            when {
+                expression { !params.SKIP_TESTS }
+            }
+            parallel {
+                stage('Frontend Tests') {
+                    steps {
+                        dir('frontend') {
+                            sh 'npm run test -- --watch=false --browsers=ChromeHeadless --code-coverage'
+                        }
+                    }
+                    post {
+                        always {
+                            junit allowEmptyResults: true, testResults: 'frontend/**/test-results/**/*.xml'
+                        }
+                    }
+                }
+                stage('Backend Tests') {
+                    steps {
+                        dir('backend') {
+                            sh 'npm ci && npm test'
+                        }
+                    }
+                    post {
+                        always {
+                            junit allowEmptyResults: true, testResults: 'backend/**/test-results/**/*.xml'
+                        }
+                    }
+                }
+            }
+        }
+
+        // ========================================
+        // Stage 4: SonarQube Analysis
+        // ========================================
+        stage('SonarQube') {
+            when {
+                expression { !params.SKIP_TESTS }
+            }
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    dir('backend') {
+                        sh """
+                            sonar-scanner \\
+                                -Dsonar.projectKey=${PROJECT_NAME}-backend \\
+                                -Dsonar.sources=. \\
+                                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+                        """
+                    }
+                }
+            }
+        }
+
+        // ========================================
+        // Stage 5: Docker Compose Build
+        // ========================================
+        // Requires docker-compose.yml with build args:
+        //   services:
+        //     app:
+        //       build:
+        //         context: .
+        //         dockerfile: cloud/Dockerfile
+        //         args:
+        //           BUILD_ENV: ${BUILD_ENV:-qa}
+        //           NODE_MEM: ${NODE_MEM:-6144}
+        //       image: ${REGISTRY}/${PROJECT_NAME}:${VERSION:-latest}
+        // ========================================
+        stage('Docker Compose Build') {
+            steps {
+                sh """
+                    BUILD_ENV=${params.ANGULAR_CONFIG} \
+                    NODE_MEM=${params.NODE_MEM} \
+                    VERSION=${IMAGE_TAG} \
+                    docker compose -f cloud/docker-compose.yml build
+                """
+            }
+        }
+
+        // ========================================
+        // Stage 6: Security Scan
+        // ========================================
+        stage('Security Scan') {
+            when {
+                expression { !params.SKIP_TESTS }
+            }
+            steps {
+                sh """
+                    docker run --rm \\
+                        -v /var/run/docker.sock:/var/run/docker.sock \\
+                        aquasec/trivy:latest image \\
+                        --exit-code 1 \\
+                        --severity CRITICAL \\
+                        ${PROJECT_NAME}:${IMAGE_TAG}
+                """
+            }
+        }
+
+        // ========================================
+        // Stage 7: Push to Registry
+        // ========================================
+        stage('Push') {
+            when {
+                expression { params.ENVIRONMENT != 'dev' }
+            }
+            steps {
+                script {
+                    def registryUrl = env.REGISTRY_CRED
+
+                    sh """
+                        docker tag ${PROJECT_NAME}:${IMAGE_TAG} ${registryUrl}/${PROJECT_NAME}:${IMAGE_TAG}
+                        docker push ${registryUrl}/${PROJECT_NAME}:${IMAGE_TAG}
+                    """
+
+                    sh """
+                        docker tag ${PROJECT_NAME}:${IMAGE_TAG} ${registryUrl}/${PROJECT_NAME}:latest
+                        docker push ${registryUrl}/${PROJECT_NAME}:latest
+                    """
+                }
+            }
+        }
+
+        // ========================================
+        // Stage 8: Deploy
+        // ========================================
+        stage('Deploy') {
+            steps {
+                script {
+                    if (params.ENVIRONMENT == 'dev') {
+                        // Local dev deploy (compose on Jenkins host)
+                        sh """
+                            IMAGE_TAG=${IMAGE_TAG} docker compose -f cloud/docker-compose.yml down
+                            IMAGE_TAG=${IMAGE_TAG} docker compose -f cloud/docker-compose.yml up -d
+                        """
+                    } else if (params.ENVIRONMENT == 'production') {
+                        // Production: manual approval required
+                        input message: "Deploy ${PROJECT_NAME}:${IMAGE_TAG} to PRODUCTION?",
+                              ok: 'Deploy'
+
+                        deployRemote(
+                            credentialId: '{{SSH_CREDENTIALS_ID}}',
+                            imageTag: env.IMAGE_TAG,
+                            composeDir: '{{REMOTE_COMPOSE_DIR}}'
+                        )
+                    } else {
+                        // Staging: auto-deploy
+                        deployRemote(
+                            credentialId: '{{SSH_CREDENTIALS_ID}}',
+                            imageTag: env.IMAGE_TAG,
+                            composeDir: '{{REMOTE_COMPOSE_DIR}}'
+                        )
+                    }
+                }
+            }
+        }
+
+        // ========================================
+        // Stage 9: Health Check
+        // ========================================
+        stage('Health Check') {
+            steps {
+                script {
+                    def healthUrl
+                    if (params.ENVIRONMENT == 'dev') {
+                        healthUrl = "http://localhost:${APP_PORT}/health"
+                    } else {
+                        healthUrl = "{{HEALTH_CHECK_URL}}"
+                    }
+
+                    timeout(time: 2, unit: 'MINUTES') {
+                        waitUntil(initialRecurrencePeriod: 5000) {
+                            def status = sh(
+                                script: "curl -sf ${healthUrl} > /dev/null 2>&1",
+                                returnStatus: true
+                            )
+                            return status == 0
+                        }
+                    }
+                    echo "Health check PASSED"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline succeeded: ${PROJECT_NAME}:${IMAGE_TAG} → ${params.ENVIRONMENT}"
+            // Uncomment to enable Slack notification:
+            // slackSend(color: 'good', message: "Deploy SUCCESS: ${PROJECT_NAME}:${IMAGE_TAG} → ${params.ENVIRONMENT}")
+        }
+        failure {
+            echo "Pipeline FAILED: ${PROJECT_NAME}:${IMAGE_TAG} → ${params.ENVIRONMENT}"
+            // Auto-rollback on production failure
+            script {
+                if (params.ENVIRONMENT == 'production') {
+                    echo "Attempting rollback..."
+                    rollbackRemote(
+                        credentialId: '{{SSH_CREDENTIALS_ID}}',
+                        composeDir: '{{REMOTE_COMPOSE_DIR}}'
+                    )
+                }
+            }
+            // Uncomment to enable Slack notification:
+            // slackSend(color: 'danger', message: "Deploy FAILED: ${PROJECT_NAME}:${IMAGE_TAG} → ${params.ENVIRONMENT}")
+        }
+        always {
+            // Clean up local Docker images to save disk space
+            sh "docker rmi ${PROJECT_NAME}:${IMAGE_TAG} || true"
+        }
+    }
+}
+
+// ============================================
+// Helper: Deploy to remote VM via SSH
+// ============================================
+def deployRemote(Map config) {
+    def cred = config.credentialId
+    def tag = config.imageTag
+    def dir = config.composeDir
+
+    sshagent(credentials: [cred]) {
+        sh """
+            ssh -o StrictHostKeyChecking=no \$SSH_USER@\$SSH_HOST '
+                cd ${dir}
+
+                # Save current state for rollback
+                sudo docker compose ps --format json > .rollback-state.json 2>/dev/null || true
+                CURRENT_TAG=\$(grep -oP "IMAGE_TAG=\\K[^ ]+" .env 2>/dev/null || echo "unknown")
+                echo "\$CURRENT_TAG" > .rollback-tag
+
+                # Update version
+                sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${tag}/" .env
+
+                # Pull and deploy
+                sudo docker compose pull
+                sudo docker compose up -d
+            '
+        """
+    }
+}
+
+// ============================================
+// Helper: Rollback on remote VM via SSH
+// ============================================
+def rollbackRemote(Map config) {
+    def cred = config.credentialId
+    def dir = config.composeDir
+
+    sshagent(credentials: [cred]) {
+        sh """
+            ssh -o StrictHostKeyChecking=no \$SSH_USER@\$SSH_HOST '
+                cd ${dir}
+
+                # Read previous version
+                PREV_TAG=\$(cat .rollback-tag 2>/dev/null || echo "")
+                if [ -z "\$PREV_TAG" ] || [ "\$PREV_TAG" = "unknown" ]; then
+                    echo "No rollback version found, manual intervention required"
+                    exit 1
+                fi
+
+                # Rollback
+                sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=\$PREV_TAG/" .env
+                sudo docker compose pull
+                sudo docker compose up -d
+                echo "Rolled back to version: \$PREV_TAG"
+            '
+        """
+    }
+}

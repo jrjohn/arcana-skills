@@ -1,0 +1,34 @@
+# TESTED: 2026-02-23 | Rocky VM (ARM64) | 68s | QEMU x86_64 emulation
+# ============================================
+# HarmonyOS CI Build Compose Template
+# ============================================
+# Builds HarmonyOS HAP using Docker with amd64 emulation on ARM64 hosts.
+# SDK is pre-extracted on host and mounted via volume.
+#
+# Prerequisites:
+#   1. QEMU binfmt (ARM64 hosts only):
+#      sudo docker run --rm --privileged tonistiigi/binfmt --install amd64
+#   2. OHOS SDK extracted locally:
+#      Download from https://github.com/ErBWs/ohos-sdk/releases/tag/6.0.0.858
+#      Extract to ./ohos-sdk-extracted/
+#
+# Usage:
+#   docker compose -f docker-compose.ci.harmonyos.yml build
+#   docker compose -f docker-compose.ci.harmonyos.yml run --rm harmonyos-build
+#
+# HAP output: ./entry/build/default/outputs/default/*.hap
+# ============================================
+
+services:
+  harmonyos-build:
+    build:
+      context: .
+      dockerfile: Dockerfile.ci
+      platforms:
+        - linux/amd64
+    image: {{REGISTRY}}/arcana/{{APP_NAME}}:${VERSION:-1.0.0}
+    platform: linux/amd64
+    volumes:
+      - .:/project
+      - ./ohos-sdk-extracted:/opt/ohos-sdk
+    command: hvigorw assembleHap --mode module -p product=default -p buildMode=debug --no-daemon
