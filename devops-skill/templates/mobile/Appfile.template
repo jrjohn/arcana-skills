@@ -1,0 +1,14 @@
+# ============================================
+# Fastlane Appfile Template
+# DevOps Skill
+# ============================================
+
+# iOS Configuration
+app_identifier "{{BUNDLE_ID}}"           # e.g., com.company.app
+apple_id "{{APPLE_ID}}"                  # Apple Developer email
+team_id "{{TEAM_ID}}"                    # Apple Developer Team ID
+itc_team_id "{{ITC_TEAM_ID}}"            # App Store Connect Team ID
+
+# Android Configuration
+json_key_file "{{GOOGLE_PLAY_JSON_KEY}}" # Path to Google Play service account JSON
+package_name "{{PACKAGE_NAME}}"          # e.g., com.company.app

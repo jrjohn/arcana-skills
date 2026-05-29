@@ -1,0 +1,84 @@
+# ============================================
+# Unified Multi-Environment Dockerfile
+# DevOps Skill Template
+# ============================================
+# Replaces multiple Dockerfiles (Dockerfile_Dev, Dockerfile_Prod, Dockerfile_Regional)
+# with a single parameterized Dockerfile using build args.
+#
+# Usage:
+#   Development:  docker build --build-arg BUILD_ENV=qa -t app:dev .
+#   Production:   docker build --build-arg BUILD_ENV=production -t app:1.2.3 .
+#   Regional:     docker build --build-arg BUILD_ENV=china -t app:1.2.3-cn .
+# ============================================
+
+# ── Build Arguments ──────────────────────────
+ARG BUILD_ENV=production
+ARG NODE_MEM=6144
+ARG NODE_VERSION=22
+ARG APP_PORT=3000
+
+# ── Stage 1: Frontend Build (Angular) ────────
+FROM node:${NODE_VERSION}-alpine AS frontend-builder
+
+ARG BUILD_ENV
+ARG NODE_MEM
+
+WORKDIR /app
+
+# Install dependencies (cached layer)
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+# Build Angular with environment-specific config
+COPY frontend/ .
+RUN node --max_old_space_size=${NODE_MEM} \
+    ./node_modules/@angular/cli/bin/ng build \
+    --configuration ${BUILD_ENV}
+
+# ── Stage 2: Backend Dependencies ────────────
+FROM node:${NODE_VERSION}-alpine AS backend-deps
+
+WORKDIR /app
+
+# Install production dependencies only (cached layer)
+COPY backend/package.json backend/package-lock.json ./
+RUN npm ci --omit=dev
+
+# ── Stage 3: Runtime ─────────────────────────
+FROM node:${NODE_VERSION}-alpine
+
+ARG APP_PORT
+
+# Security: non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Install curl for health check
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+# Copy backend dependencies
+COPY --from=backend-deps /app/node_modules ./node_modules
+
+# Copy backend source
+COPY backend/ .
+
+# Copy frontend build output
+# Angular outputs to dist/{project-name}/ — adjust path as needed
+COPY --from=frontend-builder /app/dist/ ./public/
+
+# Set ownership
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose application port
+EXPOSE ${APP_PORT}
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+    CMD curl -sf http://localhost:${APP_PORT}/health || exit 1
+
+# Start application
+CMD ["node", "server.js"]

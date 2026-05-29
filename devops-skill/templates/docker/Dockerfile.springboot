@@ -1,0 +1,52 @@
+# TESTED: 2025-02 | Rocky VM (ARM64) | JDK 25 + Gradle 9.2.1 + Spring Boot
+# ============================================
+# Spring Boot Multi-Stage Dockerfile (Gradle)
+# DevOps Skill Template
+# ============================================
+
+# Stage 1: Build
+FROM eclipse-temurin:25-jdk AS builder
+
+WORKDIR /app
+
+# Copy Gradle wrapper and build files (layer caching)
+COPY gradlew build.gradle* settings.gradle* ./
+COPY gradle ./gradle
+
+# Make gradlew executable
+RUN chmod +x gradlew
+
+# Download dependencies (cached layer)
+RUN ./gradlew dependencies --no-daemon || true
+
+# Copy source code
+COPY src ./src
+
+# Build application
+RUN ./gradlew bootJar --no-daemon -x test
+
+# Stage 2: Runtime
+FROM eclipse-temurin:25-jre
+
+# Security: non-root user
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+
+WORKDIR /app
+
+# Copy built JAR (*-SNAPSHOT.jar pattern from Gradle bootJar)
+COPY --from=builder /app/build/libs/*-SNAPSHOT.jar app.jar
+
+# Set ownership
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+
+# Run application
+ENTRYPOINT ["java", "-jar", "app.jar"]

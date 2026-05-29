@@ -1,0 +1,136 @@
+// ============================================
+// Mobile (iOS/Android) Jenkins Pipeline
+// DevOps Skill
+// ============================================
+
+pipeline {
+    agent {
+        label 'mobile'  // Requires macOS agent for iOS
+    }
+
+    environment {
+        PROJECT_NAME = '{{PROJECT_NAME}}'
+        FASTLANE_SKIP_UPDATE_CHECK = '1'
+        FASTLANE_HIDE_CHANGELOG = '1'
+    }
+
+    options {
+        timeout(time: 60, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    parameters {
+        choice(name: 'PLATFORM', choices: ['ios', 'android', 'both'], description: 'Target platform')
+        choice(name: 'TRACK', choices: ['internal', 'alpha', 'beta', 'production'], description: 'Release track')
+        booleanParam(name: 'SUBMIT_REVIEW', defaultValue: false, description: 'Submit for review after upload')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.BUILD_LABEL = "${env.BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
+                }
+            }
+        }
+
+        // === iOS Pipeline ===
+        stage('iOS - Install Dependencies') {
+            when {
+                expression { params.PLATFORM == 'ios' || params.PLATFORM == 'both' }
+            }
+            steps {
+                dir('ios') {
+                    sh 'bundle install'
+                    sh 'bundle exec pod install || true'
+                }
+            }
+        }
+
+        stage('iOS - Test') {
+            when {
+                expression { params.PLATFORM == 'ios' || params.PLATFORM == 'both' }
+            }
+            steps {
+                dir('ios') {
+                    sh 'bundle exec fastlane test'
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: '**/test-results/*.xml'
+                }
+            }
+        }
+
+        stage('iOS - Build & Upload') {
+            when {
+                expression { params.PLATFORM == 'ios' || params.PLATFORM == 'both' }
+            }
+            steps {
+                dir('ios') {
+                    withCredentials([
+                        string(credentialsId: 'apple-api-key', variable: 'APP_STORE_CONNECT_API_KEY')
+                    ]) {
+                        sh 'bundle exec fastlane release'
+                    }
+                }
+            }
+        }
+
+        // === Android Pipeline ===
+        stage('Android - Build') {
+            when {
+                expression { params.PLATFORM == 'android' || params.PLATFORM == 'both' }
+            }
+            steps {
+                dir('android') {
+                    sh './gradlew assembleRelease'
+                }
+            }
+        }
+
+        stage('Android - Test') {
+            when {
+                expression { params.PLATFORM == 'android' || params.PLATFORM == 'both' }
+            }
+            steps {
+                dir('android') {
+                    sh './gradlew test'
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: '**/build/test-results/**/*.xml'
+                }
+            }
+        }
+
+        stage('Android - Upload') {
+            when {
+                expression { params.PLATFORM == 'android' || params.PLATFORM == 'both' }
+            }
+            steps {
+                dir('android') {
+                    withCredentials([
+                        file(credentialsId: 'google-play-key', variable: 'GOOGLE_PLAY_JSON_KEY')
+                    ]) {
+                        sh "bundle exec fastlane supply --track ${params.TRACK}"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Mobile pipeline succeeded: ${PROJECT_NAME} (${params.PLATFORM})"
+        }
+        failure {
+            echo "Mobile pipeline failed: ${PROJECT_NAME} (${params.PLATFORM})"
+        }
+    }
+}

@@ -1,0 +1,272 @@
+// TESTED: esp32-app-pipeline — 370s build time (docker pull + compose run, espressif/idf:v5.5.2)
+// TESTED: stm32-app-pipeline — 471s build time (docker compose build, ARM toolchain)
+// ============================================
+// Embedded Firmware Jenkins Pipeline (ESP32 / STM32)
+// DevOps Skill — Production
+// ============================================
+// Parameterized pipeline for building, testing, and
+// archiving embedded firmware. No Docker push — artifacts
+// are stored in Jenkins or deployed via OTA.
+//
+// ESP32: docker pull + docker compose run (image ~3GB+, cached)
+//   - espressif/idf:v5.5.2 (~11GB on ARM64 with QEMU)
+// STM32: docker compose build (ARM toolchain image)
+//
+// Requires docker-compose.ci.yml in project root:
+//   ESP32:
+//     services:
+//       esp32-build:
+//         image: espressif/idf:v5.5.2
+//         working_dir: /project
+//         environment: [HOME=/tmp]
+//         volumes: [.:/project]
+//         command: idf.py set-target esp32 build
+//   STM32:
+//     services:
+//       stm32-build:
+//         build: .
+//         image: stm32-app-build:${VERSION:-latest}
+// ============================================
+
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'PLATFORM', choices: ['esp32', 'stm32'], description: 'Target platform')
+        string(name: 'IDF_TARGET', defaultValue: 'esp32', description: 'ESP-IDF target chip (esp32/esp32s2/esp32s3/esp32c3)')
+        booleanParam(name: 'SIGN_FIRMWARE', defaultValue: false, description: 'Sign firmware binary')
+        booleanParam(name: 'OTA_DEPLOY', defaultValue: false, description: 'Deploy via OTA after build')
+        string(name: 'OTA_SERVER_URL', defaultValue: '', description: 'OTA server URL (if OTA_DEPLOY is true)')
+    }
+
+    environment {
+        APP_NAME = '{{APP_NAME}}'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.BUILD_LABEL = "${env.BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
+                    env.VERSION = sh(script: "grep 'VERSION' version.h 2>/dev/null | head -1 | sed 's/.*\"\\(.*\\)\".*/\\1/' || echo '0.0.0'", returnStdout: true).trim()
+                }
+            }
+        }
+
+        // ========================================
+        // Pull Build Image (ESP32 only — ~11GB on ARM64)
+        // ========================================
+        stage('Pull Build Image') {
+            when {
+                expression { params.PLATFORM == 'esp32' }
+            }
+            steps {
+                sh 'docker pull espressif/idf:v5.5.2'
+            }
+        }
+
+        // ========================================
+        // Build via Docker Compose (platform-specific)
+        // ========================================
+        // ESP32: docker compose run (pre-pulled image, volume mount)
+        // STM32: docker compose build (multi-stage Dockerfile)
+        // Both use docker-compose.ci.yml for CI overrides.
+        // ========================================
+        stage('Docker Compose Build') {
+            steps {
+                dir("${WORKSPACE}") {
+                    script {
+                        if (params.PLATFORM == 'esp32') {
+                            // ESP32: compose run with pre-pulled image
+                            sh 'docker compose -f docker-compose.ci.yml run --rm esp32-build'
+                        } else {
+                            // STM32: compose build (produces image with artifacts)
+                            sh "VERSION=${BUILD_LABEL} docker compose -f docker-compose.ci.yml build"
+                        }
+                    }
+                }
+            }
+        }
+
+        // ========================================
+        // Extract build artifacts
+        // ========================================
+        stage('Extract Artifacts') {
+            steps {
+                dir("${WORKSPACE}") {
+                    script {
+                        sh "rm -rf /tmp/${APP_NAME}-firmware && mkdir -p /tmp/${APP_NAME}-firmware"
+                        if (params.PLATFORM == 'esp32') {
+                            // ESP32: artifacts are on host via volume mount
+                            sh """
+                                cp build/*.bin /tmp/${APP_NAME}-firmware/ 2>/dev/null || echo 'no app bin'
+                                cp build/bootloader/bootloader.bin /tmp/${APP_NAME}-firmware/ 2>/dev/null || echo 'no bootloader'
+                                cp build/partition_table/partition-table.bin /tmp/${APP_NAME}-firmware/ 2>/dev/null || echo 'no partition table'
+                            """
+                        } else {
+                            // STM32: extract from built image via docker cp
+                            sh """
+                                docker create --name ${APP_NAME}-out stm32-app-build:${BUILD_LABEL} 2>/dev/null || true
+                                docker cp ${APP_NAME}-out:/artifacts/ /tmp/${APP_NAME}-firmware/ 2>/dev/null || echo 'No artifacts'
+                                docker rm ${APP_NAME}-out 2>/dev/null || true
+                            """
+                        }
+                        sh "ls -la /tmp/${APP_NAME}-firmware/"
+                    }
+                }
+            }
+        }
+
+        // ========================================
+        // Archive artifacts
+        // ========================================
+        stage('Archive') {
+            steps {
+                sh "cp -r /tmp/${APP_NAME}-firmware/ ${WORKSPACE}/firmware-output/ 2>/dev/null || true"
+                archiveArtifacts artifacts: 'firmware-output/**', allowEmptyArchive: true, fingerprint: true
+            }
+        }
+
+        // ========================================
+        // Unit Tests (optional — Unity framework / QEMU)
+        // ========================================
+        stage('Test') {
+            when {
+                expression { fileExists('test') || fileExists('tests') }
+            }
+            steps {
+                script {
+                    if (params.PLATFORM == 'esp32') {
+                        sh """
+                            docker run --rm \
+                                -v ${WORKSPACE}:/app \
+                                -w /app \
+                                espressif/idf:v5.5.2 \
+                                bash -c '. /opt/esp/idf/export.sh && cd test && idf.py build && ./run_tests.sh'
+                        """
+                    } else {
+                        sh """
+                            docker run --rm \
+                                -v ${WORKSPACE}:/app \
+                                -w /app \
+                                stm32-app-build:${BUILD_LABEL} \
+                                bash -c 'cd build && ctest --output-on-failure'
+                        """
+                    }
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: '**/test-results/**/*.xml'
+                }
+            }
+        }
+
+        // ========================================
+        // Static Analysis (optional — cppcheck)
+        // ========================================
+        stage('Static Analysis') {
+            when {
+                expression { fileExists('src') }
+            }
+            steps {
+                sh """
+                    docker run --rm \
+                        -v ${WORKSPACE}:/app \
+                        -w /app \
+                        ubuntu:24.04 \
+                        bash -c '
+                            apt-get update && apt-get install -y --no-install-recommends cppcheck && \
+                            cppcheck --enable=all --error-exitcode=1 \
+                                --suppress=missingInclude \
+                                --suppress=unusedFunction \
+                                -I include/ \
+                                src/ 2>&1 | tee cppcheck-report.txt
+                        '
+                """
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'cppcheck-report.txt', allowEmptyArchive: true
+                }
+            }
+        }
+
+        // ========================================
+        // Firmware Signing (optional)
+        // ========================================
+        stage('Firmware Signing') {
+            when {
+                expression { params.SIGN_FIRMWARE }
+            }
+            steps {
+                script {
+                    if (params.PLATFORM == 'esp32') {
+                        withCredentials([file(credentialsId: 'esp32-signing-key', variable: 'SIGNING_KEY')]) {
+                            sh """
+                                espsecure.py sign_data \
+                                    --keyfile \$SIGNING_KEY \
+                                    --version 2 \
+                                    --output firmware-output/${APP_NAME}-signed.bin \
+                                    firmware-output/${APP_NAME}.bin
+                            """
+                        }
+                    } else {
+                        withCredentials([file(credentialsId: 'stm32-signing-key', variable: 'SIGNING_KEY')]) {
+                            sh """
+                                openssl dgst -sha256 -sign \$SIGNING_KEY \
+                                    -out firmware-output/${APP_NAME}.sig \
+                                    firmware-output/${APP_NAME}.bin
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        // ========================================
+        // OTA Deploy (optional)
+        // ========================================
+        stage('OTA Deploy') {
+            when {
+                expression { params.OTA_DEPLOY && params.OTA_SERVER_URL }
+            }
+            steps {
+                script {
+                    def firmwareBin = params.SIGN_FIRMWARE
+                        ? "firmware-output/${APP_NAME}-signed.bin"
+                        : "firmware-output/${APP_NAME}.bin"
+
+                    sh """
+                        curl -X POST '${params.OTA_SERVER_URL}/api/firmware/upload' \
+                            -F 'firmware=@${firmwareBin}' \
+                            -F 'version=${VERSION}' \
+                            -F 'platform=${params.PLATFORM}' \
+                            -F 'build=${BUILD_LABEL}'
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Firmware build succeeded: ${APP_NAME} (${params.PLATFORM}) v${VERSION} #${BUILD_LABEL}"
+        }
+        failure {
+            echo "Firmware build FAILED: ${APP_NAME} (${params.PLATFORM}) #${BUILD_LABEL}"
+        }
+        always {
+            sh "docker compose -f docker-compose.ci.yml down --remove-orphans 2>/dev/null || true"
+            sh "docker rmi stm32-app-build:${BUILD_LABEL} 2>/dev/null || true"
+        }
+    }
+}

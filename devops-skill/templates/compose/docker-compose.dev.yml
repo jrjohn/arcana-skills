@@ -1,0 +1,70 @@
+# ============================================
+# Development Environment Docker Compose
+# {{PROJECT_NAME}}
+# ============================================
+
+services:
+  # === Application Service ===
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: {{PROJECT_NAME}}-app-dev
+    restart: unless-stopped
+    ports:
+      - "{{APP_PORT}}:{{APP_PORT}}"
+    volumes:
+      - .:/app
+      - /app/node_modules  # Exclude node_modules if Node.js
+    environment:
+      - NODE_ENV=development
+      - SPRING_PROFILES_ACTIVE=dev
+      - FLASK_ENV=development
+      - DATABASE_URL=postgresql://app:app@db:5432/{{PROJECT_NAME}}_dev
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:{{APP_PORT}}/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-net
+
+  # === Database ===
+  db:
+    image: postgres:16-alpine
+    container_name: {{PROJECT_NAME}}-db-dev
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data_dev:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=app
+      - POSTGRES_DB={{PROJECT_NAME}}_dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-net
+
+  # === Redis (Optional) ===
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: {{PROJECT_NAME}}-redis-dev
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - app-net
+
+volumes:
+  db_data_dev:
+
+networks:
+  app-net:
+    driver: bridge

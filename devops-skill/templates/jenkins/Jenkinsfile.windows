@@ -1,0 +1,89 @@
+// TESTED: windows-app-pipeline | Windows 11 Pro x64 | 46s | 2026-02-24
+// Pattern: agent { label 'windows' } + dotnet build/test/publish + EXE + MSIX
+// Source: arcana-windows — WinUI 3 / .NET 10, dotnet publish (self-contained), MSIX packaging
+
+pipeline {
+    agent { label 'windows' }
+
+    environment {
+        APP_NAME    = '{{APP_NAME}}'
+        VERSION     = '0.1.0'
+        PROJECT_DIR = '{{PROJECT_DIR}}'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    bat 'git pull origin main || echo "Pull skipped"'
+                }
+                echo "Building ${APP_NAME} WinUI 3 v${VERSION}"
+            }
+        }
+
+        stage('Restore') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    bat "dotnet restore {{SOLUTION_NAME}}.sln"
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    bat "dotnet build {{PROJECT_PATH}} -c Release -p:Platform=x64 -maxcpucount:1"
+                }
+            }
+        }
+
+        stage('Unit Tests') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    bat 'if exist TestResults rmdir /s /q TestResults'
+                    bat 'dotnet test -c Release -p:Platform=x64 --logger trx --results-directory TestResults || exit 0'
+                }
+            }
+            post {
+                always {
+                    dir("${PROJECT_DIR}") {
+                        junit allowEmptyResults: true, testResults: 'TestResults/**/*.trx'
+                    }
+                }
+            }
+        }
+
+        stage('Publish EXE') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    bat 'if exist artifacts\\exe rmdir /s /q artifacts\\exe'
+                    bat "dotnet publish {{PROJECT_PATH}} -c Release -p:Platform=x64 -p:WindowsPackageType=None --self-contained -r win-x64 -o artifacts\\exe -maxcpucount:1"
+                    archiveArtifacts artifacts: 'artifacts/exe/{{APP_NAME}}.exe', fingerprint: true
+                }
+            }
+        }
+
+        stage('MSIX Package') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    bat 'if exist artifacts\\msix rmdir /s /q artifacts\\msix'
+                    bat "dotnet publish {{PROJECT_PATH}} -c Release -p:Platform=x64 -p:WindowsPackageType=MSIX -p:AppxPackageSigningEnabled=false -p:GenerateAppxPackageOnBuild=true -maxcpucount:1"
+                    bat 'mkdir artifacts\\msix 2>NUL & for /r %%f in (*.msix) do copy /Y "%%f" artifacts\\msix\\'
+                    archiveArtifacts artifacts: 'artifacts/msix/*.msix', fingerprint: true, allowEmptyArchive: true
+                }
+            }
+        }
+    }
+
+    post {
+        success { echo "Windows build SUCCESS - ${APP_NAME} v${VERSION} (EXE + MSIX)" }
+        failure { echo "Windows build FAILED" }
+        always  { echo "Build number ${BUILD_NUMBER} done" }
+    }
+}

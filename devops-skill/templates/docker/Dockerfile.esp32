@@ -1,0 +1,81 @@
+# TESTED: 2025-02 | Rocky VM (ARM64) | ESP-IDF v5.5.2 (compose-only)
+# ============================================
+# ESP32 Firmware Build Environment (Build Only)
+# DevOps Skill Template
+# ============================================
+# This Dockerfile is for CI/CD BUILD ONLY.
+# It does NOT produce a deployable container.
+# Output: .bin firmware artifacts extracted to /artifacts/
+#
+# ============================================
+# RECOMMENDED: docker pull + docker compose (CI pipeline)
+#
+#   Step 1: Pre-pull image (cached after first pull)
+#     docker pull espressif/idf:v5.5.2
+#
+#   Step 2: Build via docker compose
+#     docker compose run --rm esp32-build
+#
+#   docker-compose.yml:
+#     services:
+#       esp32-build:
+#         image: espressif/idf:v5.5.2
+#         working_dir: /project
+#         environment:
+#           - HOME=/tmp
+#         volumes:
+#           - .:/project
+#         command: idf.py set-target esp32 build
+#
+#   Artifacts are in ./build/ on the host after compose run.
+#
+# ============================================
+# ALTERNATIVE: Use 'docker build' (self-contained)
+#
+#   docker build -t esp32-build .
+#   docker create --name esp32-out esp32-build
+#   docker cp esp32-out:/artifacts/ ./firmware-output/
+#   docker rm esp32-out
+#
+# Note: The espressif/idf image is ~11GB on ARM64. The compose/pull
+# approach caches the image; 'docker build' re-downloads
+# on context changes. Prefer compose for CI pipelines.
+# ============================================
+
+FROM espressif/idf:v5.5.2 AS builder
+
+# Set target chip (esp32, esp32s2, esp32s3, esp32c3, esp32c6, esp32h2)
+ARG IDF_TARGET=esp32
+
+WORKDIR /app
+
+# Copy project files
+COPY . .
+
+# Build firmware
+RUN idf.py set-target ${IDF_TARGET} && \
+    idf.py build
+
+# Extract artifacts
+FROM builder AS artifacts
+
+RUN mkdir -p /artifacts && \
+    cp /app/build/*.bin /artifacts/ 2>/dev/null || true && \
+    cp /app/build/bootloader/bootloader.bin /artifacts/ 2>/dev/null || true && \
+    cp /app/build/partition_table/partition-table.bin /artifacts/ 2>/dev/null || true && \
+    echo "IDF_TARGET=${IDF_TARGET}" > /artifacts/build-info.txt && \
+    echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /artifacts/build-info.txt
+
+# ============================================
+# Flash instructions (not part of Docker):
+#
+# USB/Serial:
+#   esptool.py --port /dev/ttyUSB0 --baud 460800 \
+#     write_flash -z 0x1000 bootloader.bin \
+#     0x8000 partition-table.bin \
+#     0x10000 {{PROJECT_NAME}}.bin
+#
+# OTA (HTTP):
+#   curl -X POST http://{{DEVICE_IP}}/ota \
+#     -F "firmware=@{{PROJECT_NAME}}.bin"
+# ============================================

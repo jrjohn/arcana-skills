@@ -1,0 +1,88 @@
+# ============================================
+# .gitignore Template
+# DevOps Skill
+# ============================================
+
+# ── Environment & Secrets ───────────────────
+.env
+.env.*
+!.env.template
+*.pem
+*.key
+*.crt
+
+# ── DevOps State ────────────────────────────
+.devops/
+!.devops/.gitkeep
+
+# ── Docker ──────────────────────────────────
+docker-compose.override.yml
+
+# ── Node.js ─────────────────────────────────
+node_modules/
+dist/
+.next/
+.nuxt/
+coverage/
+
+# ── Java ────────────────────────────────────
+target/
+build/
+*.jar
+*.war
+.gradle/
+
+# ── Python ──────────────────────────────────
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# ── Rust ────────────────────────────────────
+target/
+**/*.rs.bk
+
+# ── Go ──────────────────────────────────────
+vendor/
+*.exe
+*.test
+*.out
+
+# ── .NET ────────────────────────────────────
+bin/
+obj/
+*.user
+*.suo
+packages/
+*.nupkg
+*.msix
+
+# ── Embedded (ESP32/STM32) ──────────────────
+*.o
+*.d
+*.elf
+*.map
+*.hex
+sdkconfig.old
+managed_components/
+
+# ── HarmonyOS ───────────────────────────────
+oh_modules/
+.preview/
+*.hap
+
+# ── IDE ─────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ── Logs ────────────────────────────────────
+*.log
+logs/
+
+# ── OS ──────────────────────────────────────
+Thumbs.db

@@ -1,0 +1,113 @@
+# ============================================
+# HarmonyOS Fastlane Configuration
+# DevOps Skill Template
+# ============================================
+# Manages AppGallery Connect submission lifecycle.
+# Requires: AppGallery Connect API credentials
+# ============================================
+
+default_platform(:harmonyos)
+
+platform :harmonyos do
+  desc "Run unit tests"
+  lane :test do
+    sh("hvigorw test --mode module --no-daemon")
+  end
+
+  desc "Build release HAP"
+  lane :build do
+    sh("hvigorw assembleHap --mode module -p product=default -p buildMode=release --no-daemon")
+  end
+
+  desc "Upload to AppGallery (internal testing)"
+  lane :internal do
+    build
+    harmonyos_upload(
+      app_id: ENV["APPGALLERY_APP_ID"],
+      hap_path: "build/default/outputs/default/entry-default-signed.hap",
+      track: "internal"
+    )
+  end
+
+  desc "Promote to beta"
+  lane :beta do
+    harmonyos_upload(
+      app_id: ENV["APPGALLERY_APP_ID"],
+      hap_path: "build/default/outputs/default/entry-default-signed.hap",
+      track: "beta"
+    )
+  end
+
+  desc "Promote to production"
+  lane :release do
+    harmonyos_upload(
+      app_id: ENV["APPGALLERY_APP_ID"],
+      hap_path: "build/default/outputs/default/entry-default-signed.hap",
+      track: "production",
+      submit_for_review: true
+    )
+  end
+
+  # Error handling
+  error do |lane, exception|
+    puts "Error in lane #{lane}: #{exception.message}"
+  end
+end
+
+# ============================================
+# Custom Action: Upload to AppGallery Connect
+# ============================================
+# This is a simplified custom action.
+# For production use, consider the official
+# AppGallery Connect Fastlane plugin.
+# ============================================
+private_lane :harmonyos_upload do |options|
+  app_id = options[:app_id]
+  hap_path = options[:hap_path]
+  track = options[:track] || "internal"
+  submit = options[:submit_for_review] || false
+
+  # Step 1: Get access token
+  token_response = sh(
+    command: "curl -s -X POST 'https://connect-api.cloud.huawei.com/api/oauth2/v1/token' " \
+             "-H 'Content-Type: application/json' " \
+             "-d '{\"client_id\": \"#{ENV['APPGALLERY_CLIENT_ID']}\", " \
+             "\"client_secret\": \"#{ENV['APPGALLERY_CLIENT_SECRET']}\", " \
+             "\"grant_type\": \"client_credentials\"}'",
+    log: false
+  )
+  token = JSON.parse(token_response)["access_token"]
+
+  # Step 2: Get upload URL
+  upload_url_response = sh(
+    command: "curl -s -X GET " \
+             "'https://connect-api.cloud.huawei.com/api/publish/v2/upload-url?appId=#{app_id}&suffix=hap' " \
+             "-H 'Authorization: Bearer #{token}' " \
+             "-H 'client_id: #{ENV['APPGALLERY_CLIENT_ID']}'",
+    log: false
+  )
+  upload_info = JSON.parse(upload_url_response)
+
+  # Step 3: Upload HAP file
+  sh(
+    command: "curl -s -X POST '#{upload_info['uploadUrl']}' " \
+             "-H 'Authorization: Bearer #{token}' " \
+             "-F 'file=@#{hap_path}' " \
+             "-F 'authCode=#{upload_info['authCode']}' " \
+             "-F 'fileCount=1'"
+  )
+
+  # Step 4: Submit for review (if requested)
+  if submit
+    sh(
+      command: "curl -s -X POST " \
+               "'https://connect-api.cloud.huawei.com/api/publish/v2/app-submit?appId=#{app_id}' " \
+               "-H 'Authorization: Bearer #{token}' " \
+               "-H 'client_id: #{ENV['APPGALLERY_CLIENT_ID']}' " \
+               "-H 'Content-Type: application/json'"
+    )
+    puts "Submitted for review on #{track} track"
+  end
+
+  puts "HAP uploaded to AppGallery Connect (#{track})"
+end

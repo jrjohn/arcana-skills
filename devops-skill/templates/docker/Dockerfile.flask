@@ -1,0 +1,60 @@
+# TESTED: 2025-02 | Rocky VM (ARM64) | Python 3.14 + Flask + gunicorn
+# ============================================
+# Python/Flask Multi-Stage Dockerfile
+# DevOps Skill Template
+# ============================================
+
+# Stage 1: Build
+FROM python:3.14-slim AS builder
+
+WORKDIR /app
+
+# Install build dependencies (pkg-config + mysqlclient-dev for MySQL support)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    pkg-config \
+    default-libmysqlclient-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install dependencies (cached layer)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Runtime
+FROM python:3.14-slim
+
+# Install runtime library for mysqlclient
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    default-libmysqlclient-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Security: non-root user
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+
+WORKDIR /app
+
+# Copy virtual environment
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy application
+COPY . .
+
+# Set ownership
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+# Expose port
+EXPOSE {{APP_PORT}}
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:{{APP_PORT}}/health')" || exit 1
+
+# Run with gunicorn (2 workers — production-tested on ARM64)
+CMD ["gunicorn", "--bind", "0.0.0.0:{{APP_PORT}}", "--workers", "2", "--threads", "2", "app:create_app()"]

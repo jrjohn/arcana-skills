@@ -1,0 +1,69 @@
+# TESTED: 2025-02 | Rocky VM (ARM64) | Node.js 22 + Prisma + TypeScript
+# ============================================
+# Node.js/Express Multi-Stage Dockerfile
+# DevOps Skill Template
+# ============================================
+
+# Stage 1: Build
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files (cached layer)
+COPY package.json package-lock.json ./
+
+# Install all dependencies (--legacy-peer-deps for compatibility)
+RUN npm ci --legacy-peer-deps
+
+# Copy source
+COPY . .
+
+# Generate Prisma client (if prisma schema exists)
+RUN npx prisma generate 2>/dev/null || true
+
+# Build TypeScript with fallback
+RUN npx tsc 2>/dev/null || npm run build 2>/dev/null || echo "No build step"
+
+# Stage 2: Production dependencies
+FROM node:22-alpine AS deps
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+
+# Install production dependencies only
+RUN npm ci --omit=dev --legacy-peer-deps
+
+# Stage 3: Runtime
+FROM node:22-alpine
+
+# Security: non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+WORKDIR /app
+
+# Copy production dependencies
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy built application
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package.json ./
+
+# Copy Prisma artifacts if they exist
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma 2>/dev/null || true
+COPY --from=builder /app/prisma ./prisma 2>/dev/null || true
+
+# Set ownership
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+# Expose port
+EXPOSE {{APP_PORT}}
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:{{APP_PORT}}/health || exit 1
+
+# Run application
+CMD ["node", "dist/index.js"]

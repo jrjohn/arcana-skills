@@ -1,0 +1,68 @@
+# TESTED: 2025-02 | Rocky VM (ARM64) | ARM GCC + CMake (simplified)
+# ============================================
+# STM32 Firmware Build Environment (Build Only)
+# DevOps Skill Template
+# ============================================
+# This Dockerfile is for CI/CD BUILD ONLY.
+# It does NOT produce a deployable container.
+# Output: .bin/.hex/.elf firmware artifacts extracted to /artifacts/
+#
+# Usage:
+#   docker build -t stm32-build .
+#   docker create --name stm32-out stm32-build
+#   docker cp stm32-out:/artifacts/ ./firmware-output/
+#   docker rm stm32-out
+#
+# Or with BuildKit output:
+#   docker build --target artifacts -o ./firmware-output .
+# ============================================
+
+FROM ubuntu:24.04 AS builder
+
+# Install ARM toolchain and build tools (including libstdc++ newlib)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc-arm-none-eabi \
+    libnewlib-arm-none-eabi \
+    libstdc++-arm-none-eabi-newlib \
+    cmake \
+    make \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy project files
+COPY . .
+
+# Build firmware (simplified CMake invocation — no toolchain file reference)
+RUN mkdir -p build && cd build && \
+    cmake .. && \
+    make -j$(nproc)
+
+# Extract artifacts
+FROM builder AS artifacts
+
+RUN mkdir -p /artifacts && \
+    cp /app/build/*.bin /artifacts/ 2>/dev/null || true && \
+    cp /app/build/*.hex /artifacts/ 2>/dev/null || true && \
+    cp /app/build/*.elf /artifacts/ 2>/dev/null || true && \
+    echo "TOOLCHAIN=arm-none-eabi-gcc" > /artifacts/build-info.txt && \
+    echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /artifacts/build-info.txt
+
+# ============================================
+# Flash instructions (not part of Docker):
+#
+# OpenOCD:
+#   openocd -f interface/stlink.cfg -f target/stm32f4x.cfg \
+#     -c "program {{PROJECT_NAME}}.bin verify reset exit 0x08000000"
+#
+# J-Link:
+#   JLinkExe -device {{MCU_TYPE}} -if SWD -speed 4000 \
+#     -CommanderScript flash.jlink
+#
+# ST-Link:
+#   st-flash write {{PROJECT_NAME}}.bin 0x08000000
+#
+# OTA (custom HTTP/MQTT):
+#   Implement device-specific OTA update protocol
+# ============================================

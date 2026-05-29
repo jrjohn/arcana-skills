@@ -1,0 +1,62 @@
+# TESTED: 2025-02 | Rocky VM (ARM64) | Rust (latest) + workspace + protobuf
+# ============================================
+# Rust Multi-Stage Dockerfile
+# DevOps Skill Template
+# ============================================
+
+# Stage 1: Build
+FROM rust:latest AS builder
+
+WORKDIR /app
+
+# Install build dependencies (protobuf-compiler for tonic/prost)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy workspace manifest and member Cargo files
+COPY Cargo.toml Cargo.lock ./
+COPY {{PACKAGE_NAME}}/Cargo.toml ./{{PACKAGE_NAME}}/
+
+# Dependency cache trick: build with dummy src first
+RUN mkdir -p {{PACKAGE_NAME}}/src && echo "fn main() {}" > {{PACKAGE_NAME}}/src/main.rs
+RUN cargo build --release -p {{PACKAGE_NAME}}
+RUN rm -rf {{PACKAGE_NAME}}/src
+
+# Copy actual source and rebuild
+COPY {{PACKAGE_NAME}}/src ./{{PACKAGE_NAME}}/src
+COPY proto ./proto
+RUN touch {{PACKAGE_NAME}}/src/main.rs && cargo build --release -p {{PACKAGE_NAME}}
+
+# Stage 2: Runtime
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Security: non-root user
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+
+WORKDIR /app
+
+# Copy binary (workspace build outputs to target/release/)
+COPY --from=builder /app/target/release/{{BINARY_NAME}} ./{{BINARY_NAME}}
+
+# Set ownership
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+# Expose port
+EXPOSE {{APP_PORT}}
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:{{APP_PORT}}/health || exit 1
+
+CMD ["/app/{{BINARY_NAME}}"]

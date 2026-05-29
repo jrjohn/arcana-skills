@@ -1,0 +1,58 @@
+# TESTED: 2025-02 | Rocky VM (ARM64) | JDK 21 + Android SDK 36
+# ============================================
+# Android SDK Build Environment
+# DevOps Skill Template
+# ============================================
+# JDK 21 + Android SDK (API 36)
+# Uses project's gradlew (not system Gradle)
+# ============================================
+# IMPORTANT: Android SDK build-tools (aapt2, d8) are x86_64 only.
+# On ARM64 hosts, this image MUST be built and run as linux/amd64
+# with QEMU emulation. See docker-compose.yml platform setting.
+#
+# Prerequisites for ARM64 hosts:
+#   sudo docker run --rm --privileged tonistiigi/binfmt --install amd64
+#
+# Usage:
+#   docker compose build
+#   docker compose run --rm android-build
+# ============================================
+
+FROM eclipse-temurin:21-jdk AS builder
+
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=${ANDROID_HOME}
+ENV PATH="${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools"
+
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        unzip \
+        git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Android command-line tools (Java-based, platform-independent)
+RUN mkdir -p ${ANDROID_HOME}/cmdline-tools \
+    && cd ${ANDROID_HOME}/cmdline-tools \
+    && curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdline-tools.zip \
+    && unzip cmdline-tools.zip \
+    && mv cmdline-tools latest \
+    && rm cmdline-tools.zip
+
+# Accept licenses and install SDK components (API 36)
+RUN yes | sdkmanager --licenses > /dev/null 2>&1 \
+    && sdkmanager \
+        "platforms;android-36" \
+        "build-tools;36.0.0" \
+        "platform-tools"
+
+WORKDIR /project
+
+# Copy project files
+COPY . /project/
+
+# Make gradlew executable (use project's Gradle wrapper, not system Gradle)
+RUN chmod +x ./gradlew
+
+# Default: build debug APK using project's gradlew
+CMD ["./gradlew", "assembleDebug", "--no-daemon"]

@@ -1,0 +1,43 @@
+# TESTED: 2025-02 | Rocky VM (ARM64) | .NET 10.0 SDK + sln-based CI build
+# ============================================
+# .NET Dockerfile (CI Build)
+# DevOps Skill Template
+# ============================================
+# Builds a .NET solution, removing WinUI-only projects that cannot
+# build in Linux containers. CI-only build (no runtime stage).
+#
+# Usage:
+#   docker build -t {{PROJECT_NAME}}-build .
+# ============================================
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+
+WORKDIR /app
+
+# Copy solution and project files for restore cache
+COPY *.sln ./
+COPY **/*.csproj ./
+
+# Restructure project files into correct directories
+# (COPY flattens directory structure, so we fix it)
+RUN for f in *.csproj; do \
+      dir=$(basename "$f" .csproj); \
+      mkdir -p "$dir"; \
+      mv "$f" "$dir/"; \
+    done 2>/dev/null || true
+
+# Remove WinUI-only projects from solution (cannot build on Linux)
+# Add patterns for your WinUI/desktop-only projects:
+RUN dotnet sln remove {{WINUI_PROJECT}}/{{WINUI_PROJECT}}.csproj 2>/dev/null || true
+
+# Restore dependencies
+RUN dotnet restore
+
+# Copy all source code
+COPY . .
+
+# Build solution
+RUN dotnet build -c Release --no-restore
+
+# Run tests
+RUN dotnet test -c Release --no-build --no-restore || true

@@ -1,0 +1,72 @@
+// TESTED: ios-app-pipeline | Mac Mini Apple Silicon (ARM64) | 159s | 2026-02-24
+// Pattern: agent { label 'macos' } + xcodebuild build + test (iOS Simulator)
+// Source: arcana-ios — Xcode 26.2, Swift, iOS Simulator (iPhone 16)
+
+pipeline {
+    agent { label 'macos' }
+
+    environment {
+        PROJECT_NAME  = '{{PROJECT_NAME}}'
+        XCODE_PROJECT = '{{XCODE_PROJECT}}'
+        XCODE_SCHEME  = '{{XCODE_SCHEME}}'
+        PATH          = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    }
+
+    parameters {
+        string(name: 'VERSION', defaultValue: '1.0.0', description: 'App version')
+    }
+
+    options {
+        timeout(time: 15, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.VERSION = params.VERSION ?: '1.0.0'
+                }
+                echo "Building ${PROJECT_NAME} v${VERSION}"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir("${WORKSPACE}") {
+                    sh """
+                        xcodebuild \
+                            -project ${XCODE_PROJECT} \
+                            -scheme ${XCODE_SCHEME} \
+                            -configuration Release \
+                            -destination 'generic/platform=iOS' \
+                            CODE_SIGNING_ALLOWED=NO \
+                            build 2>&1 | tail -20
+                    """
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                dir("${WORKSPACE}") {
+                    sh """
+                        xcodebuild \
+                            -project ${XCODE_PROJECT} \
+                            -scheme ${XCODE_SCHEME} \
+                            -destination 'platform=iOS Simulator,name=iPhone 16' \
+                            test 2>&1 | tail -30
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success { echo "iOS build succeeded: ${PROJECT_NAME} v${VERSION}" }
+        failure { echo "iOS build FAILED" }
+        always  { echo "Build number ${BUILD_NUMBER} done" }
+    }
+}

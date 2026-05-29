@@ -1,0 +1,23 @@
+# TESTED: 2026-02-23 | Rocky VM (ARM64) | 471s | arm-none-eabi-gcc / CMake
+# ============================================
+# STM32 CI Build Compose Template
+# ============================================
+# Builds STM32 firmware via Dockerfile.ci (multi-stage).
+# Artifacts extracted from built image via docker cp.
+#
+# Usage:
+#   VERSION=1.0.0 docker compose -f docker-compose.ci.stm32.yml build
+#   docker create --name stm32-out stm32-app-build:${VERSION}
+#   docker cp stm32-out:/artifacts/ ./firmware-output/
+#   docker rm stm32-out
+#
+# Firmware output: ./firmware-output/
+#   - *.bin, *.hex, *.elf
+# ============================================
+
+services:
+  stm32-build:
+    build:
+      context: .
+      dockerfile: Dockerfile.ci
+    image: stm32-app-build:${VERSION:-1.0.0}

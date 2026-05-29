@@ -1,0 +1,59 @@
+# TESTED: 2025-02 | Rocky VM (ARM64) | HarmonyOS NEXT (SDK via volume mount)
+# ============================================
+# HarmonyOS NEXT Build Environment (Simplified)
+# DevOps Skill — Experimental (ARM64 + QEMU)
+# ============================================
+# Ubuntu 22.04 + JDK 17 — SDK pre-extracted on host
+# SDK mounted via docker-compose volume (not downloaded in image)
+# ============================================
+# IMPORTANT: HarmonyOS SDK tools are x86_64 only.
+# On ARM64 hosts, must use platform: linux/amd64 with QEMU.
+#
+# Prerequisites for ARM64 hosts:
+#   sudo docker run --rm --privileged tonistiigi/binfmt --install amd64
+#
+# SDK setup on host (one-time):
+#   1. Download from https://github.com/ErBWs/ohos-sdk/releases/tag/6.0.0.858
+#   2. Extract: cat ohos-sdk-linux-amd64.tar.gz.a* | tar xzf - -C ./ohos-sdk
+#   3. Mount via docker-compose volume
+#
+# docker-compose.yml example:
+#   services:
+#     harmonyos-build:
+#       build: .
+#       platform: linux/amd64
+#       volumes:
+#         - ./ohos-sdk:/opt/ohos-sdk
+#         - .:/project
+#       command: hvigorw assembleHap --mode module -p product=default --no-daemon
+# ============================================
+
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV OHOS_SDK_HOME=/opt/ohos-sdk/command-line-tools/sdk
+ENV HOS_SDK_HOME=/opt/ohos-sdk/command-line-tools/sdk
+ENV OHOS_NDK_HOME=/opt/ohos-sdk/command-line-tools/sdk/default/openharmony
+ENV DEVECO_SDK_HOME=/opt/ohos-sdk/command-line-tools/sdk
+ENV PATH="${PATH}:/opt/ohos-sdk/command-line-tools/bin:/opt/ohos-sdk/command-line-tools/tool/node/bin"
+
+# Install dependencies (including JDK for HAP packaging)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        unzip \
+        git \
+        libgl1-mesa-dev \
+        openjdk-17-jdk-headless \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure .npmrc: default registry + HarmonyOS @ohos scope
+RUN echo "registry=https://registry.npmjs.org/" > /root/.npmrc \
+    && echo "@ohos:registry=https://repo.harmonyos.com/npm/" >> /root/.npmrc \
+    && echo "strict-ssl=true" >> /root/.npmrc
+
+WORKDIR /project
+COPY . /project/
+
+# SDK is mounted at runtime via docker-compose volume at /opt/ohos-sdk
+# Default: build HAP
+CMD ["hvigorw", "assembleHap", "--mode", "module", "-p", "product=default", "--no-daemon"]
