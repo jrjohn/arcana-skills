@@ -50,6 +50,7 @@ SKILLS=(
     "luminous-skill"
     "daily-ci-agent-skill"
     "devops-skill"
+    "arcana-ai-agent-flow-skill"
 )
 
 # Config paths

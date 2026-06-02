@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:drools="http://www.jboss.org/drools"
+    id="ci-flow-defs" targetNamespace="http://www.omg.org/bpmn20"
+    exporter="arcana" exporterVersion="1.0">
+
+  <bpmn2:itemDefinition id="_subjectItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_jobItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_buildUrlItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_resultItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_triageItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_buildResultItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_decisionItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_taskNameItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_groupIdItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_outValItem" structureRef="String"/>
+
+  <bpmn2:process id="ci-flow" drools:packageName="boo.arcana" drools:version="1.0" name="CI Flow" isExecutable="true">
+    <bpmn2:property id="subject" itemSubjectRef="_subjectItem" name="subject"/>
+    <bpmn2:property id="job" itemSubjectRef="_jobItem" name="job"/>
+    <bpmn2:property id="buildUrl" itemSubjectRef="_buildUrlItem" name="buildUrl"/>
+    <bpmn2:property id="result" itemSubjectRef="_resultItem" name="result"/>
+    <bpmn2:property id="triage" itemSubjectRef="_triageItem" name="triage"/>
+    <bpmn2:property id="buildResult" itemSubjectRef="_buildResultItem" name="buildResult"/>
+    <bpmn2:property id="decision" itemSubjectRef="_decisionItem" name="decision"/>
+
+    <bpmn2:startEvent id="start" name="Start">
+      <bpmn2:outgoing>f1</bpmn2:outgoing>
+    </bpmn2:startEvent>
+    <bpmn2:sequenceFlow id="f1" sourceRef="start" targetRef="triageTask"/>
+
+    <!-- AI: Triage -->
+    <bpmn2:userTask id="triageTask" name="Triage">
+      <bpmn2:incoming>f1</bpmn2:incoming>
+      <bpmn2:outgoing>f2</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="triageTask_TaskNameInputX" itemSubjectRef="_taskNameItem" name="TaskName"/>
+        <bpmn2:dataInput id="triageTask_GroupIdInputX" itemSubjectRef="_groupIdItem" name="GroupId"/>
+        <bpmn2:dataOutput id="triageTask_outX" itemSubjectRef="_outValItem" name="out"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>triageTask_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>triageTask_GroupIdInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>triageTask_outX</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>triageTask_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Triage]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">triageTask_TaskNameInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>triageTask_GroupIdInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[ai]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">triageTask_GroupIdInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>triageTask_outX</bpmn2:sourceRef>
+        <bpmn2:targetRef>triage</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:potentialOwner>
+        <bpmn2:resourceAssignmentExpression>
+          <bpmn2:formalExpression>ai</bpmn2:formalExpression>
+        </bpmn2:resourceAssignmentExpression>
+      </bpmn2:potentialOwner>
+    </bpmn2:userTask>
+    <bpmn2:sequenceFlow id="f2" sourceRef="triageTask" targetRef="buildTask"/>
+
+    <!-- Jenkins: Build -->
+    <bpmn2:userTask id="buildTask" name="Build">
+      <bpmn2:incoming>f2</bpmn2:incoming>
+      <bpmn2:outgoing>f3</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="buildTask_TaskNameInputX" itemSubjectRef="_taskNameItem" name="TaskName"/>
+        <bpmn2:dataInput id="buildTask_GroupIdInputX" itemSubjectRef="_groupIdItem" name="GroupId"/>
+        <bpmn2:dataOutput id="buildTask_outX" itemSubjectRef="_outValItem" name="out"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>buildTask_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>buildTask_GroupIdInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>buildTask_outX</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>buildTask_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Build]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">buildTask_TaskNameInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>buildTask_GroupIdInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[jenkins]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">buildTask_GroupIdInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>buildTask_outX</bpmn2:sourceRef>
+        <bpmn2:targetRef>buildResult</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:potentialOwner>
+        <bpmn2:resourceAssignmentExpression>
+          <bpmn2:formalExpression>jenkins</bpmn2:formalExpression>
+        </bpmn2:resourceAssignmentExpression>
+      </bpmn2:potentialOwner>
+    </bpmn2:userTask>
+    <bpmn2:sequenceFlow id="f3" sourceRef="buildTask" targetRef="decideTask"/>
+
+    <!-- AI: Decide -->
+    <bpmn2:userTask id="decideTask" name="Decide">
+      <bpmn2:incoming>f3</bpmn2:incoming>
+      <bpmn2:outgoing>f4</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="decideTask_TaskNameInputX" itemSubjectRef="_taskNameItem" name="TaskName"/>
+        <bpmn2:dataInput id="decideTask_GroupIdInputX" itemSubjectRef="_groupIdItem" name="GroupId"/>
+        <bpmn2:dataOutput id="decideTask_outX" itemSubjectRef="_outValItem" name="out"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>decideTask_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>decideTask_GroupIdInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>decideTask_outX</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>decideTask_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Decide]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">decideTask_TaskNameInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>decideTask_GroupIdInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[ai]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">decideTask_GroupIdInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>decideTask_outX</bpmn2:sourceRef>
+        <bpmn2:targetRef>decision</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:potentialOwner>
+        <bpmn2:resourceAssignmentExpression>
+          <bpmn2:formalExpression>ai</bpmn2:formalExpression>
+        </bpmn2:resourceAssignmentExpression>
+      </bpmn2:potentialOwner>
+    </bpmn2:userTask>
+    <bpmn2:sequenceFlow id="f4" sourceRef="decideTask" targetRef="end"/>
+
+    <bpmn2:endEvent id="end" name="End">
+      <bpmn2:incoming>f4</bpmn2:incoming>
+    </bpmn2:endEvent>
+  </bpmn2:process>
+
+  <bpmndi:BPMNDiagram id="dia">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="ci-flow">
+      <bpmndi:BPMNShape id="s_start" bpmnElement="start"><dc:Bounds height="56" width="56" x="100" y="100"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_triage" bpmnElement="triageTask"><dc:Bounds height="80" width="120" x="200" y="88"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_build" bpmnElement="buildTask"><dc:Bounds height="80" width="120" x="370" y="88"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_decide" bpmnElement="decideTask"><dc:Bounds height="80" width="120" x="540" y="88"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_end" bpmnElement="end"><dc:Bounds height="56" width="56" x="710" y="100"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="e_f1" bpmnElement="f1"><di:waypoint x="156" y="128"/><di:waypoint x="200" y="128"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f2" bpmnElement="f2"><di:waypoint x="320" y="128"/><di:waypoint x="370" y="128"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f3" bpmnElement="f3"><di:waypoint x="490" y="128"/><di:waypoint x="540" y="128"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f4" bpmnElement="f4"><di:waypoint x="660" y="128"/><di:waypoint x="710" y="128"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn2:definitions>
