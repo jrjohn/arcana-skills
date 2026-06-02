@@ -1,0 +1,27 @@
+# Arcana read-API (arcana-cloud-rust) — production image for the workflow platform.
+# Multi-stage: release build, then a slim runtime. Migrations are compile-time
+# embedded (sqlx::migrate!), so no migrations dir is needed at runtime. BPMN
+# definitions (for the /definitions/:id/graph edges) are mounted at runtime via
+# BPMN_DIR. Config comes from config/default.toml + ARCANA__* env overrides
+# (local.toml is intentionally NOT copied — it is Mac-dev only).
+FROM rust:1-bookworm AS builder
+# arcana-grpc builds protobufs with prost-build, which needs the protoc binary.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY . .
+RUN cargo build --release -p arcana-server
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=builder /build/target/release/arcana-server /app/arcana-server
+COPY config/default.toml config/production.toml /app/config/
+ENV BPMN_DIR=/app/bpmn \
+    DATA_INDEX_URL=http://data-index:8080 \
+    ARCANA__REDIS__ENABLED=false
+EXPOSE 8080 9090
+CMD ["/app/arcana-server"]

@@ -1,0 +1,53 @@
+# Mac dry-run override for docker-compose.bluesea.yml.
+# Supplies what bluesea provides externally (Kafka), exposes ports for
+# verification, and runs the worker in auto mode (no agent-task-node/Jenkins
+# on Mac). Run with a separate project so volumes are fresh and the pg-init
+# scripts (dataindex + arcana DBs) actually execute:
+#
+#   docker network create devops_default   # once
+#   JWT_SECRET=local-dev-secret-key-minimum-32-characters-long \
+#   KAFKA_BOOTSTRAP=kafka:9092 DASHBOARD_PORT=4300 WORKER_MODE=auto \
+#     docker compose -p aaf-bluesea \
+#       -f docker-compose.bluesea.yml -f docker-compose.bluesea.mac.yml up -d
+services:
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: aaf-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks: [devops_default]
+
+  # expose engine / data-index / read-API ports for verification only
+  kogito-bpmn:
+    ports:
+      - "8081:8080"
+  kogito-swf:
+    ports:
+      - "8082:8080"
+  data-index:
+    ports:
+      - "8180:8080"
+  arcana-cloud-rust:
+    ports:
+      - "8088:8080"
+
+  # no agent-task-node / Jenkins on Mac → auto mode
+  task-worker:
+    environment:
+      MODE: auto
+      ENGINE_URL: http://aaf-kogito-bpmn:8080
+      DATA_INDEX_URL: http://aaf-data-index:8080
+      POLL_SECS: "5"
