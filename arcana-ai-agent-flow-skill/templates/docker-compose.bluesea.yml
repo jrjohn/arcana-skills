@@ -87,8 +87,10 @@ services:
       ARCANA__SECURITY__JWT_SECRET: ${JWT_SECRET:?set a 32+ char secret}
       DATA_INDEX_URL: http://aaf-data-index:8080
       BPMN_DIR: /app/bpmn
+      SWF_DIR: /app/swf
     volumes:
       - ./bpmn:/app/bpmn:ro
+      - ./swf:/app/swf:ro
     networks: [devops_default]
 
   dashboard:
