@@ -33,6 +33,14 @@ Lessons from building arcana-ai-agent-flow Mac-first → deploying to bluesea.
   events addon + kafka connector + MetricDecorator exclude as BPMN.
 - SonataFlow uses JSON variables (no protobuf). Its instances/definitions land in
   the same Data Index; `ProcessDefinition.type = SW` (vs `BPMN`).
+- **Flow-diagram edges**: the Data Index gives SWF *nodes* but no *edges* (so the
+  diagram shows unconnected boxes). Edges live in the `.sw.yaml` as `start` +
+  per-state `transition` + `end`. Parse them (`swf.rs`, serde_yaml) into edges
+  **by state name**, then in `/definitions/:id/graph` map names → Data Index node
+  ids (Kogito ids the SWF nodes `1`,`2`,… but the *names* — Start/End/<state> —
+  match): `Start→<start state>`, `<state>→<transition>`, `<end state>→End`. Mount
+  the `.sw.yaml` dir into the read-API (`SWF_DIR`), same pattern as `BPMN_DIR`.
+  (BPMN edges come from sequence-flow sourceRef/targetRef, already node-ids.)
 
 ## Kogito Data Index
 
