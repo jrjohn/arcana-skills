@@ -102,3 +102,13 @@ Lessons from building arcana-ai-agent-flow Mac-first → deploying to bluesea.
   restart persistence. The worker keeps the routine guardrail (auto-fix only red
   `*/main` + fixable code/deps/test) so replacing the inline routine doesn't
   regress remediation.
+
+## Hourly scheduler (heartbeat)
+
+- The `ci-scheduler` service starts a `ci-maintenance` SonataFlow instance every
+  hour so the dashboard always shows recent automated runs (the event-driven B2
+  trigger handles real red builds separately).
+- **`curlimages/curl` ENTRYPOINT is `curl`** — `command: sh -c '...'` becomes
+  `curl sh -c …` and breaks (`sh: -H: not found`). Override
+  `entrypoint: ["/bin/sh","-c"]` and pass the loop as a **literal block scalar**
+  (`|`), not a folded one (`>` mangles the embedded quotes).

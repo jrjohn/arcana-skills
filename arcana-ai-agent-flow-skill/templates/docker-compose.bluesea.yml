@@ -118,6 +118,24 @@ services:
       JENKINS_TOKEN: ${JENKINS_TOKEN:-}
     networks: [devops_default]
 
+  # Hourly heartbeat: start an automated ci-maintenance (SonataFlow) instance
+  # every hour so the dashboard always shows recent automated workflow runs.
+  # (The event-driven B2 Jenkins trigger handles real red builds separately.)
+  ci-scheduler:
+    image: curlimages/curl:latest
+    container_name: aaf-ci-scheduler
+    depends_on:
+      - kogito-swf
+    entrypoint: ["/bin/sh", "-c"]   # override curl entrypoint
+    command:
+      - |
+        while true; do
+          curl -s -X POST http://aaf-kogito-swf:8080/ci-maintenance -H "Content-Type: application/json" -d '{}' -o /dev/null -w "ci-maintenance %{http_code}\n"
+          sleep ${SCHEDULE_SECS:-3600}
+        done
+    restart: unless-stopped
+    networks: [devops_default]
+
 volumes:
   kogito-pgdata:
 
