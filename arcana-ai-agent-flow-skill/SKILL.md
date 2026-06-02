@@ -59,7 +59,7 @@ See `references/architecture.md`.
 | `workflow-task-worker/` | stdlib-python poller: ready Data-Index tasks → node-aware dispatch (Triage→agent-task-node `/task/diagnose` [+`/task/fix` on red `*/main` fixable code/deps/test], Build→Jenkins rebuild, Decide→from result). `MODE=auto` (local) / `real` (prod). |
 | `bluesea-jenkins/ci-bpmn-trigger.groovy` | Jenkins RunListener: any non-SUCCESS build → POST create a ci-flow BPMN instance (replaces inline routine). |
 | `docker-compose.mac.yml` | Local stack (adds its own kafka). |
-| `docker-compose.bluesea.yml` + `.mac.yml` + `deploy-bluesea.sh` + `kogito-pg-init/` | Production overlay (external devops_default, reuse existing kafka, kogito-pg 3 DBs) + one-shot deploy script + Mac dry-run override. |
+| `docker-compose.bluesea.yml` + `.mac.yml` + `deploy-bluesea.sh` + `kogito-pg-init/` | Production overlay (external devops_default, reuse existing kafka, kogito-pg 3 DBs) + one-shot deploy script + Mac dry-run override. Includes `ci-scheduler` (hourly `ci-maintenance` heartbeat → always-fresh dashboard; `SCHEDULE_SECS` tunable). |
 
 ## Build & deploy
 
