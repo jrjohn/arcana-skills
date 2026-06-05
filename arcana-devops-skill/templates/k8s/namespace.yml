@@ -1,0 +1,8 @@
+# K8s Namespace - DevOps Skill Template
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{NAMESPACE}}
+  labels:
+    app.kubernetes.io/managed-by: arcana-devops-skill
+    environment: {{ENVIRONMENT}}
