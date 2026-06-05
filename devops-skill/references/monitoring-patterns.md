@@ -244,6 +244,48 @@ route:
 
 ---
 
+## Alert on the Damaging Event, Not the Post-Remediation State (TESTED)
+
+Anti-pattern from a real incident (2026-06-04): a disk watchdog pruned at ≥88%
+and alerted only if usage was **still ≥95% after the prune**. During a build
+storm the disk spiked to 100% three times in 45 minutes — corrupting docker's
+network state — yet every prune pulled it back to ~90%, so **zero alerts were
+sent** while the damage happened.
+
+Rule: the alert condition must test the **pre-remediation spike** (the event
+that causes damage), not the post-remediation residue (what's left after
+self-healing). Self-heal and alert are separate concerns:
+
+```bash
+UP=$(used_pct)                       # measure BEFORE remediation
+[ "$UP" -ge 95 ] && add_alert "..."  # the spike itself is the incident
+[ "$UP" -ge 88 ] && remediate        # then self-heal
+# (post-remediation check is a SECOND alert: "self-heal is losing")
+```
+
+Dedup tip: keep dynamic numbers out of the alert text so the dedup hash stays
+stable (otherwise each tick's different % defeats max-1-per-N-hours dedup).
+
+## Disk-Pressure Defense in Depth (CI build host, TESTED)
+
+Per-build cleanup inside pipelines races concurrent builds (a prune can delete
+another build's image between tag and use). Move cleanup out of the build path
+into independent layers:
+
+| layer | cadence | scope |
+|---|---|---|
+| age-based image GC | */20 min | `*:build-N` tags older than 6h (age, not keep-N — multibranch shares one tag space, keep-N kills in-progress PR builds) |
+| global cleanup | nightly off-peak | registry tag+blob GC, `image prune -a --filter until=6h`, builder/volume prune |
+| watchdog | */15 min | self-heal prune at ≥88%, alert at ≥95% pre-prune |
+
+Run the watchdog from a **different disk** than the one it watches, so it still
+works at 100%. GC buys time, not capacity — recurring ≥95% peaks mean the
+volume must grow. At 100%, docker can corrupt live container network state
+(observed: a container lost its embedded-DNS endpoint and stayed broken until
+restarted — survivors of the full disk are not necessarily healthy).
+
+---
+
 ## Dashboard as Code
 
 ### Managing Grafana Dashboards in Git

@@ -1,6 +1,6 @@
 ---
 skill_name: devops-skill
-skill_version: 1.0.0
+skill_version: 1.1.0
 created_date: 2026-02-11
 skill_type: complex
 protocols:
