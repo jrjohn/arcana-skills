@@ -18,8 +18,8 @@ repositories {
 
 dependencies {
     // Apache Tika - 文件內容提取
-    implementation 'org.apache.tika:tika-core:2.9.1'
-    implementation 'org.apache.tika:tika-parsers-standard-package:2.9.1'
+    implementation 'org.apache.tika:tika-core:2.9.4'
+    implementation 'org.apache.tika:tika-parsers-standard-package:2.9.4'
 
     // Apache Lucene - 全文索引
     implementation 'org.apache.lucene:lucene-core:9.9.1'
