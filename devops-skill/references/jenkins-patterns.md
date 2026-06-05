@@ -208,6 +208,63 @@ See `templates/jenkins/jenkins-casc.yml` for a complete example.
 
 ---
 
+## Boot-time Job Seeding — the Resurrection Trap (TESTED)
+
+A common pattern seeds jobs from XML at every Jenkins boot via `init.groovy.d`:
+
+```groovy
+// init/create-jobs.groovy — runs on EVERY boot
+new File("/var/jenkins_home/jobs-config").listFiles()
+    .findAll { it.name.endsWith('.xml') }.each { file ->
+        def name = file.name.replace('.xml', '')
+        if (jenkins.getItem(name) == null)          // ← recreates anything missing
+            jenkins.createProjectFromXML(name, new FileInputStream(file))
+    }
+```
+
+**Trap**: deleting a seeded job in the UI/API is NOT durable — the next restart
+resurrects it from its seed XML. Real incident (2026-06-04): a host restart
+resurrected 15 retired legacy pipelines because the deployed seed dir was stale
+while the repo had long been cleaned.
+
+Rules:
+- **Delete a job ⇒ delete its seed XML too**, in the repo AND the deployed dir.
+- The seed dir is config-as-code: keep deployed == repo (deploy script or CI
+  should sync it; a manually drifted seed dir is a time bomb).
+- Archive retired XMLs (`jobs-retired-<date>/`) instead of `rm` for rollback.
+
+---
+
+## Multibranch Branch-Job Corpses (TESTED)
+
+Multibranch pipelines keep one child job per branch. A branch whose PR merged
+but was never deleted keeps its job forever — frozen at its last build color
+(often red from a failure that a follow-up PR already fixed). The monitor fills
+with corpses that look like live failures.
+
+Durable fix — stop producing corpses at the source:
+
+```bash
+# per repo, one-time (no org-level inheritance — set it on NEW repos too)
+gh api -X PATCH repos/<owner>/<repo> -f delete_branch_on_merge=true
+```
+
+Cleanup of existing corpses:
+
+```bash
+# 1. verify each stale branch's PR is MERGED before deleting (never delete
+#    unmerged work):  gh pr list --head <branch> --state all
+# 2. delete the branch, then trigger a multibranch re-scan:
+curl -b "$CJ" -u "$JC" -H "$CRUMB" -X POST "$JENKINS/job/<mb-job>/build"
+# branch indexing prunes jobs for branches that no longer exist
+```
+
+Edge case: a PR closed WITHOUT merging leaves its branch (auto-delete only
+covers merges). Renovate cleans its own; human-abandoned branches need manual
+deletion.
+
+---
+
 ## Jenkins API — CSRF Crumb Handling
 
 Jenkins requires a CSRF crumb for all POST API calls. The crumb must be obtained with a cookie session and sent back in the same session.
