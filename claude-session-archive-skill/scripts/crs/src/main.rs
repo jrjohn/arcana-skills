@@ -942,7 +942,7 @@ fn flatten_content(rec: &Value) -> (String, Option<String>, String) {
 #[cfg(not(feature = "pg-backend"))]
 fn ingest_file(conn: &Connection, path: &Path) -> Result<usize> {
     let session_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
-    let project = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+    let project = project_slug(path);
     let mtime: f64 = fs::metadata(path)?
         .modified()?
         .duration_since(SystemTime::UNIX_EPOCH)?
@@ -1004,19 +1004,43 @@ fn collect_jsonl_files() -> Result<Vec<PathBuf>> {
     if !root.is_dir() {
         return Ok(out);
     }
+    // Recurse so we also pick up subagent transcripts, which live in
+    // <project>/<session-uuid>/subagents/agent-<id>.jsonl (deeper than the
+    // top-level <project>/<uuid>.jsonl main-session files).
     for proj in fs::read_dir(&root)? {
         let proj = proj?;
         if !proj.file_type()?.is_dir() { continue; }
-        for f in fs::read_dir(proj.path())? {
-            let f = f?;
-            let p = f.path();
-            if p.extension().and_then(|e| e.to_str()) == Some("jsonl") {
-                out.push(p);
-            }
-        }
+        collect_jsonl_recursive(&proj.path(), &mut out)?;
     }
     out.sort();
     Ok(out)
+}
+
+fn collect_jsonl_recursive(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+    for f in fs::read_dir(dir)? {
+        let f = f?;
+        let p = f.path();
+        if p.is_dir() {
+            collect_jsonl_recursive(&p, out)?;
+        } else if p.extension().and_then(|e| e.to_str()) == Some("jsonl") {
+            out.push(p);
+        }
+    }
+    Ok(())
+}
+
+// The `project` column must be the project slug (the first dir under
+// ~/.claude/projects), NOT the immediate parent — otherwise subagent files
+// under <project>/<uuid>/subagents/ would be tagged project="subagents" and
+// fall outside the project filter used by vsearch/csearch.
+fn project_slug(path: &Path) -> String {
+    let root = home().join(".claude/projects");
+    if let Ok(rel) = path.strip_prefix(&root) {
+        if let Some(first) = rel.components().next() {
+            return first.as_os_str().to_string_lossy().to_string();
+        }
+    }
+    path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("unknown").to_string()
 }
 
 fn refresh_all_recent_contexts() {
@@ -1428,7 +1452,7 @@ fn ingest_file_pg_daemon(
     state_mtimes: &std::collections::HashMap<String, f64>,
 ) -> Result<usize> {
     let session_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
-    let project = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+    let project = project_slug(path);
     let mtime: f64 = fs::metadata(path)?
         .modified()?
         .duration_since(SystemTime::UNIX_EPOCH)?
@@ -1564,7 +1588,7 @@ fn embed_image_ocr_missing(workers: usize) -> Result<()> {
 #[allow(dead_code)]
 fn ingest_file_pg(pg: &mut postgres::Client, path: &Path) -> Result<usize> {
     let session_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
-    let project = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+    let project = project_slug(path);
     let mtime: f64 = fs::metadata(path)?
         .modified()?
         .duration_since(SystemTime::UNIX_EPOCH)?
@@ -1647,7 +1671,7 @@ fn ingest_file_pg(pg: &mut postgres::Client, path: &Path) -> Result<usize> {
 #[cfg(all(feature = "pg-backend", unix))]
 fn ingest_file_async(pg: &mut AsyncPg, path: &Path) -> Result<usize> {
     let session_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
-    let project = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+    let project = project_slug(path);
     let mtime: f64 = fs::metadata(path)?
         .modified()?
         .duration_since(SystemTime::UNIX_EPOCH)?
