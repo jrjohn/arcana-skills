@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:drools="http://www.jboss.org/drools"
+    id="ci-maintenance-defs" targetNamespace="http://www.omg.org/bpmn20"
+    exporter="arcana" exporterVersion="2.0">
+
+  <bpmn2:itemDefinition id="_scanItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_analysisItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_remediationItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_verifyItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_taskNameItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_groupIdItem" structureRef="String"/>
+
+  <!-- ci-maintenance v2 (2026-06-09): real CI-health governance flow.
+       Scan/Remediate/Verify are scriptTasks that HTTP-call the read-only
+       ci-maint-endpoint (no docker socket; real prune stays on host cron).
+       Analyze is an ai UserTask → worker → agent-task-node /task/analyze.
+       All step outputs land in process vars → Data Index → KPI/audit. -->
+  <bpmn2:process id="ci-maintenance" name="CI Maintenance" isExecutable="true" processType="Public">
+    <bpmn2:property id="scan" itemSubjectRef="_scanItem"/>
+    <bpmn2:property id="analysis" itemSubjectRef="_analysisItem"/>
+    <bpmn2:property id="remediation" itemSubjectRef="_remediationItem"/>
+    <bpmn2:property id="verify" itemSubjectRef="_verifyItem"/>
+
+    <bpmn2:startEvent id="start" name="Start">
+      <bpmn2:outgoing>f1</bpmn2:outgoing>
+    </bpmn2:startEvent>
+
+    <bpmn2:scriptTask id="scanTask" name="Scan" scriptFormat="http://www.java.com/java">
+      <bpmn2:incoming>f1</bpmn2:incoming>
+      <bpmn2:outgoing>f2</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[kcontext.setVariable("scan", boo.arcana.MaintHttp.get("/scan"));]]></bpmn2:script>
+    </bpmn2:scriptTask>
+
+    <bpmn2:userTask id="analyzeTask" name="Analyze">
+      <bpmn2:incoming>f2</bpmn2:incoming>
+      <bpmn2:outgoing>f3</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="analyzeTask_TaskNameInputX" itemSubjectRef="_taskNameItem" name="TaskName"/>
+        <bpmn2:dataInput id="analyzeTask_GroupIdInputX" itemSubjectRef="_groupIdItem" name="GroupId"/>
+        <bpmn2:dataOutput id="analyzeTask_outX" itemSubjectRef="_analysisItem" name="out"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>analyzeTask_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>analyzeTask_GroupIdInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>analyzeTask_outX</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>analyzeTask_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Analyze]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression">analyzeTask_TaskNameInputX</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>analyzeTask_GroupIdInputX</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[ai]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression">analyzeTask_GroupIdInputX</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>analyzeTask_outX</bpmn2:sourceRef>
+        <bpmn2:targetRef>analysis</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:potentialOwner>
+        <bpmn2:resourceAssignmentExpression><bpmn2:formalExpression>ai</bpmn2:formalExpression></bpmn2:resourceAssignmentExpression>
+      </bpmn2:potentialOwner>
+    </bpmn2:userTask>
+
+    <bpmn2:scriptTask id="remediateTask" name="Remediate" scriptFormat="http://www.java.com/java">
+      <bpmn2:incoming>f3</bpmn2:incoming>
+      <bpmn2:outgoing>f4</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[kcontext.setVariable("remediation", boo.arcana.MaintHttp.post("/remediate"));]]></bpmn2:script>
+    </bpmn2:scriptTask>
+
+    <bpmn2:scriptTask id="verifyTask" name="Verify" scriptFormat="http://www.java.com/java">
+      <bpmn2:incoming>f4</bpmn2:incoming>
+      <bpmn2:outgoing>f5</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[kcontext.setVariable("verify", boo.arcana.MaintHttp.get("/verify"));]]></bpmn2:script>
+    </bpmn2:scriptTask>
+
+    <bpmn2:endEvent id="end" name="End">
+      <bpmn2:incoming>f5</bpmn2:incoming>
+    </bpmn2:endEvent>
+
+    <bpmn2:sequenceFlow id="f1" sourceRef="start" targetRef="scanTask"/>
+    <bpmn2:sequenceFlow id="f2" sourceRef="scanTask" targetRef="analyzeTask"/>
+    <bpmn2:sequenceFlow id="f3" sourceRef="analyzeTask" targetRef="remediateTask"/>
+    <bpmn2:sequenceFlow id="f4" sourceRef="remediateTask" targetRef="verifyTask"/>
+    <bpmn2:sequenceFlow id="f5" sourceRef="verifyTask" targetRef="end"/>
+  </bpmn2:process>
+</bpmn2:definitions>

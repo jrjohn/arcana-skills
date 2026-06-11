@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:drools="http://www.jboss.org/drools"
+    id="merge-flow-defs" targetNamespace="http://www.omg.org/bpmn20"
+    exporter="arcana" exporterVersion="1.0">
+
+  <bpmn2:itemDefinition id="_subjectItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_jobItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_prUrlItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_mergeItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_releaseItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_taskNameItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_groupIdItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_outValItem" structureRef="String"/>
+
+  <bpmn2:process id="merge-flow" drools:packageName="boo.arcana" drools:version="1.0" name="Merge Flow" isExecutable="true">
+    <bpmn2:property id="subject" itemSubjectRef="_subjectItem" name="subject"/>
+    <bpmn2:property id="job" itemSubjectRef="_jobItem" name="job"/>
+    <bpmn2:property id="prUrl" itemSubjectRef="_prUrlItem" name="prUrl"/>
+    <bpmn2:property id="merge" itemSubjectRef="_mergeItem" name="merge"/>
+    <bpmn2:property id="release" itemSubjectRef="_releaseItem" name="release"/>
+
+    <bpmn2:startEvent id="start" name="Start">
+      <bpmn2:outgoing>f1</bpmn2:outgoing>
+    </bpmn2:startEvent>
+    <bpmn2:sequenceFlow id="f1" sourceRef="start" targetRef="mergeTask"/>
+
+    <!-- AI: Merge — autonomous squash-merge of a verified-green PR -->
+    <bpmn2:userTask id="mergeTask" name="Merge">
+      <bpmn2:incoming>f1</bpmn2:incoming>
+      <bpmn2:outgoing>f2</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="mergeTask_TaskNameInputX" itemSubjectRef="_taskNameItem" name="TaskName"/>
+        <bpmn2:dataInput id="mergeTask_GroupIdInputX" itemSubjectRef="_groupIdItem" name="GroupId"/>
+        <bpmn2:dataOutput id="mergeTask_outX" itemSubjectRef="_outValItem" name="out"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>mergeTask_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>mergeTask_GroupIdInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>mergeTask_outX</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>mergeTask_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Merge]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">mergeTask_TaskNameInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>mergeTask_GroupIdInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[ai]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">mergeTask_GroupIdInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>mergeTask_outX</bpmn2:sourceRef>
+        <bpmn2:targetRef>merge</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:potentialOwner>
+        <bpmn2:resourceAssignmentExpression>
+          <bpmn2:formalExpression>ai</bpmn2:formalExpression>
+        </bpmn2:resourceAssignmentExpression>
+      </bpmn2:potentialOwner>
+    </bpmn2:userTask>
+    <bpmn2:sequenceFlow id="f2" sourceRef="mergeTask" targetRef="releaseTask"/>
+
+    <!-- AI: Release — run release-please (github-release + release-pr) for the merged PR's repo -->
+    <bpmn2:userTask id="releaseTask" name="Release">
+      <bpmn2:incoming>f2</bpmn2:incoming>
+      <bpmn2:outgoing>f3</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="releaseTask_TaskNameInputX" itemSubjectRef="_taskNameItem" name="TaskName"/>
+        <bpmn2:dataInput id="releaseTask_GroupIdInputX" itemSubjectRef="_groupIdItem" name="GroupId"/>
+        <bpmn2:dataOutput id="releaseTask_outX" itemSubjectRef="_outValItem" name="out"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>releaseTask_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>releaseTask_GroupIdInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>releaseTask_outX</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>releaseTask_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Release]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">releaseTask_TaskNameInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>releaseTask_GroupIdInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[ai]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">releaseTask_GroupIdInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>releaseTask_outX</bpmn2:sourceRef>
+        <bpmn2:targetRef>release</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:potentialOwner>
+        <bpmn2:resourceAssignmentExpression>
+          <bpmn2:formalExpression>ai</bpmn2:formalExpression>
+        </bpmn2:resourceAssignmentExpression>
+      </bpmn2:potentialOwner>
+    </bpmn2:userTask>
+    <bpmn2:sequenceFlow id="f3" sourceRef="releaseTask" targetRef="end"/>
+
+    <bpmn2:endEvent id="end" name="End">
+      <bpmn2:incoming>f3</bpmn2:incoming>
+    </bpmn2:endEvent>
+  </bpmn2:process>
+</bpmn2:definitions>

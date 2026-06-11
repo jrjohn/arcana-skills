@@ -10,6 +10,36 @@ Professional Go development skill based on [Arcana Cloud Go](https://github.com/
 
 ---
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**EVERY task starts by cloning the complete reference project: `git clone https://github.com/jrjohn/arcana-cloud-go.git` — never scaffold a Go project from scratch.**
+
+1. **Clone** the reference project:
+   ```bash
+   git clone https://github.com/jrjohn/arcana-cloud-go.git [new-project-directory]
+   ```
+2. **Establish a green baseline** — build + test the UNTOUCHED clone first, before changing anything:
+   ```bash
+   go mod tidy
+   go test ./...
+   go build ./cmd/server/
+   ```
+3. **Rename + strip demo endpoints** per [0. Project Setup - CRITICAL](#0-project-setup---critical) — remove the example API (Arcana User Management), but explicitly KEEP the infrastructure: gRPC server setup, fx DI container (`internal/di/`), security/auth (`internal/security/`, `internal/middleware/`), deployment modes/configs (`config/`, `deployment/`), and the proto toolchain (`api/proto/` + protobuf compilation settings).
+4. **Add features** layer by layer per the [File-by-File Feature Recipe — New Entity End-to-End](#file-by-file-feature-recipe--new-entity-end-to-end).
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `reference.md` | Full API/config reference: Viper config, deployment modes, endpoints, gRPC definitions, env vars, Docker/K8s, DB config |
+| `patterns.md` | Architecture & code patterns: service layer, data access, API design, error handling, testing, event-driven |
+| `patterns/service-layer.md` | Service layer deep dive (interface pattern, transaction pattern) |
+| `examples.md` | Complete worked examples (incl. Multi-Database DAO Pattern) |
+| `checklists/production-ready.md` | Pre-ship checklist before declaring work done |
+| `verification/commands.md` | Verification/grep commands for diagnosing wiring and stub issues |
+
+---
+
 ## Quick Reference Card
 
 ### New Endpoint Checklist:
@@ -546,6 +576,13 @@ Only modify the following required items:
 - Service names in Docker-related configuration files
 - Update settings in `.env.example` file
 
+> **⚠️ Module rename warning**: changing the `module` path in `go.mod` requires rewriting EVERY internal import (`arcana-cloud-go/internal/...`) — a partial rename leaves the build broken. Do it in one pass:
+> ```bash
+> go mod edit -module <new-module>
+> find . -name '*.go' -exec sed -i '' 's|arcana-cloud-go|<new-module>|g' {} +
+> go mod tidy && go build ./...   # must compile clean before continuing
+> ```
+
 **Step 4**: Clean up example code
 The cloned project contains example API (e.g., Arcana User Management). Clean up and replace with new project business logic:
 
@@ -588,6 +625,39 @@ go build ./cmd/server/
 - Add Domain Entities, DTOs
 - Add GORM migration scripts
 - Modify gRPC proto files (and regenerate)
+
+## File-by-File Feature Recipe — New Entity End-to-End
+
+Ordered steps to add a new entity (example: `Order`) through every layer. Create files in this order so each step compiles against the previous one.
+
+1. **Domain entity** — `internal/domain/entity/order.go`
+   GORM-tagged struct + `TableName()` + `BeforeCreate` UUID hook (mirror `entity.User` in section 3).
+2. **Migration** — register in GORM AutoMigrate for development (`db.AutoMigrate(&entity.Order{})`), or create a golang-migrate script per section 9:
+   ```bash
+   migrate create -ext sql -dir migrations -seq add_orders_table
+   ```
+3. **DTO + mapper** — in the same `internal/domain/entity/order.go`: `OrderDTO` struct + `ToOrderDTO(*Order) *OrderDTO` (same idiom as `UserDTO` / `ToUserDTO`).
+4. **DAO (multi-database)** — `internal/domain/dao/order_dao.go` (interface) + `internal/domain/dao/order_dao_impl.go` (per-DB implementations), following the existing `user_dao.go` / `user_dao_impl.go` naming. Full interface/impl/factory layout and its fx wiring: `examples.md` → "Multi-Database DAO Pattern".
+5. **Repository** — `internal/domain/repository/order_repository.go` (interface) + `internal/domain/repository/order_repository_impl.go`. `nil, nil` is only for single-record not-found; NEVER return nil slices for list data (Zero-Empty Policy).
+6. **Service** — `internal/domain/service/order_service.go` (interface + request structs with `binding` tags) + `internal/domain/service/order_service_impl.go`. Multi-write operations belong inside a GORM transaction — `db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { ... })`, see `patterns/service-layer.md` → "Transaction Pattern".
+7. **HTTP handler + routes** — `internal/controller/http/order_controller.go` with `RegisterRoutes(rg *gin.RouterGroup, authMiddleware gin.HandlerFunc)`; register the controller in `internal/controller/http/router.go`.
+8. **gRPC** — define the service in `api/proto/order.proto`, regenerate:
+   ```bash
+   protoc --go_out=. --go_opt=paths=source_relative \
+          --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+          api/proto/*.proto
+   # or: buf generate
+   ```
+   then implement ALL rpc methods in `internal/controller/grpc/order_server.go` (rpc count must match) and register it in the gRPC server setup.
+9. **DI wiring** — add to `internal/di/module.go`: `fx.Provide` for the DAO (via the factory wiring shown in `examples.md`), `repository.NewOrderRepository`, `service.NewOrderService`, and `httpctrl.NewOrderController`, mirroring the existing registrations.
+10. **Mock data** — repository/DAO stubs return realistic, varied values; list data powering charts/lists needs at least 7 items (see Mock Data Requirements above).
+11. **Unit tests per layer** — `internal/domain/service/order_service_test.go` (testify mocks, per section 10 below), repository tests alongside `internal/domain/repository/`, controller tests alongside `internal/controller/http/`, integration tests in `tests/integration/`.
+12. **Coverage check**:
+    ```bash
+    go test -coverprofile=coverage.out ./...
+    go tool cover -func=coverage.out
+    ```
+    Targets: Service 90%+, Repository/DAO 80%+, Controller 75%+.
 
 ### 1. TDD & Spec-Driven Development Workflow - MANDATORY
 
@@ -714,6 +784,8 @@ arcana-cloud-go/
 ├── go.mod
 └── go.sum
 ```
+
+> Note: `internal/domain/dao/` exists for multi-database support (MySQL/PostgreSQL/MongoDB); the DAO interface, per-DB implementations, factory, and Repository→DAO fx wiring are shown in `examples.md` → "Multi-Database DAO Pattern".
 
 ### 3. Domain Entity
 
@@ -1622,7 +1694,7 @@ func (s *settingsServiceImpl) GetAccountInfo(ctx context.Context, userID string)
 ### Code Quality
 - [ ] `go vet` passes
 - [ ] `golangci-lint` passes
-- [ ] 428+ tests passing (80%+ coverage)
+- [ ] The full test suite passing (80%+ coverage)
 - [ ] Error wrapping with `%w` for tracing
 - [ ] Context used consistently
 

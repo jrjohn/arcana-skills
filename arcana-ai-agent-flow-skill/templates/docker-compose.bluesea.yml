@@ -9,8 +9,8 @@
 #
 # Deploy assets to copy onto bluesea next to this file:
 #   ./kogito-pg-init/        (01-dataindex-db.sql, 02-arcana-db.sql)
-#   ./data-index-protobufs/  (BPMN + SWF .proto descriptors)
-#   ./bpmn/                  (BPMN definitions for the read-API graph endpoint)
+#   ./data-index-protobufs/  (the BPMN engine's .proto descriptors)
+#   ./bpmn/                  (BPMN definitions for the read-API graph endpoint / bpmn-js)
 #
 # Usage (bluesea, John `!`):
 #   KAFKA_BOOTSTRAP=<existing-kafka:9092> DASHBOARD_PORT=8090 \
@@ -48,13 +48,22 @@ services:
       KOGITO_SERVICE_URL: http://aaf-kogito-bpmn:8080
     networks: [devops_default]
 
-  kogito-swf:
-    image: arcana/kogito-swf:1.0.0
-    container_name: aaf-kogito-swf
+  # Read-only CI-health probe for the BPMN ci-maintenance flow. NO docker socket
+  # (real prune/GC stays on host cron); only observes disk (/host-data), cron
+  # results (/host-log) + Jenkins (HTTP), and remediates offline nodes via the
+  # Jenkins API. Called by ci-maintenance Scan/Remediate/Verify scriptTasks.
+  ci-maint-endpoint:
+    image: arcana/ci-maint-endpoint:1.0.0
+    container_name: aaf-ci-maint-endpoint
     environment:
-      KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
-      KOGITO_SERVICE_URL: http://aaf-kogito-swf:8080
+      JENKINS_URL: ${JENKINS_URL:-http://jenkins:8080/jenkins}
+      JENKINS_USER: ${JENKINS_USER:-admin}
+      JENKINS_TOKEN: ${JENKINS_TOKEN:-}
+    volumes:
+      - /data:/host-data:ro
+      - /var/log:/host-log:ro
     networks: [devops_default]
+    restart: unless-stopped
 
   data-index:
     image: docker.io/apache/incubator-kie-kogito-data-index-postgresql:10.0.x-20260329-linux-arm64
@@ -87,10 +96,12 @@ services:
       ARCANA__SECURITY__JWT_SECRET: ${JWT_SECRET:?set a 32+ char secret}
       DATA_INDEX_URL: http://aaf-data-index:8080
       BPMN_DIR: /app/bpmn
-      SWF_DIR: /app/swf
+      USAGE_DIR: /app/usage          # per-instance Claude CLI token usage (read)
+      CONSOLE_DIR: /app/console      # live AI-task console logs (read)
     volumes:
       - ./bpmn:/app/bpmn:ro
-      - ./swf:/app/swf:ro
+      - ./usage:/app/usage:ro
+      - ./console:/app/console:ro
     networks: [devops_default]
 
   dashboard:
@@ -104,8 +115,9 @@ services:
     networks: [devops_default]
 
   task-worker:
-    image: arcana/task-worker:1.0.0
+    image: arcana/task-worker:1.3.0
     container_name: aaf-task-worker
+    restart: unless-stopped
     depends_on:
       - kogito-bpmn
       - data-index
@@ -118,21 +130,30 @@ services:
       JENKINS_URL: ${JENKINS_URL:-}
       JENKINS_USER: ${JENKINS_USER:-}
       JENKINS_TOKEN: ${JENKINS_TOKEN:-}
+      USAGE_DIR: /app/usage          # write per-instance Claude CLI token usage
+      # data-index reconciler: repair kafka-outage drift straight in DI's PG
+      # (engine REST is the synchronous source of truth; events overwrite later)
+      DATAINDEX_PG: postgres://kogito:kogito@aaf-kogito-pg:5432/dataindex
+      RECONCILE_SECS: "300"
+      RECONCILE_PROCESS_IDS: ci-flow,merge-flow   # ci-maintenance not needed (seconds-long, no zombie risk)
+      RECONCILE_GROUPS: ai,jenkins,human          # human = parked handoff tasks (kept visible in data-index)
+    volumes:
+      - ./usage:/app/usage           # shared with arcana-cloud-rust (read side)
     networks: [devops_default]
 
-  # Hourly heartbeat: start an automated ci-maintenance (SonataFlow) instance
-  # every hour so the dashboard always shows recent automated workflow runs.
-  # (The event-driven B2 Jenkins trigger handles real red builds separately.)
+  # Hourly governance: start a ci-maintenance BPMN instance every hour
+  # (Scan -> Analyze(ai) -> Remediate -> Verify via ci-maint-endpoint).
+  # (The event-driven B2 Jenkins trigger handles red builds / green PRs separately.)
   ci-scheduler:
     image: curlimages/curl:latest
     container_name: aaf-ci-scheduler
     depends_on:
-      - kogito-swf
+      - kogito-bpmn
     entrypoint: ["/bin/sh", "-c"]   # override curl entrypoint
     command:
       - |
         while true; do
-          curl -s -X POST http://aaf-kogito-swf:8080/ci-maintenance -H "Content-Type: application/json" -d '{}' -o /dev/null -w "ci-maintenance %{http_code}\n"
+          curl -s -X POST http://aaf-kogito-bpmn:8080/ci-maintenance -H "Content-Type: application/json" -d '{}' -o /dev/null -w "ci-maintenance %{http_code}\n"
           sleep ${SCHEDULE_SECS:-3600}
         done
     restart: unless-stopped

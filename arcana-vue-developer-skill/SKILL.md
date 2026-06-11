@@ -10,6 +10,31 @@ Professional Vue 3 development skill based on [Arcana Vue](https://github.com/jr
 
 ---
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**Every task starts by cloning the complete reference project — NEVER scaffold from scratch (no `create-vue` / `vite create`):**
+
+```bash
+git clone https://github.com/jrjohn/arcana-vue.git [new-project-directory]
+```
+
+1. **Clone** the reference project (command above).
+2. **Build + test the UNTOUCHED clone first** — `npm install && npm run build && npx vitest run` must be green before any modification (known-good baseline).
+3. Follow [0. Project Setup](#0-project-setup---critical) to rename the project and strip demo code — **KEEP the infrastructure**: auth (guards/interceptors), 4-layer caching, offline/sync, security layers, DI/core, router skeleton.
+4. Add features following the [New Feature Checklist](#new-feature-checklist) below.
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `patterns.md` | Detailed design patterns beyond the core examples in this file |
+| `patterns/mvvm-input-output.md` | Deep-dive on the MVVM Input/Output/Effect ViewModel pattern |
+| `examples.md` | Full working code examples for complete features |
+| `checklists/production-ready.md` | Pre-release production & code review checklists |
+| `verification/commands.md` | Complete catalog of verification bash commands |
+
+---
+
 ## Quick Reference Card
 
 ### New Component Checklist:
@@ -1131,7 +1156,7 @@ const navGraph = useNavGraph();
 
 ---
 
-## Component with script setup
+### 10. Component with script setup
 
 ```vue
 <!-- presentation/features/users/UserFormView.vue -->
@@ -1199,7 +1224,7 @@ vm.onEffect((effect) => {
 </template>
 ```
 
-### 10. HTTP Interceptors with Axios
+### 11. HTTP Interceptors with Axios
 
 ```typescript
 // data/api/api-client.ts
@@ -1256,4 +1281,3 @@ export function createApiClient(getToken: () => string | null): AxiosInstance {
 | vue-i18n | Latest |
 | Vitest | 3.1 |
 | Vue Test Utils | Latest |
-| Architecture Rating | 10/10 |

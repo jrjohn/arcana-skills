@@ -1,8 +1,7 @@
 ---
 name: arcana-ai-agent-flow-skill
-description: Build & operate a self-service workflow monitoring platform with role-based BPMN + automated SonataFlow on one queryable layer, an engine-agnostic read-API, and a live Angular dashboard. A dual Kogito engine (BPMN for human/role decision flows, SonataFlow for fully-automated flows) feeds one Kogito Data Index; arcana-cloud-rust (Axum) serves /api/v1/workflows/*; an Angular SPA shows a multi-instance task list + live SVG flow diagram (role lanes, current/visited highlight); a task-worker drives flows (ai→agent-task-node/Claude, jenkins→Jenkins). Use when the user wants a workflow engine + real-time monitoring dashboard, to orchestrate CI remediation as a visible role-based flow, or to deploy this stack behind Authelia. Triggers "arcana-ai-agent-flow", "workflow monitor", "工作流監控", "BPMN dashboard", "Kogito Data Index", "SonataFlow 監控", "流程引擎 + dashboard".
-skill_name: arcana-ai-agent-flow-skill
-skill_version: 1.0.0
+description: Build & operate an autonomous CI workflow platform on a SINGLE Kogito BPMN engine (SonataFlow retired 2026-06-09) running three processes — ci-flow (red-build remediation with human handoff — park at humanFixTask, resume the agent's Claude session via `claude --resume <sid>`), merge-flow (verified-green PR automerge + automatic release-please releases), ci-maintenance (hourly read-only health governance) — all feeding one Kogito Data Index, driven by a Rust task-worker dispatching to a Claude agent-task-node, monitored live on an Angular bpmn-js dashboard behind Authelia. Use when the user wants a workflow engine + real-time monitoring dashboard, autonomous CI remediation/merge/release as visible BPMN flows, or AI-to-human handoff with session continuity. Triggers "arcana-ai-agent-flow", "workflow monitor", "工作流監控", "BPMN dashboard", "Kogito Data Index", "green PR automerge", "human handoff", "流程引擎 + dashboard".
+skill_version: 1.1.0
 created_date: 2026-06-02
 skill_type: complex
 status: production (deployed to bluesea / workflow.arcana.boo)
@@ -10,73 +9,131 @@ status: production (deployed to bluesea / workflow.arcana.boo)
 
 # arcana-ai-agent-flow skill
 
-A self-service, layered workflow platform: define flows (each node assigned a
-**role**), watch instances + a **live flow diagram** in real time, and have an
-agent fleet **drive** the flows. Built Mac-first, deployed to bluesea behind
-Authelia 2FA at `https://workflow.arcana.boo`.
+An autonomous CI workflow platform: a **single Kogito BPMN engine** runs three
+processes (remediate red builds, automerge + release green PRs, hourly health
+governance), an agent fleet **drives** them (Claude + Jenkins), humans take over
+seamlessly when AI can't finish, and everything is watched live on a bpmn-js
+dashboard. Built Mac-first, deployed to bluesea behind Authelia 2FA at
+`https://workflow.arcana.boo`.
+
+> SonataFlow (the former second engine) was **retired 2026-06-09** — its only
+> flow (ci-maintenance) was a heartbeat shell, BPMN is a superset of SWF for
+> this platform, and SWF's real edge (Knative scale-to-zero) was unused with
+> both engines running as always-on containers. ci-maintenance was ported to
+> BPMN; one engine now runs everything.
 
 ## What this builds
 
 ```
-[人工/角色決策] Kogito BPMN 引擎          [全自動] SonataFlow 引擎
-  BPMN, node GroupId=ai|jenkins             CNCF .sw.yaml, no human tasks
-        └── process/task events ─┐     ┌── process events
-                                 ▼     ▼
-              Kogito Data Index (PostgreSQL)  ← one queryable layer (GraphQL)
-                                 │  ProcessDefinition.type = BPMN | SW
-                                 ▼
-   arcana-cloud-rust  /api/v1/workflows/*  (Axum read-API, engine-agnostic)
-     /processes (status+role filter, currentNode+currentRole+engine)
-     /processes/:id  /processes/:id/timeline  /definitions/:id/graph
-                                 ▼  (/api proxy, single origin → no CORS)
-   Angular dashboard → nginx     +    workflow-task-worker (drives flows)
-     multi-instance table              ai      → agent-task-node (Claude)
-     live SVG flow diagram             jenkins → Jenkins build
-     (role lanes, polling 3s)
+Jenkins RunListener (ci-bpmn-trigger.groovy v7)            ci-scheduler (hourly)
+  red build ──POST /ci-flow (6h cooldown)─┐                  POST /ci-maintenance
+  green PR build (fleet-wide) ─POST /merge-flow─┐                   │
+                                          ▼     ▼                   ▼
+                 Kogito BPMN engine (Quarkus, PG persistence, kafka events)
+                   ci-flow:        Triage(ai)→Build(jenkins)→Fix(ai)⟲→Decide(ai)
+                                     →endGate→ humanFixTask(human) | End
+                   merge-flow:     Start→Merge(ai)→Release(ai)→End
+                   ci-maintenance: Scan→Analyze(ai)→Remediate→Verify  (scriptTasks
+                                     → ci-maint-endpoint, read-only, no docker sock)
+                        │ process/task events (kafka)
+                        ▼
+            Kogito Data Index (PostgreSQL, GraphQL)  ← one queryable layer
+                        ▼
+   arcana-cloud-rust  /api/v1/workflows/*  (Axum read-API, BPMN_DIR → bpmn-js XML)
+                        ▼  (/api proxy, single origin)
+   Angular dashboard (bpmn-js diagrams, handoff banner w/ claude --resume cmd)
+                        +
+   workflow-task-worker (RUST) — dispatch by task name; group=human NEVER
+   auto-completed (parked); reconciler repairs Data Index from engine truth
+     ai      → agent-task-node (Claude CLI, persistent session via sid)
+     jenkins → Jenkins rebuild
 ```
-
-**Design spirit (Cannerflow):** roles are first-class; engines are abstracted
-behind a clean semantic read-API; the UI speaks goal/flow/role, never BPMN XML.
-See `references/architecture.md`.
 
 ## When to use
 
-- User wants a **workflow engine + real-time monitoring** (task list + dynamic
-  flow diagram), with process design + instances stored in PostgreSQL.
+- User wants a **workflow engine + real-time monitoring** (task list + live
+  bpmn-js flow diagram), with processes + instances stored in PostgreSQL.
 - Orchestrate **CI failure remediation as a visible role-based flow** (red build
-  → diagnose(ai) → rebuild(jenkins) → decide(ai)) instead of opaque inline logic.
-- Dual-engine: human/role decision flows (BPMN) **and** automated flows
-  (SonataFlow) on one dashboard, distinguished by an `engine` badge.
+  → diagnose(ai) → rebuild(jenkins) → fix(ai) → decide(ai)) with **human
+  handoff** instead of dead-ending: unfixable builds park at a human task and
+  the human resumes the agent's exact Claude session.
+- **Autonomous green-PR merging + releases**: any fleet PR that builds green is
+  verified and squash-merged by the agent, then release-please runs on every
+  merge — release PRs are themselves green → automerged → releases cut
+  **full-auto** (requires conventional commits; Renovate PRs qualify).
+- **Hourly health governance** as an auditable flow: read-only scan → AI
+  analysis (severity + recommendation) → bounded remediation → verify, all
+  process vars visible in the dashboard (KPI/audit).
+
+## The three processes (templates/kogito-bpmn/*.bpmn2 — production copies)
+
+| Process | Shape | Notes |
+|---|---|---|
+| `ci-flow` | Triage(ai)→Build(jenkins)→[fixable? Fix(ai)→Build ⟲3]→Decide(ai)→endGate | endGate: green or AI-judged-merged → End; else → **humanFixTask (group=human)** — parked until a human completes it `out=verify` (re-Build) or `out=giveup` (→failEnd). `sid` process var threads ONE Claude conversation through triage/fix/decide and is what the human resumes. |
+| `merge-flow` | Start→Merge(ai)→Release(ai)→End | Merge: agent re-checks `gh pr view/checks` (open + green + no conflicts) then `gh pr merge --squash --delete-branch`. Release: **deterministic** (no AI) `npx release-please@16 github-release` then `release-pr` via agent `/task/release`; skips repos without release-please-config. |
+| `ci-maintenance` | Scan→Analyze(ai)→Remediate→Verify | scriptTasks call `boo.arcana.MaintHttp` → ci-maint-endpoint (`/scan` disk+Jenkins+cron results, `/remediate` only re-onlines Jenkins nodes, `/verify`). Analyze = AI severity/recommendation. Execution stays on host cron; flow is read-only orchestration + record. |
 
 ## Components (templates/)
 
 | Path | What |
 |---|---|
-| `kogito-bpmn/` | Quarkus 3.8.4 + Kogito 10 BPMN engine (flattened standalone pom, PG persistence, **kafka events addon**). `ci-flow.bpmn2` = Start→Triage(ai)→Build(jenkins)→Decide(ai)→End, each userTask `GroupId`-assigned. |
-| `kogito-swf/` | SonataFlow engine (`org.apache.kie.sonataflow:sonataflow-quarkus`), `ci-maintenance.sw.yaml` automated flow → same Data Index. |
-| `read-api/` | `workflow_controller.rs` (engine-agnostic endpoints), `data_index.rs` (GraphQL client), `bpmn.rs` (parse sequence-flow edges + GroupId roles), `Dockerfile.flow` (installs `protobuf-compiler`). Drop into a copy of the arcana-cloud-rust template; **repository must be PostgreSQL**. |
-| `dashboard/` | nginx.conf (SPA + `/api` proxy via resolver+variable) + Dockerfile (node:24, `npm install`). Build the Angular feature with arcana-angular-developer-skill: multi-instance table (Process/Engine/Instance/State/CurrentNode/Role/Started/Completed, default ACTIVE filter, click→detail) + SVG flow-diagram (role lanes, visited/current/pending). |
-| `workflow-task-worker/` | stdlib-python poller: ready Data-Index tasks → node-aware dispatch (Triage→agent-task-node `/task/diagnose` [+`/task/fix` on red `*/main` fixable code/deps/test], Build→Jenkins rebuild, Decide→from result). `MODE=auto` (local) / `real` (prod). |
-| `bluesea-jenkins/ci-bpmn-trigger.groovy` | Jenkins RunListener: any non-SUCCESS build → POST create a ci-flow BPMN instance (replaces inline routine). |
+| `kogito-bpmn/` | Quarkus 3.8.4 + Kogito 10 BPMN engine (flattened standalone pom, PG persistence, **kafka events addon**). Ships all three `.bpmn2` (production copies). userTasks are `GroupId`-assigned (ai/jenkins/human). |
+| `workflow-task-worker/` | **Rust** poller (`main.rs`, image `arcana/task-worker:1.3.0`): ready Data-Index tasks → dispatch by lowercased task name — triage/build/fix/decide/analyze/merge/release. Task-level tokio concurrency (fix=1, ai=2, jenkins=3). **group=human is NEVER auto-completed** — parked (stays Ready, logs `⏸ PARKED` once). `with_sid()`/`pick_sid()` thread the Claude session id through ai tasks. Reconciler (every `RECONCILE_SECS=300`, writes DI's PG directly) repairs Data-Index drift from **engine truth** both ways — survives kafka outages. `MODE=auto` (local synth) / `real` (prod). |
+| `read-api/` | `workflow_controller.rs` (engine-agnostic endpoints incl. `/definitions/{id}/bpmn` → raw XML for bpmn-js), `data_index.rs` (GraphQL client), `bpmn.rs` (sequence-flow edges + GroupId roles), `Dockerfile.flow` (installs `protobuf-compiler`). Drop into a copy of the arcana-cloud-rust template; **repository must be PostgreSQL**. Reads `BPMN_DIR=/app/bpmn`. |
+| `dashboard/` | nginx.conf (SPA + `/api` proxy via resolver+variable) + Dockerfile (node:24, `npm install`). Angular: multi-instance table + **bpmn-js** diagram (falls back to custom SVG only if no BPMN XML). **Handoff banner**: a run with a Ready human-group task shows amber banner with `sid` + copyable `docker exec -it agent-task-node claude --resume <sid>`. `nodeStatus()` honors instance state (FaultNode→Failed when terminal, not perma-Running). |
+| `bluesea-jenkins/ci-bpmn-trigger.groovy` | RunListener **v7** (production copy): red build → POST `/ci-flow` (6h per-job cooldown); green PR build, fleet-wide (`.*-app(-pipeline)?-mb/.*` + CHANGE_URL) → POST `/merge-flow {job,prUrl}`. Install to `init.groovy.d`, hot-apply via `/scriptText`. |
+| `docker-compose.bluesea.yml` (+ `.mac.yml`, `deploy-bluesea.sh`, `kogito-pg-init/`) | Production compose (synced): kogito-pg (3 DBs), kogito-bpmn, **ci-maint-endpoint** (Rust Axum, `/data` + `/var/log` read-only, Jenkins API, **zero docker socket**), data-index, read-API, dashboard, task-worker (`RECONCILE_GROUPS=ai,jenkins,human`), ci-scheduler (hourly ci-maintenance POST). |
 | `docker-compose.mac.yml` | Local stack (adds its own kafka). |
-| `docker-compose.bluesea.yml` + `.mac.yml` + `deploy-bluesea.sh` + `kogito-pg-init/` | Production overlay (external devops_default, reuse existing kafka, kogito-pg 3 DBs) + one-shot deploy script + Mac dry-run override. Includes `ci-scheduler` (hourly `ci-maintenance` heartbeat → always-fresh dashboard; `SCHEDULE_SECS` tunable). |
+
+## Human handoff (ci-flow)
+
+1. AI can't fix → endGate routes to `humanFixTask` (group=human); worker parks it.
+2. Dashboard shows the parked run (`currentNode=HumanFix`) + banner with the command:
+   `docker exec -it agent-task-node claude --resume <sid>` — re-attaches the
+   **same Claude conversation** the agent used (agent-task-node runs `claude -p`
+   WITH session persistence; `/root/.claude` is a host bind mount so sessions
+   survive recreate).
+3. Human fixes, then completes the task `out=verify` (loops back to Build to
+   confirm green) or `out=giveup` (→ failEnd).
 
 ## Build & deploy
 
-1. **Mac-first**: `cd <project> && docker compose -f docker-compose.mac.yml up -d --build`; verify Data Index GraphQL (`:8180/graphql`) returns ProcessInstances + UserTaskInstances with `potentialGroups`; read-API + dashboard via the proxy. (Engines need `mvn clean package` first — see gotchas.)
-2. **read-API**: copy the arcana-cloud-rust template (don't edit the upstream), port its repository **MySQL→PostgreSQL**, add the `read-api/` files, wire `clients` mod + `workflow_client`/`bpmn_repo` into `AppState` + nest `/workflows` after the auth layer (no token).
-3. **bluesea**: build 5 arm64 images, `docker save | ssh | docker load`, ship `deploy-bluesea.sh` + assets, create `.env` (secrets), `./deploy-bluesea.sh [--with-worker]`. Front with Authelia (subdomain + cert + nginx server block). See `references/deploy-bluesea.md`.
+1. **Mac-first**: `docker compose -f docker-compose.mac.yml up -d --build`;
+   verify Data Index GraphQL (`:8180/graphql`) returns ProcessInstances +
+   UserTaskInstances with `potentialGroups`. (Engine needs `mvn clean package`
+   first — central-only mirror, see gotchas.)
+2. **read-API**: copy the arcana-cloud-rust template (don't edit upstream), port
+   repository **MySQL→PostgreSQL**, add `read-api/` files, nest `/workflows`
+   after the auth layer (no token).
+3. **bluesea**: build arm64 images, `docker save | ssh | docker load` (worker +
+   engine can also build ON bluesea: worker is self-contained Rust; engine via
+   maven-docker jar then `docker build`), `./deploy-bluesea.sh [--with-worker]`,
+   front with Authelia. Agent `/task/release` needs `GH_TOKEN` + node/npx in the
+   agent container. See `references/deploy-bluesea.md`.
 
 ## Critical gotchas (full list in `references/build-gotchas.md`)
 
-- Events addon needs the **kafka connector**: add `quarkus-smallrye-reactive-messaging-kafka` (NOT `quarkus-messaging-kafka` — not in quarkus-bom 3.8.4) **and** `quarkus.arc.exclude-types=io.smallrye.reactive.messaging.providers.metrics.MetricDecorator`.
-- Data Index image (arm64): `apache/incubator-kie-kogito-data-index-postgresql:10.0.x-20260329-linux-arm64`; mount each engine's `target/classes/META-INF/resources/persistence/protobuf` into `/home/kogito/data/protobufs`.
-- read-API prod Dockerfile must `apt-get install protobuf-compiler` (arcana-grpc/prost-build needs `protoc`); set `ARCANA__SECURITY__GRPC_TLS_ENABLED=false` (production.toml enables it).
-- nginx `/api` proxy: use `resolver 127.0.0.11` + `set $upstream …; proxy_pass $upstream;` (no URI) so it survives upstream restarts AND forwards the full `/api/...` path.
-- `engine` field comes from Data Index `ProcessDefinition.type` (`BPMN`→bpmn, `SW`→swf); `ProcessInstance` has no `type`.
-- Dashboard Dockerfile: `node:24-alpine` + `npm install` (not `npm ci`) for musl/arm64 native optional deps.
+- Engine Maven build in containers: jboss.org repo is flaky → **central-only
+  mirror + `-U`** or the build stalls (see memory kogito-bpmn-maven-jboss-trap).
+- **BPMN XML comments must not contain `--`** (e.g. `claude --resume`) —
+  Kogito codegen dies with SAXParseException "string -- not permitted".
+- **Changing a process's node structure without bumping its version** leaves
+  stale rows in Data Index `definitions_nodes` (old + new nodes overlay on the
+  same `version=1.0`) → garbled diagram. Bump the version, or DELETE the stale
+  node ids. Instances execute correctly either way.
+- **After engine `--force-recreate`, restart the task-worker** — its in-memory
+  ready cache goes stale (shows N ready while engine/DI have 0).
+- Kafka outage ≠ lost instances: the engine is the source of truth; the worker
+  re-checks `complete()` failures against the engine and the **reconciler**
+  repairs Data Index both ways. Never abort instances off stale DI work-items.
+- Events addon needs the kafka connector `quarkus-smallrye-reactive-messaging-kafka`
+  (NOT `quarkus-messaging-kafka`) + the MetricDecorator ArC exclude.
+- nginx `/api` proxy: `resolver 127.0.0.11` + `set $upstream …; proxy_pass $upstream;`
+  (no URI) so it survives upstream restarts and forwards the full path.
+- New/changed BPMN diagram on the dashboard: ship the `.bpmn2` to `./bpmn/`,
+  restart the read-API, and hard-refresh the SPA (bpmnXml signal cache).
 
 ## References
-- `references/architecture.md` — full dual-engine design, layers, role model, decisions.
-- `references/deploy-bluesea.md` — bluesea import runbook (images, compose overlay, worker, Authelia subdomain, B2 Jenkins trigger).
+- `references/architecture.md` — single-engine design, the three flows, role model, decisions.
+- `references/deploy-bluesea.md` — bluesea runbook (images, compose, worker, Authelia, B2 trigger).
 - `references/build-gotchas.md` — every build/deploy trap hit + fix.

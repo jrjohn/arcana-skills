@@ -10,6 +10,65 @@ Professional iOS development skill based on [Arcana iOS](https://github.com/jrjo
 
 ---
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**Every task starts by cloning the complete reference project — NEVER scaffold a new Xcode project from scratch:**
+
+```bash
+git clone https://github.com/jrjohn/arcana-ios.git [new-project-directory]
+```
+
+1. **Clone** the reference project (command above).
+2. **Build + test the UNTOUCHED clone first** to establish a green baseline (`xcodebuild build` then `xcodebuild test`) before changing anything.
+3. **Follow [0. Project Setup](#0-project-setup---critical)** to rename the project and strip the demo screens — while KEEPING the infrastructure: auth/security layers (`Infrastructure/Security`, Keychain), caching (`Core/Cache`), offline/sync (SwiftData + SyncManager), the DI container (`Infrastructure/DI`), and deployment/build configs (Package.swift, project settings).
+4. **Add features** one at a time following the [File-by-File Feature Recipe](#file-by-file-feature-recipe).
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `reference.md` | Deep-dive architecture reference — layer responsibilities and project conventions |
+| `patterns.md` | Extended code patterns beyond those inlined in this file |
+| `patterns/mvvm-input-output.md` | Detailed MVVM Input/Output/Effect ViewModel walkthrough |
+| `examples.md` | Complete end-to-end feature examples to copy from |
+| `checklists/production-ready.md` | Pre-release checklist before declaring a feature done |
+| `verification/commands.md` | Full verification command set (superset of Quick Verification below) |
+
+---
+
+## File-by-File Feature Recipe
+
+Ordered file-by-file recipe for adding a complete feature (example: **Orders**) through all layers. Create files in this order — each step compiles against the previous ones.
+
+1. **Domain model** → `Domain/Models/Order.swift`
+   — Immutable struct, `Identifiable`, all fields from Spec.
+2. **Service protocol + implementation** → `Domain/Services/OrderService.swift`
+   — `OrderServiceProtocol` + `OrderService`; business rules and input validation (see Form Validation pattern).
+3. **Repository protocol** → `Domain/Repositories/OrderRepository.swift`
+   — Protocol only; `async throws` methods returning Domain models.
+4. **SwiftData entity** → `Data/Local/Entities/OrderEntity.swift`
+   — `@Model` class with `toDomain()` / `toEntity()` mapping and `syncStatus` field.
+5. **DTO** → `Data/Remote/DTOs/OrderDTO.swift`
+   — `Codable` + `toDomain()` mapping; API endpoint in `Data/Remote/APIs/`.
+6. **Repository implementation** → `Data/Repositories/OrderRepositoryImpl.swift`
+   — Offline-first: SwiftData as single source of truth, schedule background sync.
+7. **Mock repository** → `Data/Repositories/Mock/MockOrderRepository.swift`
+   — NEVER return `[]`/nil; 5-10 varied items, `Task.sleep()` latency, IDs consistent with other repositories.
+8. **DI registration** → `Infrastructure/DI/RepositoryContainer.swift`
+   — `makeOrderRepository()` with `#if DEBUG` mock/real switch.
+9. **ViewModel** → `Presentation/ViewModels/OrderListViewModel.swift`
+   — `@Observable`, Input/Output/Effect pattern.
+10. **Views** → `Presentation/Views/OrderListView.swift` (+ `OrderDetailView.swift`)
+    — Loading/Error/Empty/Content states; stateless `Content` subview for testability.
+11. **Route** → `Route.swift` — add `case orderList`, `case orderDetail(id: String)`.
+12. **Navigation destination** → `NavigationRouter.swift` — switch cases for both routes; wire ALL `onNavigate*` callbacks.
+13. **Unit tests** → `Tests/ViewModels/OrderListViewModelTests.swift`, `Tests/Repositories/OrderRepositoryTests.swift`.
+14. **UI tests** → `UITests/OrderUITests.swift`.
+
+Then run the Quick Verification Commands — route count must match destination count, and no empty mock arrays may remain.
+
+---
+
 ## Quick Reference Card
 
 ### New Screen Checklist:
@@ -261,10 +320,10 @@ final class UserRepositoryTests: XCTestCase {
 
 ### Test Command
 ```bash
-# Run all tests with coverage
+# Replace <SIMULATOR> with any installed simulator — list them with: xcrun simctl list devices
 xcodebuild test \
   -scheme [YourScheme] \
-  -destination 'platform=iOS Simulator,name=iPhone 15' \
+  -destination 'platform=iOS Simulator,name=<SIMULATOR>' \
   -enableCodeCoverage YES
 
 # View coverage report
@@ -314,8 +373,8 @@ grep -rn "action:\s*{\s*}\|Button.*{\s*}" Sources/
 echo "Routes defined:" && grep -c "case\s" Sources/**/Route.swift 2>/dev/null || echo 0
 echo "Views registered:" && grep -c "destination:" Sources/**/NavigationRouter.swift 2>/dev/null || echo 0
 
-# 4. Verify build compiles
-xcodebuild -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone 15' build
+# 4. Verify build compiles (use any installed simulator for <SIMULATOR> — list with: xcrun simctl list devices)
+xcodebuild -scheme [YourScheme] -destination 'platform=iOS Simulator,name=<SIMULATOR>' build
 
 # 5. 🚨 Check for unwired navigation closures (CRITICAL!)
 grep -rn "onNavigate.*:\s*(\s*)\s*->\s*Void\s*=\s*{" Sources/**/Views/
@@ -468,7 +527,8 @@ The cloned project contains example UI (e.g., Arcana User Management). Clean up 
 
 **Step 5**: Verify build
 ```bash
-xcodebuild -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone 15' build
+# <SIMULATOR> = any installed simulator; list with: xcrun simctl list devices
+xcodebuild -scheme [YourScheme] -destination 'platform=iOS Simulator,name=<SIMULATOR>' build
 ```
 
 ### ❌ Prohibited Actions
@@ -683,14 +743,16 @@ struct RepositoryContainer {
 
 #### Step 5: Run All Tests Before Completion
 ```bash
+# <SIMULATOR> = any installed simulator; list with: xcrun simctl list devices
+
 # Run all tests via command line
-xcodebuild test -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone 15'
+xcodebuild test -scheme [YourScheme] -destination 'platform=iOS Simulator,name=<SIMULATOR>'
 
 # Run tests with coverage
-xcodebuild test -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone 15' -enableCodeCoverage YES
+xcodebuild test -scheme [YourScheme] -destination 'platform=iOS Simulator,name=<SIMULATOR>' -enableCodeCoverage YES
 
 # Run specific test class
-xcodebuild test -scheme [YourScheme] -destination 'platform=iOS Simulator,name=iPhone 15' -only-testing:YourAppTests/LoginViewModelTests
+xcodebuild test -scheme [YourScheme] -destination 'platform=iOS Simulator,name=<SIMULATOR>' -only-testing:YourAppTests/LoginViewModelTests
 ```
 
 #### Test Directory Structure
@@ -735,7 +797,7 @@ arcana-ios/
         └── DTOs/         # Data Transfer Objects
 ```
 
-### 2. ViewModel Input/Output/Effect Pattern
+### 3. ViewModel Input/Output/Effect Pattern
 
 ```swift
 import SwiftUI
@@ -802,7 +864,7 @@ final class UserViewModel {
 }
 ```
 
-### 3. Offline-First Strategy
+### 4. Offline-First Strategy
 
 ```swift
 import SwiftData
@@ -862,7 +924,7 @@ final class UserRepository: UserRepositoryProtocol {
 }
 ```
 
-### 4. Three-Layer Cache Strategy
+### 5. Three-Layer Cache Strategy
 
 ```swift
 actor CacheManager<Key: Hashable, Value> {
@@ -927,7 +989,7 @@ actor CacheManager<Key: Hashable, Value> {
 }
 ```
 
-### 5. SwiftUI Best Practices
+### 6. SwiftUI Best Practices
 
 ```swift
 import SwiftUI
@@ -996,7 +1058,7 @@ struct UserContent: View {
 }
 ```
 
-### 6. Dependency Injection (swift-dependencies)
+### 7. Dependency Injection (swift-dependencies)
 
 ```swift
 import Dependencies
@@ -1024,7 +1086,7 @@ final class UserViewModel {
 }
 ```
 
-### 7. Form Validation
+### 8. Form Validation
 
 ```swift
 import SwiftUI
@@ -1061,7 +1123,7 @@ extension String {
 }
 ```
 
-### 8. Pagination and Lazy Loading
+### 9. Pagination and Lazy Loading
 
 ```swift
 @Observable
