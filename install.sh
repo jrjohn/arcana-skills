@@ -28,6 +28,35 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Skills to install
 SKILLS=(
+    "arcana-ios-developer-skill"
+    "arcana-android-developer-skill"
+    "arcana-react-developer-skill"
+    "arcana-angular-developer-skill"
+    "arcana-nodejs-developer-skill"
+    "arcana-python-developer-skill"
+    "arcana-springboot-developer-skill"
+    "arcana-windows-developer-skill"
+    "arcana-go-developer-skill"
+    "arcana-rust-developer-skill"
+    "arcana-vue-developer-skill"
+    "arcana-stm32-developer-skill"
+    "arcana-esp32-developer-skill"
+    "arcana-harmonyos-developer-skill"
+    "app-requirements-skill"
+    "app-uiux-designer.skill"
+    "doc-indexer-skill"
+    "claude-session-archive-skill"
+    "mis-management-skill"
+    "luminous-skill"
+    "daily-ci-agent-skill"
+    "arcana-devops-skill"
+    "arcana-ai-agent-flow-skill"
+    "arch-qube-skill"
+)
+
+# Skills renamed to the arcana-* prefix (2026-06). On install we remove any
+# old-named copy from ~/.claude/skills so users don't end up with duplicates.
+LEGACY_RENAMED_SKILLS=(
     "ios-developer-skill"
     "android-developer-skill"
     "react-developer-skill"
@@ -42,16 +71,6 @@ SKILLS=(
     "stm32-developer-skill"
     "esp32-developer-skill"
     "harmonyos-developer-skill"
-    "app-requirements-skill"
-    "app-uiux-designer.skill"
-    "doc-indexer-skill"
-    "claude-session-archive-skill"
-    "mis-management-skill"
-    "luminous-skill"
-    "daily-ci-agent-skill"
-    "arcana-devops-skill"
-    "arcana-ai-agent-flow-skill"
-    "arch-qube-skill"
 )
 
 # Config paths
@@ -503,9 +522,24 @@ ensure_skills_dir() {
     fi
 }
 
+# Remove pre-rename (un-prefixed) developer skills so the arcana-* versions
+# don't end up duplicated alongside their old selves. Idempotent.
+migrate_legacy_skills() {
+    local migrated=0
+    for old in "${LEGACY_RENAMED_SKILLS[@]}"; do
+        if [ -d "$SKILLS_DIR/$old" ]; then
+            info "Migrating renamed skill: removing legacy $old (now arcana-$old)"
+            rm -rf "$SKILLS_DIR/$old"
+            migrated=1
+        fi
+    done
+    [ "$migrated" = "1" ] && success "Legacy un-prefixed developer skills cleaned up."
+    return 0
+}
+
 # Detect if running from cloned repo or via curl
 detect_source() {
-    if [ -f "$SCRIPT_DIR/ios-developer-skill/SKILL.md" ]; then
+    if [ -f "$SCRIPT_DIR/arcana-ios-developer-skill/SKILL.md" ]; then
         echo "local"
     else
         echo "remote"
@@ -905,6 +939,7 @@ main() {
 
     check_prerequisites
     ensure_skills_dir
+    migrate_legacy_skills
     ensure_jq >/dev/null 2>&1 || true   # quiet pre-warm; OK if not installed
 
     # Detect source and clone if needed

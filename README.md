@@ -82,20 +82,20 @@ Interactive mode shows the same status table as the bash version (`[+] new`, `[�
 
 | Skill | Description |
 |-------|-------------|
-| `ios-developer-skill` | iOS development guide based on Arcana iOS enterprise architecture (Clean Architecture, MVVM, SwiftUI) |
-| `android-developer-skill` | Android development guide based on Arcana Android enterprise architecture (Jetpack Compose, Hilt DI) |
-| `react-developer-skill` | React development guide based on Arcana React enterprise architecture (React 19, Offline-First) |
-| `angular-developer-skill` | Angular development guide based on Arcana Angular enterprise architecture (Angular Signals) |
-| `nodejs-developer-skill` | Node.js/Express development guide (gRPC-first, Prisma ORM) |
-| `python-developer-skill` | Python/Flask development guide (gRPC-first, Clean Architecture) |
-| `springboot-developer-skill` | Spring Boot development guide (Dual-protocol, OSGi Plugin System) |
-| `windows-developer-skill` | Windows desktop development guide (WinUI 3, CRDT-based offline sync) |
-| `go-developer-skill` | Go cloud development guide based on Arcana Cloud Go enterprise architecture (Clean Architecture, gRPC-first, dual-protocol) |
-| `rust-developer-skill` | Rust cloud development guide based on Arcana Cloud Rust enterprise architecture (Axum/tokio, Clean Architecture, gRPC-first) |
-| `vue-developer-skill` | Vue development guide based on Arcana Vue enterprise architecture (Clean Architecture, Offline-First, MVVM Input/Output/Effect) |
-| `stm32-developer-skill` | STM32 embedded development guide based on Arcana STM32 enterprise architecture (HAL layering, Clean Architecture for firmware) |
-| `esp32-developer-skill` | ESP32 embedded development guide based on Arcana ESP32 enterprise architecture (ESP-IDF, layered firmware, OTA/secure boot) |
-| `harmonyos-developer-skill` | HarmonyOS development guide based on Arcana HarmonyOS enterprise architecture (ArkTS/ArkUI, Clean Architecture, Offline-First) |
+| `arcana-ios-developer-skill` | iOS development guide based on Arcana iOS enterprise architecture (Clean Architecture, MVVM, SwiftUI) |
+| `arcana-android-developer-skill` | Android development guide based on Arcana Android enterprise architecture (Jetpack Compose, Hilt DI) |
+| `arcana-react-developer-skill` | React development guide based on Arcana React enterprise architecture (React 19, Offline-First) |
+| `arcana-angular-developer-skill` | Angular development guide based on Arcana Angular enterprise architecture (Angular Signals) |
+| `arcana-nodejs-developer-skill` | Node.js/Express development guide (gRPC-first, Prisma ORM) |
+| `arcana-python-developer-skill` | Python/Flask development guide (gRPC-first, Clean Architecture) |
+| `arcana-springboot-developer-skill` | Spring Boot development guide (Dual-protocol, OSGi Plugin System) |
+| `arcana-windows-developer-skill` | Windows desktop development guide (WinUI 3, CRDT-based offline sync) |
+| `arcana-go-developer-skill` | Go cloud development guide based on Arcana Cloud Go enterprise architecture (Clean Architecture, gRPC-first, dual-protocol) |
+| `arcana-rust-developer-skill` | Rust cloud development guide based on Arcana Cloud Rust enterprise architecture (Axum/tokio, Clean Architecture, gRPC-first) |
+| `arcana-vue-developer-skill` | Vue development guide based on Arcana Vue enterprise architecture (Clean Architecture, Offline-First, MVVM Input/Output/Effect) |
+| `arcana-stm32-developer-skill` | STM32 embedded development guide based on Arcana STM32 enterprise architecture (HAL layering, Clean Architecture for firmware) |
+| `arcana-esp32-developer-skill` | ESP32 embedded development guide based on Arcana ESP32 enterprise architecture (ESP-IDF, layered firmware, OTA/secure boot) |
+| `arcana-harmonyos-developer-skill` | HarmonyOS development guide based on Arcana HarmonyOS enterprise architecture (ArkTS/ArkUI, Clean Architecture, Offline-First) |
 
 ### DevOps & Infrastructure Skills
 
@@ -154,14 +154,14 @@ If you only want to install a specific skill, you can manually copy it:
 
 ```bash
 # Copy a single skill to Claude Code skills directory
-cp -r ios-developer-skill ~/.claude/skills/
+cp -r arcana-ios-developer-skill ~/.claude/skills/
 ```
 
 ### Windows
 
 ```powershell
 # Copy a single skill to Claude Code skills directory
-Copy-Item -Recurse ios-developer-skill "$env:USERPROFILE\.claude\skills\"
+Copy-Item -Recurse arcana-ios-developer-skill "$env:USERPROFILE\.claude\skills\"
 ```
 
 ## Directory Structure
@@ -181,14 +181,14 @@ arcana-skills/
 │   └── hooks/                          # Hook scripts
 │       ├── validate-ui-flow.sh         # (macOS/Linux)
 │       └── validate-ui-flow.ps1        # (Windows)
-├── ios-developer-skill/
-├── android-developer-skill/
-├── angular-developer-skill/
-├── react-developer-skill/
-├── nodejs-developer-skill/
-├── python-developer-skill/
-├── springboot-developer-skill/
-├── windows-developer-skill/
+├── arcana-ios-developer-skill/
+├── arcana-android-developer-skill/
+├── arcana-angular-developer-skill/
+├── arcana-react-developer-skill/
+├── arcana-nodejs-developer-skill/
+├── arcana-python-developer-skill/
+├── arcana-springboot-developer-skill/
+├── arcana-windows-developer-skill/
 ├── app-requirements-skill/
 ├── app-uiux-designer.skill/
 ├── doc-indexer-skill/
@@ -216,7 +216,7 @@ What Skills are available?
 Or use a specific skill:
 
 ```
-Use ios-developer-skill to help me create a new iOS project
+Use arcana-ios-developer-skill to help me create a new iOS project
 ```
 
 ## Update Skills

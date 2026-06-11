@@ -17,14 +17,14 @@ allowed_tools:
   - AskUserQuestion
 dependencies:
   - app-requirements-skill
-  - springboot-developer-skill
-  - nodejs-developer-skill
-  - python-developer-skill
-  - ios-developer-skill
-  - android-developer-skill
-  - react-developer-skill
-  - angular-developer-skill
-  - windows-developer-skill
+  - arcana-springboot-developer-skill
+  - arcana-nodejs-developer-skill
+  - arcana-python-developer-skill
+  - arcana-ios-developer-skill
+  - arcana-android-developer-skill
+  - arcana-react-developer-skill
+  - arcana-angular-developer-skill
+  - arcana-windows-developer-skill
 ---
 
 # DevOps Skill
@@ -390,14 +390,14 @@ bash ~/.claude/skills/arcana-devops-skill/process/00-init/exit-validation.sh {pr
 | Skill | Integration Point |
 |-------|-------------------|
 | `app-requirements-skill` | IEC 62304 docs → compliance traceability |
-| `springboot-developer-skill` | Spring Boot build templates |
-| `nodejs-developer-skill` | Node.js build templates |
-| `python-developer-skill` | Python/Flask build templates |
-| `ios-developer-skill` | iOS Fastlane submission |
-| `android-developer-skill` | Android Fastlane submission |
-| `react-developer-skill` | React frontend build templates |
-| `angular-developer-skill` | Angular frontend build templates |
-| `windows-developer-skill` | Windows/.NET MSIX packaging |
+| `arcana-springboot-developer-skill` | Spring Boot build templates |
+| `arcana-nodejs-developer-skill` | Node.js build templates |
+| `arcana-python-developer-skill` | Python/Flask build templates |
+| `arcana-ios-developer-skill` | iOS Fastlane submission |
+| `arcana-android-developer-skill` | Android Fastlane submission |
+| `arcana-react-developer-skill` | React frontend build templates |
+| `arcana-angular-developer-skill` | Angular frontend build templates |
+| `arcana-windows-developer-skill` | Windows/.NET MSIX packaging |
 
 ---
 
