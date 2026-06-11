@@ -175,11 +175,11 @@ This skill integrates with:
 | Skill | Purpose |
 |-------|---------|
 | `app-requirements-skill` | IEC 62304 compliance |
-| `springboot-developer-skill` | Spring Boot projects |
-| `nodejs-developer-skill` | Node.js projects |
-| `python-developer-skill` | Python projects |
-| `ios-developer-skill` | iOS projects |
-| `android-developer-skill` | Android projects |
-| `react-developer-skill` | React projects |
-| `angular-developer-skill` | Angular projects |
-| `windows-developer-skill` | Windows desktop projects |
+| `arcana-springboot-developer-skill` | Spring Boot projects |
+| `arcana-nodejs-developer-skill` | Node.js projects |
+| `arcana-python-developer-skill` | Python projects |
+| `arcana-ios-developer-skill` | iOS projects |
+| `arcana-android-developer-skill` | Android projects |
+| `arcana-react-developer-skill` | React projects |
+| `arcana-angular-developer-skill` | Angular projects |
+| `arcana-windows-developer-skill` | Windows desktop projects |

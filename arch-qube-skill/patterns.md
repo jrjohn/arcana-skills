@@ -1,6 +1,6 @@
 # Architecture Qube — Patterns Enforced
 
-The patterns arch-qube checks, with ✅ correct vs ❌ violating code. These are the *target* states — when a rule FAILs, refactor toward the ✅ form. Examples are framework-neutral; the matching `<lang>-developer-skill` has language-exact versions.
+The patterns arch-qube checks, with ✅ correct vs ❌ violating code. These are the *target* states — when a rule FAILs, refactor toward the ✅ form. Examples are framework-neutral; the matching `arcana-<lang>-developer-skill` has language-exact versions.
 
 ---
 

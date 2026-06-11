@@ -41,6 +41,35 @@ param(
 # Configuration
 $RepoUrl = "https://github.com/jrjohn/arcana-skills.git"
 $Skills = @(
+    "arcana-ios-developer-skill"
+    "arcana-android-developer-skill"
+    "arcana-react-developer-skill"
+    "arcana-angular-developer-skill"
+    "arcana-nodejs-developer-skill"
+    "arcana-python-developer-skill"
+    "arcana-springboot-developer-skill"
+    "arcana-windows-developer-skill"
+    "arcana-go-developer-skill"
+    "arcana-rust-developer-skill"
+    "arcana-vue-developer-skill"
+    "arcana-stm32-developer-skill"
+    "arcana-esp32-developer-skill"
+    "arcana-harmonyos-developer-skill"
+    "app-requirements-skill"
+    "app-uiux-designer.skill"
+    "doc-indexer-skill"
+    "claude-session-archive-skill"
+    "mis-management-skill"
+    "luminous-skill"
+    "daily-ci-agent-skill"
+    "arcana-devops-skill"
+    "arcana-ai-agent-flow-skill"
+    "arch-qube-skill"
+)
+
+# Skills renamed to the arcana-* prefix (2026-06). On install we remove any
+# old-named copy from ~/.claude/skills so users don't end up with duplicates.
+$LegacyRenamedSkills = @(
     "ios-developer-skill"
     "android-developer-skill"
     "react-developer-skill"
@@ -55,16 +84,6 @@ $Skills = @(
     "stm32-developer-skill"
     "esp32-developer-skill"
     "harmonyos-developer-skill"
-    "app-requirements-skill"
-    "app-uiux-designer.skill"
-    "doc-indexer-skill"
-    "claude-session-archive-skill"
-    "mis-management-skill"
-    "luminous-skill"
-    "daily-ci-agent-skill"
-    "arcana-devops-skill"
-    "arcana-ai-agent-flow-skill"
-    "arch-qube-skill"
 )
 
 # Config paths
@@ -303,6 +322,22 @@ function Initialize-SkillsDir {
     return $skillsDir
 }
 
+# Remove pre-rename (un-prefixed) developer skills so the arcana-* versions
+# don't end up duplicated alongside their old selves. Idempotent.
+function Invoke-LegacySkillMigration {
+    $skillsDir = Get-SkillsDir
+    $migrated = $false
+    foreach ($old in $LegacyRenamedSkills) {
+        $oldPath = Join-Path $skillsDir $old
+        if (Test-Path $oldPath) {
+            Write-Info "Migrating renamed skill: removing legacy $old (now arcana-$old)"
+            Remove-Item -Recurse -Force $oldPath
+            $migrated = $true
+        }
+    }
+    if ($migrated) { Write-Success "Legacy un-prefixed developer skills cleaned up." }
+}
+
 # Detect if running from cloned repo
 function Test-LocalRepo {
     $scriptPath = $PSScriptRoot
@@ -310,7 +345,7 @@ function Test-LocalRepo {
         # Running from remote (iex)
         return $false
     }
-    $testFile = Join-Path $scriptPath "ios-developer-skill\SKILL.md"
+    $testFile = Join-Path $scriptPath "arcana-ios-developer-skill\SKILL.md"
     return Test-Path $testFile
 }
 
@@ -1087,6 +1122,7 @@ function Main {
     # Native Windows installation
     Test-Prerequisites
     $skillsDir = Initialize-SkillsDir
+    Invoke-LegacySkillMigration
 
     # Determine source
     $sourcePath = $null

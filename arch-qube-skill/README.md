@@ -2,7 +2,7 @@
 
 Usage skill for [**Architecture Qube** (`arch-qube`)](https://github.com/jrjohn/arcana-arch-qube) — the AI-powered Architecture Quality Gate for the Arcana fleet. Detects MVVM, Clean Architecture, and GoF pattern violations automatically in CI/CD.
 
-This is a **tool skill** (not a language skill): it teaches Claude to run scans, interpret and fix violations, integrate the gate into CI, and extend it with custom rules/profiles. Pair with a `<lang>-developer-skill` for language-exact fixes.
+This is a **tool skill** (not a language skill): it teaches Claude to run scans, interpret and fix violations, integrate the gate into CI, and extend it with custom rules/profiles. Pair with a `arcana-<lang>-developer-skill` for language-exact fixes.
 
 ## What's inside
 | File | Purpose |

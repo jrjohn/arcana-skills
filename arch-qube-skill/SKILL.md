@@ -8,7 +8,7 @@ allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 
 Professional usage skill for [Architecture Qube (`arch-qube`)](https://github.com/jrjohn/arcana-arch-qube) — the AI-powered Architecture Quality Gate that detects MVVM, Clean Architecture, and GoF pattern violations automatically across the Arcana fleet.
 
-> This is a **tool skill**, not a language skill. It teaches you to *run* arch-qube, *interpret* and *fix* the violations it reports, *integrate* it into CI, and *extend* it with custom rules/profiles. For language-specific architecture rules, pair it with the matching `<lang>-developer-skill`.
+> This is a **tool skill**, not a language skill. It teaches you to *run* arch-qube, *interpret* and *fix* the violations it reports, *integrate* it into CI, and *extend* it with custom rules/profiles. For language-specific architecture rules, pair it with the matching `arcana-<lang>-developer-skill`.
 
 ---
 
