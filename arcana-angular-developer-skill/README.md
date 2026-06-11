@@ -21,8 +21,8 @@ arcana-angular-developer-skill/
 ├── README.md                   # This file
 ├── verification/
 │   └── commands.md             # All verification bash commands
+├── patterns.md                 # Design patterns (original)
 ├── patterns/
-│   ├── patterns.md             # Design patterns (original)
 │   └── mvvm-input-output.md    # MVVM Input/Output/Effect pattern details
 ├── checklists/
 │   └── production-ready.md     # Production & code review checklists

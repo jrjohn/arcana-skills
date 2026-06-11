@@ -1,12 +1,42 @@
 ---
 name: arcana-rust-developer-skill
-description: Rust microservices development guide based on Arcana Cloud Rust enterprise architecture. Provides comprehensive support for Clean Architecture, dual-protocol (REST via Axum 0.7 on :8080, gRPC via Tonic 0.12 on :9090), WASM Plugin System (Wasmtime 27), Distributed Job Queue (Redis-backed with 4-level priority), resilience patterns (circuit breaker, retry, rate limiting), JWT + Argon2 + RBAC + mTLS, Prometheus metrics, distributed tracing, and 150 tests. Suitable for Rust microservices development, architecture design, code review, and debugging.
+description: Rust microservices development guide based on Arcana Cloud Rust enterprise architecture. Provides comprehensive support for Clean Architecture, dual-protocol (REST via Axum 0.7 on :8080, gRPC via Tonic 0.12 on :9090), WASM Plugin System (Wasmtime 27), Distributed Job Queue (Redis-backed with 4-level priority), resilience patterns (circuit breaker, retry, rate limiting), JWT + Argon2 + RBAC + mTLS, Prometheus metrics, distributed tracing, and a comprehensive test suite. Suitable for Rust microservices development, architecture design, code review, and debugging.
 allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 ---
 
 # Rust Developer Skill
 
-Professional Rust microservices development skill based on [Arcana Cloud Rust](https://github.com/jrjohn/arcana-cloud-rust) enterprise architecture. Architecture Rating 8.95/10.
+Professional Rust microservices development skill based on [Arcana Cloud Rust](https://github.com/jrjohn/arcana-cloud-rust) enterprise architecture. High production-readiness architecture rating.
+
+---
+
+## ⚡ Workflow — Always Start From the Reference Project
+
+**EVERY task starts by cloning the complete reference project: `git clone https://github.com/jrjohn/arcana-cloud-rust.git` — never scaffold from scratch (`cargo new` is prohibited).**
+
+1. **Clone** the reference project:
+   ```bash
+   git clone https://github.com/jrjohn/arcana-cloud-rust.git [new-project-directory]
+   ```
+2. **Build + test the UNTOUCHED clone first** to establish a green baseline before changing anything:
+   ```bash
+   cargo build
+   cargo test
+   cargo clippy -- -D warnings
+   ```
+3. **Follow [0. Project Setup - CRITICAL](#0-project-setup---critical)** to rename the project and strip the demo endpoints — while explicitly KEEPING the infrastructure: gRPC server setup (Tonic, `crates/server/src/grpc/`), DI/AppState wiring, security/auth middleware (JWT + RBAC), deployment modes and configs (`config/`, `deployment/`), and the proto toolchain (`build.rs` / tonic-build).
+4. **Add features** per the [File-by-File Feature Recipe — New Entity End-to-End](#file-by-file-feature-recipe--new-entity-end-to-end) section.
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `reference.md` | Full API/config reference |
+| `patterns.md` | Architecture & code patterns |
+| `patterns/service-layer.md` | Service layer deep dive |
+| `examples.md` | Complete worked examples |
+| `checklists/production-ready.md` | Pre-ship checklist |
+| `verification/commands.md` | Verification/grep commands |
 
 ---
 
@@ -36,7 +66,7 @@ Professional Rust microservices development skill based on [Arcana Cloud Rust](h
 ### Quick Diagnosis:
 | Symptom | Check Command |
 |---------|---------------|
-| Empty response | `grep -rn "Vec::new()\|return Ok(vec!\[\])" crates/*/src/repository/` |
+| Empty response | `grep -rn "Vec::new()\|return Ok(vec!\[\])" crates/server/src/infrastructure/db/` |
 | 500 error | `grep -rn "unimplemented!\|todo!" crates/*/src/` |
 | gRPC UNIMPLEMENTED | Compare `rpc ` count in .proto vs impl methods |
 | DI error | Check Arc<dyn Trait> wiring in AppState |
@@ -50,7 +80,7 @@ Professional Rust microservices development skill based on [Arcana Cloud Rust](h
 
 | Rule | Description | Verification |
 |------|-------------|--------------|
-| Zero-Empty Policy | Repository stubs NEVER return empty Vec | `grep -rn "Vec::new()\|vec!\[\]" crates/*/src/repository/` |
+| Zero-Empty Policy | Repository stubs NEVER return empty Vec | `grep -rn "Vec::new()\|vec!\[\]" crates/server/src/infrastructure/db/` |
 | API Wiring | ALL routes must call existing Service methods | Check handler -> service calls |
 | gRPC Implementation | ALL proto rpc methods MUST be implemented | Count rpc vs impl methods |
 | Type Safety | ALL functions have explicit return types | `cargo clippy -- -D warnings` |
@@ -470,10 +500,10 @@ impl DailyReport {
 
 ```bash
 # Check for empty Vec returns in Repository stubs (MUST FIX)
-grep -rn "Vec::new()\|vec!\[\]" crates/*/src/repository/*_impl.rs
+grep -rn "Vec::new()\|vec!\[\]" crates/server/src/infrastructure/db/*_impl.rs
 
 # Verify chart-related data has mock values
-grep -rn "daily_reports\|weekly_data\|chart_data" crates/*/src/repository/ | grep -E "Vec::new|vec!\[\]"
+grep -rn "daily_reports\|weekly_data\|chart_data" crates/server/src/infrastructure/db/ | grep -E "Vec::new|vec!\[\]"
 ```
 
 ---
@@ -503,6 +533,8 @@ Only modify the following required items:
 - Service names in Docker-related configuration files
 - Update settings in `.env.example` file
 - Proto package names in `proto/*.proto`
+
+> **⚠️ Crate rename warning**: Renaming the workspace crates (e.g., `arcana-core`) breaks every `use arcana_core::` import across the workspace (handlers, gRPC services, repository impls, tests). **Recommended: KEEP the crate names** — only the binary/app name and package metadata need changing. If a full rename is truly required, do a full `sed` across all `use` statements AND the `Cargo.toml` dependency entries of every crate, then verify with `cargo check` before proceeding.
 
 **Step 4**: Clean up example code
 The cloned project contains example API. Clean up and replace with new project business logic:
@@ -547,6 +579,57 @@ cargo clippy -- -D warnings
 - Add SQLx migration scripts
 - Modify gRPC proto files (and rebuild)
 - Add WASM plugin modules
+
+---
+
+## File-by-File Feature Recipe — New Entity End-to-End
+
+Concrete ordered recipe for adding a new entity (example: **Order**) through ALL layers. Create files in this exact order so each step compiles against the previous one.
+
+1. **Domain model + DTO + mapper** — `crates/core/src/domain/models/order.rs`
+   - `Order` struct (`#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]`), `OrderDto`, `impl From<Order> for OrderDto`, plus `CreateOrderRequest` / `UpdateOrderRequest` (serde `Deserialize` for validation). Register the module in `models/mod.rs`.
+
+2. **SQL migration** — `migrations/00X_create_orders_table.sql`
+   ```bash
+   sqlx migrate add create_orders_table
+   sqlx migrate run --database-url $DATABASE_URL
+   ```
+   Table columns must match the `FromRow` struct exactly. Add indexes for query columns. Re-run `cargo sqlx prepare --database-url $DATABASE_URL` if using offline mode.
+
+3. **Repository trait** — `crates/core/src/domain/repositories/order_repository.rs`
+   - `#[async_trait] pub trait OrderRepository: Send + Sync` with `find_by_id` / `find_all(page, size)` / `save` / `update` / `delete`, all returning `Result<_, AppError>`. Register in `repositories/mod.rs`.
+
+4. **Repository impl** — `crates/server/src/infrastructure/db/order_repository_impl.rs`
+   - `PgOrderRepository { pool: PgPool }` implementing the trait with `sqlx::query_as` (see Repository Layer section). Zero-Empty Policy applies: stubs must return mock data, never empty Vecs.
+
+5. **Service trait + impl** — `crates/core/src/domain/services/order_service.rs`
+   - `#[async_trait] pub trait OrderService: Send + Sync` + `OrderServiceImpl { repo: Arc<dyn OrderRepository> }`. Business rules (uniqueness checks, status transitions) live here, not in handlers.
+   - **Transaction note**: multi-step writes (e.g., order + order lines) belong behind ONE repository method that runs them in a single SQLx transaction on the pool — the service stays repository-agnostic and never composes partial writes.
+
+6. **Axum handler + route registration**
+   - `crates/server/src/api/handlers/order_handler.rs` — `get_order` / `list_orders` / `create_order` / `update_order` / `delete_order` using `State(state)`, `Path`, `Query<PaginationParams>`, `Claims` extractors, returning `Result<impl IntoResponse, AppError>`.
+   - `crates/server/src/api/router.rs` — register `/orders` and `/orders/:id` routes under `/api/v1` inside the `jwt_layer`.
+
+7. **gRPC proto + Tonic service impl**
+   - `proto/order.proto` — define `OrderService` with ALL rpc methods (count must match what you implement).
+   - Run `cargo build` to regenerate Rust code via `build.rs` / tonic-build (never modify the tonic-build settings).
+   - `crates/server/src/grpc/order_service.rs` — implement the generated trait, delegate to `Arc<dyn OrderService>`, map errors via `From<AppError> for tonic::Status`. Register with `tonic::transport::Server` in `crates/server/src/grpc/server.rs`.
+
+8. **AppState / DI wiring** — `crates/server/src/state.rs`
+   - Add `pub order_service: Arc<dyn OrderService>`; in `AppState::new`, construct `PgOrderRepository::new(pool.clone())` then `OrderServiceImpl::new(order_repo)`.
+
+9. **Mock data** — in the repository impl (or stub) per Mock Data Rules: chart/list data with at least 7 realistic, varied items; `Order::mock(...)` builder for complex structs.
+
+10. **Unit tests per layer**
+    - Service: `crates/core/tests/service/order_service_test.rs` — `#[cfg(test)]` module with `mockall::mock!` over `OrderRepository` (see Testing section).
+    - Handler/integration: `cargo test --test integration` for end-to-end flows including auth.
+    - gRPC: verify `rpc ` count in `proto/order.proto` matches implemented `async fn` count.
+
+11. **Coverage check**
+    ```bash
+    cargo test
+    cargo tarpaulin --out html   # Service 90%+, Repository 80%+, Handler 75%+
+    ```
 
 ---
 
@@ -1982,7 +2065,7 @@ pub async fn metrics_middleware(
 ### Code Quality
 - [ ] cargo clippy -- -D warnings (zero warnings)
 - [ ] cargo fmt -- --check (properly formatted)
-- [ ] 150+ tests passing (80%+ coverage)
+- [ ] Full test suite passing (80%+ coverage)
 - [ ] No `unwrap()` in production code
 - [ ] Proper lifetime annotations where needed
 - [ ] Error types use thiserror

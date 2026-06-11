@@ -10,6 +10,37 @@ Professional Node.js/Express/TypeScript development skill based on [Arcana Cloud
 
 ---
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**EVERY task starts by cloning the complete reference project — never scaffold a Node.js/Express project from scratch:**
+
+```bash
+git clone https://github.com/jrjohn/arcana-cloud-nodejs.git [new-project-directory]
+```
+
+1. **Clone** the reference project (command above).
+2. **Build + test the UNTOUCHED clone first** to establish a green baseline before changing anything:
+   ```bash
+   npm install
+   npm run prisma:generate
+   npm run type-check
+   npm test
+   ```
+3. **Follow [0. Project Setup](#0-project-setup---critical)** to rename the project and strip the demo endpoints (example Controllers/Services/Repositories/Models/DTOs), while explicitly **KEEPING the infrastructure**: gRPC server setup (`src/grpc/server.ts`), InversifyJS DI container (`src/container/`), security/auth middleware (`src/middleware/`), deployment modes/configs (`deploy/`, `src/config/`), and the proto toolchain (gRPC protobuf compilation settings).
+4. **Add features** layer by layer per the [File-by-File Feature Recipe](#file-by-file-feature-recipe--new-entity-end-to-end).
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `patterns.md` | Architecture & code patterns beyond the examples in this file |
+| `patterns/service-layer.md` | Service layer deep dive (business logic, DI, interfaces) |
+| `examples.md` | Complete worked examples end-to-end |
+| `checklists/production-ready.md` | Pre-ship checklist before declaring work done |
+| `verification/commands.md` | Verification/grep commands for wiring and completeness checks |
+
+---
+
 ## Quick Reference Card
 
 ### New Endpoint Checklist:
@@ -452,6 +483,8 @@ Only modify the following required items:
 - Service names in Docker-related configuration files
 - Update settings in `.env.example` file
 
+✅ **For Node.js the rename is config-only.** Internal imports use relative paths (e.g., `../repository/UserRepository`), so no source-wide rewrite of import statements is needed — changing the `package.json` name, `src/config/settings.ts` application name, Docker service names, and `.env.example` values is the complete rename. Do not run project-wide find-and-replace across `src/`.
+
 **Step 4**: Clean up example code
 The cloned project contains example API (e.g., Arcana User Management). Clean up and replace with new project business logic:
 
@@ -504,15 +537,80 @@ npm test
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TDD Development Workflow                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  Step 1: Analyze Spec → Extract all SRS & SDD requirements      │
-│  Step 2: Create Tests → Write tests for EACH Spec item          │
-│  Step 3: Verify Coverage → Ensure 100% Spec coverage in tests   │
-│  Step 4: Implement → Build features to pass tests  ⚠️ MANDATORY │
-│  Step 5: Mock APIs → Use mock data for unfinished dependencies  │
-│  Step 6: Run All Tests → ALL tests must pass before completion  │
-│  Step 7: Verify 100% → Tests written = Features implemented     │
+│  Step 1: Spec Analysis → Extract all SRS & SDD requirements     │
+│  Step 2: Write a Test per Spec Item → Vitest describe/it        │
+│  Step 3: Mock Dependencies → vi.fn() repositories/clients       │
+│  Step 4: Implement Until Green → npm test passes  ⚠️ MANDATORY  │
+│  Step 5: Coverage Check → npm run test:coverage meets targets   │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+#### Step 1: Spec Analysis
+
+Extract every SRS/SDD requirement into a traceable checklist before writing any code:
+
+```
+SRS-USER-001: GET /users/:id returns user by id (200) or 404 if missing
+SRS-USER-002: POST /users rejects duplicate email (400 VALIDATION_FAILED)
+SRS-USER-003: List endpoints support page/size pagination
+```
+
+#### Step 2: Write a Test per Spec Item
+
+Every spec item gets at least one `it()` block, named after the requirement:
+
+```typescript
+// tests/service/UserService.test.ts
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+describe("UserService", () => {
+    it("SRS-USER-001: should return user when found", async () => { /* ... */ });
+    it("SRS-USER-001: should return null when user not found", async () => { /* ... */ });
+    it("SRS-USER-002: should throw error when email exists", async () => { /* ... */ });
+});
+```
+
+#### Step 3: Mock Dependencies
+
+Mock the layer below with `vi.fn()` so tests isolate the unit under test (same idiom as the Vitest section below):
+
+```typescript
+beforeEach(() => {
+    mockRepository = {
+        findById: vi.fn(),
+        findByEmail: vi.fn(),
+        findAll: vi.fn(),
+        findPendingSync: vi.fn(),
+        save: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn(),
+    };
+    userService = new UserService(mockRepository);
+});
+
+// Stub per test case:
+vi.mocked(mockRepository.findById).mockResolvedValue(mockUser);
+```
+
+Use realistic mock data per the Mock Data Requirements section — never empty arrays for chart/list data.
+
+#### Step 4: Implement Until Green
+
+Build the production code until every test passes — tests without implementation are INCOMPLETE TDD:
+
+```bash
+npm test                                              # all tests must pass
+npm test -- src/service/__tests__/UserService.test.ts # iterate on one file
+```
+
+#### Step 5: Coverage Check
+
+```bash
+npm run test:coverage
+open coverage/lcov-report/index.html
+```
+
+Coverage must meet the layer targets (Service 90%+, Repository 80%+, Controller 75%+) and every spec item from Step 1 must trace to a passing test.
 
 #### ⛔ FORBIDDEN: Tests Without Implementation
 
@@ -1174,6 +1272,58 @@ describe("UserService", () => {
 });
 ```
 
+## File-by-File Feature Recipe — New Entity End-to-End
+
+Concrete ordered recipe for adding a new entity (example: **Order**) through ALL layers. Create files in this order so each step builds on the previous one:
+
+1. **Domain model** — `src/model/Order.ts`
+   Define the `Order` interface (+ enums) following the `src/model/User.ts` pattern.
+
+2. **Prisma schema + migration** — `prisma/schema.prisma`
+   Add the `model Order { ... }` block (with `@@map`/`@map` snake_case mappings), then:
+   ```bash
+   npx prisma migrate dev --name add_orders_table
+   npx prisma generate
+   ```
+
+3. **DTO + mapper** — `src/dto/OrderDto.ts`
+   Define `OrderDto`, `CreateOrderDto`, `UpdateOrderDto`; add the `toOrderDto()` mapper in `src/model/Order.ts` (same place as `toUserDto`).
+
+4. **Repository interface + implementation**
+   - `src/repository/OrderRepository.ts` — interface (`findById`, `findAll`, `save`, `update`, `delete`, ...)
+   - `src/repository/OrderRepositoryImpl.ts` — `@injectable()` class using `PrismaClient`. NEVER return empty arrays from stubs (Zero-Empty Policy).
+
+5. **Service interface + implementation** — `src/service/OrderService.ts`
+   `IOrderService` interface + `@injectable()` `OrderService` with `@inject(TYPES.OrderRepository)`. Business logic and `AppException` error cases live here.
+
+6. **Controller + route registration** — `src/controller/OrderController.ts`
+   Zod schemas + `createOrderController(orderService)` factory (router.get/post/put/delete with `jwtRequired` and `validate(...)`), then register the router in the Express app. Every route MUST call an existing Service method.
+
+7. **gRPC proto + servicer + regen**
+   - `src/grpc/protos/order.proto` — define the `OrderService` rpc methods
+   - Run protoc to generate TypeScript code (use the project's existing protobuf compilation settings — do NOT modify them)
+   - `src/grpc/OrderServicer.ts` — implement ALL rpc methods (count must match the .proto), delegating to the Service layer via DI
+
+8. **InversifyJS DI wiring**
+   - `src/container/types.ts` — add `OrderRepository: Symbol.for("OrderRepository")` and `OrderService: Symbol.for("OrderService")` to `TYPES`
+   - `src/container/container.ts` — `container.bind<OrderRepository>(TYPES.OrderRepository).to(OrderRepositoryImpl).inSingletonScope();` and the same for `IOrderService`/`OrderService`
+
+9. **Mock data** — in `OrderRepositoryImpl` stubs awaiting real data: realistic, varied values; at least 7 items for list/chart data (see Mock Data Requirements).
+
+10. **Unit tests per layer (Vitest)** — under `tests/`:
+    - `tests/service/OrderService.test.ts` — mock the repository with `vi.fn()`
+    - `tests/repository/OrderRepository.test.ts` — data mapping and error handling
+    - `tests/controller/OrderController.test.ts` — request handling and validation
+
+11. **Coverage check**
+    ```bash
+    npm run type-check
+    npm test
+    npm run test:coverage   # Service 90%+, Repository 80%+, Controller 75%+
+    ```
+
+---
+
 ## API Wiring Verification Guide
 
 ### 🚨 The API Wiring Blind Spot
@@ -1290,7 +1440,7 @@ export class SettingsService implements ISettingsService {
 ### Code Quality
 - [ ] TypeScript strict mode enabled
 - [ ] ESLint passing
-- [ ] 538+ tests passing (90%+ coverage)
+- [ ] The full test suite passing (90%+ coverage)
 - [ ] No `any` types without justification
 
 ## Common Issues

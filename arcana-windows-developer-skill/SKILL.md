@@ -10,6 +10,60 @@ Professional Windows desktop development skill based on [Arcana Windows](https:/
 
 ---
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**Every task starts by cloning the complete reference project — NEVER scaffold a new WinUI 3 project from scratch:**
+
+```bash
+git clone https://github.com/jrjohn/arcana-windows.git [new-project-directory]
+```
+
+1. **Clone** the reference project (command above).
+2. **Build + test the UNTOUCHED clone first** to establish a green baseline (`dotnet restore && dotnet build && dotnet test`) before changing anything.
+3. **Follow [0. Project Setup](#0-project-setup---critical)** to rename the solution/namespaces and strip the demo screens — while KEEPING the infrastructure: auth/security layers (`src/Arcana.Infrastructure/Security` — PBKDF2 hashing, RBAC, audit logging), caching, offline/sync (CRDT engine + vector clocks), the DI container (`src/Arcana.Infrastructure/`), the plugin runtime (`src/Arcana.Plugins*`), and deployment/build configs (`.csproj` versions, `Directory.Build.props`).
+4. **Add features** one at a time following the [File-by-File Feature Recipe](#file-by-file-feature-recipe).
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `reference.md` | Deep-dive architecture reference — layer responsibilities and project conventions |
+| `patterns.md` | Extended code patterns beyond those inlined in this file |
+| `patterns/mvvm-udf.md` | Detailed MVVM UDF (Input/Output/Effect) ViewModel walkthrough |
+| `examples.md` | Complete end-to-end feature examples to copy from |
+| `checklists/production-ready.md` | Pre-release checklist before declaring a feature done |
+| `verification/commands.md` | Full verification command set (superset of Quick Verification below) |
+
+---
+
+## File-by-File Feature Recipe
+
+Ordered file-by-file recipe for adding a complete feature (example: **Orders**) through all layers. Create files in this order — each step compiles against the previous ones.
+
+1. **Domain entity** → `src/Arcana.Domain/Entities/Order.cs`
+   — Implements `IEntity` (and `ISyncableEntity` if it must sync offline).
+2. **Service interface + implementation** → `src/Arcana.Domain/Services/IOrderService.cs` + `OrderService.cs`
+   — Business rules and validation; only calls repository/UnitOfWork methods that exist on the interfaces.
+3. **Repository interface** → `src/Arcana.Domain/Repositories/IOrderRepository.cs`
+   — Extends `IRepository<Order>` for any custom queries beyond the generic CRUD.
+4. **Repository implementation** → `src/Arcana.Data/Repositories/OrderRepository.cs`
+   — Then expose `IRepository<Order> Orders { get; }` on `IUnitOfWork` and wire it in `UnitOfWork`.
+5. **EF Core configuration** → `src/Arcana.Data/Configurations/OrderConfiguration.cs`
+   — Entity mapping; register the `DbSet<Order>` in the DbContext.
+6. **Mock data** → `tests/Arcana.App.Tests/Mocks/MockOrderRepository.cs`
+   — NEVER return empty collections; 5-10 varied items, `Task.Delay()` latency, IDs consistent with other repositories.
+7. **DI registration** → `src/Arcana.Infrastructure/DependencyInjection.cs`
+   — Register service + repository; `#if DEBUG` switch between mock and real where applicable.
+8. **ViewModel** → `src/Arcana.App/ViewModels/OrderListViewModel.cs`
+   — MVVM UDF: nested `Input` records, `Output : ObservableObject`, `Effect` records, `Subject<Effect> Fx`.
+9. **View** → `src/Arcana.App/Views/OrderListPage.xaml` + `OrderListPage.xaml.cs`
+   — Loading/Error/Empty/Content states; subscribe to `_viewModel.Fx` in code-behind and route Effects to `INavGraph`.
+10. **Navigation** → add `ToOrderList()` / `ToOrderDetail(string orderId)` to `INavGraph` AND implement them in `NavGraph` (`_frame.Navigate(typeof(OrderListPage))`).
+11. **Unit tests** → `tests/Arcana.App.Tests/ViewModels/OrderListViewModelTests.cs`, `tests/Arcana.Data.Tests/Repositories/OrderRepositoryTests.cs`.
+12. **Verify** → `dotnet build && dotnet test`, then run the Quick Verification Commands — every `Effect.Navigate*` must have a View subscription AND a NavGraph implementation.
+
+---
+
 ## Quick Reference Card
 
 ### New View Checklist:
@@ -1112,6 +1166,16 @@ public class PluginRuntime
     }
 }
 ```
+
+#### Create a New Plugin — File Recipe
+
+1. **Project** → create `plugins/<YourPlugin>/<YourPlugin>.csproj` referencing `src/Arcana.Plugins.Contracts/` (interfaces only — never reference `Arcana.App` directly).
+2. **Manifest** → define the `PluginManifest` (Key, Name, Version, `PluginType` — one of the 18 types, `ActivationEvents`).
+3. **Plugin class** → `plugins/<YourPlugin>/<YourPlugin>Plugin.cs` implementing `IArcanaPlugin` (`Key`/`Name`/`Version`/`Manifest` + `OnActivateAsync`/`OnDeactivateAsync`).
+4. **Views** → add plugin views (e.g. `plugins/<YourPlugin>/Views/`) and register them in `OnActivateAsync` via `context.Navigation.RegisterView("<view-key>", typeof(YourView))`.
+5. **Commands / menu items** → subscribe via `context.MessageBus.Subscribe<YourCommand>(...)` and publish `RegisterMenuItemEvent` via `context.EventAggregator`.
+6. **Cleanup** → unsubscribe and release resources in `OnDeactivateAsync`.
+7. **Load + verify** → build the plugin, let `PluginRuntime.LoadPluginAsync` load it through its isolated `AssemblyLoadContext`, then test activation/deactivation (no leaked subscriptions after unload).
 
 ### 5. Repository + Unit of Work Pattern
 

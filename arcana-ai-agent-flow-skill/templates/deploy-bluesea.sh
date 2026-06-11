@@ -32,9 +32,9 @@ ENV_FILE=".env"
 WITH_WORKER=0
 [[ "${1:-}" == "--with-worker" ]] && WITH_WORKER=1
 
-MON_SERVICES=(kogito-pg kogito-bpmn kogito-swf data-index arcana-cloud-rust dashboard)
-IMAGES=(arcana/kogito-bpmn:1.0.0 arcana/kogito-swf:1.0.0 \
-        arcana/arcana-cloud-rust:1.0.0 arcana/dashboard:1.0.0 arcana/task-worker:1.0.0)
+MON_SERVICES=(kogito-pg kogito-bpmn ci-maint-endpoint data-index arcana-cloud-rust dashboard)
+IMAGES=(arcana/kogito-bpmn:1.0.0 arcana/ci-maint-endpoint:1.0.0 \
+        arcana/arcana-cloud-rust:1.0.0 arcana/dashboard:1.0.0 arcana/task-worker:1.3.0)
 
 red()   { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }

@@ -62,22 +62,6 @@ services:
     ports:
       - "8081:8080"   # REST + /q/swagger-ui + /q/health
 
-  # Automated (no-human) CNCF Serverless Workflows — feeds the SAME Data Index.
-  kogito-swf:
-    build:
-      context: ./kogito-swf
-      dockerfile: Dockerfile
-    image: arcana/kogito-swf:1.0.0
-    container_name: aaf-kogito-swf
-    depends_on:
-      kafka:
-        condition: service_started
-    environment:
-      KAFKA_BOOTSTRAP: kafka:9092
-      KOGITO_SERVICE_URL: http://kogito-swf:8080
-    ports:
-      - "8082:8080"   # REST + /q/swagger-ui + /q/health
-
   data-index:
     image: docker.io/apache/incubator-kie-kogito-data-index-postgresql:10.0.x-20260329-linux-arm64
     container_name: aaf-data-index
@@ -94,7 +78,7 @@ services:
       QUARKUS_HTTP_CORS_ORIGINS: "/.*/"
       KOGITO_DATA_INDEX_PROPS: -Dquarkus.hibernate-orm.database.generation=update
     volumes:
-      # both engines' protobuf descriptors (BPMN + SWF) collected into one dir
+      # the BPMN engine's protobuf descriptors
       - ./data-index-protobufs:/home/kogito/data/protobufs:ro
     ports:
       - "8180:8080"   # GraphQL at /graphql, GraphiQL UI at /graphiql

@@ -2,7 +2,7 @@
 
 Lessons from building arcana-ai-agent-flow Mac-first → deploying to bluesea.
 
-## Kogito engines (Quarkus 3.8.4 / Kogito 10.0.0, arm64)
+## Kogito engine (Quarkus 3.8.4 / Kogito 10.0.0, arm64)
 
 1. **Flatten the pom** — the kogito-examples parent isn't resolvable standalone.
    Self-contained pom: `quarkus-bom` 3.8.4 + `kogito-bom` 10.0.0 imports; repos
@@ -27,28 +27,47 @@ Lessons from building arcana-ai-agent-flow Mac-first → deploying to bluesea.
    `GET /<processId>/<id>`. Added `job`/`buildUrl`/`result` so the Jenkins
    trigger can pass build context the worker then acts on.
 
-## SonataFlow
+## BPMN authoring + engine ops (post single-engine, 2026-06)
 
-- Extension: `org.apache.kie.sonataflow:sonataflow-quarkus` (in kogito-bom). Same
-  events addon + kafka connector + MetricDecorator exclude as BPMN.
-- SonataFlow uses JSON variables (no protobuf). Its instances/definitions land in
-  the same Data Index; `ProcessDefinition.type = SW` (vs `BPMN`).
-- **Flow-diagram edges**: the Data Index gives SWF *nodes* but no *edges* (so the
-  diagram shows unconnected boxes). Edges live in the `.sw.yaml` as `start` +
-  per-state `transition` + `end`. Parse them (`swf.rs`, serde_yaml) into edges
-  **by state name**, then in `/definitions/:id/graph` map names → Data Index node
-  ids (Kogito ids the SWF nodes `1`,`2`,… but the *names* — Start/End/<state> —
-  match): `Start→<start state>`, `<state>→<transition>`, `<end state>→End`. Mount
-  the `.sw.yaml` dir into the read-API (`SWF_DIR`), same pattern as `BPMN_DIR`.
-  (BPMN edges come from sequence-flow sourceRef/targetRef, already node-ids.)
+> SonataFlow was retired 2026-06-09 (ci-maintenance ported to BPMN; one engine
+> runs everything). The SWF-specific gotchas (swf.rs edge parsing, SWF_DIR) are
+> obsolete and removed with the templates.
+
+- **XML comments must not contain `--`** — e.g. writing `claude --resume` in a
+  BPMN comment makes Kogito codegen fail with SAXParseException "the string
+  '--' is not permitted within comments". Spell it `claude resume` or move the
+  note outside the XML.
+- **Bump the process version when changing node structure.** Data Index
+  `definitions_nodes` does NOT dedupe across redeploys of the same
+  `version=1.0` — old + new nodes overlay and the dashboard diagram garbles
+  (two Starts, orphan nodes). Execution stays correct; only definition metadata
+  is dirty. Fix after the fact: `DELETE FROM definitions_nodes_metadata /
+  definitions_nodes WHERE process_id=… AND id IN (<stale ids>)`.
+- **After engine `--force-recreate`, restart the task-worker** — it keeps an
+  in-memory ready cache and will log "N ready" while engine/Data-Index have 0.
+  `docker restart aaf-task-worker`.
+- **Kafka outage ⇒ Data Index drift, not data loss.** The engine (sync REST) is
+  the source of truth. The Rust worker re-checks `complete()` failures against
+  the engine (instance gone → drop; task renewed under a new work-item id →
+  retry with fresh id) and a reconciler loop (`RECONCILE_SECS`, writes DI's PG
+  directly) repairs drift both ways. Never abort instances off stale DI
+  work-item ids — that was the original incident.
+- **endGate conditions: check the AI verdict, not just this branch's build.**
+  `!"SUCCESS".equals(buildResult)` alone parks a human even when Decide already
+  judged the failure cleared on main; AND it with
+  `decision == null || !decision.toLowerCase().startsWith("merge")`.
+- **New/changed diagram not showing**: ship the `.bpmn2` into the read-API's
+  `BPMN_DIR` mount (`./bpmn/`), restart `aaf-arcana-cloud-rust`, and
+  hard-refresh the SPA (Ctrl+Shift+R — the bpmnXml signal caches). bpmn-js
+  needs no bpmndi coordinates (auto-layout).
 
 ## Kogito Data Index
 
 - Image (arm64-native, no emulation):
   `docker.io/apache/incubator-kie-kogito-data-index-postgresql:10.0.x-20260329-linux-arm64`.
-- Mount each engine's protobuf descriptors
+- Mount the engine's protobuf descriptors
   (`target/classes/META-INF/resources/persistence/protobuf`) into
-  `/home/kogito/data/protobufs`. Collect both engines' `.proto` into one dir.
+  `/home/kogito/data/protobufs`.
 - `ProcessInstance` has **no** `type` field (query errors); engine type is only
   on `ProcessDefinition.type`. The read-API builds a processId→engine map from
   ProcessDefinitions to annotate instances.
@@ -102,20 +121,23 @@ Lessons from building arcana-ai-agent-flow Mac-first → deploying to bluesea.
 
 ## CI trigger (B2)
 
-- Replace the inline-routine Jenkins RunListener with `ci-bpmn-trigger.groovy`:
-  any non-SUCCESS build → POST `http://<engine>:8080/ci-flow {subject,job,buildUrl,result}`
-  → BPMN instance → worker orchestrates. Idempotent re-register removes both the
-  old `CiRoutineTrigger` and any prior `CiBpmnTrigger`. Activate live via
+- `ci-bpmn-trigger.groovy` (v7) replaces the inline-routine RunListener:
+  **red** build → POST `http://<engine>:8080/ci-flow {subject,job,buildUrl,result}`
+  with a **6h per-job cooldown**; **green PR** build, fleet-wide
+  (`job ==~ /.*-app(-pipeline)?-mb\/.*/` + CHANGE_URL) → POST
+  `/merge-flow {job,prUrl}`. Idempotent re-register removes the old
+  `CiRoutineTrigger` and any prior `CiBpmnTrigger`. Activate live via
   `/jenkins/scriptText` (admin token); `docker cp` into `init.groovy.d` for
   restart persistence. The worker keeps the routine guardrail (auto-fix only red
   `*/main` + fixable code/deps/test) so replacing the inline routine doesn't
   regress remediation.
 
-## Hourly scheduler (heartbeat)
+## Hourly scheduler (governance)
 
-- The `ci-scheduler` service starts a `ci-maintenance` SonataFlow instance every
-  hour so the dashboard always shows recent automated runs (the event-driven B2
-  trigger handles real red builds separately).
+- The `ci-scheduler` service starts a `ci-maintenance` BPMN instance every hour
+  (Scan→Analyze(ai)→Remediate→Verify via ci-maint-endpoint) so health
+  governance runs and the dashboard shows recent automated runs (the
+  event-driven B2 trigger handles red builds / green PRs separately).
 - **`curlimages/curl` ENTRYPOINT is `curl`** — `command: sh -c '...'` becomes
   `curl sh -c …` and breaks (`sh: -H: not found`). Override
   `entrypoint: ["/bin/sh","-c"]` and pass the loop as a **literal block scalar**

@@ -10,6 +10,32 @@ Professional Angular development skill based on [Arcana Angular](https://github.
 
 ---
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**Every task starts by cloning the complete reference project — NEVER scaffold from scratch (no `ng new`):**
+
+```bash
+git clone https://github.com/jrjohn/arcana-angular.git [new-project-directory]
+```
+
+1. **Clone** the reference project (command above).
+2. **Build + test the UNTOUCHED clone first** — `npm install && npm run build && npm run test -- --watch=false --browsers=ChromeHeadless` must be green before any modification (known-good baseline).
+3. Follow [0. Project Setup](#0-project-setup---critical) to rename the project and strip demo code — **KEEP the infrastructure**: auth (guards/interceptors), 4-layer caching, offline/sync, security layers, DI/core, router skeleton.
+4. Add features following the [File-by-File Feature Recipe](#file-by-file-feature-recipe) below.
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `patterns.md` | Detailed design patterns beyond the core examples in this file |
+| `patterns/mvvm-input-output.md` | Deep-dive on the MVVM Input/Output/Effect ViewModel pattern |
+| `examples.md` | Full working code examples for complete features |
+| `checklists/production-ready.md` | Pre-release production & code review checklists |
+| `verification/commands.md` | Complete catalog of verification bash commands |
+| `reference.md` | Technical reference (versions, APIs, configuration details) |
+
+---
+
 ## Quick Reference Card
 
 ### New Screen Checklist:
@@ -39,6 +65,43 @@ Professional Angular development skill based on [Arcana Angular](https://github.
 | Navigation crash | Compare `app.routes.ts` paths vs component imports |
 | Button does nothing | `grep "(click)=\"\"" src/app/**/*.html` |
 | Data not loading | `grep "throw.*NotImplemented\\|TODO" src/app/data/` |
+
+---
+
+## File-by-File Feature Recipe
+
+Create files in this order when adding a new feature (example: `project`):
+
+```
+1. Model              -> src/app/domain/models/project.model.ts
+2. Validator          -> src/app/domain/validators/project.validator.ts
+3. Service Interface  -> src/app/domain/services/project.service.ts
+4. Service Impl       -> src/app/domain/services/project.service.impl.ts
+5. Repository Interface -> src/app/domain/repositories/project.repository.ts
+6. Repository Impl    -> src/app/data/repositories/project.repository.impl.ts
+7. DTO                -> src/app/data/remote/dtos/project.dto.ts
+8. Mapper             -> src/app/data/remote/mappers/project.mapper.ts
+9. Mock Repository    -> src/app/data/repositories/mock/mock-project.repository.ts
+10. Provider Binding  -> src/app/core/providers/repository.providers.ts
+11. ViewModel         -> src/app/presentation/projects/project.viewmodel.ts
+12. Component         -> src/app/presentation/projects/project.component.ts
+13. NavGraph Methods  -> src/app/core/services/nav-graph.service.ts (toProjectList, toProjectDetail)
+14. Route             -> src/app/app.routes.ts (path + component)
+15. Tests             -> project.viewmodel.spec.ts + service/repository specs
+```
+
+Step notes:
+- **1-2**: Model is a plain TypeScript interface; validator is pure logic (no Angular imports beyond signals if needed).
+- **3-6**: Service depends on the repository INTERFACE (abstract class, step 5), never the impl. Repository impl wraps the 4-layer cache + offline sync (Dexie).
+- **7-8**: DTO mirrors the API payload exactly; mapper converts DTO <-> domain model. Never leak DTOs above the data layer.
+- **9**: Mock data must be realistic and non-empty (see Mock Data Rules — NEVER return `[]` / `of([])`).
+- **10**: Bind impl vs mock in `repository.providers.ts` via `environment.production` switch.
+- **11**: `@Injectable()` ViewModel with Input/Output/Effect pattern — Signals for output, `Subject` for effects, single `onInput()` entry point.
+- **12**: Standalone component with `ChangeDetectionStrategy.OnPush`, `providers: [ProjectViewModel]`, Loading/Error/Empty/Content states, subscribe to `effect$`.
+- **13-14**: Every route added in `app.routes.ts` MUST get a matching NavGraphService method, and every `@Output()` navigation event must be bound in the parent template.
+- **15**: ViewModel specs first (90%+ target), then service (85%+) and repository (80%+) specs.
+
+Verify after wiring: `npm run build && npm run test -- --watch=false --browsers=ChromeHeadless`.
 
 ---
 
@@ -150,32 +213,32 @@ export function requiresReauth(error: AppError): boolean {
 
 ### Error Handling by Layer
 
-**HTTP Interceptor:**
+**HTTP Interceptor** (functional `HttpInterceptorFn` — the modern primary pattern; see [9. HTTP Interceptors](#9-http-interceptors) for the legacy class-based alternative):
 ```typescript
-@Injectable()
-export class ErrorInterceptor implements HttpInterceptor {
-  intercept(req: HttpRequest<unknown>, next: HttpHandler): Observable<HttpEvent<unknown>> {
-    return next.handle(req).pipe(
-      catchError((error: HttpErrorResponse) => {
-        let appError: AppError;
+// core/interceptors/error.interceptor.ts
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { catchError, throwError } from 'rxjs';
 
-        if (error.status === 0) {
-          appError = { type: 'NETWORK_UNAVAILABLE' };
-        } else if (error.status === 401) {
-          appError = { type: 'UNAUTHORIZED' };
-        } else if (error.status === 404) {
-          appError = { type: 'NOT_FOUND' };
-        } else if (error.status >= 500) {
-          appError = { type: 'SERVER_ERROR', statusCode: error.status };
-        } else {
-          appError = { type: 'UNKNOWN', underlying: error };
-        }
+export const errorInterceptor: HttpInterceptorFn = (req, next) =>
+  next(req).pipe(
+    catchError((error: HttpErrorResponse) => {
+      let appError: AppError;
 
-        return throwError(() => appError);
-      })
-    );
-  }
-}
+      if (error.status === 0) {
+        appError = { type: 'NETWORK_UNAVAILABLE' };
+      } else if (error.status === 401) {
+        appError = { type: 'UNAUTHORIZED' };
+      } else if (error.status === 404) {
+        appError = { type: 'NOT_FOUND' };
+      } else if (error.status >= 500) {
+        appError = { type: 'SERVER_ERROR', statusCode: error.status };
+      } else {
+        appError = { type: 'UNKNOWN', underlying: error };
+      }
+
+      return throwError(() => appError);
+    })
+  );
 ```
 
 **ViewModel Layer:**
@@ -757,7 +820,7 @@ src/
 └── styles/               # SCSS with Bootstrap
 ```
 
-### 2. ViewModel Input/Output/Effect Pattern with Signals
+### 3. ViewModel Input/Output/Effect Pattern with Signals
 
 ```typescript
 import { Injectable, signal, computed } from '@angular/core';
@@ -837,7 +900,7 @@ export class UserViewModel {
 }
 ```
 
-### 3. Four-Layer Offline-First Caching
+### 4. Four-Layer Offline-First Caching
 
 ```typescript
 import { Injectable } from '@angular/core';
@@ -915,7 +978,7 @@ export class CacheManager<T> {
 }
 ```
 
-### 4. Offline-First Repository
+### 5. Offline-First Repository
 
 ```typescript
 import { Injectable } from '@angular/core';
@@ -993,7 +1056,7 @@ export class UserRepository {
 }
 ```
 
-### 5. Component with OnPush Change Detection
+### 6. Component with OnPush Change Detection
 
 ```typescript
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
@@ -1076,7 +1139,7 @@ export class UserComponent {
 }
 ```
 
-### 6. Type-Safe Navigation (NavGraphService)
+### 7. Type-Safe Navigation (NavGraphService)
 
 ```typescript
 import { Injectable, inject } from '@angular/core';
@@ -1117,7 +1180,7 @@ export class NavGraphService {
 }
 ```
 
-### 7. Security - Input Sanitization
+### 8. Security - Input Sanitization
 
 ```typescript
 import { Injectable } from '@angular/core';
@@ -1161,7 +1224,56 @@ export class SanitizationService {
 }
 ```
 
-### 8. HTTP Interceptors
+### 9. HTTP Interceptors
+
+**Modern (primary): functional interceptors with `HttpInterceptorFn` + `withInterceptors`.** Match what the reference repo uses; modern Angular prefers functional.
+
+```typescript
+// core/interceptors/auth.interceptor.ts
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { throwError } from 'rxjs';
+import { catchError, retry } from 'rxjs/operators';
+
+// Auth Interceptor (functional)
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  const token = inject(AuthService).getToken();
+
+  if (token) {
+    req = req.clone({
+      setHeaders: { Authorization: `Bearer ${token}` },
+    });
+  }
+
+  return next(req);
+};
+
+// Error Interceptor (functional)
+export const errorInterceptor: HttpInterceptorFn = (req, next) =>
+  next(req).pipe(
+    retry(1),
+    catchError((error: HttpErrorResponse) => {
+      const errorMessage =
+        error.error instanceof ErrorEvent
+          ? error.error.message // Client-side error
+          : `Error Code: ${error.status}\nMessage: ${error.message}`; // Server-side error
+
+      console.error(errorMessage);
+      return throwError(() => new Error(errorMessage));
+    })
+  );
+
+// app.config.ts - Registration
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
+  ],
+};
+```
+
+**Legacy alternative: class-based `HttpInterceptor`** (only if the reference repo still uses it — registered via `HTTP_INTERCEPTORS` multi-provider):
 
 ```typescript
 import { Injectable } from '@angular/core';
@@ -1220,7 +1332,7 @@ export class ErrorInterceptor implements HttpInterceptor {
 }
 ```
 
-### 9. Form Validation
+### 10. Form Validation
 
 ```typescript
 import { signal, computed } from '@angular/core';

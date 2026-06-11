@@ -18,7 +18,7 @@ Embedded firmware CI/CD differs fundamentally from server/web application pipeli
 
 | Aspect | Detail |
 |--------|--------|
-| Docker Image | `espressif/idf:v5.4.1` (~3GB, cached after first pull) |
+| Docker Image | `espressif/idf:v5.5.2` (~3GB, cached after first pull; reference project now on IDF v6.x — prefer matching the project's idf version) |
 | Build System | CMake (via `idf.py`) |
 | Toolchain | xtensa-esp32-elf-gcc (bundled) |
 | Output | `.bin` (app + bootloader + partition table) |
@@ -26,13 +26,14 @@ Embedded firmware CI/CD differs fundamentally from server/web application pipeli
 
 ```bash
 # Recommended: docker pull + docker compose (CI pipeline)
-docker pull espressif/idf:v5.4.1
+# (reference project now on IDF v6.x — prefer matching the project's idf version)
+docker pull espressif/idf:v5.5.2
 docker compose run --rm esp32-build
 
 # docker-compose.yml:
 # services:
 #   esp32-build:
-#     image: espressif/idf:v5.4.1
+#     image: espressif/idf:v5.5.2
 #     working_dir: /project
 #     environment:
 #       - HOME=/tmp
@@ -264,7 +265,7 @@ Common stages:
 
 | Tool | Recommended Version | Notes |
 |------|-------------------|-------|
-| ESP-IDF | v5.5.x | LTS, production recommended |
+| ESP-IDF | v5.5.x | LTS CI image; reference project now on IDF v6.x — prefer matching the project's idf version |
 | arm-none-eabi-gcc | 13.x | From ARM developer site |
 | CMake | 3.28+ | Required by ESP-IDF v5.x |
 | OpenOCD | 0.12+ | STM32 support |

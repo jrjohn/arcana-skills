@@ -10,6 +10,39 @@ Professional Python/Flask development skill based on [Arcana Cloud Python](https
 
 ---
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**EVERY task starts by cloning the complete reference project — `git clone https://github.com/jrjohn/arcana-cloud-python.git` — NEVER scaffold a Flask project from scratch.**
+
+1. **Clone** the reference project:
+   ```bash
+   git clone https://github.com/jrjohn/arcana-cloud-python.git [new-project-directory]
+   cd [new-project-directory]
+   ```
+2. **Build + test the UNTOUCHED clone first** to establish a green baseline before changing anything:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   python -m pytest
+   ```
+   All tests must pass on the pristine clone. If they fail, fix the environment — not the code — before proceeding.
+3. **Rename + strip demo endpoints** following [0. Project Setup - CRITICAL](#0-project-setup---critical). Remove the example API (Arcana User Management), but explicitly **KEEP** the infrastructure: gRPC server setup (`app/grpc/server.py`), DI/dependency wiring (`app/config/dependencies.py`), security/auth middleware (`app/middleware/`), deployment modes & configs (`deployment/`, `k8s/`), and the proto toolchain (gRPC protobuf compilation settings).
+4. **Add features** one entity at a time per the [File-by-File Feature Recipe — New Entity End-to-End](#file-by-file-feature-recipe--new-entity-end-to-end).
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `reference.md` | Full API/config reference |
+| `patterns.md` | Architecture & code patterns |
+| `patterns/service-layer.md` | Service layer deep dive |
+| `examples.md` | Complete worked examples |
+| `checklists/production-ready.md` | Pre-ship checklist before declaring a task done |
+| `verification/commands.md` | Verification/grep commands for wiring & stub checks |
+
+---
+
 ## Quick Reference Card
 
 ### New Endpoint Checklist:
@@ -18,7 +51,7 @@ Professional Python/Flask development skill based on [Arcana Cloud Python](https
 2. Add method to Service interface (Protocol)
 3. Implement method in ServiceImpl
 4. Add Repository method if data access needed
-5. Add Pydantic model for request validation
+5. Add Marshmallow schema for request validation
 6. Verify mock data returns non-empty values
 ```
 
@@ -55,7 +88,7 @@ Professional Python/Flask development skill based on [Arcana Cloud Python](https
 
 | Rule | Description | Verification |
 |------|-------------|--------------|
-| Input Validation | Pydantic models for all requests | Check request models |
+| Input Validation | Marshmallow schemas for all requests (Pydantic only if the repo adopts it) | Check request schemas |
 | Mock Data Quality | Realistic, varied values | Review mock data |
 | Error Handling | AppException for all errors | Check exception usage |
 | Logging | Structured logging | Check logger calls |
@@ -353,7 +386,7 @@ scores = [80] * 7
 scores = [72, 78, 85, 80, 76, 88, 82]  # Shows trend
 ```
 
-**Rule 3: Data must match dataclass/Pydantic model exactly**
+**Rule 3: Data must match dataclass/SQLAlchemy model exactly**
 ```bash
 # Before creating mock data, ALWAYS verify the model definition:
 grep -A 20 "class TherapyData" app/model/*.py
@@ -409,6 +442,8 @@ Only modify the following required items:
 - Service names in Docker-related configuration files
 - Update settings in `.env` example file
 
+> ✅ **The rename is config-only.** All source code lives under the stable top-level `app/` package, so the items above (pyproject metadata, settings, Docker configs, `.env`) are the complete rename — NO source-wide import rewrite is needed. Only renaming the `app/` package itself would require rewriting imports; don't do that.
+
 **Step 4**: Clean up example code
 The cloned project contains example API (e.g., Arcana User Management). Clean up and replace with new project business logic:
 
@@ -450,6 +485,53 @@ python -m pytest
 - Add Domain Models, DTOs
 - Add Alembic migration scripts
 - Modify gRPC proto files (and recompile)
+
+## File-by-File Feature Recipe — New Entity End-to-End
+
+Ordered recipe for adding a new entity (example: `Order`) through ALL layers. Create files in this order — each step builds on the previous one.
+
+1. **Domain Model** — `app/model/order.py`
+   SQLAlchemy model on the shared `Base` (see "Domain Model with SQLAlchemy"): typed `Column`s, `created_at`/`updated_at`, `to_dict()`.
+
+2. **Alembic Migration** — `migrations/versions/00X_create_orders.py`
+   Migration script with `upgrade()`/`downgrade()` mirroring the model (see "8. Database Migration with Alembic"), then apply:
+   ```bash
+   alembic revision -m "create orders table"   # fill in upgrade()/downgrade()
+   alembic upgrade head
+   ```
+
+3. **DTO + Validation Schema** — `app/dto/order_dto.py`
+   `CreateOrderDTO` / `UpdateOrderDTO` dataclasses, plus Marshmallow `CreateOrderSchema` / `UpdateOrderSchema` for request validation (per the Controller Layer example). Map validated schema data into the DTO (`CreateOrderDTO(**data)`).
+
+4. **Repository** — `app/repository/order_repository.py` (interface/base) + `app/repository/order_repository_impl.py` (implementation)
+   `find_by_id`, `find_all(page, size)` returning `(items, total)`, `save`, `update`, `delete`. SQLAlchemy `Session` injected via `__init__`; commit + refresh inside the repository (documented idiom). Zero-Empty Policy: stubs NEVER return `[]`.
+
+5. **Service** — `app/service/order_service.py`
+   `OrderService` interface (Protocol) + `OrderServiceImpl` with the business logic: uniqueness checks, `uuid4()` IDs, raising `AppException`/`ValueError` for conflicts. Service calls only Repository methods that exist (verification command #9).
+
+6. **Controller** — `app/controller/order_controller.py`
+   `order_bp = Blueprint("orders", __name__, url_prefix="/api/v1/orders")` with `@jwt_required`, Marshmallow validation, pagination params (`page`, `size`). Register the blueprint in the Flask app factory (`app/__init__.py`).
+
+7. **gRPC** — proto definition in `app/grpc/` (e.g., `order.proto`) + `app/grpc/order_servicer.py`
+   Define service + messages, run protoc to regenerate Python code using the project's EXISTING compilation settings (do not modify them). Servicer extends the generated base, implements ALL rpc methods (rpc count MUST equal def count), delegates to `OrderService`, and is registered in `app/grpc/server.py`.
+
+8. **DI Wiring** — `app/config/dependencies.py`
+   Add `get_order_repository()` / `get_order_service()` factories (env-switchable Mock vs Real, per the documented `FLASK_ENV == "testing"` pattern) and expose the service as `g.order_service`, matching the documented `g.user_service` idiom.
+
+9. **Mock Data** — `tests/mock/mock_order_repository.py`
+   `MockOrderRepository` with realistic, varied values matching the model exactly; list data powering charts gets at least 7 items (Mock Data Rules).
+
+10. **Unit Tests per Layer** (pytest, documented test tree):
+    - `tests/repository/test_order_repository.py`
+    - `tests/service/test_order_service.py`
+    - `tests/controller/test_order_controller.py`
+    - `tests/grpc/test_order_grpc.py`
+
+11. **Coverage Check**:
+    ```bash
+    python -m pytest --cov=app --cov-report=html
+    ```
+    Meet the per-layer targets: Service 90%+, Repository 80%+, Controller 75%+ (see "Test Coverage Targets").
 
 ### 1. TDD & Spec-Driven Development Workflow - MANDATORY
 
@@ -1413,7 +1495,7 @@ class SettingsService:
 - [ ] Type hints on all functions
 - [ ] mypy strict mode passes
 - [ ] flake8/black/isort compliant
-- [ ] 100% test coverage target
+- [ ] Coverage meets per-layer targets: Service 90%+, Repository 80%+, Controller 75%+ (see "Test Coverage Targets")
 
 ## Common Issues
 

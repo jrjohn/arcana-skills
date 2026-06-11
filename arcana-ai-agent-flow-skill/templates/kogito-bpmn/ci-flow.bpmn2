@@ -6,7 +6,7 @@
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
     xmlns:drools="http://www.jboss.org/drools"
     id="ci-flow-defs" targetNamespace="http://www.omg.org/bpmn20"
-    exporter="arcana" exporterVersion="1.0">
+    exporter="arcana" exporterVersion="4.0">
 
   <bpmn2:itemDefinition id="_subjectItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_jobItem" structureRef="String"/>
@@ -14,26 +14,39 @@
   <bpmn2:itemDefinition id="_resultItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_triageItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_buildResultItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_fixItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_decisionItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_attemptsItem" structureRef="Integer"/>
   <bpmn2:itemDefinition id="_taskNameItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_groupIdItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_outValItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_sidItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_humanActionItem" structureRef="String"/>
 
-  <bpmn2:process id="ci-flow" drools:packageName="boo.arcana" drools:version="1.0" name="CI Flow" isExecutable="true">
+  <bpmn2:error id="ciUnresolved" errorCode="CI_UNRESOLVED" name="CI Unresolved"/>
+
+  <bpmn2:process id="ci-flow" drools:packageName="boo.arcana" drools:version="4.0" name="CI Flow" isExecutable="true">
     <bpmn2:property id="subject" itemSubjectRef="_subjectItem" name="subject"/>
     <bpmn2:property id="job" itemSubjectRef="_jobItem" name="job"/>
     <bpmn2:property id="buildUrl" itemSubjectRef="_buildUrlItem" name="buildUrl"/>
     <bpmn2:property id="result" itemSubjectRef="_resultItem" name="result"/>
     <bpmn2:property id="triage" itemSubjectRef="_triageItem" name="triage"/>
     <bpmn2:property id="buildResult" itemSubjectRef="_buildResultItem" name="buildResult"/>
+    <bpmn2:property id="fix" itemSubjectRef="_fixItem" name="fix"/>
     <bpmn2:property id="decision" itemSubjectRef="_decisionItem" name="decision"/>
+    <bpmn2:property id="attempts" itemSubjectRef="_attemptsItem" name="attempts"/>
+    <!-- sid: the persisted Claude session id; written by each ai task so the whole
+         flow shares ONE conversation (diagnose->fix->retries->decide) and a human
+         can re-attach to it. humanAction: a parked human's verdict (verify|giveup). -->
+    <bpmn2:property id="sid" itemSubjectRef="_sidItem" name="sid"/>
+    <bpmn2:property id="humanAction" itemSubjectRef="_humanActionItem" name="humanAction"/>
 
     <bpmn2:startEvent id="start" name="Start">
       <bpmn2:outgoing>f1</bpmn2:outgoing>
     </bpmn2:startEvent>
     <bpmn2:sequenceFlow id="f1" sourceRef="start" targetRef="triageTask"/>
 
-    <!-- AI: Triage -->
+    <!-- AI: Triage (diagnose) -->
     <bpmn2:userTask id="triageTask" name="Triage">
       <bpmn2:incoming>f1</bpmn2:incoming>
       <bpmn2:outgoing>f2</bpmn2:outgoing>
@@ -41,12 +54,14 @@
         <bpmn2:dataInput id="triageTask_TaskNameInputX" itemSubjectRef="_taskNameItem" name="TaskName"/>
         <bpmn2:dataInput id="triageTask_GroupIdInputX" itemSubjectRef="_groupIdItem" name="GroupId"/>
         <bpmn2:dataOutput id="triageTask_outX" itemSubjectRef="_outValItem" name="out"/>
+        <bpmn2:dataOutput id="triageTask_sidX" itemSubjectRef="_sidItem" name="sid"/>
         <bpmn2:inputSet>
           <bpmn2:dataInputRefs>triageTask_TaskNameInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>triageTask_GroupIdInputX</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
         <bpmn2:outputSet>
           <bpmn2:dataOutputRefs>triageTask_outX</bpmn2:dataOutputRefs>
+          <bpmn2:dataOutputRefs>triageTask_sidX</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
       <bpmn2:dataInputAssociation>
@@ -67,17 +82,51 @@
         <bpmn2:sourceRef>triageTask_outX</bpmn2:sourceRef>
         <bpmn2:targetRef>triage</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>triageTask_sidX</bpmn2:sourceRef>
+        <bpmn2:targetRef>sid</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
       <bpmn2:potentialOwner>
         <bpmn2:resourceAssignmentExpression>
           <bpmn2:formalExpression>ai</bpmn2:formalExpression>
         </bpmn2:resourceAssignmentExpression>
       </bpmn2:potentialOwner>
     </bpmn2:userTask>
-    <bpmn2:sequenceFlow id="f2" sourceRef="triageTask" targetRef="buildTask"/>
+    <bpmn2:sequenceFlow id="f2" sourceRef="triageTask" targetRef="triageGate"/>
 
-    <!-- Jenkins: Build -->
-    <bpmn2:userTask id="buildTask" name="Build">
+    <!-- Diagnosis-based routing (reads the Triage diagnosis): fixable code/test
+         -> Fix first; not-fixable infra/registry/disk/network -> escalate to
+         Decide (skip the futile build/fix loop); else (flaky / unknown) -> just
+         re-trigger the Build. -->
+    <bpmn2:exclusiveGateway id="triageGate" name="Diagnosis?" gatewayDirection="Diverging" default="t_build">
       <bpmn2:incoming>f2</bpmn2:incoming>
+      <bpmn2:outgoing>t_fix</bpmn2:outgoing>
+      <bpmn2:outgoing>t_escalate</bpmn2:outgoing>
+      <bpmn2:outgoing>t_build</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <!-- agent-fixable -> Fix BEFORE building (fix, then build to verify) -->
+    <bpmn2:sequenceFlow id="t_fix" sourceRef="triageGate" targetRef="fixJoin">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return triage != null && triage.contains("\"fixable\": true");]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <!-- not fixable + structural/infra -> escalate straight to Decide -->
+    <bpmn2:sequenceFlow id="t_escalate" sourceRef="triageGate" targetRef="decideJoin">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return triage != null && triage.contains("\"fixable\": false") && (triage.contains("\"category\": \"infra\"") || triage.contains("\"category\": \"registry\"") || triage.contains("\"category\": \"disk\"") || triage.contains("\"category\": \"network\""));]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <!-- default (flaky-transient / unknown / test) -> re-trigger the Build -->
+    <bpmn2:sequenceFlow id="t_build" sourceRef="triageGate" targetRef="buildJoin"/>
+
+    <!-- Join: re-trigger pass (from Diagnosis) and loop-backs (from Fix) merge here -->
+    <bpmn2:exclusiveGateway id="buildJoin" name="merge" gatewayDirection="Converging">
+      <bpmn2:incoming>t_build</bpmn2:incoming>
+      <bpmn2:incoming>f_loop</bpmn2:incoming>
+      <bpmn2:incoming>h_verify</bpmn2:incoming>
+      <bpmn2:outgoing>f_build</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:sequenceFlow id="f_build" sourceRef="buildJoin" targetRef="buildTask"/>
+
+    <!-- Jenkins: Build (rebuild + wait for result) -->
+    <bpmn2:userTask id="buildTask" name="Build">
+      <bpmn2:incoming>f_build</bpmn2:incoming>
       <bpmn2:outgoing>f3</bpmn2:outgoing>
       <bpmn2:ioSpecification>
         <bpmn2:dataInput id="buildTask_TaskNameInputX" itemSubjectRef="_taskNameItem" name="TaskName"/>
@@ -115,22 +164,109 @@
         </bpmn2:resourceAssignmentExpression>
       </bpmn2:potentialOwner>
     </bpmn2:userTask>
-    <bpmn2:sequenceFlow id="f3" sourceRef="buildTask" targetRef="decideTask"/>
+    <bpmn2:sequenceFlow id="f3" sourceRef="buildTask" targetRef="buildGate"/>
 
-    <!-- AI: Decide -->
-    <bpmn2:userTask id="decideTask" name="Decide">
+    <!-- Gateway: build OK? -->
+    <bpmn2:exclusiveGateway id="buildGate" name="Build OK?" gatewayDirection="Diverging" default="g_decide">
       <bpmn2:incoming>f3</bpmn2:incoming>
+      <bpmn2:outgoing>g_fix</bpmn2:outgoing>
+      <bpmn2:outgoing>g_decide</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <!-- not SUCCESS and under the retry cap -> Fix and loop -->
+    <bpmn2:sequenceFlow id="g_fix" sourceRef="buildGate" targetRef="fixJoin">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return !"SUCCESS".equals(buildResult) && (attempts == null ? 0 : attempts.intValue()) < 3;]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <!-- default: success, or retries exhausted -> Decide -->
+    <bpmn2:sequenceFlow id="g_decide" sourceRef="buildGate" targetRef="decideJoin"/>
+
+    <!-- Join: fix-first (from Diagnosis) and build-failed (from Build OK?) merge -->
+    <bpmn2:exclusiveGateway id="fixJoin" name="merge-fix" gatewayDirection="Converging">
+      <bpmn2:incoming>t_fix</bpmn2:incoming>
+      <bpmn2:incoming>g_fix</bpmn2:incoming>
+      <bpmn2:outgoing>f_fixin</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:sequenceFlow id="f_fixin" sourceRef="fixJoin" targetRef="fixTask"/>
+
+    <!-- AI: Fix (apply a fix for the failure) -->
+    <bpmn2:userTask id="fixTask" name="Fix">
+      <bpmn2:incoming>f_fixin</bpmn2:incoming>
+      <bpmn2:outgoing>f_fix</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="fixTask_TaskNameInputX" itemSubjectRef="_taskNameItem" name="TaskName"/>
+        <bpmn2:dataInput id="fixTask_GroupIdInputX" itemSubjectRef="_groupIdItem" name="GroupId"/>
+        <bpmn2:dataOutput id="fixTask_outX" itemSubjectRef="_outValItem" name="out"/>
+        <bpmn2:dataOutput id="fixTask_sidX" itemSubjectRef="_sidItem" name="sid"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>fixTask_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>fixTask_GroupIdInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>fixTask_outX</bpmn2:dataOutputRefs>
+          <bpmn2:dataOutputRefs>fixTask_sidX</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>fixTask_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Fix]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">fixTask_TaskNameInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>fixTask_GroupIdInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[ai]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">fixTask_GroupIdInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>fixTask_outX</bpmn2:sourceRef>
+        <bpmn2:targetRef>fix</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>fixTask_sidX</bpmn2:sourceRef>
+        <bpmn2:targetRef>sid</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:potentialOwner>
+        <bpmn2:resourceAssignmentExpression>
+          <bpmn2:formalExpression>ai</bpmn2:formalExpression>
+        </bpmn2:resourceAssignmentExpression>
+      </bpmn2:potentialOwner>
+    </bpmn2:userTask>
+    <bpmn2:sequenceFlow id="f_fix" sourceRef="fixTask" targetRef="incAttempts"/>
+
+    <!-- bump the retry counter, then loop back to Build -->
+    <bpmn2:scriptTask id="incAttempts" name="Inc Attempts" scriptFormat="http://www.java.com/java">
+      <bpmn2:incoming>f_fix</bpmn2:incoming>
+      <bpmn2:outgoing>f_loop</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[kcontext.setVariable("attempts", (kcontext.getVariable("attempts") == null ? 0 : ((Integer) kcontext.getVariable("attempts")).intValue()) + 1);]]></bpmn2:script>
+    </bpmn2:scriptTask>
+    <bpmn2:sequenceFlow id="f_loop" sourceRef="incAttempts" targetRef="buildJoin"/>
+
+    <!-- Join: escalate (from Diagnosis) and post-build (from Build OK?) merge -->
+    <bpmn2:exclusiveGateway id="decideJoin" name="merge-decide" gatewayDirection="Converging">
+      <bpmn2:incoming>t_escalate</bpmn2:incoming>
+      <bpmn2:incoming>g_decide</bpmn2:incoming>
+      <bpmn2:outgoing>f_decidein</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:sequenceFlow id="f_decidein" sourceRef="decideJoin" targetRef="decideTask"/>
+
+    <!-- AI: Decide (merge / escalate) -->
+    <bpmn2:userTask id="decideTask" name="Decide">
+      <bpmn2:incoming>f_decidein</bpmn2:incoming>
       <bpmn2:outgoing>f4</bpmn2:outgoing>
       <bpmn2:ioSpecification>
         <bpmn2:dataInput id="decideTask_TaskNameInputX" itemSubjectRef="_taskNameItem" name="TaskName"/>
         <bpmn2:dataInput id="decideTask_GroupIdInputX" itemSubjectRef="_groupIdItem" name="GroupId"/>
         <bpmn2:dataOutput id="decideTask_outX" itemSubjectRef="_outValItem" name="out"/>
+        <bpmn2:dataOutput id="decideTask_sidX" itemSubjectRef="_sidItem" name="sid"/>
         <bpmn2:inputSet>
           <bpmn2:dataInputRefs>decideTask_TaskNameInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>decideTask_GroupIdInputX</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
         <bpmn2:outputSet>
           <bpmn2:dataOutputRefs>decideTask_outX</bpmn2:dataOutputRefs>
+          <bpmn2:dataOutputRefs>decideTask_sidX</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
       <bpmn2:dataInputAssociation>
@@ -151,30 +287,95 @@
         <bpmn2:sourceRef>decideTask_outX</bpmn2:sourceRef>
         <bpmn2:targetRef>decision</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>decideTask_sidX</bpmn2:sourceRef>
+        <bpmn2:targetRef>sid</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
       <bpmn2:potentialOwner>
         <bpmn2:resourceAssignmentExpression>
           <bpmn2:formalExpression>ai</bpmn2:formalExpression>
         </bpmn2:resourceAssignmentExpression>
       </bpmn2:potentialOwner>
     </bpmn2:userTask>
-    <bpmn2:sequenceFlow id="f4" sourceRef="decideTask" targetRef="end"/>
+    <bpmn2:sequenceFlow id="f4" sourceRef="decideTask" targetRef="endGate"/>
+
+    <!-- Resolved? SUCCESS goes to normal End (RESOLVED). Not resolved does NOT
+         dead-end: it parks at a human task (durable; waits indefinitely) so a
+         person can re-attach to the same Claude session (the sid var) and continue
+         the fix, then release it (verify re-runs Build to confirm; giveup ends
+         Failed). This replaces the old straight-to-failEnd edge. -->
+    <bpmn2:exclusiveGateway id="endGate" name="Resolved?" gatewayDirection="Diverging" default="g_ok">
+      <bpmn2:incoming>f4</bpmn2:incoming>
+      <bpmn2:outgoing>g_human</bpmn2:outgoing>
+      <bpmn2:outgoing>g_ok</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:sequenceFlow id="g_human" sourceRef="endGate" targetRef="humanFixTask">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return !"SUCCESS".equals(buildResult) && (decision == null || !decision.trim().toLowerCase().startsWith("merge"));]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="g_ok" sourceRef="endGate" targetRef="end"/>
+
+    <!-- Human handoff: group=human => the worker deliberately does NOT auto-complete
+         it (it notifies + leaves it Ready). The person attaches to session `sid`,
+         fixes, then completes with out=verify|giveup. -->
+    <bpmn2:userTask id="humanFixTask" name="HumanFix">
+      <bpmn2:incoming>g_human</bpmn2:incoming>
+      <bpmn2:outgoing>fh</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="humanFixTask_TaskNameInputX" itemSubjectRef="_taskNameItem" name="TaskName"/>
+        <bpmn2:dataInput id="humanFixTask_GroupIdInputX" itemSubjectRef="_groupIdItem" name="GroupId"/>
+        <bpmn2:dataOutput id="humanFixTask_outX" itemSubjectRef="_humanActionItem" name="out"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>humanFixTask_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>humanFixTask_GroupIdInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>humanFixTask_outX</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>humanFixTask_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[HumanFix]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">humanFixTask_TaskNameInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>humanFixTask_GroupIdInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[human]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">humanFixTask_GroupIdInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>humanFixTask_outX</bpmn2:sourceRef>
+        <bpmn2:targetRef>humanAction</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:potentialOwner>
+        <bpmn2:resourceAssignmentExpression>
+          <bpmn2:formalExpression>human</bpmn2:formalExpression>
+        </bpmn2:resourceAssignmentExpression>
+      </bpmn2:potentialOwner>
+    </bpmn2:userTask>
+    <bpmn2:sequenceFlow id="fh" sourceRef="humanFixTask" targetRef="humanGate"/>
+
+    <!-- Human verdict: verify (default) -> loop back to Build to confirm the fix;
+         giveup -> Error End (Failed). -->
+    <bpmn2:exclusiveGateway id="humanGate" name="Human verdict?" gatewayDirection="Diverging" default="h_verify">
+      <bpmn2:incoming>fh</bpmn2:incoming>
+      <bpmn2:outgoing>h_giveup</bpmn2:outgoing>
+      <bpmn2:outgoing>h_verify</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:sequenceFlow id="h_giveup" sourceRef="humanGate" targetRef="failEnd">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return humanAction != null && humanAction.toLowerCase().contains("giveup");]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="h_verify" sourceRef="humanGate" targetRef="buildJoin"/>
 
     <bpmn2:endEvent id="end" name="End">
-      <bpmn2:incoming>f4</bpmn2:incoming>
+      <bpmn2:incoming>g_ok</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:endEvent id="failEnd" name="Failed">
+      <bpmn2:incoming>h_giveup</bpmn2:incoming>
+      <bpmn2:errorEventDefinition id="failErrDef" errorRef="ciUnresolved"/>
     </bpmn2:endEvent>
   </bpmn2:process>
-
-  <bpmndi:BPMNDiagram id="dia">
-    <bpmndi:BPMNPlane id="plane" bpmnElement="ci-flow">
-      <bpmndi:BPMNShape id="s_start" bpmnElement="start"><dc:Bounds height="56" width="56" x="100" y="100"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_triage" bpmnElement="triageTask"><dc:Bounds height="80" width="120" x="200" y="88"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_build" bpmnElement="buildTask"><dc:Bounds height="80" width="120" x="370" y="88"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_decide" bpmnElement="decideTask"><dc:Bounds height="80" width="120" x="540" y="88"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_end" bpmnElement="end"><dc:Bounds height="56" width="56" x="710" y="100"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="e_f1" bpmnElement="f1"><di:waypoint x="156" y="128"/><di:waypoint x="200" y="128"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_f2" bpmnElement="f2"><di:waypoint x="320" y="128"/><di:waypoint x="370" y="128"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_f3" bpmnElement="f3"><di:waypoint x="490" y="128"/><di:waypoint x="540" y="128"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_f4" bpmnElement="f4"><di:waypoint x="660" y="128"/><di:waypoint x="710" y="128"/></bpmndi:BPMNEdge>
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
 </bpmn2:definitions>

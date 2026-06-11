@@ -8,6 +8,61 @@ allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 
 Professional HarmonyOS 5 (NEXT) development skill based on [Arcana HarmonyOS](https://github.com/jrjohn/arcana-harmonyos) enterprise architecture.
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**Every task starts by cloning the complete reference project — NEVER scaffold a new HarmonyOS project from scratch:**
+
+```bash
+git clone https://github.com/jrjohn/arcana-harmonyos.git [new-project-directory]
+```
+
+1. **Clone** the reference project (command above).
+2. **Build + test the UNTOUCHED clone first** to establish a green baseline (`hvigorw assembleHap --mode module -p product=default -p module=entry`, then run the test suite) before changing anything.
+3. **Follow [0. Project Setup](#0-project-setup---critical)** to rename the bundleName/module and strip the demo pages — while KEEPING the infrastructure: auth/security layers (`core/security` HUKS), caching (`data/cache` LRU), offline/sync (`core/sync` + RelationalStore + WorkScheduler), the DI container (`core/di`), and deployment/build configs (`build-profile.json5`, `oh-package.json5`).
+4. **Add features** one at a time following the [File-by-File Feature Recipe](#file-by-file-feature-recipe).
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `reference.md` | Deep-dive architecture reference — layer responsibilities and project conventions |
+| `patterns.md` | Extended code patterns beyond those inlined in this file |
+| `patterns/mvvm-input-output.md` | Detailed MVVM Input/Output/Effect ViewModel walkthrough |
+| `examples.md` | Complete end-to-end feature examples to copy from |
+| `checklists/production-ready.md` | Pre-release checklist before declaring a feature done |
+| `verification/commands.md` | Full verification command set (superset of Quick Verification below) |
+
+---
+
+## File-by-File Feature Recipe
+
+Ordered file-by-file recipe for adding a complete feature (example: **Orders**) through all layers. Create files in this order — each step compiles against the previous ones. Paths are relative to `entry/src/main/ets/`.
+
+1. **Domain model** → `domain/models/Order.ets`
+   — Immutable class with `withX()` factory methods (no spread operators in ArkTS).
+2. **Validator** → `domain/validators/OrderValidator.ets`
+   — Pure functions returning `Result<T, AppError>` (no throw).
+3. **Repository interface** → `domain/repository/OrderRepository.ets`
+   — PURE: no HarmonyOS SDK imports; methods return `Promise<Result<T, AppError>>`.
+4. **Service** → `domain/services/OrderService.ets`
+   — Business logic coordination; only calls methods that exist on the repository interface.
+5. **DTO** → `data/api/dto/OrderDto.ets`
+   — With mapping to/from domain model.
+6. **Local source** → `data/local/OrderLocalSource.ets`
+   — RelationalStore persistence + sync status column (`SyncStatus.PENDING_*`).
+7. **Repository implementation** → `data/repository/OrderRepositoryImpl.ets`
+   — Offline-first: local source as single source of truth; mock data NEVER empty (5-10 varied items, consistent IDs).
+8. **DI registration** → `core/di/` — add `ServiceIdentifiers.ORDER_REPOSITORY` / `ORDER_SERVICE` / `ORDER_VIEW_MODEL` constants and explicit `container.bind()` / `bindSingleton()` calls.
+9. **ViewModel** → `presentation/viewmodel/OrderListViewModel.ets`
+   — Input/Output/Effect classes (class-based constants, discriminated unions), `@injectable`.
+10. **Page** → `pages/OrderListPage.ets` (+ `OrderDetailPage.ets`)
+    — `@Entry` component with Loading/Error/Empty/Content states; strings via `$r('app.string.xxx')`.
+11. **Route registration** → add `ORDER_LIST` / `ORDER_DETAIL` to `core/navigation/NavigationRoutes.ets` AND register the pages in `router_map` in `entry/src/main/module.json5`.
+12. **Unit tests** → add `OrderListViewModel` / `OrderValidator` / `OrderRepositoryImpl` hypium tests under the `entry_test` module (`/ets/test/`) and register them in `List.test`.
+13. **Verify** → build with `hvigorw assembleHap` and run the test suite; then run the Quick Verification Commands (no `any`/`unknown`/spread, no empty handlers, DI bindings present).
+
+---
+
 ## Core Architecture Principles
 
 ### Clean Architecture - Four Layers
@@ -241,7 +296,8 @@ describe('FeatureViewModel', () => {
 ### Minimum Tests Before PR
 ```bash
 # Run all tests
-hdc shell aa test -b com.example.app -m entry_test -s unittest /ets/test/List.test
+# <your.bundle.name> must match the bundleName set in AppScope/app.json5 during the §0 Project Setup rename
+hdc shell aa test -b <your.bundle.name> -m entry_test -s unittest /ets/test/List.test
 
 # Or via DevEco Studio
 # Run > Run All Tests
@@ -1120,8 +1176,8 @@ grep -rn "new Array()\|Array<.*>()" entry/src/main/ets/data/repository/ | grep -
 # 8. Check sync status tracking
 grep -rn "SyncStatus\." entry/src/main/ets/data/repository/
 
-# 9. Run all tests
-hdc shell aa test -b com.example.app -m entry_test -s unittest /ets/test/List.test
+# 9. Run all tests (<your.bundle.name> = bundleName set in AppScope/app.json5 during §0 rename)
+hdc shell aa test -b <your.bundle.name> -m entry_test -s unittest /ets/test/List.test
 
 # 10. Build verification
 hvigorw assembleHap --mode module -p product=default -p module=entry
@@ -1264,8 +1320,9 @@ grep -c "container.bind\|bindSingleton" entry/src/main/ets/core/di/*.ets
 echo "=== 5. Build Verification ===" && \
 hvigorw assembleHap --mode module -p product=default -p module=entry && echo "OK: Build passed"
 
+# <your.bundle.name> = bundleName set in AppScope/app.json5 during §0 rename
 echo "=== 6. Test Verification ===" && \
-hdc shell aa test -b com.example.app -m entry_test -s unittest /ets/test/List.test
+hdc shell aa test -b <your.bundle.name> -m entry_test -s unittest /ets/test/List.test
 ```
 
 Task is NOT complete if ANY of these checks fail.

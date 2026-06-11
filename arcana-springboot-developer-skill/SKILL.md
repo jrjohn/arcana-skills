@@ -8,6 +8,33 @@ allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 
 Professional Spring Boot development skill based on [Arcana Cloud SpringBoot](https://github.com/jrjohn/arcana-cloud-springboot) enterprise architecture.
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**EVERY task starts by cloning the complete reference project: `git clone https://github.com/jrjohn/arcana-cloud-springboot.git` — never scaffold from scratch (no Spring Initializr, no hand-rolled Gradle setup).**
+
+1. **Clone** the reference project:
+   ```bash
+   git clone https://github.com/jrjohn/arcana-cloud-springboot.git [new-project-directory]
+   ```
+2. **Establish a green baseline** — build and test the UNTOUCHED clone first, before changing anything:
+   ```bash
+   ./gradlew clean build && ./gradlew test
+   ```
+   If the pristine clone is not green, fix the environment (JDK, network) before touching code.
+3. **Rename + strip demo endpoints** — follow [0. Project Setup - CRITICAL](#0-project-setup---critical) to rename the project/package and delete the example User Management API, while explicitly **KEEPING infrastructure**: gRPC server setup, DI container/config, security/auth (`config/`, `security/`), deployment modes/configs (`deployment/`), and the proto toolchain (`src/main/proto/` + `generateProto`).
+4. **Add features** per the [File-by-File Feature Recipe — New Entity End-to-End](#file-by-file-feature-recipe--new-entity-end-to-end), one entity at a time, keeping the build green after each layer.
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `reference.md` | Full API/config reference — exact annotations, properties, and options |
+| `patterns.md` | Architecture & code patterns beyond what this file covers |
+| `patterns/service-layer.md` | Service layer deep dive — transactions, orchestration, interfaces vs impls |
+| `examples.md` | Complete worked examples to copy-adapt |
+| `checklists/production-ready.md` | Pre-ship checklist before declaring a task done |
+| `verification/commands.md` | Verification/grep commands for wiring and stub audits |
+
 ---
 
 ## Quick Reference Card
@@ -444,6 +471,20 @@ Only modify the following required items:
 - Rename package directory structure under `src/main/java/`
 - Update application name in `application.yml`
 
+⚠️ **Rename warning**: the Java package rename touches **every import and `package` declaration** in the project — a partial rename leaves a broken mix of `com.arcana` and new-package references. Use an IDE refactor (IntelliJ → Refactor → Rename Package), or do it mechanically:
+```bash
+# 1. Rewrite every occurrence of the base package (macOS sed; on Linux drop the '')
+grep -rl 'com.arcana' src/ | xargs sed -i '' 's/com.arcana/<new.package>/g'
+
+# 2. Move directories to match the new package path
+mkdir -p src/main/java/<new/package/path>
+git mv src/main/java/com/arcana/* src/main/java/<new/package/path>/
+# (repeat for src/test/java/com/arcana/ and src/main/proto java_package options)
+
+# 3. Verify with a clean build — must be green before continuing
+./gradlew clean build
+```
+
 **Step 4**: Clean up example code
 The cloned project contains example API (e.g., Arcana User Management). Clean up and replace with new project business logic:
 
@@ -779,7 +820,7 @@ arcana-cloud-springboot/
 └── plugins/                  # Sample plugins
 ```
 
-### 2. Dual-Protocol Support (gRPC + REST)
+### 3. Dual-Protocol Support (gRPC + REST)
 
 #### gRPC Service Definition
 ```protobuf
@@ -923,7 +964,7 @@ public class UserController {
 }
 ```
 
-### 3. OSGi Plugin System
+### 4. OSGi Plugin System
 
 #### Plugin Interface
 ```java
@@ -1054,7 +1095,7 @@ public class PluginRuntimeManager {
 }
 ```
 
-### 4. Security Configuration
+### 5. Security Configuration
 
 ```java
 @Configuration
@@ -1140,7 +1181,7 @@ public class JwtTokenProvider {
 }
 ```
 
-### 5. Resilience with Circuit Breaker
+### 6. Resilience with Circuit Breaker
 
 ```java
 @Service
@@ -1191,7 +1232,7 @@ resilience4j:
 */
 ```
 
-### 6. Server-Side Rendering
+### 7. Server-Side Rendering
 
 ```java
 @Service
@@ -1227,6 +1268,47 @@ public class SSREngine {
     }
 }
 ```
+
+## File-by-File Feature Recipe — New Entity End-to-End
+
+Concrete ordered recipe for adding a new entity (example: `Order`) through ALL layers. Paths use the reference base package `com.arcana` — substitute your renamed package. This template documents no Flyway/Liquibase migration toolchain; persistence follows the existing datasource config in `application.yml` (H2 for the `test` profile).
+
+Create files in this order, keeping `./gradlew clean build` green after each layer:
+
+1. **Domain model** — `src/main/java/com/arcana/model/Order.java`
+   Plain domain model (builder pattern as in `DailyReport.builder()` examples). All required fields defined here first — DTOs and mock data must match it exactly.
+2. **DTOs + mapper** — `src/main/java/com/arcana/dto/OrderDto.java`
+   Static factory mapper `OrderDto.from(Order)` (same style as `UserDto.from(user)` — no MapStruct in this architecture). Also `CreateOrderRequest` / `UpdateOrderRequest` with validation annotations and `toEntity()`.
+3. **Repository interface** — `src/main/java/com/arcana/repository/OrderRepository.java`
+4. **Repository impl** — `src/main/java/com/arcana/repository/OrderRepositoryImpl.java`
+   Implement EVERY interface method. Zero-Empty Policy applies: stubs return realistic varied mock data (≥7 items for list/chart data), never `List.of()` / `emptyList()`. No separate DAO layer exists in this architecture — Repository is the data-access boundary.
+5. **Service interface** — `src/main/java/com/arcana/service/OrderService.java`
+6. **Service impl** — `src/main/java/com/arcana/service/OrderServiceImpl.java`
+   `@Service` class; place `@Transactional` on the ServiceImpl methods (transaction boundary lives in the Service layer, not Controller or Repository).
+7. **REST controller** — `src/main/java/com/arcana/controller/OrderController.java`
+   `@RestController` + `@RequestMapping("/api/v1/orders")`, `@Valid` on every `@RequestBody`, `@PreAuthorize` on non-public endpoints. Every Service method called here MUST exist in step 5/6.
+8. **gRPC proto** — `src/main/proto/order.proto`
+   `service OrderService { rpc ... }` with `option java_package = "com.arcana.grpc.order";` then regenerate:
+   ```bash
+   ./gradlew generateProto
+   ```
+9. **gRPC service impl** — `src/main/java/com/arcana/grpc/OrderGrpcService.java`
+   `@GrpcService` class extending the generated `OrderServiceGrpc.OrderServiceImplBase`; implement ALL rpc methods (rpc count must equal `@Override` count) and wire to the existing `OrderService` from step 5.
+10. **DI wiring** — none needed explicitly: Spring component scan picks up `@RestController` / `@Service` / `@Repository`, and `@GrpcService` is registered by the gRPC starter. Constructor injection via `@RequiredArgsConstructor`.
+11. **Mock/seed data** — `src/test/java/com/arcana/mock/MockOrderRepository.java`
+    `@Repository` + `@Profile("test")` with a static seed list (see `MockUserRepository` pattern); reusable `createMockOrder(...)` factory helpers for complex objects.
+12. **Unit tests per layer** (locations per the Test Directory Structure):
+    - `src/test/java/com/arcana/controller/OrderControllerTest.java` — `@WebMvcTest` + MockMvc (target 80%+)
+    - `src/test/java/com/arcana/service/OrderServiceTest.java` — `@ExtendWith(MockitoExtension.class)` (target 90%+)
+    - `src/test/java/com/arcana/repository/OrderRepositoryTest.java` (target 75%+)
+    - `src/test/java/com/arcana/grpc/OrderGrpcServiceTest.java`
+13. **Coverage check**:
+    ```bash
+    ./gradlew test jacocoTestReport
+    open build/reports/jacoco/test/html/index.html
+    ```
+
+---
 
 ## API Wiring Verification Guide
 
@@ -1549,6 +1631,8 @@ public class ItemController {
 ---
 
 ## Tech Stack Reference
+
+Versions track the reference repo — check build.gradle before assuming.
 
 | Technology | Recommended Version |
 |------------|---------------------|

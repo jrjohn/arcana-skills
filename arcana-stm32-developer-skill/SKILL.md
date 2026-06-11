@@ -10,6 +10,27 @@ Professional STM32/FreeRTOS/C++14 embedded development skill based on [Arcana Em
 
 ---
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**Never start an STM32 project from scratch.** Clone the validated reference project and adapt it — the linker script, FreeRTOS config, and Observable infrastructure are production-validated and easy to break by hand-assembly.
+
+1. **Clone first** — follow [Project Setup - CRITICAL](#project-setup---critical) below for the full clone/re-init/KEEP/REPLACE procedure.
+2. **Build the untouched clone first** — establish a green `make` + `arm-none-eabi-size` baseline BEFORE changing anything. If the pristine clone doesn't build, fix your toolchain (not the project).
+3. **Then adapt** — replace only the example services/models listed in Project Setup; keep the core architecture files.
+
+### Supporting files — load on demand
+
+| File | When to load |
+|------|--------------|
+| `patterns/observable-pattern.md` | Implementing or debugging the Observable/dispatcher pattern |
+| `patterns.md` | General architecture patterns overview |
+| `examples.md` | Concrete code examples for services, models, observers |
+| `checklists/production-ready.md` | Pre-release / production readiness review |
+| `verification/commands.md` | Build, size, and verification commands |
+| `reference.md` | API and configuration reference details |
+
+---
+
 ## Quick Reference Card
 
 ### New Observer Checklist:
@@ -794,8 +815,8 @@ grep -rn "StackType_t\|configMINIMAL_STACK_SIZE\|stack_size\|stackSize" Core/
 # 10. Verify no floating point in ISR context
 grep -rn "float\|double" Core/Src/*IRQ* Core/Src/*Handler*
 
-# 11. Build the project
-make -j$(nproc) 2>&1 | tail -20
+# 11. Build the project (portable core count: Linux nproc / macOS sysctl)
+make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu) 2>&1 | tail -20
 ```
 
 CRITICAL: All heap allocation checks MUST return empty. Any use of `malloc`, `new`, `std::vector`, or `std::string` in application code is a critical defect.
@@ -855,10 +876,13 @@ Only modify the following:
 
 **Step 5**: Build and verify
 ```bash
-make -j$(nproc)
+# Portable core count: nproc on Linux, hw.ncpu on macOS
+make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
 arm-none-eabi-size build/*.elf
 # Verify: RAM < 6,144 bytes, Flash < 58,982 bytes
 ```
+> Note: if the project is built inside STM32CubeIDE (managed build), the IDE drives the
+> build itself — the `make` invocation above only applies to the Makefile/CLI build path.
 
 ### Prohibited Actions
 - **DO NOT** use `malloc`, `new`, or any dynamic allocation in application code

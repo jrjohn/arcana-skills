@@ -8,6 +8,64 @@ allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 
 Professional Android development skill based on [Arcana Android](https://github.com/jrjohn/arcana-android) enterprise architecture.
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**Every task starts by cloning the complete reference project — NEVER scaffold a new Android project from scratch:**
+
+```bash
+git clone https://github.com/jrjohn/arcana-android.git [new-project-directory]
+```
+
+1. **Clone** the reference project (command above).
+2. **Build + test the UNTOUCHED clone first** to establish a green baseline (`./gradlew clean build` then `./gradlew test`) before changing anything.
+3. **Follow [0. Project Setup](#0-project-setup---critical)** to rename the project/package and strip the demo screens — while KEEPING the infrastructure: auth/security layers (encrypted SharedPreferences token storage), caching (`core/cache`), offline/sync (`sync/` + Room `AppDatabase`), the DI container (`di/` Hilt modules), and deployment/build configs (Gradle setup, `gradle/libs.versions.toml`).
+4. **Add features** one at a time following the [File-by-File Feature Recipe](#file-by-file-feature-recipe).
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `reference.md` | Deep-dive architecture reference — layer responsibilities and project conventions |
+| `patterns.md` | Extended code patterns beyond those inlined in this file |
+| `patterns/mvvm-input-output.md` | Detailed MVVM Input/Output ViewModel walkthrough |
+| `examples.md` | Complete end-to-end feature examples to copy from |
+| `checklists/production-ready.md` | Pre-release checklist before declaring a feature done |
+| `verification/commands.md` | Full verification command set (superset of Quick Verification below) |
+
+---
+
+## File-by-File Feature Recipe
+
+Ordered file-by-file recipe for adding a complete feature (example: **Orders**) through all layers. Create files in this order — each step compiles against the previous ones. Paths are relative to `app/src/main/java/<your/package>/`.
+
+1. **Domain model** → `domain/model/Order.kt`
+   — Immutable data class, all fields from Spec.
+2. **Repository interface** → `domain/repository/OrderRepository.kt`
+   — `suspend fun` methods returning `Result<T>` / `Flow<T>` of Domain models.
+3. **Service** → `domain/service/OrderService.kt`
+   — Business rules and validation; only calls methods that exist on the repository interface.
+4. **Room entity** → `data/local/entity/OrderEntity.kt`
+   — With `toDomain()` / `toEntity()` mapping and `syncStatus` field.
+5. **DAO** → `data/local/dao/OrderDao.kt` — then register the entity + DAO in `data/local/AppDatabase.kt`.
+6. **DTO + API** → `data/remote/dto/OrderDto.kt`, `data/remote/api/OrderApi.kt`.
+7. **Repository implementation** → `data/repository/OrderRepositoryImpl.kt`
+   — Offline-first: Room as single source of truth, schedule background sync.
+8. **Mock repository** → `data/repository/mock/MockOrderRepository.kt`
+   — NEVER return `emptyList()`/null; 5-10 varied items, `delay()` latency, IDs consistent with other repositories.
+9. **DI registration** → `di/RepositoryModule.kt` — `@Binds` the mock (development) or real implementation.
+10. **ViewModel** → `ui/screens/orders/OrderListViewModel.kt`
+    — `@HiltViewModel`, Input/Output pattern + Effect channel.
+11. **Screen** → `ui/screens/orders/OrderListScreen.kt` (+ `OrderDetailScreen.kt`)
+    — Loading/Error/Empty/Content states; stateless content composable.
+12. **Route** → `nav/NavRoutes.kt` — add `Orders` / `OrderDetail` route objects.
+13. **NavGraph** → `nav/NavGraph.kt` — `composable()` for each route; wire ALL `onNavigate*` callbacks (no default `= {}` left unwired).
+14. **Unit tests** → `app/src/test/.../ui/screens/orders/OrderListViewModelTest.kt`, `app/src/test/.../data/repository/OrderRepositoryTest.kt`.
+15. **UI tests** → `app/src/androidTest/.../ui/screens/OrderListScreenTest.kt`.
+
+Then run the Quick Verification Commands — route count must match composable count, and no empty mock lists may remain.
+
+---
+
 ## Core Architecture Principles
 
 ### Clean Architecture - Three Layers
@@ -1033,6 +1091,8 @@ Only modify the following required items:
 - Rename package directory structure under `app/src/main/java/`
 - Update package-related settings in `AndroidManifest.xml`
 
+⚠️ Renaming the package touches every `import` statement, `AndroidManifest.xml`, and the Hilt DI modules — do it via IDE refactor (Android Studio: Refactor > Rename on the package), NOT with `sed`/text replacement.
+
 **Step 4**: Clean up example code
 The cloned project contains example UI (e.g., Arcana User Management). Clean up and replace with new project screens:
 
@@ -1877,8 +1937,8 @@ fun String.isValidEmail(): Boolean =
 
 | Technology | Recommended Version |
 |------------|---------------------|
-| Kotlin | 1.9+ |
-| Compose BOM | 2024.01+ |
+| Kotlin | 2.x (K2) |
+| Compose BOM | see `gradle/libs.versions.toml` in the reference repo for current versions |
 | Hilt | 2.50+ |
 | Room | 2.6+ |
 | Ktor | 2.3+ |

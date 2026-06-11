@@ -9,7 +9,83 @@ allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 Professional ESP32-S3 IoT development skill based on [Arcana Embedded ESP32](https://github.com/jrjohn/arcana-embedded-esp32) production-ready IoT command platform.
 
 **Target**: ESP32-S3 (512KB SRAM, 8MB PSRAM, 16MB Flash)
-**Stack**: C++17, ESP-IDF v5.5, FreeRTOS, Bluedroid BLE, AES-256-CCM, nanopb, MQTT5
+**Stack**: C++17, ESP-IDF v6.x, FreeRTOS, Bluedroid BLE, AES-256-CCM, nanopb, MQTT5
+
+---
+
+## ⚡ Workflow — Always Start From the Reference Project
+
+**Never start an ESP32 project from scratch or from `idf.py create-project`.** Clone the validated reference project [arcana-embedded-esp32](https://github.com/jrjohn/arcana-embedded-esp32) and adapt it — the BLE/crypto/command pipeline, partition layout, and sdkconfig defaults are hardware-validated and easy to break by reassembling them by hand.
+
+1. **Clone first** — follow [§0. Project Setup — CRITICAL](#0-project-setup--critical) below.
+2. **Build the untouched clone first** — establish a green `idf.py build` baseline BEFORE changing anything. If the pristine clone doesn't build, fix your toolchain (not the project).
+3. **Then adapt** — replace only the demo handlers/sensors listed in §0; keep the core infrastructure.
+
+### Supporting files — load on demand
+
+| File | When to load |
+|------|--------------|
+| `patterns/command-pipeline.md` | Implementing or debugging the command dispatch/codec/crypto pipeline |
+| `patterns.md` | General architecture patterns overview |
+| `examples.md` | Concrete code examples for handlers, sensors, BLE |
+| `checklists/production-ready.md` | Pre-release / production readiness review |
+| `verification/commands.md` | Build, size, and on-target verification commands |
+| `reference.md` | API and protocol reference details |
+
+---
+
+## 0. Project Setup — CRITICAL
+
+IMPORTANT: This reference project has been hardware-validated (BLE + WiFi coexistence, AES-256-CCM + ECDH command channel, partition table, per-target sdkconfig). NEVER rebuild the crypto pipeline, frame protocol, or partition layout from scratch — clone and adapt.
+
+**Step 1**: Clone the reference project
+```bash
+git clone https://github.com/jrjohn/arcana-embedded-esp32.git [new-project-directory]
+cd [new-project-directory]
+```
+
+**Step 2**: Reinitialize Git
+```bash
+rm -rf .git
+git init
+git add .
+git commit -m "Initial commit from arcana-embedded-esp32 template"
+```
+
+**Step 3**: Rename the project
+- Top-level `CMakeLists.txt`: change `project(...)` name
+- `sdkconfig.defaults` (and any per-target `sdkconfig.defaults.esp32s3`): update project-specific defaults (device name, BLE advertised name, MQTT client id prefix, etc.)
+- Do NOT delete per-target defaults files — `sdkconfig.defaults.esp32s3` carries flash size, partition table, and PSRAM/SPI settings the board needs
+
+**Core infrastructure to KEEP** (do not delete or rewrite):
+- `components/CommandService/` — dispatcher, factory, codec, ArcanaFrame, CryptoEngine (AES-256-CCM), SessionManager, KeyExchange (ECDH P-256)
+- `components/BleService/` — GAP/GATT server+client facade
+- `components/ObservableSensor/` — Observable / StaticObservable / EventQueue infrastructure
+- `partitions.csv` + partition-table Kconfig — validated OTA layout
+- FatFs file ports (raw-FatFs `FatFsFilePort` for SD storage) — required for files >2GB (stdio ports break at 2^31, see Common Issues)
+- `sdkconfig.defaults` + per-target defaults — validated BLE/WiFi/mbedTLS/PSRAM config
+
+**Demo code to REPLACE with your application**:
+- Demo command handlers (System/Sensor demo clusters in `CommandFactory` registration) — keep the Ping/KeyExchange plumbing, replace business handlers
+- Demo sensors / publishers built on Observable — replace with your sensor services
+- Demo `.proto` payload messages — extend `command.proto` / `command.options` for your payloads
+
+**Step 4**: Build and verify (baseline BEFORE any changes)
+```bash
+. ~/esp/esp-idf/export.sh        # or ~/.espressif/v6.x/esp-idf/export.sh
+rm -f sdkconfig                  # avoid stale-config trap (see below)
+idf.py set-target esp32s3
+idf.py build
+echo "exit=$?"                   # capture exit code explicitly — `| tail` masks failures
+```
+
+> **Stale sdkconfig trap**: a reused `sdkconfig` from another target/flash-size makes the board crash-loop at peripheral init and look like a code bug. Always `rm -f sdkconfig && idf.py set-target esp32s3` so the build composes `sdkconfig.defaults` + `sdkconfig.defaults.esp32s3` fresh. Keep per-deployment secrets (e.g. `CONFIG_CMD_ENCRYPTION_PSK`) only in the git-ignored `sdkconfig`, never in `sdkconfig.defaults`.
+
+### Prohibited Actions
+- **DO NOT** modify `partitions.csv` offsets/sizes without recalculating OTA slot fit
+- **DO NOT** weaken crypto config (CCM, ECDH, session limits) in sdkconfig
+- **DO NOT** re-implement ArcanaFrame / CryptoEngine — extend via new commands instead
+- **DO NOT** commit real PSK/credentials to `sdkconfig.defaults`
 
 ---
 
@@ -202,7 +278,7 @@ Mobile App                          ESP32-S3
     |-- BLE Write Characteristic ------>|
     |                                   | 1. GATT Server receives raw bytes
     |                                   | 2. ArcanaFrame::parse() validates
-    |                                   |    Magic(0xAR CA) + CRC-16
+    |                                   |    Magic + CRC-16
     |                                   | 3. AES-256-CCM decrypt payload
     |                                   |    (verify 8B auth tag)
     |                                   | 4. nanopb decode to Command struct
@@ -633,30 +709,57 @@ public:
 
 ---
 
+## File-by-File Feature Recipe — New Command End-to-End
+
+Concrete ordered steps to add one new command (e.g. `Sensor::Threshold`, cluster `0x01` / command `0x03`). Verify file paths against the reference repo before editing.
+
+1. **Command ID** — `components/CommandService/include/CommandDefs.h`: add the cluster:command pair (and any new `CommandStatus` codes). Pick the next free command id within the cluster; never reuse a retired id.
+2. **Payload schema** — `components/CommandService/proto/command.proto`: add request/response message fields. `command.options`: add `max_size` for EVERY bytes/string field (unbounded fields fail the nanopb review gate).
+3. **Regenerate nanopb** — run the project's nanopb generation (build does it automatically if wired into CMake; otherwise `nanopb_generator` on the `.proto`). Confirm the regenerated `command.pb.h/.c` diff contains your fields.
+4. **Handler file** — new `components/CommandService/src/<feature>_handler.cpp` (+ header in `include/`): subclass/implement the handler `execute(const CommandRequest&, CommandResponse&)`, return a specific `CommandStatus` for every failure path. Add the new `.cpp` to the component `CMakeLists.txt`.
+5. **Registration** — `components/CommandService/src/command_factory.cpp` (`CommandFactory::registerAll`): `dispatcher.registerHandler(cluster, command, <Handler>::execute);`
+6. **BLE GATT exposure (only if a new characteristic is needed)** — most commands ride the existing command-write/response-notify characteristics and need NOTHING here. If a new characteristic is required: `ble_uuids.h` + `gatt_db[]` entry + handler in `GattServer` (see New BLE Service Checklist).
+7. **Host test script** — extend the host-side command client (`tools/ble_crypto_test.py` for BLE, `tools/mqtt_crypto_test.py` for MQTT) with the new cluster/command + payload; round-trip against real hardware (ECDH session → encrypted command → check response status). Remember: host mbedTLS differs from target — crypto-path changes MUST be verified on hardware.
+8. **Build + size check**:
+   ```bash
+   idf.py build; echo "exit=$?"          # don't let `| tail` mask failures
+   idf.py size-components | grep -E "DRAM|Total"   # stay within the memory budget table
+   ```
+   Then flash and watch the log: `idf.py -p <port> flash monitor`.
+
+---
+
 ## Arcana Frame Protocol
 
 ### Frame Structure (9 Bytes Overhead)
 
+> **VERIFY AGAINST THE REFERENCE REPO**: the authoritative layout is `ArcanaFrame` in the
+> [arcana-embedded-esp32](https://github.com/jrjohn/arcana-embedded-esp32) repo
+> (`grep -rn "kMagic\|stream_id" components/ main/`). The layout below is the 7-byte-header
+> form used by the `build()`/`parse()` code in this document: 7B header + 2B CRC = 9B overhead.
+> The magic byte values shown are PLACEHOLDERS — read the real constants from the repo.
+
 ```
-+--------+--------+-------+-------+----------+--------+----------+
-| Byte 0 | Byte 1 | Byte 2| Byte 3| Byte 4-5 | Byte 6 | Byte N   |
-|        |        |       |       |          | to N-3 |  to N-1  |
-+--------+--------+-------+-------+----------+--------+----------+
-| Magic  | Magic  | Ver   | Flags | Length   | Payload| CRC-16   |
-| 0xAR   | 0xCA   | 0x01  |       | (LE)     |        | (LE)     |
-+--------+--------+-------+-------+----------+--------+----------+
++--------+--------+-------+-------+----------+----------+---------+----------+
+| Byte 0 | Byte 1 | Byte 2| Byte 3| Byte 4   | Byte 5-6 | Byte 7  | Byte 7+N |
+|        |        |       |       |          |          | to 6+N  | to 8+N   |
++--------+--------+-------+-------+----------+----------+---------+----------+
+| Magic0 | Magic1 | Ver   | Flags | StreamID | Length   | Payload | CRC-16   |
+| (see   | repo)  | 0x01  |       |          | (LE)     |         | (LE)     |
++--------+--------+-------+-------+----------+----------+---------+----------+
 ```
 
 ### Field Details
 
 | Field | Offset | Size | Description |
 |-------|--------|------|-------------|
-| Magic | 0 | 2B | `0xAR 0xCA` - Frame sync marker |
+| Magic | 0 | 2B | Frame sync marker (placeholder below — verify real bytes in reference repo) |
 | Version | 2 | 1B | Protocol version (currently 0x01) |
 | Flags | 3 | 1B | Bit 0: encrypted, Bit 1: compressed, Bit 2: fragmented |
-| Length | 4 | 2B | Payload length (little-endian, max 65535) |
-| Payload | 6 | N | Encrypted nanopb-serialized command data |
-| CRC-16 | 6+N | 2B | CRC-16/CCITT over bytes 0 to 5+N (little-endian) |
+| StreamID | 4 | 1B | Logical stream / fragment-group identifier |
+| Length | 5 | 2B | Payload length (little-endian, max 65535) |
+| Payload | 7 | N | Encrypted nanopb-serialized command data |
+| CRC-16 | 7+N | 2B | CRC-16/CCITT over bytes 0 to 6+N (header + payload, little-endian) |
 
 ### Flags Bit Field
 
@@ -674,11 +777,14 @@ public:
 // components/CommandService/include/ArcanaFrame.h
 class ArcanaFrame {
 public:
-    static constexpr uint16_t kMagic = 0xCAAR;  // Little-endian: AR CA
+    // PLACEHOLDER magic bytes — read the real constants from ArcanaFrame
+    // in the reference repo (the original doc used invalid literals 0xAR/0xCAAR)
+    static constexpr uint8_t kMagic0 = 0xCA;  /* see reference repo for actual magic */
+    static constexpr uint8_t kMagic1 = 0xA5;  /* see reference repo for actual magic */
     static constexpr uint8_t kVersion = 0x01;
-    static constexpr size_t kHeaderSize = 6;     // Magic+Ver+Flags+Len
+    static constexpr size_t kHeaderSize = 7;     // Magic(2)+Ver+Flags+StreamID+Len(2)
     static constexpr size_t kCrcSize = 2;
-    static constexpr size_t kOverhead = kHeaderSize + kCrcSize;  // 8B
+    static constexpr size_t kOverhead = kHeaderSize + kCrcSize;  // 9B
 
     struct ParseResult {
         bool valid;
@@ -694,8 +800,8 @@ public:
         if (out_buf_len < kOverhead + payload_len) return 0;
 
         size_t pos = 0;
-        out_buf[pos++] = 0xAR;
-        out_buf[pos++] = 0xCA;
+        out_buf[pos++] = kMagic0;
+        out_buf[pos++] = kMagic1;
         out_buf[pos++] = kVersion;
         out_buf[pos++] = flags;
         out_buf[pos++] = stream_id;
@@ -705,33 +811,33 @@ public:
         // Payload
         memcpy(&out_buf[pos], payload, payload_len);
         pos += payload_len;
-        // CRC-16 over everything before CRC
+        // CRC-16 over everything before CRC (header + payload)
         uint16_t crc = crc16_ccitt(out_buf, pos);
         out_buf[pos++] = crc & 0xFF;
         out_buf[pos++] = (crc >> 8) & 0xFF;
 
-        return pos;
+        return pos;  // kOverhead + payload_len
     }
 
     static ParseResult parse(const uint8_t* buf, size_t len) {
         ParseResult r{};
-        if (len < kOverhead + 1) return r;  // Need at least 1B payload
-        if (buf[0] != 0xAR || buf[1] != 0xCA) return r;
+        if (len < kOverhead) return r;  // Minimum: empty payload frame
+        if (buf[0] != kMagic0 || buf[1] != kMagic1) return r;
         if (buf[2] != kVersion) return r;
 
         r.flags = buf[3];
         r.stream_id = buf[4];
         r.payload_len = buf[5] | (buf[6] << 8);
 
-        if (len < kHeaderSize + 1 + r.payload_len + kCrcSize) return r;
+        if (len < kHeaderSize + r.payload_len + kCrcSize) return r;
 
-        // Verify CRC-16
-        size_t crc_offset = kHeaderSize + 1 + r.payload_len;
+        // Verify CRC-16 over header + payload
+        size_t crc_offset = kHeaderSize + r.payload_len;
         uint16_t expected = buf[crc_offset] | (buf[crc_offset + 1] << 8);
         uint16_t actual = crc16_ccitt(buf, crc_offset);
         if (expected != actual) return r;
 
-        r.payload = &buf[kHeaderSize + 1];
+        r.payload = &buf[kHeaderSize];
         r.valid = true;
         return r;
     }
@@ -763,6 +869,19 @@ private:
 | Key Derivation | HKDF-SHA256 | 32B output, context-specific info |
 | Session ID | Random | 4B per connection |
 | Nonce Counter | Monotonic | Per-session, never reused |
+
+> ⚠️ **IDF v6 / mbedTLS 4 HKDF TRAP**: do NOT implement the HKDF/HMAC step with the
+> `mbedtls_md` HMAC API (or `mbedtls_hkdf`, which uses it). On ESP-IDF v6 / mbedTLS 4.x,
+> `mbedtls_md`-based HMAC dispatches through PSA Crypto and **fails at runtime when
+> `psa_crypto_init()` has not run** — every KeyExchange returns status `0xFF`
+> ("HKDF failed"). `mbedtls_ccm` and the raw `mbedtls_sha256` primitive are NOT PSA-gated.
+> **Fix**: implement HMAC-SHA256 manually (RFC 2104 ipad/opad) over raw `mbedtls_sha256`,
+> then build HKDF extract/expand on top of it.
+> Two extra gotchas: (1) host tests linking system mbedTLS 2.28 (no PSA) will pass while
+> the target fails — this regression is invisible to host CI; (2) call
+> `mbedtls_sha256_starts/update/finish` as bare statements without `== 0` return checks —
+> they return `int` on mbedTLS 4.x but `void` in 2.28 deprecated wrappers, so checking the
+> return value breaks the host build.
 
 ### ECDH Key Exchange Flow
 
@@ -1178,6 +1297,10 @@ CONFIG_MBEDTLS_AES_USE_INTERRUPT=y
 CONFIG_MBEDTLS_CCM_C=y
 CONFIG_MBEDTLS_ECDH_C=y
 CONFIG_MBEDTLS_ECP_DP_SECP256R1_ENABLED=y
+# NOTE: CONFIG_MBEDTLS_HKDF_C enables mbedtls_hkdf(), but on IDF v6 / mbedTLS 4
+# it goes through PSA-gated mbedtls_md HMAC and fails at runtime (status 0xFF)
+# unless psa_crypto_init() ran. Prefer handwritten HMAC over raw mbedtls_sha256
+# (see HKDF trap in Security Architecture).
 CONFIG_MBEDTLS_HKDF_C=y
 
 # MQTT
@@ -1234,7 +1357,7 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 
 ### Protocol Review
 
-- [ ] Frame Magic bytes verified (0xAR 0xCA)
+- [ ] Frame Magic bytes verified (per `ArcanaFrame` constants in the reference repo)
 - [ ] CRC-16 computed over header + payload (not including CRC itself)
 - [ ] Length field is little-endian
 - [ ] nanopb `.options` max_size set for all bytes/string fields
@@ -1268,6 +1391,18 @@ conn_params.min_int = 0x10;  // 20ms
 **Symptom**: Decryption succeeds but produces garbage plaintext.
 **Cause**: Nonce counter not incremented after encrypt/decrypt, or counter reset on reconnect without new key exchange.
 **Fix**: Always increment `nonce_counter++` after every encrypt AND decrypt. Force new ECDH on reconnect.
+
+### Issue: HKDF / Key Exchange Fails with Status 0xFF on IDF v6
+
+**Symptom**: Every `Security::KeyExchange` command fails at runtime (`HKDF failed`, response status `0xFF`); AES-CCM itself works fine; host unit tests are green.
+**Cause**: HMAC implemented via the `mbedtls_md` API (directly or through `mbedtls_hkdf`). On IDF v6 / mbedTLS 4.x this dispatches through PSA Crypto, which errors when `psa_crypto_init()` has not run. Host tests linking mbedTLS 2.28 (no PSA) cannot catch it.
+**Fix**: Handwritten HMAC-SHA256 (RFC 2104 ipad/opad) over the raw `mbedtls_sha256` primitive, with HKDF extract/expand on top. Call `mbedtls_sha256_starts/update/finish` as bare statements (no `== 0` checks — they are `void` on mbedTLS 2.28 host builds).
+
+### Issue: SD Card Files Silently Truncated at Exactly 2GB
+
+**Symptom**: Daily log/data files on SD cap at exactly 2,147,483,648 bytes (2^31); writes appear to succeed but the file stops growing; reads past 2GB return garbage or fail.
+**Cause**: stdio file ports (`fopen`/`fseek`/`ftell`) use signed 32-bit `long` offsets on ESP32 — `size()`/`seek()` break past 2^31.
+**Fix**: Use the raw-FatFs file port (`FatFsFilePort`: `f_open`/`f_lseek`/`f_read`/`f_write` with 64-bit `FSIZE_t`) from the reference project for any file that can exceed 2GB. FAT32 then allows up to 4GB per file. Do NOT attempt exFAT on ESP-IDF: it has no exFAT Kconfig and flipping `FF_FS_EXFAT=1` in the bundled ffconf fails to build — it requires vendoring the whole fatfs component.
 
 ### Issue: nanopb Buffer Overflow
 
@@ -1383,12 +1518,12 @@ arcana-embedded-esp32/
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| ESP-IDF | v5.5 | SDK & build system |
+| ESP-IDF | v6.x (e.g. v6.0.1) | SDK & build system |
 | C++ | 17 | Application language |
 | ESP32-S3 | N16R8 | MCU (dual-core Xtensa LX7, 240MHz) |
-| FreeRTOS | 10.5.1 | RTOS kernel (SMP) |
+| FreeRTOS | ESP-IDF bundled | RTOS kernel (SMP) |
 | Bluedroid | ESP-IDF built-in | BLE stack (GAP + GATT + SMP) |
-| mbedTLS | 3.x (ESP-IDF) | AES-256-CCM, ECDH P-256, HKDF |
+| mbedTLS | 4.x (ESP-IDF v6, PSA-gated `mbedtls_md` — see HKDF trap) | AES-256-CCM, ECDH P-256, HKDF |
 | nanopb | 0.4.x | Protobuf for embedded (no heap) |
 | MQTT | v5.0 | Cloud connectivity |
 | CMake | 3.24+ | Build system |
@@ -1434,8 +1569,8 @@ When handling ESP32-S3 development tasks, follow these principles:
 ### Quick Verification Commands
 
 ```bash
-# 1. Build project
-idf.py build 2>&1 | tail -20
+# 1. Build project (capture exit code — `| tail` would mask a failed build)
+idf.py build > /tmp/build.log 2>&1; echo "exit=$?"; tail -20 /tmp/build.log
 
 # 2. Check DRAM usage
 idf.py size-components | grep -E "DRAM|Total"

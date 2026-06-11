@@ -10,6 +10,31 @@ Professional React development skill based on [Arcana React](https://github.com/
 
 ---
 
+## ⚡ Workflow — Always Start From the Reference Project
+
+**Every task starts by cloning the complete reference project — NEVER scaffold from scratch (no `create-react-app` / `vite create`):**
+
+```bash
+git clone https://github.com/jrjohn/arcana-react.git [new-project-directory]
+```
+
+1. **Clone** the reference project (command above).
+2. **Build + test the UNTOUCHED clone first** — `npm install && npm run build && npm run test` must be green before any modification (known-good baseline).
+3. Follow [0. Project Setup](#0-project-setup---critical) to rename the project and strip demo code — **KEEP the infrastructure**: auth (guards/interceptors), 4-layer caching, offline/sync, security layers, DI/core (Context providers), router skeleton.
+4. Add features following the [File-by-File Feature Recipe](#file-by-file-feature-recipe) below.
+
+### Supporting files — load on demand
+
+| File | When to read |
+|------|--------------|
+| `patterns.md` | Detailed design patterns beyond the core examples in this file |
+| `patterns/mvvm-input-output.md` | Deep-dive on the MVVM Input/Output/Effect ViewModel pattern |
+| `examples.md` | Full working code examples for complete features |
+| `checklists/production-ready.md` | Pre-release production & code review checklists |
+| `verification/commands.md` | Complete catalog of verification bash commands |
+
+---
+
 ## Quick Reference Card
 
 ### New Screen Checklist:
@@ -39,6 +64,43 @@ Professional React development skill based on [Arcana React](https://github.com/
 | Navigation crash | Compare routes.tsx paths vs component imports |
 | Button does nothing | `grep -rn "onClick={undefined}\\|onClick={() => {}}" src/` |
 | Data not loading | `grep -rn "throw.*NotImplemented\\|TODO" src/data/` |
+
+---
+
+## File-by-File Feature Recipe
+
+Create files in this order when adding a new feature (example: `project`):
+
+```
+1. Model              -> domain/models/project.model.ts
+2. Validator          -> domain/validators/project.validator.ts
+3. Service Interface  -> domain/services/project.service.ts
+4. Service Impl       -> domain/services/project.service.impl.ts
+5. Repository Interface -> domain/repositories/project.repository.ts
+6. Repository Impl    -> data/repositories/project.repository.impl.ts
+7. DTO                -> data/remote/dtos/project.dto.ts
+8. Mapper             -> data/remote/mappers/project.mapper.ts
+9. Mock Repository    -> data/repositories/mock/mock-project.repository.ts
+10. Provider Binding  -> core/providers/RepositoryProvider.tsx (+ useProjectRepository hook)
+11. ViewModel Hook    -> presentation/pages/projects/useProjectViewModel.ts
+12. Component         -> presentation/pages/projects/ProjectPage.tsx
+13. NavGraph Methods  -> core/services/nav-graph.service.ts (toProjectList, toProjectDetail)
+14. Route             -> router/routes.tsx (path + element)
+15. Tests             -> useProjectViewModel.test.ts + service/repository tests
+```
+
+Step notes:
+- **1-2**: Model is a plain TypeScript interface; validator is a pure function module (no React imports).
+- **3-6**: Service depends on the repository INTERFACE (step 5), never the impl. Repository impl wraps the 4-layer cache + offline sync.
+- **7-8**: DTO mirrors the API payload exactly; mapper converts DTO <-> domain model. Never leak DTOs above the data layer.
+- **9**: Mock data must be realistic and non-empty (see Mock Data Rules — NEVER return `[]`).
+- **10**: Register both impl and mock in `RepositoryProvider.tsx` (mock for DEV) and export a `useProjectRepository()` hook.
+- **11**: Hook follows the Input/Output/Effect pattern (discriminated-union `Input`, memoized `Output`, RxJS `Subject` for effects).
+- **12**: Wrap with `React.memo`, render Loading/Error/Empty/Content states, subscribe to `effect$` in `useEffect`.
+- **13-14**: Every route added in `routes.tsx` MUST get a matching NavGraph method, and every navigation callback prop must be bound in the parent.
+- **15**: ViewModel hook tests first (90%+ target), then service (85%+) and repository (80%+) tests.
+
+Verify after wiring: `npm run type-check && npm run build && npm run test`.
 
 ---
 
