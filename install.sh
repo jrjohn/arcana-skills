@@ -51,6 +51,7 @@ SKILLS=(
     "daily-ci-agent-skill"
     "arcana-devops-skill"
     "arcana-ai-agent-flow-skill"
+    "arch-qube-skill"
 )
 
 # Config paths
