@@ -90,6 +90,12 @@ Interactive mode shows the same status table as the bash version (`[+] new`, `[â
 | `python-developer-skill` | Python/Flask development guide (gRPC-first, Clean Architecture) |
 | `springboot-developer-skill` | Spring Boot development guide (Dual-protocol, OSGi Plugin System) |
 | `windows-developer-skill` | Windows desktop development guide (WinUI 3, CRDT-based offline sync) |
+| `go-developer-skill` | Go cloud development guide based on Arcana Cloud Go enterprise architecture (Clean Architecture, gRPC-first, dual-protocol) |
+| `rust-developer-skill` | Rust cloud development guide based on Arcana Cloud Rust enterprise architecture (Axum/tokio, Clean Architecture, gRPC-first) |
+| `vue-developer-skill` | Vue development guide based on Arcana Vue enterprise architecture (Clean Architecture, Offline-First, MVVM Input/Output/Effect) |
+| `stm32-developer-skill` | STM32 embedded development guide based on Arcana STM32 enterprise architecture (HAL layering, Clean Architecture for firmware) |
+| `esp32-developer-skill` | ESP32 embedded development guide based on Arcana ESP32 enterprise architecture (ESP-IDF, layered firmware, OTA/secure boot) |
+| `harmonyos-developer-skill` | HarmonyOS development guide based on Arcana HarmonyOS enterprise architecture (ArkTS/ArkUI, Clean Architecture, Offline-First) |
 
 ### DevOps & Infrastructure Skills
 
