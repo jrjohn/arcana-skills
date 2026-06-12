@@ -19,7 +19,7 @@ services:
       retries: 20
 
   kafka:
-    image: apache/kafka:3.9.1
+    image: apache/kafka:4.3.0
     container_name: aaf-kafka
     environment:
       KAFKA_NODE_ID: 1
