@@ -23,6 +23,14 @@ can't finish, and everything is watched live on a bpmn-js dashboard.
   deterministic release-please), `jenkins` → Jenkins rebuild, `human` → **never
   auto-completed** (parked). Reconciler (300s) repairs Data-Index drift from
   engine truth.
+- **Self-fixing Fix(ai) node** — the agent fixes red builds autonomously before
+  escalating: **archive-first** (vsearch/csearch the session archive for a proven
+  fix — a human's manual fix is ingested ~15 min later and reused next time), a
+  **dependency-major playbook** (peer-dep coupling → bundle the framework codemod
+  e.g. `ng update`; test-runner-major coverage drop → `coverage.exclude`; stale
+  lockfile → regenerate), and **disposable-container builds** (`docker run node:24
+  …`) to use toolchains its own container lacks. Pushes to the PR branch; main
+  stays review-gated. Novel failures still park for human handoff.
 - **ci-maint-endpoint (Rust Axum)** — read-only health probe
   (`/scan` `/remediate` `/verify`), zero docker socket.
 - **CI trigger v7** — Jenkins RunListener: red build → ci-flow (6h cooldown);

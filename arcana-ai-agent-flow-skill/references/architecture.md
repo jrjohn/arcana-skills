@@ -115,6 +115,27 @@ completed 實例預設刪除 → 不可查。**Data Index 是標準可查詢層*
 - endGate 條件注意：必須同時看 `buildResult` **和** `decision`，否則「main 上已解但本
   branch 沒重跑綠」會誤 park 人（2026-06-09 修過的真實 bug）。
 
+**Fix(ai) 自修策略**（`/task/fix` prompt，2026-06-14 強化）—— 目標是自己修、修不動才 park：
+
+1. **Archive-first**：先 `vsearch`/`csearch` session archive 找同 root-cause 的已驗證修法。
+   人手動修的案例 ~15 分鐘後 ingest 進 archive → 下次同類失敗 agent 自己撈來照做（被動學習）。
+2. **Dependency-major playbook**（寫進 prompt，第一次遇到就認得）—— renovate major 的固定失敗型態：
+   - **peer-dep 耦合**：tooling major 不能單升（ts6 綁 Angular 22；`npm ci` 噴 ERESOLVE
+     `peer … from @angular/*`）→ 跑框架 codemod 綁一起升（`ng update @angular/core@N …`）。
+   - **test-runner major 後 coverage 掉破 gate**：test 全過但 SonarQube `coverage < 80`，
+     runner 改了覆蓋率範圍（vitest v4 把 0% 的 bootstrap 檔新算進來）→ 加進 `coverage.exclude`
+     （比照已排除的 `src/index.ts`），不補假測試、不調門檻。
+   - **lockfile 不同步**（`renovate/artifacts` 失敗）→ `npm install` 重生 + commit。
+3. **拋棄式容器 build**：agent 容器有 python/java/rust + docker CLI,但 node 只有 v22、無 go/gradle。
+   缺工具或版本太舊時(如 Angular 22 的 `ng update` 要 node≥24.15),用官方 image 拋棄式容器
+   build(`docker run --rm -v $(pwd):/w -w /w node:24 …`),像 CI 一樣,而非 park「本機 build 不了」。
+   (`permissions.allow` 有 bare `Bash` → headless 可跑 docker run。)
+4. **Close the loop**：fix 推到失敗 pipeline 會重跑的 PR-head branch(feature branch 不受保護);
+   只有要動 main 才開 PR + 停(review-gated)。
+5. **自修 vs park**:code-level API break(go#31 mongo-driver coverage.out → 修好 merge)、
+   重複案例、已知 pattern → 自修;全新失敗第一次 → park 給人。大框架 major 即使 build 得起來也
+   只推 PR branch、不自動 merge main(保守)。
+
 ### 5.2 merge-flow — 綠 PR 自動合併 + 自動 release
 
 `Start → Merge(ai) → Release(ai) → End`
