@@ -11,7 +11,7 @@
 #       -f docker-compose.bluesea.yml -f docker-compose.bluesea.mac.yml up -d
 services:
   kafka:
-    image: apache/kafka:3.9.1
+    image: apache/kafka:3.9.2
     container_name: aaf-kafka
     environment:
       KAFKA_NODE_ID: 1
