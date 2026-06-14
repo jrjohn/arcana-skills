@@ -85,6 +85,20 @@ Jenkins RunListener (ci-bpmn-trigger.groovy v7)            ci-scheduler (hourly)
 | `docker-compose.bluesea.yml` (+ `.mac.yml`, `deploy-bluesea.sh`, `kogito-pg-init/`) | Production compose (synced): kogito-pg (3 DBs), kogito-bpmn, **ci-maint-endpoint** (Rust Axum, `/data` + `/var/log` read-only, Jenkins API, **zero docker socket**), data-index, read-API, dashboard, task-worker (`RECONCILE_GROUPS=ai,jenkins,human`), ci-scheduler (hourly ci-maintenance POST). |
 | `docker-compose.mac.yml` | Local stack (adds its own kafka). |
 
+## Fix-node remediation strategy (ci-flow `Fix(ai)`)
+
+The Fix node (worker → agent-task-node `/task/fix`, prompt in `server.py`) is built to fix autonomously and only escalate when it genuinely can't:
+
+1. **Archive-first** — before reinventing, it `vsearch`/`csearch` the shared session archive for a proven fix to the same root cause. Every past fix (any session) is recallable; a human's manual fix gets ingested (~15 min) and becomes the agent's playbook for the next occurrence.
+2. **Dependency-major playbook** (encoded in the prompt so it's recognised on first sight) — renovate `chore(deps)` majors fail in patterned ways:
+   - **peer-dep coupling** — a tooling major can't go alone (e.g. `typescript` 6 is locked to Angular 22; `npm ci` shows ERESOLVE `peer … from @angular/*`). Fix = bundle the framework major via its official codemod (`ng update @angular/core@N @angular/cli@N @angular/cdk@N`), which auto-applies migration schematics, then ONE combined PR.
+   - **quality-gate coverage drop** after a test-runner major (vitest/jest) — tests pass but SonarQube `coverage < 80`. The runner changed coverage *scope* (e.g. vitest v4 newly counts 0%-covered bootstrap/entry files). Fix = add them to `coverage.exclude` (same category as already-excluded `src/index.ts`) — never pad fake tests or lower the gate.
+   - **lockfile out of sync** (`renovate/artifacts` failed) → regenerate (`npm install`) + commit.
+3. **Disposable-container build** — the agent container has python/java/rust + the docker CLI but only node v22 and no go/gradle. When a fix needs a toolchain it lacks or a newer version (e.g. `ng update` to Angular 22 needs node ≥ 24.15), it builds in a throwaway official-image container exactly like CI (`docker run --rm -v $(pwd):/w -w /w node:24 …`) instead of parking with "can't build locally". (`permissions.allow` has bare `Bash` → docker runs headless.)
+4. **Close the loop** — applies the fix to the PR-head branch the failing pipeline will rebuild (feature branches aren't protected); only fixes that must target main open a PR + stop (review-gated).
+
+**Self-fixes vs parks:** code-level API breaks (fixed go#31 mongo-driver `coverage.out` → merged), recurrences, and known patterns → self-fix; a genuinely-novel failure the first time → park for human handoff (below). Big framework majors stay review-gated even when buildable (pushed to the PR branch, never auto-merged to main).
+
 ## Human handoff (ci-flow)
 
 1. AI can't fix → endGate routes to `humanFixTask` (group=human); worker parks it.
