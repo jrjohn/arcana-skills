@@ -1,6 +1,6 @@
 # Multi-arch runtime for the Kogito BPMN engine (built jar copied in).
 # Build the jar first:  mvn -DskipTests package  (produces target/quarkus-app/)
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:26.0.1_8-jre
 WORKDIR /deployments
 COPY target/quarkus-app/lib/ /deployments/lib/
 COPY target/quarkus-app/*.jar /deployments/

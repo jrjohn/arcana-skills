@@ -18,7 +18,7 @@
 #   docker compose run --rm android-build
 # ============================================
 
-FROM eclipse-temurin:21-jdk AS builder
+FROM eclipse-temurin:26.0.1_8-jdk AS builder
 
 ENV ANDROID_HOME=/opt/android-sdk
 ENV ANDROID_SDK_ROOT=${ANDROID_HOME}
