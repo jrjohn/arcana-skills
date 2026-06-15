@@ -1,0 +1,109 @@
+# claude-agents-workflow-skill — reference deployment (all-Docker, Kafka-backed).
+#
+#   Jenkins RunListener --HTTP--> ce-kafka-bridge --produce--> Kafka
+#        --> SonataFlow (sf-ci) --REST--> agent-task-node (claude -p)
+#
+# Ingestion goes through Kafka so build events are DURABLE (survive an sf-ci
+# restart) and REPLAYABLE (retained log for problem-tracking / audit).
+#
+# Assumes the host already runs Jenkins (+ optional PostgreSQL) on `devops_default`
+# (bluesea convention). Adjust network name / paths / platform per deployment.
+#
+# NOTE on sf-ci: KIE publishes no arm64 image. The SonataFlow service is an
+# arm64-native Quarkus app built from kogito-examples per references/sonataflow-setup.md
+# (the build MUST keep the quarkus-maven-plugin `generate-code` goal + the Kafka
+# extension). Build it, then point the `sf-ci` service at target/quarkus-app.
+
+services:
+  kafka:
+    image: apache/kafka-native:3.9.1      # KRaft (no Zookeeper), multi-arch, ~50MB
+    container_name: kafka
+    restart: unless-stopped
+    networks: [devops_default]
+    mem_limit: 1g
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_LOG_RETENTION_HOURS: "720"      # 30d retention for replay/audit
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - /data/kafka:/var/lib/kafka/data     # persist the event log
+    # Topic `ci.build.completed` auto-creates on first use; to set 30d retention
+    # explicitly run once (JVM image has the CLI):
+    #   docker run --rm --network devops_default apache/kafka:3.9.1 \
+    #     /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create \
+    #     --topic ci.build.completed --partitions 1 --replication-factor 1 \
+    #     --config retention.ms=2592000000
+
+  ce-kafka-bridge:
+    build:
+      context: ./ce-kafka-bridge           # Rust + rdkafka; ~1.5MB RSS, robust
+    image: ce-kafka-bridge:rust
+    container_name: ce-kafka-bridge
+    restart: unless-stopped
+    networks: [devops_default]
+    mem_limit: 128m
+    environment:
+      - KAFKA_BOOTSTRAP=kafka:9092
+      - KAFKA_TOPIC=ci.build.completed
+      - PORT=8088
+      # Periodic sweep heartbeat (the cron replacement): emits a ci_sweep_requested
+      # CloudEvent to SWEEP_TOPIC every SWEEP_INTERVAL_SECS. 0 = disabled (dormant
+      # pre-cutover, while the legacy OS cron is still the active maintainer).
+      - SWEEP_TOPIC=ci.sweep.requested
+      - SWEEP_INTERVAL_SECS=0      # set to 21600 (6h) at cutover
+    depends_on: [kafka]
+    # sweep topic (auto-creates, or pre-create with 7d retention):
+    #   docker run --rm --network devops_default apache/kafka:3.9.1 \
+    #     /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create \
+    #     --topic ci.sweep.requested --partitions 1 --replication-factor 1 \
+    #     --config retention.ms=604800000
+
+  sf-ci:
+    # arm64-native Quarkus app (see sonataflow-setup.md). The build output
+    # target/quarkus-app is bind-mounted into a plain JRE; rebuild + restart this
+    # service to pick up workflow changes (production jar does NOT hot-reload).
+    image: eclipse-temurin:17
+    container_name: sf-ci
+    restart: unless-stopped
+    networks: [devops_default]
+    command: ["java", "-jar", "/deployments/quarkus-app/quarkus-run.jar"]
+    volumes:
+      - ${SF_QUARKUS_APP:-./build/quarkus-app}:/deployments/quarkus-app:ro
+    environment:
+      - AGENT_TASK_URL=http://agent-task-node:8090
+      - LC_ALL=en_US.UTF-8
+    mem_limit: 1g
+    depends_on: [kafka, agent-task-node]
+
+  agent-task-node:
+    build:
+      context: ./agent-task-node
+      args:
+        BASE_IMAGE: ${AGENT_BASE_IMAGE:-daily-ci-agent:latest}
+    image: agent-task-node:latest
+    container_name: agent-task-node
+    restart: unless-stopped
+    networks: [devops_default]
+    volumes:
+      - /data/projects/daily-ci-agent/claude-home:/root/.claude
+      - /tmp/agent.env:/tmp/agent.env:ro
+    environment:
+      - PORT=8090
+      - AGENT_TASK_TIMEOUT=900
+      # - AGENT_STUB=1   # test mode: skip claude, return canned typed JSON (verify.sh)
+    mem_limit: 2g
+
+networks:
+  devops_default:
+    external: true

@@ -1,0 +1,83 @@
+# OpenAPI spec for the agent-task-node — SonataFlow calls these as REST
+# (openapi) functions. The server base URL is injected via application.properties
+# (quarkus.rest-client."agent-task-node".url = http://agent-task-node:8090).
+openapi: 3.0.3
+info:
+  title: agent-task-node
+  version: "0.1.0"
+# kogito generates the REST client + work-item handler from this spec at build
+# time; the base URL comes from servers[0] (agent-task-node on devops_default).
+servers:
+  - url: http://agent-task-node:8090
+paths:
+  /task/diagnose:
+    post:
+      operationId: diagnose
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                job: { type: string }
+                buildUrl: { type: string }
+      responses:
+        "200":
+          description: diagnosis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cause: { type: string }
+                  category: { type: string }
+                  fixable: { type: boolean }
+                  proposedAction: { type: string }
+                  confidence: { type: number }
+  /task/fix:
+    post:
+      operationId: fix
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                job: { type: string }
+                cause: { type: string }
+      responses:
+        "200":
+          description: fix result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  action: { type: string }
+                  prUrl: { type: string }
+                  branch: { type: string }
+                  summary: { type: string }
+                  pushed: { type: boolean }
+  /task/merge:
+    post:
+      operationId: merge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prUrl: { type: string }
+      responses:
+        "200":
+          description: merge result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  merged: { type: boolean }
+                  reason: { type: string }
