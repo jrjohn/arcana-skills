@@ -119,6 +119,11 @@ completed 實例預設刪除 → 不可查。**Data Index 是標準可查詢層*
 
 1. **Archive-first**：先 `vsearch`/`csearch` session archive 找同 root-cause 的已驗證修法。
    人手動修的案例 ~15 分鐘後 ingest 進 archive → 下次同類失敗 agent 自己撈來照做（被動學習）。
+   **2026-06-15 起 agent 自己每次 AI-task 的完整對話也自動進 archive**（見 §6 AI-task console）：
+   worker 跑完即把該節點 stream-json 逐字 `INSERT` 進 `archive_main.msg`（`project='aaf'`），
+   所以 agent 不只學人手動修，也能 `vsearch/csearch '<concept>' aaf` 撈自己過去的 run。
+   （前提：agent 容器要把 `~/.claude/bin` 上 PATH，且 CLAUDE.md 的 project-filter 白名單用 `aaf`
+   而非死標籤 `daily-ci-agent`——否則 `command not found` / 搜回空。）
 2. **Dependency-major playbook**（寫進 prompt，第一次遇到就認得）—— renovate major 的固定失敗型態：
    - **peer-dep 耦合**：tooling major 不能單升（ts6 綁 Angular 22；`npm ci` 噴 ERESOLVE
      `peer … from @angular/*`）→ 跑框架 codemod 綁一起升（`ng update @angular/core@N …`）。
@@ -175,12 +180,29 @@ completed 實例預設刪除 → 不可查。**Data Index 是標準可查詢層*
 | **kogito-data-index** | 統一可查詢層（process/task/timeline + GraphQL） | `kogito-data-index-postgresql`（CQRS，kafka 事件投影） |
 | **kogito-pg** | 工作流專用 PG（workflow / dataindex / arcana 三 DB） | postgres:17-alpine |
 | **arcana-cloud-rust** | engine-agnostic 唯讀 read-API + `/definitions/{id}/bpmn`（bpmn-js 用） | Axum + SQLx；`BPMN_DIR=/app/bpmn` |
-| **workflow-task-worker** | **Rust** poller：task name dispatch（triage/build/fix/decide/analyze/merge/release）；human 永不自動完成；reconciler 每 300s 以引擎為真相源修 DI | tokio + reqwest + tokio-postgres；image `arcana/task-worker:1.3.0` |
-| **agent-task-node** | Claude CLI 任務節點：`/task/diagnose|fix|decide|merge|analyze`（Claude，session persistence + sid）+ `/task/release`（deterministic，繞過 Claude） | `claude -p --output-format json`；`/root/.claude` host bind mount（session 永續） |
+| **workflow-task-worker** | **Rust** poller：task name dispatch（triage/build/fix/decide/analyze/merge/release）；human 永不自動完成；reconciler 每 300s 以引擎為真相源修 DI；**AI-task 完成即 `ingest_console` 把該節點逐字稿寫進 archive（見下）** | tokio + reqwest + tokio-postgres；image `arcana/task-worker:1.3.1` |
+| **agent-task-node** | Claude CLI 任務節點：`/task/diagnose\|fix\|decide\|merge\|analyze`（Claude，session persistence + sid）+ `/task/release`（deterministic，繞過 Claude） | `claude -p --output-format stream-json`（AI task；逐 event 串到 console jsonl）；`/root/.claude` host bind mount（session + archive wrapper 永續） |
 | **ci-maint-endpoint** | 唯讀 CI 健康 probe（`/scan` `/remediate` `/verify`），零 docker socket | Rust Axum；image `arcana/ci-maint-endpoint:1.0.0` |
 | **dashboard-web** | Angular 即時監控：實例表 + **bpmn-js** 流程圖 + handoff banner（sid + resume 指令） | standalone + signals；nginx `/api` proxy |
 | **ci-bpmn-trigger.groovy** | Jenkins RunListener **v7**：紅 build→/ci-flow（6h cooldown）；綠 PR build（fleet-wide）→/merge-flow | init.groovy.d + scriptText 熱套用 |
 | **ci-scheduler** | 每 3600s POST /ci-maintenance | curlimages/curl loop |
+
+### 6.1 AI-task console（即時看 + 永久搜，2026-06-15）
+
+每個 AI-task 節點的 Claude 對話有**兩條出口**,同一份 `--output-format stream-json`:
+
+1. **即時(dashboard「· console」)** — agent-task-node 把 stream-json 逐 event 串到
+   `CONSOLE_DIR/{piid}__{node}.jsonl`;read-API `GET /api/v1/workflows/processes/{id}/console/{node}`
+   (`console_lines`)把它 render 成 console 行,dashboard 點該節點即看即時對話。
+   **坑(2026-06-15 修)**:`console_lines` 的 `"system"` arm 原本對**每個** `type:"system"` event
+   (init + hook + N×thinking_tokens)都印「● session started」→ 一次 run 噴 ~12 行假的、model 還帶 `[1m]`;
+   改成只認 `subtype=="init"` + 切掉 model 的 `[` 後綴 → 1 行乾淨。
+2. **永久(csearch/vsearch)** — worker `ingest_console`(完成 hook,在 `record_usage` 旁)讀同一個
+   `.jsonl`,逐字 `INSERT INTO archive_main.msg`(`project='aaf'`、`session_id={piid}__{node}`、
+   embedding 留 NULL)、`ON CONFLICT(session_id,seq) DO NOTHING` 冪等。Mac `crs embed-missing`
+   (15 分 launchd)補 bge-m3 向量。→ **agent 跑的每一輪都能 csearch/vsearch 搜到**(見 §5.1 archive-first)。
+   接線:`ARCHIVE_PG` 連 `pg-archive-test`(接進 devops_default)、worker 掛 `./console:ro`。
+   非 crs-build 的 writer 也能這樣餵 archive — 詳見 `claude-session-archive-skill` README v1.23.0。
 
 ---
 
