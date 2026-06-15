@@ -199,10 +199,15 @@ completed 實例預設刪除 → 不可查。**Data Index 是標準可查詢層*
    改成只認 `subtype=="init"` + 切掉 model 的 `[` 後綴 → 1 行乾淨。
 2. **永久(csearch/vsearch)** — worker `ingest_console`(完成 hook,在 `record_usage` 旁)讀同一個
    `.jsonl`,逐字 `INSERT INTO archive_main.msg`(`project='aaf'`、`session_id={piid}__{node}`、
-   embedding 留 NULL)、`ON CONFLICT(session_id,seq) DO NOTHING` 冪等。Mac `crs embed-missing`
-   (15 分 launchd)補 bge-m3 向量。→ **agent 跑的每一輪都能 csearch/vsearch 搜到**(見 §5.1 archive-first)。
+   embedding 留 NULL)、`ON CONFLICT(session_id,seq) DO NOTHING` 冪等。csearch 即時可搜(content_tsv
+   GENERATED);**vsearch 的 embedding 由 bluesea 本地 cron 補,不是 Mac**(Mac launchd 的
+   `crs embed-missing` 是 `--project-prefix=-Users-jrjohn` scoped,故意只 embed Mac row、避免跨 WAN
+   work-stealing,所以 `project='aaf'` 它不碰)。aaf 的 embed:`/etc/cron.d/aaf-embed`(每 15 分)
+   → `crs embed-missing --project-prefix=aaf`(`CRS_BUILD_DIRECT=1` 直連、免 pgsearchd daemon;用
+   bluesea 自己的 `ollama` 容器 bge-m3、零 WAN)。→ **agent 每一輪都能 csearch/vsearch 自己**(見 §5.1)。
    接線:`ARCHIVE_PG` 連 `pg-archive-test`(接進 devops_default)、worker 掛 `./console:ro`。
-   非 crs-build 的 writer 也能這樣餵 archive — 詳見 `claude-session-archive-skill` README v1.23.0。
+   非 crs-build 的 writer 餵 archive 的通則(含「embedding 要自己接 host-local cron,非全域免費」)
+   詳見 `claude-session-archive-skill` README v1.23.0。
 
 ---
 
