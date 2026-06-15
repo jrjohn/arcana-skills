@@ -187,6 +187,16 @@ C. nginx config: for `/jenkins/api/` specifically, set `auth_request_set` such t
 
 ---
 
+## #11: agent's `vsearch`/`csearch` archive lookup fails — usually PATH, sometimes a dead project label
+
+If you wired the agent to the shared archive (see `claude-session-archive-skill` → `references/cloud-deployment.md`), the agent's own archive-first lookup can still fail two ways:
+
+**(a) `vsearch: command not found` even though `crs` + creds are present.** The self-contained wrappers (`~/.claude/bin/{vsearch,csearch}`, each `export CRS_PG_URL="$(cat ~/.claude/.crs_pg_url)"; export OLLAMA_HOST=http://ollama:11434; exec crs vsearch "$@"`) and `.crs_pg_url` are mounted, but `~/.claude/bin` is **not on the container's PATH** — so bare `vsearch`/`csearch` resolve to nothing while `/root/.claude/bin/csearch` works by full path. Fix: prepend `~/.claude/bin` to a **full** explicit `PATH=` in the agent's env-file (env-file PATH replaces the image's — list every existing dir). Diagnose with `docker exec <agent> command -v csearch` FIRST: "not found" = PATH, not creds/Ollama. No image rebuild needed.
+
+**(b) `vsearch '...' <project>` returns empty.** The agent's CLAUDE.md project-filter allow-list points at a label with **0 rows**. If the agent's own AI-task transcripts are ingested under `project='aaf'` (via the BPMN worker — see `arcana-ai-agent-flow-skill` §6.1) but the allow-list still says `daily-ci-agent` (a dead label), every filtered search returns nothing. Fix: set the allow-list project to the label the runs are actually stored under (`aaf`). Keep the deny-list (Somnics/medical/personal-Mac paths) intact — global queries stay forbidden for credential/PII protection. CLAUDE.md is re-read per headless `claude` invocation (mounted), so no restart.
+
+---
+
 ## Debugging recipe (when something inexplicably fails)
 
 1. Container logs: `docker logs daily-ci-agent | tail -50`

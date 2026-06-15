@@ -17,12 +17,20 @@ can't finish, and everything is watched live on a bpmn-js dashboard.
   (visited/current/error highlight, polling) + **handoff banner** (parked human
   task → copyable `docker exec -it agent-task-node claude --resume <sid>`),
   behind nginx `/api` proxy (single origin).
-- **task-worker (Rust, 1.3.0)** — dispatch by task name
+- **task-worker (Rust, 1.3.1)** — dispatch by task name
   (triage/build/fix/decide/analyze/merge/release): `ai` → agent-task-node
   (Claude CLI with session persistence, `sid` threading; `/task/release` is
   deterministic release-please), `jenkins` → Jenkins rebuild, `human` → **never
   auto-completed** (parked). Reconciler (300s) repairs Data-Index drift from
   engine truth.
+- **AI-task console — live + durable (2026-06-15)** — every AI node's Claude
+  conversation is `--output-format stream-json`: (a) **live** in the dashboard
+  via read-API `console_lines` (the "· console" panel; fixed to emit one clean
+  `session started` line, not ~12), and (b) **durable + searchable** — the worker
+  `ingest_console`s the verbatim transcript into the shared `archive_main.msg`
+  (`project='aaf'`, embedding filled by the Mac `crs embed-missing` pass), so the
+  fleet agent's own past runs are recalled by csearch/vsearch like any session.
+  See `references/architecture.md` §6.1 + `claude-session-archive-skill` v1.23.0.
 - **Self-fixing Fix(ai) node** — the agent fixes red builds autonomously before
   escalating: **archive-first** (vsearch/csearch the session archive for a proven
   fix — a human's manual fix is ingested ~15 min later and reused next time), a
