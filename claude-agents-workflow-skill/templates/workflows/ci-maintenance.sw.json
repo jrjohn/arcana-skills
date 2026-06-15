@@ -1,0 +1,203 @@
+{
+  "id": "ci-maintenance",
+  "version": "3.0",
+  "specVersion": "0.8",
+  "name": "CI Maintenance",
+  "start": "WaitForBuildEvent",
+  "events": [
+    {
+      "name": "buildCompleted",
+      "type": "ci_build_completed",
+      "source": "jenkins/arcana",
+      "kind": "consumed",
+      "correlation": [
+        {
+          "contextAttributeName": "jobref"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "diagnoseFn",
+      "operation": "agentnode.json#diagnose"
+    },
+    {
+      "name": "fixFn",
+      "operation": "agentnode.json#fix"
+    },
+    {
+      "name": "mergeFn",
+      "operation": "agentnode.json#merge"
+    },
+    {
+      "name": "logReport",
+      "type": "custom",
+      "operation": "sysout"
+    }
+  ],
+  "states": [
+    {
+      "name": "WaitForBuildEvent",
+      "type": "event",
+      "onEvents": [
+        {
+          "eventRefs": [
+            "buildCompleted"
+          ]
+        }
+      ],
+      "transition": "Triage"
+    },
+    {
+      "name": "Triage",
+      "type": "switch",
+      "dataConditions": [
+        {
+          "name": "red-main",
+          "condition": "${ .result == \"FAILURE\" and .branch == \"main\" }",
+          "transition": "Diagnose"
+        },
+        {
+          "name": "green-pr",
+          "condition": "${ .result == \"SUCCESS\" and (.branch | startswith(\"PR-\")) }",
+          "transition": "MergeEval"
+        }
+      ],
+      "defaultCondition": {
+        "transition": "Report"
+      }
+    },
+    {
+      "name": "Diagnose",
+      "type": "operation",
+      "actions": [
+        {
+          "functionRef": {
+            "refName": "diagnoseFn",
+            "arguments": {
+              "job": "${ .job }",
+              "buildUrl": "${ .buildUrl }"
+            }
+          },
+          "actionDataFilter": {
+            "toStateData": "${ .diagnosis }"
+          }
+        }
+      ],
+      "transition": "Fix"
+    },
+    {
+      "name": "Fix",
+      "type": "operation",
+      "actions": [
+        {
+          "functionRef": {
+            "refName": "fixFn",
+            "arguments": {
+              "job": "${ .job }",
+              "cause": "${ .diagnosis.cause // \"unknown\" }"
+            }
+          },
+          "actionDataFilter": {
+            "toStateData": "${ .fixResult }"
+          }
+        }
+      ],
+      "transition": "Verify"
+    },
+    {
+      "name": "Verify",
+      "type": "event",
+      "onEvents": [
+        {
+          "eventRefs": [
+            "buildCompleted"
+          ],
+          "eventDataFilter": {
+            "toStateData": "${ .verify }"
+          }
+        }
+      ],
+      "timeouts": {
+        "eventTimeout": "PT30M"
+      },
+      "stateDataFilter": {
+        "output": "${ . + {retries: ((.retries // 0) + 1)} }"
+      },
+      "transition": "Decide"
+    },
+    {
+      "name": "Decide",
+      "type": "switch",
+      "dataConditions": [
+        {
+          "name": "sla-timeout",
+          "condition": "${ .verify == null }",
+          "transition": "Escalate"
+        },
+        {
+          "name": "verified-green",
+          "condition": "${ .verify.result == \"SUCCESS\" }",
+          "transition": "Report"
+        },
+        {
+          "name": "retry",
+          "condition": "${ .retries < 2 }",
+          "transition": "Fix"
+        }
+      ],
+      "defaultCondition": {
+        "transition": "Escalate"
+      }
+    },
+    {
+      "name": "MergeEval",
+      "type": "operation",
+      "actions": [
+        {
+          "functionRef": {
+            "refName": "mergeFn",
+            "arguments": {
+              "prUrl": "${ .prUrl // .buildUrl }"
+            }
+          },
+          "actionDataFilter": {
+            "toStateData": "${ .mergeResult }"
+          }
+        }
+      ],
+      "transition": "Report"
+    },
+    {
+      "name": "Escalate",
+      "type": "operation",
+      "actions": [
+        {
+          "functionRef": {
+            "refName": "logReport",
+            "arguments": {
+              "message": "${ \"[ci-maintenance][ESCALATE] job=\" + .job + \" reason=\" + (if .verify == null then \"SLA: no re-build within PT30M\" else (\"still RED after \" + (.retries|tostring) + \" verify attempts\") end) }"
+            }
+          }
+        }
+      ],
+      "end": true
+    },
+    {
+      "name": "Report",
+      "type": "operation",
+      "actions": [
+        {
+          "functionRef": {
+            "refName": "logReport",
+            "arguments": {
+              "message": "${ \"[ci-maintenance] job=\" + .job + \" result=\" + .result + \" verify=\" + (.verify.result // \"n/a\") + \" merged=\" + (.mergeResult.merged // \"n/a\" | tostring) + \" retries=\" + (.retries // 0 | tostring) }"
+            }
+          }
+        }
+      ],
+      "end": true
+    }
+  ]
+}

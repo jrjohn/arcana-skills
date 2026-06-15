@@ -1,0 +1,71 @@
+{
+  "id": "ci-sweep",
+  "version": "1.0",
+  "specVersion": "0.8",
+  "name": "CI Periodic Sweep",
+  "start": "WaitForSweepTick",
+  "events": [
+    {
+      "name": "sweepTick",
+      "type": "ci_sweep_requested",
+      "source": "ce-kafka-bridge",
+      "kind": "consumed"
+    }
+  ],
+  "functions": [
+    {
+      "name": "sweepFn",
+      "operation": "agentnode.json#sweep"
+    },
+    {
+      "name": "logReport",
+      "type": "custom",
+      "operation": "sysout"
+    }
+  ],
+  "states": [
+    {
+      "name": "WaitForSweepTick",
+      "type": "event",
+      "onEvents": [
+        {
+          "eventRefs": [
+            "sweepTick"
+          ]
+        }
+      ],
+      "transition": "Sweep"
+    },
+    {
+      "name": "Sweep",
+      "type": "operation",
+      "actions": [
+        {
+          "functionRef": {
+            "refName": "sweepFn",
+            "arguments": {}
+          },
+          "actionDataFilter": {
+            "toStateData": "${ .sweep }"
+          }
+        }
+      ],
+      "transition": "Report"
+    },
+    {
+      "name": "Report",
+      "type": "operation",
+      "actions": [
+        {
+          "functionRef": {
+            "refName": "logReport",
+            "arguments": {
+              "message": "${ \"[ci-sweep] checked=\" + (.sweep.checked // 0 | tostring) + \" red=\" + (.sweep.red | length | tostring) + \" retriggered=\" + (.sweep.retriggered // 0 | tostring) }"
+            }
+          }
+        }
+      ],
+      "end": true
+    }
+  ]
+}
