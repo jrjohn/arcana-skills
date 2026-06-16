@@ -3006,7 +3006,7 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
         "WITH msg_hits AS MATERIALIZED (
              SELECT id, ts, project, session_id, role, tool_name, content
              FROM msg
-             WHERE content_tsv @@ plainto_tsquery('simple', $1)
+             WHERE (content_tsv @@ plainto_tsquery('simple', $1) OR id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1)))
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
          ),
@@ -3033,7 +3033,7 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
         "WITH hits AS MATERIALIZED (
              SELECT id, ts, project, session_id, role, tool_name, content
              FROM msg
-             WHERE content_tsv @@ plainto_tsquery('simple', $1)
+             WHERE (content_tsv @@ plainto_tsquery('simple', $1) OR id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1)))
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
          ),

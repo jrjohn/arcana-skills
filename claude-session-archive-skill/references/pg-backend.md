@@ -122,6 +122,32 @@ CREATE INDEX msg_tool_idx     ON msg (tool_name);
 CREATE INDEX msg_tsv_idx      ON msg USING GIN  (content_tsv);
 CREATE INDEX msg_emb_idx      ON msg USING hnsw (embedding vector_cosine_ops);
 
+-- Optional: Chinese csearch via pg_jieba (since v1.24.0). A SIDE TABLE, not a column
+-- on msg — backfilling a column would rewrite every bloated msg tuple (4KB embedding)
+-- + re-insert HNSW/GIN per row (~130x slower; see README "What's new"). Requires the
+-- pg_jieba extension (build the PG image from jaiminpan/pg_jieba; overwrite the bundled
+-- Simplified jieba_base.dict with fxsjy/jieba's dict.txt.big for Traditional). csearch's
+-- union queries this with plainto_tsquery('jiebacfg', …) — jiebacfg on BOTH sides, never
+-- jiebaqry (it over-segments and won't match the dict-mode index).
+CREATE EXTENSION IF NOT EXISTS pg_jieba;
+CREATE TABLE msg_jieba (
+    id bigint PRIMARY KEY REFERENCES msg(id) ON DELETE CASCADE,
+    cj tsvector
+);
+CREATE INDEX msg_jieba_cj_idx ON msg_jieba USING GIN (cj);
+CREATE OR REPLACE FUNCTION msg_jieba_sync() RETURNS trigger AS $$
+BEGIN
+  INSERT INTO msg_jieba(id, cj)
+    VALUES (NEW.id, to_tsvector('jiebacfg', coalesce(NEW.content,'')))
+  ON CONFLICT (id) DO UPDATE SET cj = EXCLUDED.cj;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+CREATE TRIGGER msg_jieba_sync_aiu AFTER INSERT OR UPDATE OF content ON msg
+  FOR EACH ROW EXECUTE FUNCTION msg_jieba_sync();
+-- one-time backfill (append-only, ~130K rows/min): 
+--   INSERT INTO msg_jieba(id,cj) SELECT id, to_tsvector('jiebacfg',coalesce(content,'')) FROM msg
+--   ON CONFLICT (id) DO NOTHING;
+
 CREATE TABLE ingest_state (
     file_path TEXT PRIMARY KEY,
     mtime DOUBLE PRECISION NOT NULL,

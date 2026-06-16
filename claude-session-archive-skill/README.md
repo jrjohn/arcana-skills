@@ -307,6 +307,16 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.24.0 — `csearch` now matches Chinese (pg_jieba side table, PG backend)
+
+The PG-backend `csearch` indexed content with `to_tsvector('simple', …)`, and the `simple` config does **no CJK word segmentation** — it keeps a whole Han run as one token, so Chinese substring/keyword `csearch` was unreliable (only `vsearch`/bge-m3 handled Chinese well). Now csearch also matches Chinese via **pg_jieba**.
+
+**Architecture — a side table, NOT a column on `msg`.** `msg_jieba(id bigint PK REFERENCES msg(id) ON DELETE CASCADE, cj tsvector)` + a GIN index on `cj`; an `AFTER INSERT OR UPDATE OF content` trigger on `msg` upserts `to_tsvector('jiebacfg', content)`. csearch's two `FROM msg` CTEs become `WHERE (content_tsv @@ plainto_tsquery('simple',$1) OR id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg',$1)))` — Latin/exact still on `content_tsv`, Chinese on the jieba side table, no regression. The `image_ocr` arm is unchanged (no side table). Requires the `pg_jieba` extension in the archive PG image (build from jaiminpan/pg_jieba); the default sqlite backend (`msg_fts`) is unaffected.
+
+**Trap 1 — side table is ~130× faster to backfill than `ALTER TABLE … ADD COLUMN … + UPDATE`.** First attempt added `content_jieba` as a column on `msg` and backfilled with `UPDATE`: measured ~1000 rows/min, ~4h for 290K rows, and pausing services / parallel workers made it *worse* (parallel range-workers all stalled on `IO/DataFileRead` — disk seek-thrash). Root cause: each MVCC `UPDATE` rewrites the **whole** bloated tuple (every `msg` row carries a 1024-dim embedding ≈ 4 KB + content + content_tsv) **and** re-inserts into the HNSW(embedding) + GIN(content_tsv) indexes — per row. jieba itself is a non-issue (~0.3 ms/row, dict cached). The side table sidesteps all of it: `INSERT INTO msg_jieba SELECT id, to_tsvector('jiebacfg', content) FROM msg` is append-only — no `msg` rewrite, no embedding/HNSW touch, GIN built once at the end. Measured **50K rows in 22 s (~130K rows/min)**, full 290K in ~2-3 min. **General rule: to add a derived value to every row of a large table that has big columns (embeddings/blobs) or expensive indexes (HNSW), use a side table + append-only INSERT — never ADD COLUMN + UPDATE.** Client location is irrelevant (the UPDATE/INSERT runs server-side); disk write is the only variable.
+
+**Trap 2 — query with `jiebacfg`, NOT `jiebaqry`.** pg_jieba's README suggests `jiebaqry` for queries, but it over-segments: `plainto_tsquery('jiebaqry','防火牆')` → `防火 & 火牆 & 防火牆` (all AND-ed), while the index (`jiebacfg`, dict mode) stores only the whole word `防火牆` — so the `jiebaqry` query **fails to match** (the `防火`/`火牆` sub-tokens aren't in the index). Index and query must both use `jiebacfg` (verified: `防火牆`=match, `規則調整`=match). Also: pg_jieba's bundled `jieba_base.dict` is **Simplified**; overwrite it with fxsjy/jieba's `extra_dict/dict.txt.big` (≈584K entries, Traditional + Simplified) at image-build time for correct Traditional segmentation (`防火牆規則調整` → `防火牆 / 規則 / 調整`).
+
 ### v1.23.0 — non-crs writers can feed the archive; cloud-agent PATH gotcha
 
 Two findings from wiring the BPMN AI-agent fleet (aaf) into the shared `archive_main` PG.
