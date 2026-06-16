@@ -1,0 +1,2 @@
+# self-hosted CDN mirrors (fetched on demand, not source) — see scripts/fetch-mermaid.sh
+lib/
