@@ -3851,70 +3851,101 @@ fn cmd_distill_init() -> Result<()> {
 #[cfg(feature = "pg-backend")]
 fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<String>) -> Result<()> {
     cmd_distill_init()?;
-    let (prefix_clause, prefix_binds) = project_prefix_filter_pg(project_prefix.as_deref(), 1);
-    let mut pg = pg_connect()?;
-    let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
-    let select_sql = format!(
-        "SELECT id, content FROM msg \
-         WHERE NOT EXISTS (SELECT 1 FROM msg_distilled d WHERE d.original_id = msg.id) \
-           AND length(content) >= 20{} ORDER BY id DESC {}",
-        prefix_clause, limit_clause);
-    let params: Vec<&(dyn postgres::types::ToSql + Sync)> =
-        prefix_binds.iter().map(|s| s as &(dyn postgres::types::ToSql + Sync)).collect();
-    let rows = pg.query(&select_sql, &params[..])?;
-    let jobs: Vec<(i64, String)> = rows.iter().map(|r| (r.get(0), r.get(1))).collect();
-    drop(pg);
-    if jobs.is_empty() { println!("nothing to distill (prefix={:?})", project_prefix); return Ok(()); }
-    println!("distill-missing: {} jobs over {} workers (model={})", jobs.len(), workers, distill_model());
-
     use rayon::prelude::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    // Per-row progress to STDERR (unbuffered — visible even when stdout is piped/
-    // backgrounded, where Rust block-buffers). Generation is the slow phase
-    // (~20s/row); without this the run looks hung for tens of minutes.
-    let total = jobs.len();
-    let done = AtomicUsize::new(0);
-    let t_gen = std::time::Instant::now();
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
-    let results: Vec<(i64, String, String, Vec<String>, Vec<f32>)> = pool.install(|| {
-        jobs.par_iter().filter_map(|(id, content)| {
-            let http = distill_http_client().ok()?;
-            let r = distill_text_gen(&http, content);
-            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-            let el = t_gen.elapsed().as_secs_f64();
-            let rate = el / n as f64;
-            let eta = rate * (total - n) as f64;
-            eprintln!("  [{:>3}/{} {:>3.0}%] gen id={} elapsed={:.0}s rate={:.0}s/row eta={:.0}s",
-                n, total, 100.0 * n as f64 / total as f64, id, el, rate, eta);
-            let (props, ids) = match r {
-                Ok(v) => v,
-                Err(e) => { eprintln!("    distill id={} err={}", id, e); return None; }
-            };
-            if props.is_empty() && ids.is_empty() { return None; } // nothing extracted → raw covers it
-            let props_text = props.join("\n");
-            let mut dt = props.join(" ");
-            if !ids.is_empty() { dt.push(' '); dt.push_str(&ids.join(" ")); }
-            let dt = dt.trim().to_string();
-            if dt.is_empty() { return None; }
-            let emb = embed_text(&http, &dt).ok()?;
-            Some((*id, props_text, dt, ids, emb))
-        }).collect()
-    });
+    use std::collections::HashSet;
 
-    let mut pg = pg_connect()?;
+    let (prefix_clause, prefix_binds) = project_prefix_filter_pg(project_prefix.as_deref(), 1);
     let model = distill_model();
-    let mut n = 0usize;
-    for (id, props_text, dt, ids, emb) in &results {
-        let lit = vec_literal(emb);
-        let sql = format!(
-            "INSERT INTO msg_distilled (original_id, props, identifiers, distill_text, summary_embedding, distill_model, distill_ver) \
-             VALUES ($1, $2, $3, $4, '{}'::vector, $5, $6) ON CONFLICT (original_id) DO NOTHING", lit);
-        match pg.execute(&sql, &[id, props_text, ids, dt, &model, &DISTILL_VER]) {
-            Ok(_) => { n += 1; if n % 25 == 0 { println!("  inserted {}/{}", n, results.len()); } }
-            Err(e) => eprintln!("insert id={} err={}", id, e),
-        }
+
+    // Scale context: how many rows still lack a distilled entry.
+    {
+        let mut pg = pg_connect()?;
+        let cnt_sql = format!(
+            "SELECT COUNT(*) FROM msg WHERE NOT EXISTS \
+             (SELECT 1 FROM msg_distilled d WHERE d.original_id = msg.id) AND length(content) >= 20{}",
+            prefix_clause);
+        let binds: Vec<&(dyn postgres::types::ToSql + Sync)> =
+            prefix_binds.iter().map(|s| s as &(dyn postgres::types::ToSql + Sync)).collect();
+        let pending: i64 = pg.query_one(&cnt_sql, &binds[..])?.get(0);
+        println!("distill-missing: {} pending (model={}, prefix={:?}, chunked)", pending, model, project_prefix);
+        if pending == 0 { return Ok(()); }
     }
-    println!("done. distilled {} rows ({} skipped empty).", n, jobs.len() - results.len());
+
+    // Chunked persistence: select CHUNK pending rows, generate + INSERT that chunk,
+    // repeat. A kill mid-run loses only the in-flight chunk (≤CHUNK rows); every
+    // completed chunk is already in msg_distilled so a re-run resumes. `attempted`
+    // stops rows whose distillation yields nothing (not inserted) from being
+    // re-selected forever.
+    const CHUNK: usize = 10;
+    let mut attempted: HashSet<i64> = HashSet::new();
+    let mut total_done = 0usize;
+    let t0 = std::time::Instant::now();
+
+    loop {
+        if limit > 0 && total_done >= limit { break; }
+        let remaining = if limit > 0 { (limit - total_done).min(CHUNK) } else { CHUNK };
+        let sel_lim = remaining + attempted.len().min(60); // over-select past attempted-empties
+        let select_sql = format!(
+            "SELECT id, content FROM msg \
+             WHERE NOT EXISTS (SELECT 1 FROM msg_distilled d WHERE d.original_id = msg.id) \
+               AND length(content) >= 20{} ORDER BY id DESC LIMIT {}",
+            prefix_clause, sel_lim);
+        let binds: Vec<&(dyn postgres::types::ToSql + Sync)> =
+            prefix_binds.iter().map(|s| s as &(dyn postgres::types::ToSql + Sync)).collect();
+        let mut pg = pg_connect()?;
+        let rows = pg.query(&select_sql, &binds[..])?;
+        drop(pg);
+        let jobs: Vec<(i64, String)> = rows.iter()
+            .map(|r| (r.get::<_, i64>(0), r.get::<_, String>(1)))
+            .filter(|(id, _)| !attempted.contains(id))
+            .take(remaining)
+            .collect();
+        if jobs.is_empty() { break; } // no fresh pending rows left
+        for (id, _) in &jobs { attempted.insert(*id); }
+
+        let done = AtomicUsize::new(0);
+        let cn = jobs.len();
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
+        let results: Vec<(i64, String, String, Vec<String>, Vec<f32>)> = pool.install(|| {
+            jobs.par_iter().filter_map(|(id, content)| {
+                let http = distill_http_client().ok()?;
+                let r = distill_text_gen(&http, content);
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                eprintln!("  [chunk {}/{}  total_done={}  {:.0}s] gen id={}",
+                    n, cn, total_done, t0.elapsed().as_secs_f64(), id);
+                let (props, ids) = match r {
+                    Ok(v) => v,
+                    Err(e) => { eprintln!("    distill id={} err={}", id, e); return None; }
+                };
+                if props.is_empty() && ids.is_empty() { return None; } // raw covers it
+                let props_text = props.join("\n");
+                let mut dt = props.join(" ");
+                if !ids.is_empty() { dt.push(' '); dt.push_str(&ids.join(" ")); }
+                let dt = dt.trim().to_string();
+                if dt.is_empty() { return None; }
+                let emb = embed_text(&http, &dt).ok()?;
+                Some((*id, props_text, dt, ids, emb))
+            }).collect()
+        });
+
+        // INSERT this chunk now — the persistence checkpoint.
+        let mut pg = pg_connect()?;
+        for (id, props_text, dt, ids, emb) in &results {
+            let lit = vec_literal(emb);
+            let sql = format!(
+                "INSERT INTO msg_distilled (original_id, props, identifiers, distill_text, summary_embedding, distill_model, distill_ver) \
+                 VALUES ($1, $2, $3, $4, '{}'::vector, $5, $6) ON CONFLICT (original_id) DO NOTHING", lit);
+            if let Err(e) = pg.execute(&sql, &[id, props_text, ids, dt, &model, &DISTILL_VER]) {
+                eprintln!("insert id={} err={}", id, e);
+            }
+        }
+        total_done += results.len();
+        let el = t0.elapsed().as_secs_f64();
+        println!("  chunk persisted: +{} → total {} ({:.0}s, {:.0}s/row)",
+            results.len(), total_done, el, if total_done > 0 { el / total_done as f64 } else { 0.0 });
+    }
+    println!("done. distilled {} rows this run.", total_done);
     Ok(())
 }
 
