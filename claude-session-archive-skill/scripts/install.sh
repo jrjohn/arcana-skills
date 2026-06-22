@@ -148,6 +148,27 @@ case ":$PATH:" in
         ;;
 esac
 
+# 4a2. (v1.25+) shorthand shell functions: osearch / vsearch / csearch.
+#      crs is on PATH, but the bare `osearch '...'` form needs a wrapper.
+#      osearch is the default front door (orient→recall→pin RRF fusion, pg-backend);
+#      vsearch (pure semantic) / csearch (lexical) are manual shortcuts. Idempotent.
+case "${SHELL##*/}" in
+    zsh)  RC="$HOME/.zshrc" ;;
+    bash) RC="$HOME/.bashrc" ;;
+    *)    RC="$HOME/.profile" ;;
+esac
+if [ -f "$RC" ] && grep -q 'crs.*release/crs" osearch' "$RC" 2>/dev/null; then
+    echo "    shell functions: osearch/vsearch/csearch already in $RC"
+else
+    {
+        printf '\n# claude-session-archive: search shorthands (osearch=default front door)\n'
+        printf 'osearch() { "%s" osearch "$@"; }\n' "$BIN"
+        printf 'vsearch() { "%s" vsearch "$@"; }\n' "$BIN"
+        printf 'csearch() { "%s" csearch "$@"; }\n' "$BIN"
+    } >> "$RC"
+    echo "    shell functions: appended osearch/vsearch/csearch to $RC (new shell to pick up)"
+fi
+
 # 4b. (v1.15+) OCR helpers — make screenshot text searchable in csearch/vsearch.
 #     OCR engine is OS-native + free:
 #       macOS  → Swift CLI wrapping VNRecognizeTextRequest (Apple Vision)
@@ -295,6 +316,35 @@ elif [ "$WITH_PG" = "1" ] && [ "$PLATFORM" = "Linux" ]; then
     echo "    The crs binary's pgsearchd subcommand listens on a unix socket at"
     echo "    \$XDG_CACHE_HOME/pgsearchd/pgsearchd.sock (defaults to ~/.cache/...)."
     echo "    Set CRS_PG_PASSWORD (and friends) in the unit file's Environment="
+fi
+
+# 7c. (--with-pg, macOS, GPU host only) osearch distillation backfill.
+#     osearch's orient leg reads a msg_distilled side table populated by a
+#     generative model (qwen2.5:7b via Ollama /api/generate). This runs ONLY
+#     where there's a GPU (your Mac) — bluesea/cloud agents only *query*.
+#     We install the table + the backfill daemon files but DO NOT auto-load the
+#     daemon: it grinds the GPU continuously, so loading it is opt-in.
+if [ "$WITH_PG" = "1" ] && [ "$PLATFORM" = "Darwin" ]; then
+    echo "==> osearch distillation (orient layer)"
+    # Create msg_distilled side table + owner-RLS (idempotent; safe if it exists).
+    if "$BIN" distill-init >/dev/null 2>&1; then
+        echo "    ✓ msg_distilled side table ready (run \`crs distill-missing\` to populate)"
+    else
+        echo "    !! distill-init failed (need CRS_PG_PASSWORD set + pg reachable); rerun \`crs distill-init\` later"
+    fi
+    # Install the continuous-backfill daemon files (opt-in — not loaded here).
+    cp "$SKILL_DIR/scripts/distill-backfill.sh" "$ARCHIVE_DIR/distill-backfill.sh" 2>/dev/null \
+        && chmod +x "$ARCHIVE_DIR/distill-backfill.sh"
+    D_PLIST="$HOME/Library/LaunchAgents/com.${USER_SHORT}.crs-distill.plist"
+    if [ ! -f "$D_PLIST" ]; then
+        sed "s|<USERNAME>|${USER_SHORT}|g" "$SKILL_DIR/scripts/launchd/distill.plist.template" > "$D_PLIST"
+        echo "    installed backfill daemon files (NOT started — GPU-heavy, opt-in)"
+        echo "    to start continuous orient backfill (newest-first, ~300 rows/hr):"
+        echo "        launchctl load \"$D_PLIST\""
+        echo "    to pause:  launchctl unload \"$D_PLIST\"   |   log: $ARCHIVE_DIR/distill-backfill.log"
+    else
+        echo "    backfill daemon plist already present: $D_PLIST"
+    fi
 fi
 
 # 8. Register SessionStart hook

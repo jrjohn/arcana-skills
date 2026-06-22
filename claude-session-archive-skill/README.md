@@ -11,7 +11,22 @@ Deployment is **Rust (`crs`) — single ~5 MB self-contained binary** that bundl
 
 **Optional remote PG backend** (since v1.13): `cargo build --release --features pg-backend` (or `install.sh --with-pg`) re-routes csearch / vsearch / vsearch-since / build / embed-missing through a remote PostgreSQL 17 + pgvector instance. Adds `pgsearch` / `pgsearchd` subcommands; daemon holds an r2d2 connection pool over a unix socket so each query skips the ~700ms TLS handshake. Use this when you want the same archive across multiple machines. Performance trade-off: csearch ~315ms / vsearch ~1.1s end-to-end (WAN RTT-bound, not algorithm-bound — pure server query is ~6ms / ~200ms after v1.13.3's HNSW plan fix). Default sqlite build remains single-machine and 3-10× faster locally. See `references/pg-backend.md` for full setup.
 
+**`osearch` — the default front door (PG-backend, since v1.25):** fuses lexical + semantic + a proposition-distilled "orient" layer via weighted Reciprocal Rank Fusion, so a single command serves NL questions, concept queries, and exact-entity lookups. `vsearch`/`csearch` remain as manual single-leg shortcuts. The orient layer is filled by a Mac-GPU distillation backfill (`crs distill-missing` / `distill-init`, `qwen2.5:7b`); GPU-only, so cloud/cron agents only query. See the `osearch` section below.
+
 ## What it gives you
+
+### `osearch` — default front door (orient→recall→pin RRF fusion, PG-backend, v1.25+)
+```bash
+osearch '今天有人用 VPN 嗎?' network      # NL question → semantic answer leads
+osearch '自動 VPN 黑名單機制' network       # concept → fused legs surface the right past report
+osearch '品質法規部' network --with-id      # entity term → pin+recall agreement ranks top
+```
+Unions three legs over the same archive, fused by **weighted Reciprocal Rank Fusion**, and returns raw msg:
+- **orient** — semantic KNN over a proposition-distilled side table (`msg_distilled`)
+- **recall** — semantic KNN over raw `msg.embedding` (= `vsearch`)
+- **pin** — FTS5/GIN lexical over raw `msg` + `msg_jieba` (= `csearch`)
+
+Adaptive weighting: NL queries (have `?`/`？` or ≥12 chars) weight the semantic leg 2× so lexical stopword noise can't bury the answer; short exact-token/IP/hostname queries use equal weights so pin+recall agreement wins. **A blended front door, not a `csearch` superset** — for pure exact-lexical lookups use `csearch`. The orient layer is populated by a Mac-GPU distillation backfill (`crs distill-missing`, `qwen2.5:7b`); until coverage builds, osearch ≈ vsearch (RRF guarantees osearch ≥ vsearch regardless). sqlite-only backend: osearch unavailable, use `vsearch`.
 
 ### `csearch` — FTS5 lexical (always available)
 ```bash
