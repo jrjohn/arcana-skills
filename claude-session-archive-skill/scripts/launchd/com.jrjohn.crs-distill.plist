@@ -9,10 +9,12 @@
         <string>/bin/bash</string>
         <string>/Users/jrjohn/claude-archive/distill-backfill.sh</string>
     </array>
-    <key>StartInterval</key>
-    <integer>1800</integer>
+    <key>KeepAlive</key>
+    <true/>
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
     <key>Nice</key>
     <integer>10</integer>
     <key>StandardOutPath</key>
