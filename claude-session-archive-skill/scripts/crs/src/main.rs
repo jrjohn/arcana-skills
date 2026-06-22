@@ -147,6 +147,34 @@ enum Cmd {
     },
     /// Embed one string and print first 5 dims (debug helper)
     EmbedText { text: String },
+    /// Create the msg_distilled side table + indexes + owner-based RLS (idempotent). (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    DistillInit,
+    /// Distill msg rows lacking a msg_distilled entry: generative proposition
+    /// extraction (Mac GPU / qwen2.5:7b) → embed → INSERT. Mirrors embed-missing. (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    DistillMissing {
+        #[arg(long, default_value = "2")]
+        workers: usize,
+        #[arg(long, default_value = "0")]
+        limit: usize,
+        /// Comma-separated project-name prefixes — same semantics as embed-missing.
+        #[arg(long = "project-prefix")]
+        project_prefix: Option<String>,
+    },
+    /// orient→recall→pin upgrade-chain search: union of distilled-KNN (orient) +
+    /// raw vsearch (recall) + raw csearch (pin), drilled back to raw msg. (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    Osearch {
+        query: String,
+        project: Option<String>,
+        #[arg(long, default_value = "10")]
+        limit: usize,
+        #[arg(long = "no-img")]
+        no_img: bool,
+        #[arg(long = "with-id")]
+        with_id: bool,
+    },
     /// OCR image content blocks referenced by [IMG:<sha>] sentinels in msg.content,
     /// inserting results into image_ocr_cache + image_ocr. Mirrors embed-missing.
     #[cfg(feature = "pg-backend")]
@@ -295,6 +323,96 @@ fn vec_to_blob(v: &[f32]) -> Vec<u8> {
         out.extend_from_slice(&f.to_le_bytes());
     }
     out
+}
+
+// ─────────────────── distillation (generative) ───────────────────
+// Mirrors embed_text but calls Ollama /api/generate with a generative model
+// (qwen2.5:7b default) to produce proposition-style structured distillation.
+// Validated by the 2026-06 prototype: proposition extraction loses ~30% of
+// entities vs ~53% for one-line summary; raw+union safety net covers the rest.
+// Traditional-Chinese forced (qwen defaults to simplified, which breaks
+// lexical match against a Traditional archive).
+
+#[cfg(feature = "pg-backend")]
+fn distill_model() -> String {
+    std::env::var("CRS_DISTILL_MODEL").unwrap_or_else(|_| "qwen2.5:7b".to_string())
+}
+
+#[cfg(feature = "pg-backend")]
+const DISTILL_VER: i32 = 1;
+
+#[cfg(feature = "pg-backend")]
+fn ollama_generate_url() -> String {
+    // Reuse ollama_url() host root; swap /api/embed → /api/generate.
+    ollama_url().replace("/api/embed", "/api/generate")
+}
+
+// Generative distillation is far slower than embedding (qwen produces 13+
+// propositions; under GPU queueing a call can exceed the 60s default). Give it
+// a generous ceiling so rows aren't wasted to timeout (they'd be retried next
+// sweep anyway — distill-missing re-selects rows still lacking a msg_distilled
+// row — but re-running generation is wasteful). 300s.
+#[cfg(feature = "pg-backend")]
+fn distill_http_client() -> Result<reqwest::blocking::Client> {
+    Ok(reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()?)
+}
+
+#[cfg(feature = "pg-backend")]
+#[derive(Deserialize)]
+struct GenResponse {
+    response: String,
+}
+
+#[cfg(feature = "pg-backend")]
+#[derive(Deserialize, Default)]
+struct DistillObj {
+    #[serde(default)]
+    props: Vec<serde_json::Value>,
+    #[serde(default)]
+    identifiers: Vec<serde_json::Value>,
+}
+
+// Flatten a JSON value (string | object | other) into plain strings, so a
+// model that returns identifiers as objects {"name":...} doesn't break us.
+#[cfg(feature = "pg-backend")]
+fn flat_strs(vals: &[serde_json::Value]) -> Vec<String> {
+    let mut out = Vec::new();
+    for v in vals {
+        match v {
+            serde_json::Value::String(s) => out.push(s.clone()),
+            serde_json::Value::Object(m) => {
+                for (_, vv) in m {
+                    if let Some(s) = vv.as_str() { out.push(s.to_string()); }
+                    else { out.push(vv.to_string()); }
+                }
+            }
+            other => out.push(other.to_string()),
+        }
+    }
+    out
+}
+
+#[cfg(feature = "pg-backend")]
+const DISTILL_PROMPT: &str = "你是 RAG 精練器。對下面這「一筆」訊息抽出所有原子 proposition(每個自足事實一條)。\n鐵律：1.務必逐一保留所有人名/部門/設備/IP/hostname/工號等具體 token,不挑重點不省略長尾。\n2.務必繁體中文,entity 照原文用字(品質法規部 不可轉簡體)。3.identifiers 為字串陣列。\n只輸出一個 JSON 物件：{\"props\":[\"命題1\",\"命題2\"],\"identifiers\":[\"token字串\"]}\n\n訊息：\n";
+
+// Returns (props, identifiers). On any failure returns empty vecs (caller skips
+// the row; raw+vsearch+csearch still cover it — distilled is ADD not REPLACE).
+#[cfg(feature = "pg-backend")]
+fn distill_text_gen(client: &reqwest::blocking::Client, content: &str) -> Result<(Vec<String>, Vec<String>)> {
+    let snippet: String = content.chars().take(1200).collect();
+    let body = serde_json::json!({
+        "model": distill_model(),
+        "prompt": format!("{}{}", DISTILL_PROMPT, snippet),
+        "stream": false,
+        "format": "json",
+        "options": { "temperature": 0.1, "num_ctx": 4096 }
+    });
+    let resp: GenResponse = client.post(&ollama_generate_url())
+        .json(&body).send()?.error_for_status()?.json()?;
+    let obj: DistillObj = serde_json::from_str(resp.response.trim()).unwrap_or_default();
+    Ok((flat_strs(&obj.props), flat_strs(&obj.identifiers)))
 }
 
 // ─────────────────────────── csearch ───────────────────────────
@@ -3681,6 +3799,217 @@ fn cmd_pgsearch(query: &str, mode_fts: bool, mode_vec: bool, mode_hybrid: bool, 
     Ok(())
 }
 
+// ─────────────────── distill / osearch (pg-backend) ───────────────────
+
+#[cfg(feature = "pg-backend")]
+const MSG_DISTILLED_DDL: &str = "
+CREATE TABLE IF NOT EXISTS msg_distilled (
+  id BIGSERIAL PRIMARY KEY,
+  original_id BIGINT NOT NULL REFERENCES msg(id) ON DELETE CASCADE,
+  owner TEXT NOT NULL DEFAULT current_user,
+  props TEXT,
+  identifiers TEXT[],
+  distill_text TEXT,
+  summary_tsv tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(distill_text,''))) STORED,
+  summary_embedding vector(1024),
+  distill_model TEXT,
+  distill_ver INT,
+  ts TIMESTAMPTZ DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS msg_distilled_orig ON msg_distilled(original_id);
+CREATE INDEX IF NOT EXISTS msg_distilled_tsv ON msg_distilled USING gin(summary_tsv);
+CREATE INDEX IF NOT EXISTS msg_distilled_hnsw ON msg_distilled USING hnsw(summary_embedding vector_cosine_ops);
+ALTER TABLE msg_distilled ENABLE ROW LEVEL SECURITY;
+ALTER TABLE msg_distilled FORCE ROW LEVEL SECURITY;
+";
+
+// Idempotent: table + indexes + owner-based RLS policy. owner defaults to the
+// connecting role (current_user). With a single shared archive role today the
+// policy is transparent (owner = current_user always true); it is "born
+// compliant" so a future per-employee role rollout (see pgvector-rbac-rls
+// design) enforces hierarchy without a schema change. ⚠️ Mac + bluesea MUST
+// connect as the SAME archive role, else RLS hides Mac-written rows from bluesea.
+#[cfg(feature = "pg-backend")]
+fn cmd_distill_init() -> Result<()> {
+    let mut pg = pg_connect()?;
+    pg.batch_execute(MSG_DISTILLED_DDL)?;
+    let exists: bool = pg.query_one(
+        "SELECT EXISTS(SELECT 1 FROM pg_policies WHERE tablename='msg_distilled' AND policyname='rbac_hier')",
+        &[])?.get(0);
+    if !exists {
+        pg.batch_execute(
+            "CREATE POLICY rbac_hier ON msg_distilled \
+             USING (pg_has_role(current_user, owner, 'USAGE')) \
+             WITH CHECK (owner = current_user)")?;
+    }
+    println!("msg_distilled ready (table + indexes + RLS policy rbac_hier).");
+    Ok(())
+}
+
+// Mirror of cmd_embed_missing_direct, but generative: find msg rows lacking a
+// msg_distilled entry → proposition-extract (qwen) → embed distill_text → INSERT.
+#[cfg(feature = "pg-backend")]
+fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<String>) -> Result<()> {
+    cmd_distill_init()?;
+    let (prefix_clause, prefix_binds) = project_prefix_filter_pg(project_prefix.as_deref(), 1);
+    let mut pg = pg_connect()?;
+    let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
+    let select_sql = format!(
+        "SELECT id, content FROM msg \
+         WHERE NOT EXISTS (SELECT 1 FROM msg_distilled d WHERE d.original_id = msg.id) \
+           AND length(content) >= 20{} ORDER BY id DESC {}",
+        prefix_clause, limit_clause);
+    let params: Vec<&(dyn postgres::types::ToSql + Sync)> =
+        prefix_binds.iter().map(|s| s as &(dyn postgres::types::ToSql + Sync)).collect();
+    let rows = pg.query(&select_sql, &params[..])?;
+    let jobs: Vec<(i64, String)> = rows.iter().map(|r| (r.get(0), r.get(1))).collect();
+    drop(pg);
+    if jobs.is_empty() { println!("nothing to distill (prefix={:?})", project_prefix); return Ok(()); }
+    println!("distill-missing: {} jobs over {} workers (model={})", jobs.len(), workers, distill_model());
+
+    use rayon::prelude::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    // Per-row progress to STDERR (unbuffered — visible even when stdout is piped/
+    // backgrounded, where Rust block-buffers). Generation is the slow phase
+    // (~20s/row); without this the run looks hung for tens of minutes.
+    let total = jobs.len();
+    let done = AtomicUsize::new(0);
+    let t_gen = std::time::Instant::now();
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
+    let results: Vec<(i64, String, String, Vec<String>, Vec<f32>)> = pool.install(|| {
+        jobs.par_iter().filter_map(|(id, content)| {
+            let http = distill_http_client().ok()?;
+            let r = distill_text_gen(&http, content);
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            let el = t_gen.elapsed().as_secs_f64();
+            let rate = el / n as f64;
+            let eta = rate * (total - n) as f64;
+            eprintln!("  [{:>3}/{} {:>3.0}%] gen id={} elapsed={:.0}s rate={:.0}s/row eta={:.0}s",
+                n, total, 100.0 * n as f64 / total as f64, id, el, rate, eta);
+            let (props, ids) = match r {
+                Ok(v) => v,
+                Err(e) => { eprintln!("    distill id={} err={}", id, e); return None; }
+            };
+            if props.is_empty() && ids.is_empty() { return None; } // nothing extracted → raw covers it
+            let props_text = props.join("\n");
+            let mut dt = props.join(" ");
+            if !ids.is_empty() { dt.push(' '); dt.push_str(&ids.join(" ")); }
+            let dt = dt.trim().to_string();
+            if dt.is_empty() { return None; }
+            let emb = embed_text(&http, &dt).ok()?;
+            Some((*id, props_text, dt, ids, emb))
+        }).collect()
+    });
+
+    let mut pg = pg_connect()?;
+    let model = distill_model();
+    let mut n = 0usize;
+    for (id, props_text, dt, ids, emb) in &results {
+        let lit = vec_literal(emb);
+        let sql = format!(
+            "INSERT INTO msg_distilled (original_id, props, identifiers, distill_text, summary_embedding, distill_model, distill_ver) \
+             VALUES ($1, $2, $3, $4, '{}'::vector, $5, $6) ON CONFLICT (original_id) DO NOTHING", lit);
+        match pg.execute(&sql, &[id, props_text, ids, dt, &model, &DISTILL_VER]) {
+            Ok(_) => { n += 1; if n % 25 == 0 { println!("  inserted {}/{}", n, results.len()); } }
+            Err(e) => eprintln!("insert id={} err={}", id, e),
+        }
+    }
+    println!("done. distilled {} rows ({} skipped empty).", n, jobs.len() - results.len());
+    Ok(())
+}
+
+// orient leg: KNN over msg_distilled.summary_embedding, joined back to raw msg.
+// Best-effort — returns Err if the table doesn't exist yet (osearch then runs
+// recall+pin only). Mirrors pg_vec's HNSW-first MATERIALIZED plan.
+#[cfg(feature = "pg-backend")]
+fn pg_distill_orient(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
+    let emb = embed_pg_query(http, query)?;
+    let lit = vec_literal(&emb);
+    let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
+    let over_fetch = ((limit * 20).max(100)) as i64;
+    let ef = std::cmp::max(over_fetch as i32, 100);
+    client.execute(&format!("SET hnsw.ef_search = {ef}"), &[]).ok();
+    let sql = format!(
+        "WITH knn AS MATERIALIZED (
+             SELECT d.original_id, d.summary_embedding <=> '{lit}'::vector AS dist
+             FROM msg_distilled d
+             WHERE d.summary_embedding IS NOT NULL
+             ORDER BY d.summary_embedding <=> '{lit}'::vector
+             LIMIT $2
+         )
+         SELECT m.id, m.ts, m.project, m.session_id, m.role, m.tool_name, m.content, knn.dist
+         FROM knn JOIN msg m ON m.id = knn.original_id
+         WHERE ($1::text IS NULL OR m.project LIKE $1)
+         ORDER BY knn.dist LIMIT $3");
+    let rows = client.query(&sql, &[&proj_like, &over_fetch, &(limit as i64)])?;
+    Ok(rows.iter().map(|r| PgRow {
+        id: r.get(0), ts: r.get(1), project: r.get(2), session_id: r.get(3),
+        role: r.get(4), tool_name: r.get(5), content: r.get(6), score: r.get(7),
+    }).collect())
+}
+
+// osearch: orient + recall + pin legs fused by Reciprocal Rank Fusion (RRF).
+// RRF (score = Σ_legs 1/(k + rank), k=60) is the standard hybrid-search fusion:
+// it ranks by cross-leg agreement + per-leg rank, WITHOUT needing comparable
+// scores across lexical/semantic, and WITHOUT a strict leg priority. Strict
+// "pin first" was wrong for natural-language questions — the lexical leg matches
+// stopword fragments and buried the perfect semantic hit. RRF lets a row that is
+// #1 in the semantic (recall) leg surface even if the lexical leg is noisy.
+#[cfg(feature = "pg-backend")]
+fn cmd_osearch(query: &str, project: Option<&str>, limit: usize, no_img: bool, with_id: bool) -> Result<()> {
+    let include_img = !no_img;
+    // Over-fetch per leg so RRF has cross-leg material to fuse, then trim to limit.
+    let pool = (limit * 3).max(20);
+    let mut pg = pg_connect()?;
+    let http = http_client()?;
+    let pin = pg_fts(&mut pg, query, project, pool, include_img).unwrap_or_default();
+    let recall = pg_vec(&mut pg, &http, query, project, pool, include_img).unwrap_or_default();
+    let orient = match pg_distill_orient(&mut pg, &http, query, project, pool) {
+        Ok(v) => v,
+        Err(e) => { eprintln!("  (orient skipped: {e})"); Vec::new() }
+    };
+
+    // Adaptive weighted RRF — cheap query routing without a classifier:
+    //   • Natural-language query (has ? / ？, or long) → recall (semantic) 2× weight,
+    //     so the lexical pin leg's stopword-fragment noise can't bury the answer.
+    //   • Short exact-token / entity / IP / hostname query → equal weights (1:1:1),
+    //     so pin's exact match + recall's agreement win (keeps the eval gate green).
+    // The question mark is the strongest NL signal; CJK has no spaces so length is
+    // the fallback. A bare entity term (品質法規部, FortiGate, an IP) stays equal-weight.
+    let qchars = query.chars().count();
+    let is_nl = query.contains('?') || query.contains('？') || qchars >= 12;
+    let recall_w = if is_nl { 2.0_f64 } else { 1.0 };
+    const RRF_K: f64 = 60.0;
+    use std::collections::HashMap;
+    let mut score: HashMap<i64, f64> = HashMap::new();
+    let mut legs_of: HashMap<i64, Vec<&str>> = HashMap::new();
+    let mut row_of: HashMap<i64, &PgRow> = HashMap::new();
+    for (tag, leg, w) in [("pin", &pin, 1.0_f64), ("recall", &recall, recall_w), ("orient", &orient, 1.0)] {
+        for (rank, r) in leg.iter().enumerate() {
+            let key = match r.id { Some(k) if k >= 0 => k, _ => continue };
+            *score.entry(key).or_insert(0.0) += w / (RRF_K + rank as f64);
+            legs_of.entry(key).or_default().push(tag);
+            row_of.entry(key).or_insert(r);
+        }
+    }
+    let mut ranked: Vec<i64> = score.keys().copied().collect();
+    ranked.sort_by(|a, b| score[b].partial_cmp(&score[a]).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut shown = 0usize;
+    for key in ranked.iter().take(limit) {
+        let r = row_of[key];
+        let tag = legs_of[key].join("+");
+        let prefix = if with_id {
+            format!("id={} sid={} ", r.id.unwrap_or(-1), r.session_id.chars().take(8).collect::<String>())
+        } else { String::new() };
+        println!("{}[{}] {}", prefix, tag, fmt_pg_row(r, 200));
+        shown += 1;
+    }
+    eprintln!("\n# osearch(RRF): pin={} recall={} orient={} → {} fused, top {} shown",
+        pin.len(), recall.len(), orient.len(), score.len(), shown);
+    Ok(())
+}
+
 // ─────────────────────────── main ───────────────────────────
 
 fn main() -> Result<()> {
@@ -3697,6 +4026,12 @@ fn main() -> Result<()> {
         Cmd::GenRecent { force } => cmd_gen_recent(force),
         Cmd::EmbedMissing { workers, limit, project_prefix } => cmd_embed_missing(workers, limit, project_prefix),
         Cmd::EmbedText { text } => cmd_embed_text(&text),
+        #[cfg(feature = "pg-backend")]
+        Cmd::DistillInit => cmd_distill_init(),
+        #[cfg(feature = "pg-backend")]
+        Cmd::DistillMissing { workers, limit, project_prefix } => cmd_distill_missing(workers, limit, project_prefix),
+        #[cfg(feature = "pg-backend")]
+        Cmd::Osearch { query, project, limit, no_img, with_id } => cmd_osearch(&query, project.as_deref(), limit, no_img, with_id),
         Cmd::Doctor => cmd_doctor(),
         Cmd::PruneVec { dry_run } => cmd_prune_vec(dry_run),
         #[cfg(feature = "pg-backend")]

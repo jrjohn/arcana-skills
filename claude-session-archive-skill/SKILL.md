@@ -19,7 +19,7 @@ Permanent, local, full-text searchable history of every Claude Code session you'
 
 | Trigger | Action |
 |---|---|
-| User asks you to recall something from a past session ("上週那個 X 怎麼設的？", "we discussed Y last Thursday") | Run `vsearch '<natural-language paraphrase>' [project]` first (semantic, default); fall back to `csearch '<exact phrase>' [project]` only when query is a precise literal (IP / hostname / file path / FTS5 syntax) or vsearch returns nothing useful |
+| User asks you to recall something from a past session ("上週那個 X 怎麼設的？", "we discussed Y last Thursday") | Run `osearch '<natural-language paraphrase>' [project]` first (default front door, pg-backend — fuses semantic + lexical + distilled via RRF); `vsearch` (pure semantic) / `csearch` (precise literal: IP / hostname / file path / FTS5 syntax) are manual shortcuts to skip the funnel. On sqlite-only backend, osearch is unavailable — use `vsearch` first |
 | User about to SSH / dig logs to identify someone or look up history (".98 是誰?", "上次怎麼處理 X 的") | **Discipline layer** (preflight hook) blocks the SSH/log-grep until vsearch runs. The answer is often already in archive. See `references/discipline-layer.md` |
 | User invokes `/claude-session-archive-skill` or types `csearch ...` and it errors | Diagnose: archive not installed yet → walk through install. Already installed → check FTS5 syntax. |
 | User on a fresh Mac wants the archive set up | Walk through Steps 1-6 in `references/installation-guide.md` |
@@ -34,7 +34,7 @@ Permanent, local, full-text searchable history of every Claude Code session you'
             ▼  crs build (idempotent incremental ingest, Rust binary)
 ~/claude-archive/sessions.db    ← SQLite + FTS5 + sqlite-vec (all bundled in crs)
             │  (launchd every 15 min)
-            ├── ~/bin/crs                      single binary: build / csearch / vsearch / vsearch-since / gen-recent / embed-missing
+            ├── ~/bin/crs                      single binary: build / osearch / csearch / vsearch / vsearch-since / gen-recent / embed-missing / distill-init / distill-missing
             ├── sqlite3 <db> "SELECT ..."      raw SQL
             ├── ~/.sqliterc                    cache=512MB / mmap=512MB tuning
             └── ~/.claude/CLAUDE.md            instructions so any new Claude
@@ -67,7 +67,7 @@ The skill ships with **two interchangeable backends, same source, Cargo feature 
 
 **Build-time exclusive**: each `crs` binary is one or the other. Switching is a 10-30s rebuild — same source, different `--features` flag. The default sqlite build doesn't even compile the postgres deps (lighter binary, faster build).
 
-In `pg-backend` mode, `cmd_csearch` / `cmd_vsearch` / `cmd_vsearch_since` / `cmd_build` / `cmd_embed_missing` all route to PG. Two extra subcommands appear (`pgsearch`, `pgsearchd`) for direct PG queries and the long-running daemon. **Local sqlite is unused for search** in this mode — `~/claude-archive/sessions.db` may not even exist.
+In `pg-backend` mode, `cmd_csearch` / `cmd_vsearch` / `cmd_vsearch_since` / `cmd_build` / `cmd_embed_missing` all route to PG. Extra subcommands appear: `pgsearch` / `pgsearchd` (direct PG queries + daemon), and `osearch` / `distill-init` / `distill-missing` (the orient→recall→pin fused front door + its `msg_distilled` side-table + Mac-GPU distillation sweep — see the osearch CLI section). **Local sqlite is unused for search** in this mode — `~/claude-archive/sessions.db` may not even exist.
 
 **Since v1.20, `cmd_build` + `cmd_embed_missing` (unix) route their PG ops *through the pgsearchd daemon pool* (typed RPCs over the unix socket), not bare `pg_connect()`** — this fixes the embed-missing SSLRead hang (idle bare connection evicted by NAT). It is **no-fallback**: build requires the daemon to be up. **Consequence for cloud/container deploys** — earlier docs said cloud deploys may "skip pgsearchd and connect direct"; that is still true for *search* (daemon is a latency optimization there), but a host running `crs build` against PG now **must** run pgsearchd, and the daemon socket owner must match the build user (e.g. daemon and cron both as `claude-agent`). Search-only consumers can still go direct.
 
@@ -130,6 +130,33 @@ This path skips the `pgsearchd` daemon (direct PG over Docker network is already
 Requires `OLLAMA_HOST` and `CRS_PG_URL` in container env (typically set in `docker-compose.yml` `environment:` block). v1.17.1+ `crs` honors `OLLAMA_HOST` — earlier builds had the URL hardcoded to localhost and won't work in a multi-container setup.
 
 ## Daily usage patterns
+
+### CLI — `osearch` (default front door, pg-backend, v1.21+)
+
+**orient → recall → pin upgrade chain, fused by weighted RRF.** Unions three legs over the same archive and returns raw msg, drilled back from any leg:
+- **orient** — KNN over `msg_distilled.summary_embedding` (proposition-distilled side table), drilled to raw
+- **recall** — semantic KNN over raw `msg.embedding` (= what `vsearch` does)
+- **pin** — FTS5 / GIN lexical over raw `msg` + `msg_jieba` (= what `csearch` does)
+
+```bash
+osearch '今天有人用 VPN 嗎?' network      # NL question → recall-weighted, semantic answer leads
+osearch '自動 VPN 黑名單機制' network       # concept → fused legs surface the right past report
+osearch '品質法規部' network --with-id      # entity term → pin+recall agreement ranks top
+```
+
+**Fusion = adaptive weighted RRF** (`score = Σ w/(60+rank)`): NL queries (contain `?`/`？` or ≥12 chars) weight the semantic **recall** leg 2× so lexical stopword-fragment noise can't bury the answer; short exact-token/IP/hostname queries use equal weights so pin+recall cross-leg agreement wins. **osearch is a BLENDED front door, not a csearch superset** — it intentionally mixes semantic rows in. For pure exact-lexical lookups use `csearch` directly.
+
+osearch unlocks the preflight sentinel like vsearch/csearch. CLAUDE.md preflight default is now **osearch first**; vsearch/csearch are manual shortcuts for "skip the funnel, go straight to one leg."
+
+#### Distillation (Mac GPU only — `distill-missing` / `distill-init`)
+
+The orient leg needs a populated `msg_distilled` side table:
+- `crs distill-init` — create `msg_distilled` (FK→msg, `distill_text`, `summary_embedding vector(1024)`, HNSW+GIN, **owner-based RLS** `pg_has_role(current_user,owner)` FORCE) — idempotent.
+- `crs distill-missing [--project-prefix X] [--limit N]` — find msg rows lacking a distilled row → **generative proposition extraction** via Ollama `/api/generate` (`qwen2.5:7b`, env `CRS_DISTILL_MODEL`, Traditional-Chinese proposition prompt) → embed → INSERT. Per-row `%`/eta progress on stderr. ~40s/row on Mac GPU; **single-process** (parallel runs contend on the one GPU and halve throughput).
+
+Generation runs only where there's a GPU (Mac); bluesea/cloud containers only **query** (bge-m3 query-embed is cheap, CPU-fine). orient marginal value grows with backfill coverage — sparse coverage → osearch ≈ vsearch (orient empty, recall+pin cover); RRF guarantees osearch ≥ vsearch regardless.
+
+eval gate: `scripts/crs/eval/osearch_gate.py` — blend-aware regression check (osearch ≥ 0.5× csearch lexical recall on entity terms).
 
 ### CLI — `csearch` (FTS5 lexical, always available)
 
