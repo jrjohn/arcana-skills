@@ -2,6 +2,10 @@
 
 Professional STM32/FreeRTOS/C++14 embedded development skill based on [Arcana Embedded STM32](https://github.com/jrjohn/arcana-embedded-stm32) production architecture.
 
+## 🔁 Adding a module = copy the nearest working module
+
+When adding a new sensor / command / peripheral, **don't build it from scratch — copy the nearest existing module of the same kind in the reference firmware, then rename + adapt it.** Re-deriving the pattern each time invites breaking the discipline the architecture depends on (dynamic allocation creeping in, non-ISR-safe publish, skipping the Observable / Port boundary, dropped host tests) — deviations that may compile but violate the real-time / memory constraints. Copying a known-good module carries that discipline in *by construction*. (Full rule in `SKILL.md`.)
+
 ## Architecture Rating: 9.1/10
 
 ## Key Features

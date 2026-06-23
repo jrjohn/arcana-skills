@@ -21,7 +21,18 @@ git clone https://github.com/jrjohn/arcana-windows.git [new-project-directory]
 1. **Clone** the reference project (command above).
 2. **Build + test the UNTOUCHED clone first** to establish a green baseline (`dotnet restore && dotnet build && dotnet test`) before changing anything.
 3. **Follow [0. Project Setup](#0-project-setup---critical)** to rename the solution/namespaces and strip the demo screens — while KEEPING the infrastructure: auth/security layers (`src/Arcana.Infrastructure/Security` — PBKDF2 hashing, RBAC, audit logging), caching, offline/sync (CRDT engine + vector clocks), the DI container (`src/Arcana.Infrastructure/`), the plugin runtime (`src/Arcana.Plugins*`), and deployment/build configs (`.csproj` versions, `Directory.Build.props`).
-4. **Add features** one at a time following the [File-by-File Feature Recipe](#file-by-file-feature-recipe).
+4. **Add features by copying the nearest working feature, then adapting** (see [🔁 Adding a feature](#-adding-a-feature--copy-the-nearest-working-feature-not-from-scratch)) — the recipe below is the completeness checklist. ([File-by-File Feature Recipe](#file-by-file-feature-recipe))
+
+### 🔁 Adding a feature = copy the nearest working feature (NOT from scratch)
+
+**When you add a new feature/screen, do NOT re-create it from memory by walking the File-by-File Recipe on a blank slate. Copy the nearest already-working feature in the cloned reference, then adapt it.**
+
+1. **Find the closest conformant feature** already in the reference — e.g. the example **Orders** list/detail feature, which already demonstrates the full Model → Repository → Service/UseCase → ViewModel (Input/Output/Effect) → View chain wired through DI.
+2. **Duplicate its ENTIRE file set** (domain entity, service interface + implementation, repository interface, repository implementation + UnitOfWork wiring, EF Core configuration + DbContext DbSet, mock data, DI registration, ViewModel, View XAML + code-behind, INavGraph + NavGraph navigation, unit tests) 1:1, keeping every layer.
+3. **Rename + adapt** to the new domain (types, navigation, endpoints, DI bindings).
+4. **Diff against the original** to confirm nothing was dropped — same layer split, same ViewModel/use-case/repository boundary, same error model, same tests.
+
+**Why this is mandatory:** the File-by-File Recipe is a *checklist of what must exist*, not a from-scratch build order. Re-deriving the pattern each time makes every step a chance to skip a layer (the ViewModel, the repository), wire a shortcut (view → data/API directly), or drop the tests — the "vibe-coding" deviations that compile and pass coverage but fail architecture review. Copying a known-good feature carries conformance in *by construction*; the recipe is then only your verification that nothing is missing.
 
 ### Supporting files — load on demand
 

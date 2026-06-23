@@ -19,7 +19,18 @@ Professional ESP32-S3 IoT development skill based on [Arcana Embedded ESP32](htt
 
 1. **Clone first** — follow [§0. Project Setup — CRITICAL](#0-project-setup--critical) below.
 2. **Build the untouched clone first** — establish a green `idf.py build` baseline BEFORE changing anything. If the pristine clone doesn't build, fix your toolchain (not the project).
-3. **Then adapt** — replace only the demo handlers/sensors listed in §0; keep the core infrastructure.
+3. **Then adapt** — replace only the demo handlers/sensors listed in §0; keep the core infrastructure. When adding a NEW command/sensor module, do it by copying the nearest working module — see [Adding a module = copy the nearest working module](#-adding-a-module--copy-the-nearest-working-module-not-from-scratch) below.
+
+### 🔁 Adding a module = copy the nearest working module (NOT from scratch)
+
+**When you add a new sensor / command / peripheral module, do NOT re-create it from memory. Copy the nearest already-working module of the same kind in the reference firmware, then adapt it.**
+
+1. **Find the closest conformant module** already in the reference — e.g. the existing `SensorReadHandler` / `SensorSubscribeHandler` Sensor-cluster command handler (with its Observable-backed sensor publisher) registered in `CommandFactory`, which already follows the project's pattern (zero-copy model passing, static crypto-session allocation, ISR-safe Observable publishing into the command pipeline).
+2. **Duplicate its ENTIRE file set** (the cluster:command id in `CommandDefs.h`; the request/response messages in `command.proto` + a `max_size` entry for every field in `command.options`; the handler `components/CommandService/src/<feature>_handler.cpp` + its `include/` header; the `CommandFactory::registerAll` registration in `command_factory.cpp`; the component `CMakeLists.txt` build entry; and the host round-trip test in `tools/ble_crypto_test.py` / `tools/mqtt_crypto_test.py`) 1:1, keeping the established pattern (zero-copy model, static allocation, ISR-safe publish, the Observable/Port boundary).
+3. **Rename + adapt** to the new sensor/command/peripheral (IDs, registers, payload types, registration).
+4. **Diff against the original** to confirm nothing was dropped — same pattern, same allocation discipline, same tests.
+
+**Why this is mandatory:** re-deriving the pattern each time makes every step a chance to break the discipline the architecture depends on (dynamic allocation creeping in, non-ISR-safe publish, skipping the Observable boundary, dropping the host test) — deviations that may compile but violate the real-time/memory constraints. Copying a known-good module carries that discipline in *by construction*.
 
 ### Supporting files — load on demand
 

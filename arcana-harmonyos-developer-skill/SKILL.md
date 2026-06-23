@@ -19,7 +19,18 @@ git clone https://github.com/jrjohn/arcana-harmonyos.git [new-project-directory]
 1. **Clone** the reference project (command above).
 2. **Build + test the UNTOUCHED clone first** to establish a green baseline (`hvigorw assembleHap --mode module -p product=default -p module=entry`, then run the test suite) before changing anything.
 3. **Follow [0. Project Setup](#0-project-setup---critical)** to rename the bundleName/module and strip the demo pages — while KEEPING the infrastructure: auth/security layers (`core/security` HUKS), caching (`data/cache` LRU), offline/sync (`core/sync` + RelationalStore + WorkScheduler), the DI container (`core/di`), and deployment/build configs (`build-profile.json5`, `oh-package.json5`).
-4. **Add features** one at a time following the [File-by-File Feature Recipe](#file-by-file-feature-recipe).
+4. **Add features by copying the nearest working feature, then adapting** (see [🔁 Adding a feature](#-adding-a-feature--copy-the-nearest-working-feature-not-from-scratch)) — the recipe below is the completeness checklist. ([File-by-File Feature Recipe](#file-by-file-feature-recipe))
+
+### 🔁 Adding a feature = copy the nearest working feature (NOT from scratch)
+
+**When you add a new feature/screen, do NOT re-create it from memory by walking the File-by-File Recipe on a blank slate. Copy the nearest already-working feature in the cloned reference, then adapt it.**
+
+1. **Find the closest conformant feature** already in the reference — e.g. the example **Orders** list/detail feature, which already demonstrates the full Model → Repository → Service/UseCase → ViewModel (Input/Output/Effect) → View chain wired through DI.
+2. **Duplicate its ENTIRE file set** (domain model, validator, repository interface, service, DTO, local source, repository implementation, DI registration, ViewModel, pages, route registration in NavigationRoutes + module.json5 router_map, hypium unit tests) 1:1, keeping every layer.
+3. **Rename + adapt** to the new domain (types, navigation, endpoints, DI bindings).
+4. **Diff against the original** to confirm nothing was dropped — same layer split, same ViewModel/use-case/repository boundary, same error model, same tests.
+
+**Why this is mandatory:** the File-by-File Recipe is a *checklist of what must exist*, not a from-scratch build order. Re-deriving the pattern each time makes every step a chance to skip a layer (the ViewModel, the repository), wire a shortcut (view → data/API directly), or drop the tests — the "vibe-coding" deviations that compile and pass coverage but fail architecture review. Copying a known-good feature carries conformance in *by construction*; the recipe is then only your verification that nothing is missing.
 
 ### Supporting files — load on demand
 

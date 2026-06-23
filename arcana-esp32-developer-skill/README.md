@@ -2,6 +2,10 @@
 
 Professional ESP32-S3 IoT development skill based on [Arcana Embedded ESP32](https://github.com/jrjohn/arcana-embedded-esp32) production-ready IoT command platform.
 
+## 🔁 Adding a module = copy the nearest working module
+
+When adding a new sensor / command / peripheral, **don't build it from scratch — copy the nearest existing module of the same kind in the reference firmware, then rename + adapt it.** Re-deriving the pattern each time invites breaking the discipline the architecture depends on (dynamic allocation creeping in, non-ISR-safe publish, skipping the Observable / Port boundary, dropped host tests) — deviations that may compile but violate the real-time / memory constraints. Copying a known-good module carries that discipline in *by construction*. (Full rule in `SKILL.md`.)
+
 ## Version
 
 **v1.0** - Initial Release

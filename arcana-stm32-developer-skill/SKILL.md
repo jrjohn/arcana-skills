@@ -16,7 +16,18 @@ Professional STM32/FreeRTOS/C++14 embedded development skill based on [Arcana Em
 
 1. **Clone first** — follow [Project Setup - CRITICAL](#project-setup---critical) below for the full clone/re-init/KEEP/REPLACE procedure.
 2. **Build the untouched clone first** — establish a green `make` + `arm-none-eabi-size` baseline BEFORE changing anything. If the pristine clone doesn't build, fix your toolchain (not the project).
-3. **Then adapt** — replace only the example services/models listed in Project Setup; keep the core architecture files.
+3. **Then adapt** — replace only the example services/models listed in Project Setup; keep the core architecture files. When adding a NEW service/sensor/peripheral module, do it by copying the nearest working module — see [Adding a module = copy the nearest working module](#-adding-a-module--copy-the-nearest-working-module-not-from-scratch) below.
+
+### 🔁 Adding a module = copy the nearest working module (NOT from scratch)
+
+**When you add a new sensor / command / peripheral module, do NOT re-create it from memory. Copy the nearest already-working module of the same kind in the reference firmware, then adapt it.**
+
+1. **Find the closest conformant module** already in the reference — e.g. the existing `CounterService` (observer) or `TimerService` (publisher) built on `Observable<T>`, which already follows the project's pattern (zero-copy `const T&` model passing, static allocation, ISR-safe `publishFromISR` + `portYIELD_FROM_ISR`, the Observable/dispatcher boundary).
+2. **Duplicate its ENTIRE file set** (the model struct in `Core/Inc/Models.hpp` with its `static_assert` size/trivially-copyable guards + `ModelType` enum + `QueueItem` union entry; the service header `Core/Inc/<Service>.hpp` + source `Core/Src/<Service>.cpp`; the `Observable<Model>` member, `Observer` registration and task wiring in `Core/Src/App.cpp`; the `.cpp` added to the `Makefile` build; and the `arm-none-eabi-size` RAM/Flash budget re-check) 1:1, keeping the established pattern (zero-copy model, static allocation, ISR-safe publish, the Observable/Port boundary).
+3. **Rename + adapt** to the new sensor/command/peripheral (IDs, registers, payload types, registration).
+4. **Diff against the original** to confirm nothing was dropped — same pattern, same allocation discipline, same tests.
+
+**Why this is mandatory:** re-deriving the pattern each time makes every step a chance to break the discipline the architecture depends on (dynamic allocation creeping in, non-ISR-safe publish, skipping the Observable boundary, dropping the host test) — deviations that may compile but violate the real-time/memory constraints. Copying a known-good module carries that discipline in *by construction*.
 
 ### Supporting files — load on demand
 
