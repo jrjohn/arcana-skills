@@ -2,6 +2,10 @@
 
 Professional HarmonyOS 5 (NEXT) development skill based on [Arcana HarmonyOS](https://github.com/jrjohn/arcana-harmonyos) enterprise architecture.
 
+## 🔁 Adding a feature = copy the nearest working feature
+
+When adding a new feature, **don't build it from scratch off the recipe — copy the nearest existing conformant feature in the cloned reference, then rename + adapt it.** Re-deriving the pattern each time invites skipped layers (ViewModel / repository), shortcut wiring (component → data/API directly), and dropped tests — the "vibe-coding" deviations that compile and pass coverage but fail architecture review. Copying a known-good feature carries conformance in *by construction*; the File-by-File Recipe is then your completeness checklist, not a from-scratch build order. (Full rule in `SKILL.md`.)
+
 ## Version
 
 **v1.0** - Initial Release

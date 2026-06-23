@@ -21,7 +21,18 @@ git clone https://github.com/jrjohn/arcana-vue.git [new-project-directory]
 1. **Clone** the reference project (command above).
 2. **Build + test the UNTOUCHED clone first** — `npm install && npm run build && npx vitest run` must be green before any modification (known-good baseline).
 3. Follow [0. Project Setup](#0-project-setup---critical) to rename the project and strip demo code — **KEEP the infrastructure**: auth (guards/interceptors), 4-layer caching, offline/sync, security layers, DI/core, router skeleton.
-4. Add features following the [New Feature Checklist](#new-feature-checklist) below.
+4. **Add features by copying the nearest working feature, then adapting** (see [🔁 Adding a feature](#-adding-a-feature--copy-the-nearest-working-feature-not-from-scratch)) — the [New Feature Checklist](#new-feature-checklist) below is the completeness checklist.
+
+### 🔁 Adding a feature = copy the nearest working feature (NOT from scratch)
+
+**When you add a new feature, do NOT re-create it from memory by walking the File-by-File Recipe on a blank slate. Copy the nearest already-working feature in the cloned reference, then adapt it.**
+
+1. **Find the closest conformant feature** already in the reference — e.g. the example `users` feature (user-list / user-detail / user-form) — it already has the full Model → Repository → Service → ViewModel (Input/Output/Effect) → Component → specs chain wired through DI.
+2. **Duplicate its ENTIRE file set** (entity, validator, service interface + impl, repository interface + impl, mapper, DTO, mock repository, DI token + container binding, ViewModel composable, component view, route, tests) 1:1, keeping every layer.
+3. **Rename + adapt** to the new domain (types, routes, endpoints, DI bindings/providers).
+4. **Diff against the original** to confirm nothing was dropped — same layer split, same ViewModel/service/repository boundary, same error model, same tests.
+
+**Why this is mandatory:** the File-by-File Recipe is a *checklist of what must exist*, not a from-scratch build order. Re-deriving the pattern each time makes every step a chance to skip a layer (the ViewModel, the repository), wire a shortcut (component → data/API directly), or drop the tests — the "vibe-coding" deviations that pass local build + coverage but fail architecture review (e.g. arch-qube). Copying a known-good feature carries conformance in *by construction*; the recipe is then only your verification that nothing is missing.
 
 ### Supporting files — load on demand
 

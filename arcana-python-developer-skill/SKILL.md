@@ -28,7 +28,18 @@ Professional Python/Flask development skill based on [Arcana Cloud Python](https
    ```
    All tests must pass on the pristine clone. If they fail, fix the environment — not the code — before proceeding.
 3. **Rename + strip demo endpoints** following [0. Project Setup - CRITICAL](#0-project-setup---critical). Remove the example API (Arcana User Management), but explicitly **KEEP** the infrastructure: gRPC server setup (`app/grpc/server.py`), DI/dependency wiring (`app/config/dependencies.py`), security/auth middleware (`app/middleware/`), deployment modes & configs (`deployment/`, `k8s/`), and the proto toolchain (gRPC protobuf compilation settings).
-4. **Add features** one entity at a time per the [File-by-File Feature Recipe — New Entity End-to-End](#file-by-file-feature-recipe--new-entity-end-to-end).
+4. **Add features by copying the nearest working entity, then adapting** (see [🔁 Adding a feature](#-adding-a-feature--copy-the-nearest-working-feature-not-from-scratch)) — the [File-by-File Feature Recipe — New Entity End-to-End](#file-by-file-feature-recipe--new-entity-end-to-end) below is the completeness checklist.
+
+### 🔁 Adding a feature = copy the nearest working feature (NOT from scratch)
+
+**When you add a new feature/entity, do NOT re-create it from memory by walking the File-by-File Recipe on a blank slate. Copy the nearest already-working feature in the cloned reference, then adapt it.**
+
+1. **Find the closest conformant feature** already in the reference — e.g. the example `user` entity implemented end-to-end (handler/controller → service trait + impl → repository → model/DTO, with AppError/Result error handling and tests) — it already demonstrates the full layered pattern.
+2. **Duplicate its ENTIRE file set** (domain model, Alembic migration, DTO + validation schema, repository base + impl, service interface + impl, controller blueprint + registration, gRPC proto + servicer, DI wiring, mock data, and unit tests per layer) 1:1, keeping every layer.
+3. **Rename + adapt** to the new domain (types, routes, endpoints, DI/AppState bindings).
+4. **Diff against the original** to confirm nothing was dropped — same layer split, same service/repository trait boundary, same AppError/Result error model, same tests.
+
+**Why this is mandatory:** the File-by-File Recipe is a *checklist of what must exist*, not a from-scratch build order. Re-deriving the pattern each time makes every step a chance to skip a layer (the service trait, the repository), wire a shortcut (handler → DB/API directly, `Result<_, String>` instead of `AppError`), or drop the tests — the "vibe-coding" deviations that compile and pass coverage but fail architecture review. Copying a known-good feature carries conformance in *by construction*; the recipe is then only your verification that nothing is missing.
 
 ### Supporting files — load on demand
 

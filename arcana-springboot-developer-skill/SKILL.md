@@ -22,7 +22,18 @@ Professional Spring Boot development skill based on [Arcana Cloud SpringBoot](ht
    ```
    If the pristine clone is not green, fix the environment (JDK, network) before touching code.
 3. **Rename + strip demo endpoints** — follow [0. Project Setup - CRITICAL](#0-project-setup---critical) to rename the project/package and delete the example User Management API, while explicitly **KEEPING infrastructure**: gRPC server setup, DI container/config, security/auth (`config/`, `security/`), deployment modes/configs (`deployment/`), and the proto toolchain (`src/main/proto/` + `generateProto`).
-4. **Add features** per the [File-by-File Feature Recipe — New Entity End-to-End](#file-by-file-feature-recipe--new-entity-end-to-end), one entity at a time, keeping the build green after each layer.
+4. **Add features by copying the nearest working entity, then adapting** (see [🔁 Adding a feature](#-adding-a-feature--copy-the-nearest-working-feature-not-from-scratch)) — the [File-by-File Feature Recipe — New Entity End-to-End](#file-by-file-feature-recipe--new-entity-end-to-end) below is the completeness checklist (keep the build green after each layer).
+
+### 🔁 Adding a feature = copy the nearest working feature (NOT from scratch)
+
+**When you add a new feature/entity, do NOT re-create it from memory by walking the File-by-File Recipe on a blank slate. Copy the nearest already-working feature in the cloned reference, then adapt it.**
+
+1. **Find the closest conformant feature** already in the reference — e.g. the example `user` entity implemented end-to-end (handler/controller → service trait + impl → repository → model/DTO, with AppError/Result error handling and tests) — it already demonstrates the full layered pattern.
+2. **Duplicate its ENTIRE file set** (domain model, DTOs + mapper, repository interface, repository impl, service interface, service impl, REST controller, gRPC proto, gRPC service impl, DI wiring, mock/seed data, and unit tests per layer) 1:1, keeping every layer.
+3. **Rename + adapt** to the new domain (types, routes, endpoints, DI/AppState bindings).
+4. **Diff against the original** to confirm nothing was dropped — same layer split, same service/repository trait boundary, same AppError/Result error model, same tests.
+
+**Why this is mandatory:** the File-by-File Recipe is a *checklist of what must exist*, not a from-scratch build order. Re-deriving the pattern each time makes every step a chance to skip a layer (the service trait, the repository), wire a shortcut (handler → DB/API directly, `Result<_, String>` instead of `AppError`), or drop the tests — the "vibe-coding" deviations that compile and pass coverage but fail architecture review. Copying a known-good feature carries conformance in *by construction*; the recipe is then only your verification that nothing is missing.
 
 ### Supporting files — load on demand
 
