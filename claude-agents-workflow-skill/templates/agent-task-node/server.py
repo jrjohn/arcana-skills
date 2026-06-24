@@ -30,6 +30,8 @@ import shutil
 import subprocess
 import re
 import time
+import tempfile
+import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 CLAUDE = shutil.which("claude") or "/usr/local/bin/claude"
@@ -791,6 +793,202 @@ def run_release(payload):
             "githubRelease": gr[-700:], "releasePr": rp[-700:]}
 
 
+# --- Designer publish (Phase 1C / C5) -------------------------------------
+# Deterministic, NO AI. Turns a designed BPMN flow into a GATED PR on the
+# platform repo (arcana-ai-bpm). It NEVER merges and NEVER self-deploys: the
+# PR is opened for CI (kogito build) + human / merge-flow to gate the actual
+# deploy. Modelled on run_release's git/gh-via-subprocess structure.
+
+PROC_ID_RE = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
+PUBLISH_REPO = os.environ.get("PUBLISH_REPO", "jrjohn/arcana-ai-bpm")
+# whitespace below is load-bearing: it must match the golden proto byte-for-byte
+# (data-index-protobufs/demo-generic.proto). Tabs for indent, trailing spaces,
+# and the @VariableInfo continuation line starting with a single space.
+_FIELD_ANN = ("\t/* @Field(index = Index.YES, store = Store.YES) @SortableField */ \n")
+_VAR_ANN = ("\t/* @Field(index = Index.YES, store = Store.YES) @SortableField\n"
+            " @VariableInfo(tags=\"\") */ \n")
+
+
+def _message_name(process_id):
+    """demo-generic -> Demo_generic : '-' -> '_', first char upper-cased."""
+    s = process_id.replace("-", "_")
+    return s[:1].upper() + s[1:]
+
+
+def gen_proto(process_id, var_names):
+    """Pure function: BPMN process id + ordered variable names -> Kogito
+    data-index .proto text. Output matches data-index-protobufs/demo-generic.proto
+    exactly in structure (proto2, package keeps the dash, message name upper-cased
+    with '-'->'_', id field first, KogitoMetadata last)."""
+    msg = _message_name(process_id)
+    lines = []
+    lines.append('syntax = "proto2"; \n')
+    lines.append("package boo.arcana.%s; \n" % process_id)
+    lines.append('import "kogito-index.proto";\n')
+    lines.append('import "kogito-types.proto";\n')
+    lines.append('option kogito_model = "%s";\n' % msg)
+    lines.append('option kogito_id = "%s";\n' % process_id)
+    lines.append("\n")
+    lines.append("/* @Indexed */ \n")
+    lines.append("message %s { \n" % msg)
+    lines.append('\toption java_package = "boo.arcana";\n')
+    # field 1: id
+    lines.append(_FIELD_ANN)
+    lines.append("\toptional string id = 1; \n")
+    # fields 2..N: each process variable, in document order
+    n = 2
+    for name in var_names:
+        lines.append(_VAR_ANN)
+        lines.append("\toptional string %s = %d; \n" % (name, n))
+        n += 1
+    # last field: metadata
+    lines.append(_FIELD_ANN)
+    lines.append(
+        "\toptional org.kie.kogito.index.model.KogitoMetadata metadata = %d; \n" % n)
+    lines.append("}\n")
+    return "".join(lines)
+
+
+def _local(tag):
+    """Strip XML namespace -> localname (namespace-agnostic parsing)."""
+    return tag.rsplit("}", 1)[-1]
+
+
+def _parse_bpmn(bpmn_xml):
+    """Return (process_id, [var_names in document order]) from a BPMN2 string.
+    Namespace-agnostic on localnames 'process' and 'property'."""
+    root = ET.fromstring(bpmn_xml)
+    proc = None
+    for el in root.iter():
+        if _local(el.tag) == "process":
+            proc = el
+            break
+    if proc is None:
+        raise RuntimeError("no <process> element in bpmnXml")
+    pid = proc.get("id") or ""
+    var_names = []
+    for el in proc.iter():
+        if _local(el.tag) == "property":
+            nm = el.get("name") or el.get("id")
+            if nm:
+                var_names.append(nm)
+    return pid, var_names
+
+
+def publish_flow(payload):
+    """Deterministic gated-publish (NO AI). Validates the flow, generates the
+    data-index proto, scaffolds the three platform-repo files, and opens a
+    GATED PR on arcana-ai-bpm — never merges, never deploys. CI (kogito build)
+    + human / merge-flow gate the actual deploy.
+
+    payload: { processId, bpmnXml, dry_run? }
+    returns: { prUrl, branch } | { proto, files, processId } (dry_run) | { error }
+    """
+    process_id = (payload.get("processId") or "").strip()
+    bpmn_xml = payload.get("bpmnXml") or ""
+    dry_run = bool(payload.get("dry_run"))
+
+    # --- validate / sanitize (prevents path traversal + bad filenames) ---
+    if not PROC_ID_RE.match(process_id):
+        return {"error": "invalid processId %r: must match ^[a-z][a-z0-9-]{0,63}$"
+                % process_id}
+    if not bpmn_xml.strip():
+        return {"error": "bpmnXml is empty"}
+    try:
+        parsed_id, var_names = _parse_bpmn(bpmn_xml)
+    except Exception as e:
+        return {"error": "cannot parse bpmnXml: %s" % e}
+
+    # If the BPMN's own process id disagrees, rewrite it to match processId so
+    # the proto / filenames / engine id are all consistent.
+    if parsed_id != process_id:
+        bpmn_xml = re.sub(
+            r'(<[^>]*\bprocess\b[^>]*\bid=")[^"]*(")',
+            lambda m: m.group(1) + process_id + m.group(2),
+            bpmn_xml, count=1)
+
+    proto = gen_proto(process_id, var_names)
+    rel_files = {
+        "bpmn/%s.bpmn2" % process_id: bpmn_xml,
+        "kogito-bpmn/src/main/resources/boo/arcana/%s.bpmn2" % process_id: bpmn_xml,
+        "data-index-protobufs/%s.proto" % process_id: proto,
+    }
+
+    # --- dry run: scaffold into a temp dir, skip push/PR (locally verifiable) ---
+    if dry_run:
+        tmp = tempfile.mkdtemp(prefix="publish-%s-" % process_id)
+        try:
+            for rel, content in rel_files.items():
+                dst = os.path.join(tmp, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                with open(dst, "w") as f:
+                    f.write(content)
+            return {"dry_run": True, "processId": process_id,
+                    "proto": proto, "files": sorted(rel_files.keys()),
+                    "scaffoldDir": tmp, "varNames": var_names}
+        finally:
+            # keep scaffoldDir for the caller to inspect; do not delete here
+            pass
+
+    # --- real path: clone, write files, open a GATED PR (never merge) ---
+    token = os.environ.get("GH_TOKEN", "")
+    branch = "designer/publish-%s" % process_id
+    tmp = tempfile.mkdtemp(prefix="publish-%s-" % process_id)
+    workdir = os.path.join(tmp, "repo")
+    try:
+        clone_url = "https://x-access-token:%s@github.com/%s" % (token, PUBLISH_REPO)
+        c = subprocess.run(["git", "clone", "--depth", "1", clone_url, workdir],
+                           capture_output=True, text=True, timeout=240)
+        if c.returncode != 0:
+            return {"error": "clone failed: %s" % (c.stderr or c.stdout)[-500:]}
+
+        def _git(*args):
+            return subprocess.run(["git", "-C", workdir, *args],
+                                  capture_output=True, text=True, timeout=120)
+
+        _git("checkout", "-b", branch)
+        for rel, content in rel_files.items():
+            dst = os.path.join(workdir, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, "w") as f:
+                f.write(content)
+        _git("add", "-A")
+        cm = _git("commit", "-m", "feat(designer): publish flow %s" % process_id)
+        if cm.returncode != 0 and "nothing to commit" in (cm.stdout + cm.stderr):
+            return {"error": "no changes to publish for %s" % process_id}
+        ps = _git("push", "-u", "origin", branch, "--force")
+        if ps.returncode != 0:
+            return {"error": "push failed: %s" % (ps.stderr or ps.stdout)[-500:]}
+
+        body = ("Designer-published flow `%s`.\n\n"
+                "This is a **GATED** PR — opened by the AI-BPM designer, NOT a "
+                "self-deploy. CI (kogito build) + human / merge-flow gate the "
+                "actual deploy. Do not auto-merge without the green gate.\n\n"
+                "Files:\n- `bpmn/%s.bpmn2`\n"
+                "- `kogito-bpmn/src/main/resources/boo/arcana/%s.bpmn2`\n"
+                "- `data-index-protobufs/%s.proto`\n"
+                % (process_id, process_id, process_id, process_id))
+        env = dict(os.environ)
+        if token:
+            env["GH_TOKEN"] = token
+        pr = subprocess.run(
+            ["gh", "pr", "create", "-R", PUBLISH_REPO,
+             "--base", "main", "--head", branch,
+             "--title", "feat(designer): publish flow %s" % process_id,
+             "--body", body],
+            capture_output=True, text=True, timeout=120, cwd=workdir, env=env)
+        if pr.returncode != 0:
+            return {"error": "pr create failed: %s" % (pr.stderr or pr.stdout)[-500:]}
+        pr_url = pr.stdout.strip().splitlines()[-1] if pr.stdout.strip() else ""
+        return {"prUrl": pr_url, "branch": branch, "processId": process_id}
+    except subprocess.TimeoutExpired:
+        return {"error": "publish timed out"}
+    except Exception as e:
+        return {"error": "publish failed: %s" % e}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, obj):
         body = json.dumps(obj).encode()
@@ -808,7 +1006,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         task = self.path.rsplit("/", 1)[-1]
-        if task not in PROMPTS and task not in ("release", "execute"):
+        if task not in PROMPTS and task not in ("release", "execute", "publish-flow"):
             return self._send(404, {"error": f"unknown task {task}"})
         try:
             n = int(self.headers.get("Content-Length", 0))
