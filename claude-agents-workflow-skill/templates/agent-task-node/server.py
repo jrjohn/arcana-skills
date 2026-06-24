@@ -953,9 +953,15 @@ def publish_flow(payload):
             with open(dst, "w") as f:
                 f.write(content)
         _git("add", "-A")
-        cm = _git("commit", "-m", "feat(designer): publish flow %s" % process_id)
-        if cm.returncode != 0 and "nothing to commit" in (cm.stdout + cm.stderr):
-            return {"error": "no changes to publish for %s" % process_id}
+        # A fresh clone has no committer identity; set it inline so `git commit`
+        # never fails with "Author identity unknown" (that previously slipped past
+        # the nothing-to-commit guard and pushed an empty branch).
+        cm = _git("-c", "user.email=agent@arcana.boo", "-c", "user.name=AI-BPM Designer",
+                  "commit", "-m", "feat(designer): publish flow %s" % process_id)
+        if cm.returncode != 0:
+            if "nothing to commit" in (cm.stdout + cm.stderr):
+                return {"error": "no changes to publish for %s" % process_id}
+            return {"error": "commit failed: %s" % (cm.stderr or cm.stdout)[-500:]}
         ps = _git("push", "-u", "origin", branch, "--force")
         if ps.returncode != 0:
             return {"error": "push failed: %s" % (ps.stderr or ps.stdout)[-500:]}
