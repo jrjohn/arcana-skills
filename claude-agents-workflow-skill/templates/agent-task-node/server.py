@@ -1018,6 +1018,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = run_release(payload)
             elif task == "execute":
                 result = run_claude_generic(payload)
+            elif task == "publish-flow":
+                result = publish_flow(payload)
             else:
                 result = run_claude(task, payload)
             self._send(200, result)
