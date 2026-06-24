@@ -29,6 +29,7 @@ import os
 import shutil
 import subprocess
 import re
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 CLAUDE = shutil.which("claude") or "/usr/local/bin/claude"
@@ -550,13 +551,106 @@ def _invoke_claude(prompt, schema, payload, wall):
     return so
 
 
+# --- Phase 1B: osearch memory pre-fetch ---------------------------------------
+# Before invoking Claude, pull semantically-relevant organizational memory from the
+# team archive (crs pgsearch --vec: bge-m3 query embed + HNSW over archive_main.msg)
+# and inject it, provenance-tagged, ahead of the task prompt. Best-effort: a miss or
+# timeout NEVER fails the task. Connection reuses the same ARCHIVE_PG the worker uses;
+# CRS_PG_HOST defaults to the cert CN (arcana.boo, a devops_default alias) so crs's
+# TLS verification passes, and CRS_OLLAMA_URL points at the in-cluster ollama.
+PREFETCH = os.environ.get("MEMORY_PREFETCH", "1") != "0"
+CRS_BIN = os.environ.get("CRS_BIN", "/root/bin/crs")
+PREFETCH_LIMIT = int(os.environ.get("MEMORY_PREFETCH_LIMIT", "4"))
+# 15s tolerates a cold Ollama (first bge-m3 embed loads the model into VRAM); warm
+# queries are ~0.8-2.8s. A single cold start must not knock out memory recall.
+PREFETCH_TIMEOUT = int(os.environ.get("MEMORY_PREFETCH_TIMEOUT", "15"))
+_PROJ_PREFIX = "-Users-jrjohn-Documents-projects-"
+
+
+def _crs_pg_env():
+    url = os.environ.get("ARCHIVE_PG", "")
+    m = re.match(r"postgres(?:ql)?://([^:]+):([^@]+)@([^:/]+):(\d+)/(.+)", url)
+    if not m:
+        return None
+    user, pw, _host, _port, db = m.groups()
+    e = dict(os.environ)
+    e.update({
+        "CRS_PG_HOST": os.environ.get("CRS_PG_HOST", "arcana.boo"),
+        "CRS_PG_PORT": os.environ.get("CRS_PG_PORT", "5432"),
+        "CRS_PG_USER": user, "CRS_PG_PASSWORD": pw, "CRS_PG_DB": db,
+        "CRS_OLLAMA_URL": os.environ.get("CRS_OLLAMA_URL", "http://ollama:11434/api/embed"),
+    })
+    return e
+
+
+def _mem_query(payload):
+    src = dict(payload)
+    src.update(payload.get("data") or {})
+    parts = [str(src[k]) for k in ("prompt", "job", "cause", "subject",
+                                   "buildResult", "prUrl", "ai_input") if src.get(k)]
+    return " ".join(parts)[:400]
+
+
+# Circuit breaker: trip only after PREFETCH_FAIL_THRESHOLD *consecutive* failures
+# (a genuine archive outage), so a lone cold-start timeout doesn't knock out recall.
+# Once tripped, prefetch is skipped for PREFETCH_COOLDOWN s. Any success resets it.
+_PREFETCH_COOLDOWN_UNTIL = 0.0
+_PREFETCH_FAILS = 0
+PREFETCH_COOLDOWN = int(os.environ.get("MEMORY_PREFETCH_COOLDOWN", "300"))
+PREFETCH_FAIL_THRESHOLD = int(os.environ.get("MEMORY_PREFETCH_FAIL_THRESHOLD", "3"))
+
+
+def fetch_memory(query):
+    """Semantic archive recall (Phase 1B). Returns a provenance-tagged context block
+    or '' — never raises. Tagged stale-aware so the agent verifies before acting."""
+    global _PREFETCH_COOLDOWN_UNTIL, _PREFETCH_FAILS
+    if not PREFETCH or not (query or "").strip():
+        return ""
+    now = time.time()
+    if now < _PREFETCH_COOLDOWN_UNTIL:
+        return ""
+    env = _crs_pg_env()
+    if not env:
+        return ""
+    try:
+        p = subprocess.run([CRS_BIN, "pgsearch", "--vec", "--limit", str(PREFETCH_LIMIT),
+                            "--json", query], capture_output=True, text=True,
+                           timeout=PREFETCH_TIMEOUT, env=env)
+        rows = (json.loads(p.stdout).get("results", [])
+                if p.returncode == 0 and p.stdout.strip() else [])
+    except Exception:
+        _PREFETCH_FAILS += 1
+        if _PREFETCH_FAILS >= PREFETCH_FAIL_THRESHOLD:
+            _PREFETCH_COOLDOWN_UNTIL = now + PREFETCH_COOLDOWN
+            _PREFETCH_FAILS = 0
+        return ""
+    _PREFETCH_FAILS = 0  # success resets the consecutive-failure counter
+    lines = []
+    for r in rows:
+        proj = (r.get("project") or "").replace(_PROJ_PREFIX, "").strip("-") or "?"
+        ts = (r.get("ts") or "")[:16]
+        sid = (r.get("session_id") or "")[:8]
+        content = " ".join((r.get("content") or "").split())[:280]
+        if content:
+            lines.append(f"- [{proj}|{ts}|{sid}] {content}")
+    if not lines:
+        return ""
+    return ("## Relevant history (team archive — semantic recall; may be stale, "
+            "verify before acting)\n" + "\n".join(lines) + "\n")
+
+
+def _with_memory(prompt, payload):
+    mem = fetch_memory(_mem_query(payload))
+    return (mem + "\n" + prompt) if mem else prompt
+
+
 def run_claude(task, payload):
     """Static-verb path: prompt + schema come from the in-code PROMPTS/SCHEMAS
     registries keyed by the CI verb (diagnose/fix/merge/...)."""
     if STUB:
         return STUB_RESPONSES[task]
     schema = json.dumps(SCHEMAS[task])
-    prompt = PROMPTS[task](payload)
+    prompt = _with_memory(PROMPTS[task](payload), payload)
     wall = 1800 if task == "fix" else TIMEOUT
     return _invoke_claude(prompt, schema, payload, wall)
 
@@ -610,7 +704,7 @@ def prompt_generic(payload):
 def run_claude_generic(payload):
     if not (payload.get("prompt") or "").strip():
         raise RuntimeError("generic executor requires a non-empty `prompt`")
-    prompt = prompt_generic(payload)
+    prompt = _with_memory(prompt_generic(payload), payload)
     schema = json.dumps(_generic_schema(payload))
     return _invoke_claude(prompt, schema, payload, 1800)
 
