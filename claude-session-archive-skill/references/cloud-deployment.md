@@ -86,7 +86,7 @@ docker exec <container> bash -c "
 
 ```bash
 docker cp <skill>/scripts/archive-preflight.sh <container>:/root/.claude/hooks/
-docker cp <skill>/scripts/auto-vsearch-on-prompt.sh <container>:/root/.claude/hooks/
+docker cp <skill>/scripts/auto-osearch-on-prompt.sh <container>:/root/.claude/hooks/
 docker exec <container> chmod +x /root/.claude/hooks/*.sh
 ```
 

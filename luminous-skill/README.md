@@ -24,7 +24,7 @@ A Claude Code skill that switches your AI assistant into a **思辨同理對話 
 ```
 
 ### Auto trigger（hook 偵測情緒/人生決策關鍵字自動切換）
-若搭配 `~/.claude/hooks/auto-vsearch-on-prompt.sh`（同 repo 的 archive auto-vsearch hook 內含此功能），偵測到 `我覺得我.*失敗 / 不知道該不該 / 想放棄 / 該不該轉行/離職/分手` 等人生決策語會自動載入此 skill。
+若搭配 `~/.claude/hooks/auto-osearch-on-prompt.sh`（同 repo 的 archive auto-vsearch hook 內含此功能），偵測到 `我覺得我.*失敗 / 不知道該不該 / 想放棄 / 該不該轉行/離職/分手` 等人生決策語會自動載入此 skill。
 
 ## Behavior model
 

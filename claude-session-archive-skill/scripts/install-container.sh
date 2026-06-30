@@ -68,7 +68,7 @@ register_hooks_in_settings() {
   cp "$settings" "$settings.bak-pre-install"
 
   jq --arg pre "$CLAUDE_HOME/hooks/archive-preflight.sh" \
-     --arg auto "$CLAUDE_HOME/hooks/auto-vsearch-on-prompt.sh" \
+     --arg auto "$CLAUDE_HOME/hooks/auto-osearch-on-prompt.sh" \
      --arg gen "$ARCHIVE_DIR/crs/target/release/crs gen-recent 2>/dev/null || true" '
     .hooks //= {}
     | .hooks.SessionStart = [{hooks: [{type: "command", command: $gen, timeout: 30}]}]
@@ -114,7 +114,7 @@ cp -f "$CRS_BIN" "$ARCHIVE_DIR/crs/target/release/crs" 2>/dev/null || \
 log "Installing hooks to $CLAUDE_HOME/hooks/"
 mkdir -p "$CLAUDE_HOME/hooks"
 cp -f "$SKILL_DIR/scripts/archive-preflight.sh"      "$CLAUDE_HOME/hooks/"
-cp -f "$SKILL_DIR/scripts/auto-vsearch-on-prompt.sh" "$CLAUDE_HOME/hooks/"
+cp -f "$SKILL_DIR/scripts/auto-osearch-on-prompt.sh" "$CLAUDE_HOME/hooks/"
 chmod +x "$CLAUDE_HOME/hooks/"*.sh
 
 register_hooks_in_settings

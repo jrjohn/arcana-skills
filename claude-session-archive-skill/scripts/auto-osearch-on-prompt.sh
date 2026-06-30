@@ -2,21 +2,26 @@
 # UserPromptSubmit hook — archive lookup auto-trigger.
 #
 # Detects "look up something historical / identity / status" intent in the
-# user's prompt, runs vsearch behind the scenes, and injects top hits as
+# user's prompt, runs osearch behind the scenes, and injects top hits as
 # additionalContext. Also sets the archive-preflight sentinel so subsequent
 # raw sqlite3 / memory grep / log digging is unblocked.
 #
+# osearch is the default front door (orient→recall→pin RRF fusion; unions the
+# vsearch + csearch legs). On a sqlite-only backend, or before the distill/orient
+# layer is populated, osearch ≈ vsearch (RRF guarantees osearch >= vsearch), so it
+# is always a safe default. (Filename kept as-is to avoid churning install refs.)
+#
 # Why: most "who is .45?" / "what was the password for X?" / "did we fix Y?"
 # style questions are already answered verbatim in the archive DB. Running
-# vsearch on prompt submit avoids the round-trip of Claude having to remember
+# osearch on prompt submit avoids the round-trip of Claude having to remember
 # the rule, query the archive, then answer. The injected context lands in
 # Claude's first turn so the model can answer immediately.
 #
 # Failure modes (silent, never blocks):
-#   - vsearch timeout / Ollama down  → silent skip, prompt unchanged
-#   - trigger doesn't match           → exit 0, prompt unchanged
-#   - results empty                   → don't inject, but sentinel still set
-#                                       (we did query, just got nothing)
+#   - search slow/down (e.g. remote PG over WAN) → hard-capped + skipped, unchanged
+#   - trigger doesn't match                       → exit 0, prompt unchanged
+#   - results empty                               → don't inject, but sentinel still set
+#                                                   (we did query, just got nothing)
 #
 # This hook is a *companion* to archive-preflight.sh:
 #   - preflight is REACTIVE (blocks bad tool calls)
@@ -59,21 +64,48 @@ else
     exit 0
 fi
 
-# Cross-project semantic search (vsearch is global by default).
-# macOS lacks `timeout`/`gtimeout` by default; rely on Claude Code's
-# hook-level timeout (set in settings.json, typically 5s) to bound runtime.
-# vsearch typically returns in 500ms; if Ollama is down it fails fast.
-result=$("$CRS" vsearch "$prompt" 2>/dev/null | head -8)
-
-# Set archive-preflight sentinel even if results are empty.
-# Rationale: "I queried the archive, found nothing" still satisfies the
-# preflight rule — subsequent SSH / sqlite3 / memory grep should now unblock.
+# Set archive-preflight sentinel for this archive-intent prompt, even if the
+# search is skipped (cooldown) or returns nothing — we "consulted" the archive,
+# so subsequent SSH / sqlite3 / memory grep should now unblock.
 [ -n "$sid" ] && : > "/tmp/claude-archive-preflight-${sid}"
+
+# Cross-project search via osearch (global by default). osearch warm ~1-2s, but a
+# slow/unreachable remote PG (e.g. over WAN) can hang 20-30s and blow past the
+# hook's settings.json timeout, erroring every prompt. Two guards:
+#   (a) hard cap on runtime — prefer `timeout`/`gtimeout` (Linux/coreutils), else
+#       `perl` alarm (survives exec; macOS has perl), else a bare call. A run
+#       killed by the cap exits >=124, which we detect.
+#   (b) circuit breaker — after a timeout, skip the search for COOLDOWN_SECS so a
+#       degraded backend doesn't make every prompt wait. Auto-recovers when healthy.
+COOLDOWN="/tmp/claude-osearch-cooldown"
+SEARCH_TIMEOUT=4
+COOLDOWN_SECS=180
+
+if [ -f "$COOLDOWN" ]; then
+    mtime=$(stat -f %m "$COOLDOWN" 2>/dev/null || stat -c %Y "$COOLDOWN" 2>/dev/null || echo 0)
+    [ "$(( $(date +%s) - mtime ))" -lt "$COOLDOWN_SECS" ] && exit 0
+    rm -f "$COOLDOWN"
+fi
+
+if command -v timeout >/dev/null 2>&1; then
+    result=$(timeout "$SEARCH_TIMEOUT" "$CRS" osearch "$prompt" 2>/dev/null); rc=$?
+elif command -v gtimeout >/dev/null 2>&1; then
+    result=$(gtimeout "$SEARCH_TIMEOUT" "$CRS" osearch "$prompt" 2>/dev/null); rc=$?
+elif command -v perl >/dev/null 2>&1; then
+    result=$(perl -e 'alarm shift; exec @ARGV' "$SEARCH_TIMEOUT" "$CRS" osearch "$prompt" 2>/dev/null); rc=$?
+else
+    result=$("$CRS" osearch "$prompt" 2>/dev/null); rc=$?
+fi
+
+# Timed out (cap killed it) → arm breaker, skip this turn.
+[ "$rc" -ge 124 ] && { : > "$COOLDOWN"; exit 0; }
+rm -f "$COOLDOWN"
+result=$(printf '%s' "$result" | head -8)
 
 # Empty results → don't inject (avoid noise) but sentinel is set.
 [ -z "$result" ] && exit 0
 
-ctx="Auto-archive lookup (vsearch top hits, all projects):
+ctx="Auto-archive lookup (osearch top hits, all projects):
 
 $result
 

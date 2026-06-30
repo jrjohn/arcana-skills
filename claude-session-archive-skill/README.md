@@ -95,7 +95,7 @@ Once `vsearch`/`csearch` runs and sets the sentinel, Tier-B patterns unblock for
 
 **Why block memory grep too?** Memory files are hand-curated indexes — incomplete by design (only what someone bothered to write down). For "who is in dept X?", "what's .136 used for?", "where's password Y?" the canonical source is the archive (full conversation transcripts). Forcing `vsearch`/`csearch` first prevents the antipattern of grepping memory and silently missing 2/3 of the data that's actually in the archive.
 
-**Why TTL (since v1.11)?** Post-compact, the model loses procedural memory of having run vsearch, but `session_id` (and thus the sentinel) persists. Without TTL, hooks would silently allow sqlite3 forever based on a vsearch from hours ago. 30-min TTL forces re-vsearch after any meaningful gap; `auto-vsearch-on-prompt.sh` refreshes the sentinel on archive-intent prompts so active conversations rarely hit it.
+**Why TTL (since v1.11)?** Post-compact, the model loses procedural memory of having run vsearch, but `session_id` (and thus the sentinel) persists. Without TTL, hooks would silently allow sqlite3 forever based on a vsearch from hours ago. 30-min TTL forces re-vsearch after any meaningful gap; `auto-osearch-on-prompt.sh` refreshes the sentinel on archive-intent prompts so active conversations rarely hit it.
 
 The hook is registered idempotently — re-running `install.sh` is safe.
 
@@ -313,7 +313,7 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 | 2 | **`uninstall.sh` / `uninstall.ps1`** — tear down launchd / Task / hook / symlink / pgsearchd plist. | Medium | Medium |
 | 3 | **`pg_dump` cron in installer** (PG mode) — daily backup to local file or S3, with rotation. | Medium | Small |
 | 4 | **`crs doctor`: duplicate hook detection** — scan `settings.json` for repeated hook commands. | Medium (UX) | Small |
-| 5 | **Tighten `ARCHIVE_TRIGGER` regex** in `auto-vsearch-on-prompt.sh` — strip generic interrogatives, keep only history-intent keywords. | Medium (cost) | Small |
+| 5 | **Tighten `ARCHIVE_TRIGGER` regex** in `auto-osearch-on-prompt.sh` — strip generic interrogatives, keep only history-intent keywords. | Medium (cost) | Small |
 | ~~6~~ | ~~Windows preflight + auto-vsearch parity~~ — **shipped in v1.14.0** | ✓ | — |
 | 7 | **Optional: `pgsearchd` deployment on VPS** + thin RPC client on Mac. Cuts vsearch e2e ~1.1 s → ~400 ms (saves WAN RTT). | Medium | Medium |
 | 8 | **Linux systemd-timer alternative** to cron (parity with launchd). | Low | Medium |
@@ -321,6 +321,15 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 | 10 | **Unfreeze `OLLAMA_VER`** in `install-semantic.sh` — fetch latest release tag at install time. | Low | Small |
 
 ## What's new
+
+### v1.25.0 — `osearch` default front door + auto-prompt hook on osearch (cross-platform timeout / circuit-breaker)
+
+`osearch` (orient→recall→pin RRF fusion — unions the semantic `vsearch` + lexical `csearch` legs over the same archive, drilled back to raw msg) is now the **default front door**; `vsearch`/`csearch` stay as manual single-leg shortcuts. Adaptive weighting: NL queries (`?`/`？` or ≥12 chars) weight the semantic leg 2×; short exact-token / IP / hostname queries use equal weights. The orient layer is GPU-populated on a Mac (`crs distill-missing`); where empty, RRF guarantees osearch ≥ vsearch, so it's always a safe default (sqlite-only backend: osearch unavailable → use `vsearch`).
+
+The operational layer caught up to it:
+- **Auto-prompt hook renamed** `auto-vsearch-on-prompt.{sh,ps1}` → `auto-osearch-on-prompt.{sh,ps1}` and now runs `osearch` (every install script / `docker cp` / settings-registration reference updated; no dangling old-name refs).
+- **Cross-platform hard timeout + circuit-breaker** added to the bash hook. A slow / unreachable remote PG (over WAN) used to hang 20–30 s and blow past the hook's `settings.json` timeout, **erroring every prompt**. Now the search is hard-capped (`timeout`/`gtimeout` on Linux, `perl` alarm on macOS — survives `exec` — bare fallback otherwise) and a 180 s circuit-breaker skips the search after a timeout so a degraded backend doesn't stall every prompt; it auto-recovers when healthy. The preflight sentinel is set on archive-intent prompts even when the search is skipped, so the discipline gate still unblocks.
+- **`CLAUDE.md.cloud-agent.template`** now teaches osearch as the default front door (cloud/cron agents only *query* the orient layer; the Mac GPU populates it).
 
 ### v1.24.0 — `csearch` now matches Chinese (pg_jieba side table, PG backend)
 
@@ -428,11 +437,11 @@ Motivation: Critical guidance #7 has said for two releases "extend the CLI rathe
 Closes the longest-standing Windows gap. `archive-preflight.ps1` jumped from v1.9.0 behavior (4 rules, no TTL) to full v1.13 behavior:
 
 - **Hard-deny `sqlite3 SEARCH`** against `sessions.db` regardless of sentinel — `LIKE`, `MATCH`, `msg_fts`, `GLOB` patterns blocked at the hook layer. Metadata queries (`COUNT` / `PRAGMA` / `.schema` / `msg_vec` maintenance) still allowed when sentinel valid.
-- **30-min sentinel TTL.** `Test-SentinelValid` checks `LastWriteTime` against `[DateTime]::Now`, auto-removes stale sentinels. Forces re-vsearch after compact / idle gap; `auto-vsearch-on-prompt.ps1` refreshes sentinel on every archive-intent prompt so active sessions don't notice the TTL.
+- **30-min sentinel TTL.** `Test-SentinelValid` checks `LastWriteTime` against `[DateTime]::Now`, auto-removes stale sentinels. Forces re-vsearch after compact / idle gap; `auto-osearch-on-prompt.ps1` refreshes sentinel on every archive-intent prompt so active sessions don't notice the TTL.
 - **SSH log investigation rule** — `ssh ... grep/cat/tail ... /var/log/...` denied until sentinel valid.
 - **Local log grep rule** — same logic for local `grep/cat/tail` on `/var/log/` or `*.log`.
 - **`git log --grep / -S` rule** — investigative git history search denied until sentinel valid.
-- **New `auto-vsearch-on-prompt.ps1`** (UserPromptSubmit hook, PowerShell port of the bash version). Detects archive-intent keywords (identity / history / status / question), runs `crs.exe vsearch` cross-project, injects top 8 hits as `additionalContext`, pre-sets the sentinel. Archive-only — no luminous-skill bundling (separate concerns, separate hooks).
+- **New `auto-osearch-on-prompt.ps1`** (UserPromptSubmit hook, PowerShell port of the bash version). Detects archive-intent keywords (identity / history / status / question), runs `crs.exe vsearch` cross-project, injects top 8 hits as `additionalContext`, pre-sets the sentinel. Archive-only — no luminous-skill bundling (separate concerns, separate hooks).
 - **`install.ps1` step 7c** registers the new UserPromptSubmit hook idempotently, with the same "preserve user customization on hash mismatch" guard as the bash installer.
 
 PG-backend daemon (`pgsearchd`) remains unix-socket-only — Windows PG mode falls back to per-query TCP+TLS (~700 ms handshake each call). Pure OS limitation, no fix in scope.
@@ -478,7 +487,7 @@ The 2026-05-14 PG migration (v1.12.0) shipped with `csearch / vsearch / vsearch-
 Two independent fixes prompted by a 2026-05-11 post-compact incident where Claude went straight to `sqlite3 ... LIKE '%X%'` for a credential lookup instead of csearch:
 
 - **Hard-deny `sqlite3 SEARCH` on `sessions.db`.** Patterns `LIKE`, `MATCH`, `msg_fts`, `GLOB` are now blocked **regardless of sentinel state**. csearch is the only supported interface for content search. Motivation: CLAUDE.md prose said "vsearch first" but its credential-lookup section literally used raw `sqlite3 LIKE` as the example — that pattern survived compact as the model's procedural muscle memory. Moving the rule from prose into the hook + rewriting all credential examples to use csearch closes the gap. csearch returns ts + project + role + ~258 chars per hit at this revision (covers 99% of credential/history/context lookups); if your case needs more, extend the csearch CLI rather than bypass the hook. Metadata queries (`COUNT`, `PRAGMA`, `.schema`, `msg_vec` maintenance) remain allowed for backfill checks. _(Note: v1.17 flipped this default to full content; see the v1.17.0 changelog entry below.)_
-- **30-minute sentinel TTL.** The sentinel file (`/tmp/claude-archive-preflight-<sid>`) now expires 30 minutes after creation. `sentinel_valid()` checks mtime, auto-removes stale files. Motivation: post-compact, the model loses procedural memory of having run vsearch but `session_id` (and thus sentinel) persists — without TTL, the hook would allow Tier-B operations forever based on a vsearch from hours ago. `auto-vsearch-on-prompt.sh` refreshes the sentinel on every archive-intent prompt, so active conversations don't notice the TTL; it only kicks in after compact / idle gaps.
+- **30-minute sentinel TTL.** The sentinel file (`/tmp/claude-archive-preflight-<sid>`) now expires 30 minutes after creation. `sentinel_valid()` checks mtime, auto-removes stale files. Motivation: post-compact, the model loses procedural memory of having run vsearch but `session_id` (and thus sentinel) persists — without TTL, the hook would allow Tier-B operations forever based on a vsearch from hours ago. `auto-osearch-on-prompt.sh` refreshes the sentinel on every archive-intent prompt, so active conversations don't notice the TTL; it only kicks in after compact / idle gaps.
 - **CLAUDE.md credential section rewritten** to follow `vsearch → csearch` 2-tier hierarchy, with all `sqlite3 LIKE` examples removed and a "禁用 raw sqlite3 搜尋" callout listing the hard-denied patterns.
 
 Windows port (`archive-preflight.ps1`) not updated this release — Windows installs continue at v1.10.0 preflight behavior.

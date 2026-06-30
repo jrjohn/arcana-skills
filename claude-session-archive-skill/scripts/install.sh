@@ -23,7 +23,7 @@
 #   7b. (--with-pg only) install + load pgsearchd launchd plist on macOS
 #   8.  Register SessionStart hook in ~/.claude/settings.json (needs jq)
 #   8b. Install + register PreToolUse archive-preflight hook (Bash + Read)
-#   8c. Install + register UserPromptSubmit auto-vsearch-on-prompt hook
+#   8c. Install + register UserPromptSubmit auto-osearch-on-prompt hook
 #   9.  First ingest run (skipped under --with-pg if CRS_PG_PASSWORD not set)
 #  10. Smoke test
 #
@@ -399,27 +399,27 @@ else
     echo "       {\"matcher\":\"Read\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PREFLIGHT\",\"timeout\":5}]})"
 fi
 
-# 8c. Install + register UserPromptSubmit auto-vsearch-on-prompt hook
+# 8c. Install + register UserPromptSubmit auto-osearch-on-prompt hook
 #     - Detects identity / history / status / question keywords in the prompt.
 #     - Runs `crs vsearch <prompt>` cross-project, injects top hits as
 #       additionalContext, and pre-sets the preflight sentinel.
 #     - Companion to 8b (proactive vs reactive enforcement).
 #
-#     Note: don't clobber a customized auto-vsearch-on-prompt.sh (e.g. one
+#     Note: don't clobber a customized auto-osearch-on-prompt.sh (e.g. one
 #     that bundles an extra trigger like emotional/persona switching).
 #     Detect and skip if the existing file differs from the skill version.
-AUTO_VSEARCH="$HOOKS_DIR/auto-vsearch-on-prompt.sh"
-SRC="$SKILL_DIR/scripts/auto-vsearch-on-prompt.sh"
+AUTO_VSEARCH="$HOOKS_DIR/auto-osearch-on-prompt.sh"
+SRC="$SKILL_DIR/scripts/auto-osearch-on-prompt.sh"
 if [ -f "$AUTO_VSEARCH" ]; then
     if cmp -s "$SRC" "$AUTO_VSEARCH"; then
-        echo "    auto-vsearch-on-prompt hook unchanged: $AUTO_VSEARCH"
+        echo "    auto-osearch-on-prompt hook unchanged: $AUTO_VSEARCH"
     else
         echo "    !! $AUTO_VSEARCH exists and differs from skill version — leaving as-is"
         echo "       (your version may have local customizations like a luminous-skill"
         echo "       trigger; diff manually if needed)"
     fi
 else
-    echo "==> installing auto-vsearch-on-prompt hook → $AUTO_VSEARCH"
+    echo "==> installing auto-osearch-on-prompt hook → $AUTO_VSEARCH"
     cp "$SRC" "$AUTO_VSEARCH"
     chmod +x "$AUTO_VSEARCH"
 fi
@@ -427,7 +427,7 @@ fi
 if command -v jq >/dev/null 2>&1; then
     UPS_CMD="$AUTO_VSEARCH"
     if jq -e --arg c "$UPS_CMD" \
-        '(.hooks.UserPromptSubmit // []) | flatten | map(.command? // "") | any(. == $c or test("auto-vsearch-on-prompt"))' \
+        '(.hooks.UserPromptSubmit // []) | flatten | map(.command? // "") | any(. == $c or test("auto-osearch-on-prompt"))' \
         "$SETTINGS" >/dev/null 2>&1 ; then
         echo "    UserPromptSubmit auto-vsearch hook already registered (skip)"
     else

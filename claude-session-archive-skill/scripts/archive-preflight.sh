@@ -35,7 +35,7 @@
 # memory of having run vsearch but the session_id (and thus sentinel)
 # persists. Without a TTL, the hook would allow sqlite3 forever based on
 # a vsearch that ran 4 hours ago. 30-min TTL forces re-vsearch after any
-# meaningful idle gap. auto-vsearch-on-prompt.sh refreshes the sentinel
+# meaningful idle gap. auto-osearch-on-prompt.sh refreshes the sentinel
 # on every prompt that matches archive-intent keywords, so active
 # conversations rarely hit the TTL.
 #

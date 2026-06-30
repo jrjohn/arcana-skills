@@ -33,7 +33,7 @@ invoke 此 skill 當對話內容是：
 ```
 
 ### 模式 2: 系統自動觸發（hook）
-若 `~/.claude/hooks/auto-vsearch-on-prompt.sh` 偵測到情緒/人生決策關鍵詞（`我覺得我.*失敗|不知道該不該|想放棄|人生.*意義|該不該轉行/離職/分手` 等），會 inject luminous 內容自動切換。
+若 `~/.claude/hooks/auto-osearch-on-prompt.sh` 偵測到情緒/人生決策關鍵詞（`我覺得我.*失敗|不知道該不該|想放棄|人生.*意義|該不該轉行/離職/分手` 等），會 inject luminous 內容自動切換。
 
 ### 模式 3: 在主對話中切換
 User 問完技術問題後突然轉情緒，可手動 `/luminous` 切換。

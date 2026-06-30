@@ -25,26 +25,30 @@ You share `archive_main` (PG + pgvector) with {{OTHER_CLIENTS}} (e.g. owner's Ma
 - `crs` binary: `/usr/local/bin/crs`
 - Ingest: cron `*/{{INGEST_INTERVAL_MIN}} * * * *` runs `crs build`
 
-**Preflight hook** (`~/.claude/hooks/archive-preflight.sh`) hard-enforces: the first archive query each session must be `vsearch` or `csearch`. Until the sentinel is set, any raw `sqlite3` / memory grep / log digging / SSH grep is denied. Violation = first tool call rejected, you waste a round-trip.
+**Preflight hook** (`~/.claude/hooks/archive-preflight.sh`) hard-enforces: the first archive query each session must be `osearch` (the default front door), `vsearch`, or `csearch`. Until the sentinel is set, any raw `sqlite3` / memory grep / log digging / SSH grep is denied. Violation = first tool call rejected, you waste a round-trip.
 
 ### When to query the archive
 
 | Scenario | Action |
 |---|---|
-| Debugging the same issue across multiple turns | `vsearch '<concept>' '<project>'` for "how was this solved before" |
-| Resuming interrupted work | `vsearch` recent session ending keywords for the relevant repo |
-| Building a mental model of an unfamiliar module | `vsearch '<module>' '<project>'` — gives verbatim tool_use + results, richer than `git log` |
+| Debugging the same issue across multiple turns | `osearch '<concept>' '<project>'` for "how was this solved before" |
+| Resuming interrupted work | `osearch` recent session ending keywords for the relevant repo |
+| Building a mental model of an unfamiliar module | `osearch '<module>' '<project>'` — gives verbatim tool_use + results, richer than `git log` |
 | Encountering an opaque error / log line | `csearch '"<verbatim string>"'` (phrase-quote it) |
 | Identifying a literal target (IP / hostname / SHA / commit / employee ID) | `csearch '"<literal>"' '<project>'` |
 
-### vsearch vs csearch
+### osearch (default) vs vsearch / csearch
+
+**`osearch` is the default front door** — orient→recall→pin RRF fusion that unions the semantic (vsearch) and lexical (csearch) legs, so one command serves NL questions, concepts, and exact-entity lookups. Reach for a single leg only to skip the funnel deliberately:
 
 | What you want | Pick |
 |---|---|
-| "How did we handle X" — forgot the exact keyword | **vsearch** (default) |
-| Conceptual / fuzzy / cross-language | **vsearch** |
-| Exact phrase / IP / hostname / SHA / filename | **csearch** (skip vsearch) |
+| Default — "how did we handle X" / concept / mixed | **osearch** |
+| Pure semantic, deliberately skip the lexical leg | **vsearch** |
+| Exact phrase / IP / hostname / SHA / filename | **csearch** (skip the funnel) |
 | Specific date / commit detail | **csearch** + date filter |
+
+> Cloud/cron note: the orient (distill) layer is GPU-populated on a Mac; cloud agents only **query** it. Where it's empty, osearch ≈ vsearch (RRF guarantees osearch >= vsearch), so osearch is always a safe default. sqlite-only backend: osearch unavailable → use `vsearch`.
 
 ### FTS5 syntax (csearch)
 
