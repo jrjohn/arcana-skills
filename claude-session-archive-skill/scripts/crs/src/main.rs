@@ -3122,9 +3122,19 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
     let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
     let sql = if include_img {
         "WITH msg_hits AS MATERIALIZED (
+             -- `content_tsv @@ q OR id IN (jieba subquery)` can't use one index for
+             -- the OR → planner falls back to a Seq Scan on msg (whole table). Split
+             -- into a UNION ALL so each leg hits its own GIN index (msg_tsv_idx /
+             -- msg_jieba_cj_idx); the outer DISTINCT ON (content) dedups any overlap.
              SELECT id, ts, project, session_id, role, tool_name, content
              FROM msg
-             WHERE (content_tsv @@ plainto_tsquery('simple', $1) OR id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1)))
+             WHERE content_tsv @@ plainto_tsquery('simple', $1)
+               AND role IN ('user', 'assistant')
+               AND ($2::text IS NULL OR project LIKE $2)
+             UNION ALL
+             SELECT id, ts, project, session_id, role, tool_name, content
+             FROM msg
+             WHERE id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1))
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
          ),
@@ -3149,9 +3159,17 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
          FROM deduped ORDER BY ts DESC LIMIT $3"
     } else {
         "WITH hits AS MATERIALIZED (
+             -- See the include_img branch: OR-subquery → Seq Scan; UNION ALL keeps
+             -- each leg on its own GIN index (msg_tsv_idx / msg_jieba_cj_idx).
              SELECT id, ts, project, session_id, role, tool_name, content
              FROM msg
-             WHERE (content_tsv @@ plainto_tsquery('simple', $1) OR id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1)))
+             WHERE content_tsv @@ plainto_tsquery('simple', $1)
+               AND role IN ('user', 'assistant')
+               AND ($2::text IS NULL OR project LIKE $2)
+             UNION ALL
+             SELECT id, ts, project, session_id, role, tool_name, content
+             FROM msg
+             WHERE id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1))
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
          ),
