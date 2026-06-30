@@ -22,10 +22,10 @@ dependencies {
     implementation 'org.apache.tika:tika-parsers-standard-package:2.9.4'
 
     // Apache Lucene - 全文索引
-    implementation 'org.apache.lucene:lucene-core:9.9.1'
-    implementation 'org.apache.lucene:lucene-queryparser:9.9.1'
-    implementation 'org.apache.lucene:lucene-analysis-common:9.9.1'
-    implementation 'org.apache.lucene:lucene-analysis-smartcn:9.9.1'  // 中文分詞
+    implementation 'org.apache.lucene:lucene-core:10.5.0'
+    implementation 'org.apache.lucene:lucene-queryparser:10.5.0'
+    implementation 'org.apache.lucene:lucene-analysis-common:10.5.0'
+    implementation 'org.apache.lucene:lucene-analysis-smartcn:10.5.0'  // 中文分詞
 
     // JSON 處理
     implementation 'com.google.code.gson:gson:2.10.1'
