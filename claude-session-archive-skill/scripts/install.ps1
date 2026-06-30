@@ -15,7 +15,7 @@
     6. Register Scheduled Task ClaudeArchiveIngest (every 15 min → crs.exe build)
     7. Register SessionStart hook (crs.exe gen-recent)
     7b. Install + register PreToolUse archive-preflight hook (Bash + Read)
-    7c. Install + register UserPromptSubmit auto-vsearch-on-prompt hook
+    7c. Install + register UserPromptSubmit auto-osearch-on-prompt hook
     8. First ingest run
     9. Smoke test
 
@@ -231,27 +231,27 @@ foreach ($matcher in 'Bash','Read') {
 }
 ($obj | ConvertTo-Json -Depth 10) | Set-Content -Path $Settings -Encoding UTF8
 
-# 7c. Install + register auto-vsearch-on-prompt UserPromptSubmit hook
+# 7c. Install + register auto-osearch-on-prompt UserPromptSubmit hook
 #     - Pattern-matches identity / history / status / question keywords in the
 #       prompt and pre-runs vsearch, injecting top hits as additionalContext.
 #     - Also pre-sets the preflight sentinel so subsequent sqlite3 / memory
 #       grep / SSH log queries unblock automatically.
-#     - Don't clobber a customized auto-vsearch-on-prompt.ps1 (preserve user
+#     - Don't clobber a customized auto-osearch-on-prompt.ps1 (preserve user
 #       customizations, e.g. an extra trigger branch).
-$AutoVsearch = Join-Path $HooksDir 'auto-vsearch-on-prompt.ps1'
-$AutoVsearchSrc = Join-Path $SkillDir 'scripts\auto-vsearch-on-prompt.ps1'
+$AutoVsearch = Join-Path $HooksDir 'auto-osearch-on-prompt.ps1'
+$AutoVsearchSrc = Join-Path $SkillDir 'scripts\auto-osearch-on-prompt.ps1'
 if (Test-Path $AutoVsearch) {
     $srcHash = (Get-FileHash $AutoVsearchSrc).Hash
     $dstHash = (Get-FileHash $AutoVsearch).Hash
     if ($srcHash -eq $dstHash) {
-        Write-Host "    auto-vsearch-on-prompt hook unchanged: $AutoVsearch"
+        Write-Host "    auto-osearch-on-prompt hook unchanged: $AutoVsearch"
     } else {
         Write-Host "    !! $AutoVsearch exists and differs from skill version — leaving as-is"
         Write-Host "       (your version may have local customizations like a luminous-skill"
         Write-Host "       trigger; diff manually if needed)"
     }
 } else {
-    Write-Host "==> installing auto-vsearch-on-prompt hook → $AutoVsearch"
+    Write-Host "==> installing auto-osearch-on-prompt hook → $AutoVsearch"
     Copy-Item -Force $AutoVsearchSrc $AutoVsearch
 }
 
@@ -268,7 +268,7 @@ $autoVsearchCmd = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$AutoVs
 $alreadyRegistered = $false
 foreach ($entry in @($obj.hooks.UserPromptSubmit)) {
     foreach ($h in @($entry.hooks)) {
-        if ($h.command -and ($h.command -like '*auto-vsearch-on-prompt.ps1*')) {
+        if ($h.command -and ($h.command -like '*auto-osearch-on-prompt.ps1*')) {
             $alreadyRegistered = $true
         }
     }

@@ -45,11 +45,11 @@ Registered against `Bash` and `Read` matchers. Inspects the tool input and appli
 
 **Critically**: vsearch/csearch returning **zero results** still sets the sentinel. The rule is "you must check archive first", not "archive must contain the answer". A genuine new investigation just gets a one-line empty result, then proceeds normally.
 
-### 2. `auto-vsearch-on-prompt.sh` — UserPromptSubmit (proactive)
+### 2. `auto-osearch-on-prompt.sh` — UserPromptSubmit (proactive)
 
 Doesn't block anything — it preempts. When the user's prompt contains "look something up" intent (identity / history / status / question keywords), this hook:
 
-1. Runs `crs vsearch <prompt>` cross-project
+1. Runs `crs osearch <prompt>` cross-project
 2. Injects top hits as `additionalContext` (Claude sees them in its first turn)
 3. Sets the preflight sentinel (we did query, even if empty)
 
@@ -69,7 +69,7 @@ False positives are inevitable (the regex is permissive). The cost of a false po
 /tmp/claude-archive-preflight-<session_id>     # TTL: 30 minutes (since v1.11)
 ```
 
-- **Created / refreshed by**: `vsearch` / `csearch` invocation (preflight hook), or any `auto-vsearch-on-prompt` archive-trigger match. Each invocation touches the file, resetting the mtime → resetting the TTL clock.
+- **Created / refreshed by**: `vsearch` / `csearch` invocation (preflight hook), or any `auto-osearch-on-prompt` archive-trigger match. Each invocation touches the file, resetting the mtime → resetting the TTL clock.
 - **Checked by**: preflight hook on every Tier-B Bash / Read call via `sentinel_valid()`:
   ```sh
   sentinel_valid() {
@@ -89,7 +89,7 @@ False positives are inevitable (the regex is permissive). The cost of a false po
 
 Without TTL, the sentinel created by a vsearch at minute 0 would be valid forever. If Claude Code compacts the conversation at minute 90, the model loses procedural memory of having run vsearch — but the sentinel file persists (same `session_id`). The model's next archive query post-compact could go straight to raw sqlite3 (Tier B), with the hook silently allowing it because the sentinel is still there.
 
-30-minute TTL fixes this: any meaningful idle gap or compact forces a re-vsearch. Active conversations refresh the sentinel automatically (auto-vsearch-on-prompt fires on every archive-intent prompt), so users never notice the TTL — it only kicks in when the model would otherwise drift.
+30-minute TTL fixes this: any meaningful idle gap or compact forces a re-vsearch. Active conversations refresh the sentinel automatically (auto-osearch-on-prompt fires on every archive-intent prompt), so users never notice the TTL — it only kicks in when the model would otherwise drift.
 
 ### Manual override
 
@@ -104,7 +104,7 @@ This is escape-hatch only and resets the 30-min TTL. Normal flow is: run vsearch
 
 ## Composition with other skills
 
-This skill ships **archive-only** hooks. If you have other skills that also want UserPromptSubmit injection (e.g. an emotional persona that triggers on life-decision keywords), they should ship **their own** hook script — don't bundle unrelated triggers into `auto-vsearch-on-prompt.sh`.
+This skill ships **archive-only** hooks. If you have other skills that also want UserPromptSubmit injection (e.g. an emotional persona that triggers on life-decision keywords), they should ship **their own** hook script — don't bundle unrelated triggers into `auto-osearch-on-prompt.sh`.
 
 Multiple UserPromptSubmit hooks can coexist in `settings.json`:
 
@@ -112,7 +112,7 @@ Multiple UserPromptSubmit hooks can coexist in `settings.json`:
 {
   "hooks": {
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/auto-vsearch-on-prompt.sh", "timeout": 5 }] },
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/auto-osearch-on-prompt.sh", "timeout": 5 }] },
       { "hooks": [{ "type": "command", "command": "~/.claude/hooks/auto-other-skill.sh", "timeout": 5 }] }
     ]
   }

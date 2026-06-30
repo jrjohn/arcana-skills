@@ -1,12 +1,12 @@
 # UserPromptSubmit hook (Windows) — archive lookup auto-trigger.
 #
 # Detects "look up something historical / identity / status" intent in the
-# user's prompt, runs crs.exe vsearch behind the scenes, and injects top
+# user's prompt, runs crs.exe osearch behind the scenes, and injects top
 # hits as additionalContext. Also sets the archive-preflight sentinel so
 # subsequent raw sqlite3 / memory grep / log digging is unblocked.
 #
 # Failure modes (silent, never blocks):
-#   - vsearch timeout / Ollama down  → silent skip, prompt unchanged
+#   - osearch timeout / Ollama down  → silent skip, prompt unchanged
 #   - trigger doesn't match           → exit 0, prompt unchanged
 #   - results empty                   → don't inject, but sentinel still set
 #
@@ -18,7 +18,7 @@
 # UserPromptSubmit injection, it should ship its own .ps1 — don't bundle
 # multiple unrelated triggers in one script.
 #
-# Installation: $env:USERPROFILE\.claude\hooks\auto-vsearch-on-prompt.ps1
+# Installation: $env:USERPROFILE\.claude\hooks\auto-osearch-on-prompt.ps1
 # Registration: UserPromptSubmit (see install.ps1)
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -58,11 +58,11 @@ $candidates = @(
 $crs = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $crs) { exit 0 }
 
-# Cross-project semantic search (vsearch is global by default).
+# Cross-project semantic search (osearch is global by default).
 # Bound by Claude Code's hook-level timeout (set in settings.json, typically 5s).
-# vsearch typically returns in ~500ms — 1.1s; if Ollama is down it fails fast.
+# osearch typically returns in ~500ms — 1.1s; if Ollama is down it fails fast.
 try {
-    $result = & $crs vsearch $prompt 2>$null | Select-Object -First 8 | Out-String
+    $result = & $crs osearch $prompt 2>$null | Select-Object -First 8 | Out-String
 } catch {
     $result = ''
 }
@@ -78,7 +78,7 @@ if ($sid) {
 if (-not $result -or $result.Trim().Length -eq 0) { exit 0 }
 
 $ctx = @"
-Auto-archive lookup (vsearch top hits, all projects):
+Auto-archive lookup (osearch top hits, all projects):
 
 $($result.TrimEnd())
 
