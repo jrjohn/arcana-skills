@@ -24,6 +24,7 @@ Design notes:
 - Auth: relies on the mounted claude-home (/root/.claude) credentials,
   same as the existing daily-ci-agent image this is built FROM.
 """
+import base64
 import json
 import os
 import shutil
@@ -1398,30 +1399,124 @@ def implement_flow(payload):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _pr_url_and_branch(payload):
+    """The worker passes the implement node's result JSON (incl. prUrl + branch) as `prUrl`;
+    pull the real URL + branch out of it (or fall back to plain fields)."""
+    raw = payload.get("prUrl") or ""
+    url = raw if isinstance(raw, str) else ""
+    branch = ""
+    if isinstance(raw, str) and raw.strip().startswith("{"):
+        try:
+            j = json.loads(raw)
+            url = j.get("prUrl", "") or ""
+            branch = j.get("branch", "") or ""
+        except Exception:
+            pass
+    return url, (branch or payload.get("branch") or "")
+
+
+def _gen_testcases(payload):
+    """T4-2: generate feature-specific Playwright testcases (.mjs) from the ACs + the PR diff, so
+    the Test gate checks THIS feature (not just org regression). Returns the .mjs text, or None to
+    fall back to the default regression set (the runner then uses org-designer.testcases.mjs)."""
+    srs = payload.get("srs") or ""
+    if isinstance(srs, (dict, list)):
+        srs = json.dumps(srs, ensure_ascii=False)
+    url, _ = _pr_url_and_branch(payload)
+    diff = ""
+    if url:
+        try:
+            diff = (subprocess.run(["gh", "pr", "diff", url], capture_output=True, text=True,
+                                   timeout=90).stdout or "")[:12000]
+        except Exception:
+            diff = ""
+    if not (srs or diff):
+        return None
+    prompt = (
+        "You are writing Playwright e2e testcases for a NEW feature, to run against a LIVE preview "
+        "of the app (already logged in, at BASE_URL).\n\n"
+        "Acceptance criteria (SRS):\n" + (srs or "(none)") + "\n\n"
+        "The feature's code (PR diff — use the REAL selectors / visible text from here):\n"
+        + (diff or "(none)") + "\n\n"
+        "GROUNDING — a WORKING testcase for THIS app (copy its route + selector style). The Org\n"
+        "Designer is at route `/org`; its container is `.org-designer`, tree rows are `.org-row`.\n"
+        "The feature under test is rendered on this SAME `/org` page — navigate there first:\n"
+        "export const testcases = [\n"
+        "  { id: 'ORG-ADD-01', name: '...', run: async ({ page, assert, shot, base }) => {\n"
+        "      await page.goto(`${base}/org`, { waitUntil: 'domcontentloaded' });\n"
+        "      await page.waitForSelector('.org-designer', { timeout: 20000 });\n"
+        "      const n = await page.locator('.org-row').count();\n"
+        "      assert(n > 0, `expected rows, got ${n}`);\n"
+        "  } },\n];\n\n"
+        "Write a JavaScript ES module exporting `testcases`, EXACTLY this shape:\n"
+        "export const testcases = [\n"
+        "  { id: 'FEAT-01', name: '<short zh desc>', run: async ({ page, assert, shot, base, shared }) => {\n"
+        "      await page.goto(`${base}/<route>`, { waitUntil: 'domcontentloaded' });\n"
+        "      await page.waitForSelector('<real selector>', { timeout: 20000 });\n"
+        "      await shot('before');\n"
+        "      const actual = (await page.locator('<real selector>').innerText()).trim();\n"
+        "      assert(actual === '<expected>', `got ${actual}`);\n"
+        "  } },\n];\n\n"
+        "Rules:\n"
+        "- Assert on a REAL end-state value the feature produces (text / count / attribute) — NEVER "
+        "on the mere presence of a 'success' string.\n"
+        "- Use ONLY selectors / routes / text that appear in the diff or SRS; if unsure, prefer "
+        "role/text locators (getByText, getByRole).\n"
+        "- 2-4 focused testcases for the key ACs (include edge cases like empty / error / a11y if "
+        "the SRS mentions them).\n"
+        "- `assert(cond, msg)` throws on false; `shot(name)` screenshots; `base` is the origin; "
+        "`shared` persists across testcases.\n"
+        "- Output ONLY the module code — no markdown fences, no prose."
+    )
+    schema = json.dumps({"type": "object", "additionalProperties": False,
+                         "properties": {"testcasesMjs": {"type": "string"}},
+                         "required": ["testcasesMjs"]})
+    try:
+        out = _invoke_claude(prompt, schema, payload, wall=300)
+        mjs = ((out or {}).get("testcasesMjs") or "").replace("```javascript", "") \
+            .replace("```js", "").replace("```", "").strip()
+        return mjs if "export const testcases" in mjs else None
+    except Exception:
+        return None
+
+
 def test_flow(payload):
-    """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted
-    docker.sock against a target URL. The runner runs REAL e2e (falsifiable, screenshot-backed),
-    builds a testcase Excel, uploads the evidence to MinIO, and prints a compact testReport JSON
-    (prefixed `TESTREPORT:`). We parse + return it. Fail-safe: any error -> allPass:false so the
-    flow REWORKS rather than passing unverified code. Chromium/build tooling live in the runner
-    image, NOT this agent image — the agent only needs the mounted docker.sock."""
+    """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted docker.sock.
+    T4: when a PR branch is known, the runner clones + builds it and serves a preview so e2e run
+    against the PR's ACTUAL (unmerged) code; feature-specific testcases are generated from the ACs
+    + PR diff (T4-2) so the gate checks THIS feature, not just org regression. Runs REAL e2e
+    (falsifiable, screenshot-backed), writes a testcase Excel + evidence to MinIO, returns a
+    testReport. Fail-safe: any error -> allPass:false so the flow REWORKS. Chromium / build tooling
+    live in the runner image, not this agent — the agent needs only the mounted docker.sock."""
     keep = lambda v: "".join(c for c in str(v) if c.isalnum() or c in "-_") or "adhoc"
     piid = keep(payload.get("_piid") or payload.get("slug") or "adhoc")
     net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
+    repo = payload.get("repo") or ""
+    _, branch = _pr_url_and_branch(payload)
     cmd = ["docker", "run", "--rm", "--network", net,
-           "-e", "TARGET_URL=" + os.environ.get("TEST_TARGET_URL", "http://aaf-dashboard:80"),
            "-e", "MINIO_URL=" + os.environ.get("TEST_MINIO_URL", "http://aaf-minio:9000"),
            "-e", "MINIO_USER=" + os.environ.get("MINIO_ROOT_USER", "minioadmin"),
            "-e", "MINIO_PASS=" + os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin"),
            "-e", "MINIO_BUCKET=arcana-attachments",
            "-e", "INSTANCE=" + piid,
-           os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local")]
+           "-e", "API_TARGET=" + os.environ.get("TEST_API_TARGET", "http://aaf-arcana-cloud-rust:8080")]
+    if repo and branch:  # T4-1: build the PR branch and test its real code
+        cmd += ["-e", "REPO=" + repo, "-e", "BRANCH=" + branch,
+                "-e", "GH_TOKEN=" + os.environ.get("GH_TOKEN", "")]
+    else:                # regression fallback: test the already-running app
+        cmd += ["-e", "TARGET_URL=" + os.environ.get("TEST_TARGET_URL", "http://aaf-dashboard:80")]
+    gen = _gen_testcases(payload)  # T4-2: feature-specific testcases (else default regression)
+    if gen:
+        cmd += ["-e", "TESTCASES_B64=" + base64.b64encode(gen.encode()).decode()]
+    cmd.append(os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local"))
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=2400)
         line = next((l for l in reversed((r.stdout or "").splitlines())
                      if l.startswith("TESTREPORT:")), "")
         if line:
-            return json.loads(line[len("TESTREPORT:"):])
+            rep = json.loads(line[len("TESTREPORT:"):])
+            rep["featureTests"] = bool(gen)  # true = tested THIS feature; false = regression only
+            return rep
         tail = ((r.stderr or "") + (r.stdout or ""))[-400:]
         return {"allPass": False, "total": 0, "passed": 0,
                 "reason": "runner emitted no TESTREPORT (exit %s): %s" % (r.returncode, tail)}
