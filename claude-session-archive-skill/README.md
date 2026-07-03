@@ -322,6 +322,13 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.27.0 — `osearch` self-query: auto date/project filtering (rules-based, no LLM) + `crs osearch-eval` harness
+
+- **Self-query on `osearch`** — a natural-language query with temporal/project intent now auto-applies a metadata filter: `osearch '六月 openfortivpn'` → June only; `osearch '上週的 X'` → last calendar week (Mon–Sun); `osearch 'network 的 Y'` → `project=network`. Rules-based extraction (`extract_filters`, **no LLM**): Chinese/English month names, relative windows (今天/昨天/上週/這週/上個月/近N天…), and known project slugs; matched words are stripped from the semantic query. **Conservative** — no date/project intent → query returned untouched, so plain queries stay **byte-identical** (no note, no filter). Explicit `osearch 'x' network` / `--project` / `--since <hours>` override auto-extraction.
+- **Per-leg, pgvector-aware** — the date filter is NULL-guarded on the lexical (pin) leg and injected **inside** the recall (`pg_vec`) HNSW MATERIALIZED CTE with `SET hnsw.iterative_scan = relaxed_order` (pgvector ≥ 0.8): without it a selective `WHERE` on HNSW post-filters to **0 rows**; with it recall is recovered at **~+3 ms warm**. No date filter → `iterative_scan = off` keeps unfiltered queries fast. The orient (distilled) leg stays project-only (`msg_distilled` has no `ts`).
+- **`crs osearch-eval`** — new in-process (Rust, no Python) eval harness: precision@k / recall@k / MRR of `osearch` vs a lexical-oracle ground truth (`pg_fts(entity) ∩ project/date`), grouped by query category, `--variant osearch|osearch-selfquery` for A/B. Reconnects PG per query (a single WAN connection drops mid-run and silently empties results). `eval/queryset.json` holds a 15-query metadata-intent set.
+- **Measured** — self-query lifts **date-scoped precision@15 0.133 → 0.347 (~2.6×)** with **zero change on nl-concept queries** (0.289 → 0.289 — proof the NULL-guards leave plain queries untouched); +3 ms only when a filter fires.
+
 ### v1.26.0 — distillation backfill: env-tunable workers + dedicated-machine offload; pgvector HNSW filter caveat
 
 - **`distill-backfill.sh` now reads `CRS_DISTILL_WORKERS` (default 2).** The GPU-heavy orient backfill (`crs distill-missing`, `qwen2.5:7b`) can be **offloaded to a separate idle machine** (e.g. a spare Mac mini) that reads/writes the same shared PG — the primary dev box stays free. Tuning gotcha: **`workers=4` stalls qwen2.5:7b on an M4** (memory-bandwidth-bound — 4 parallel 7B generations thrash, ~0 throughput); **`workers=2` is the sweet spot** (~9–12 s/row warm).
