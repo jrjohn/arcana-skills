@@ -322,6 +322,13 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.26.0 — distillation backfill: env-tunable workers + dedicated-machine offload; pgvector HNSW filter caveat
+
+- **`distill-backfill.sh` now reads `CRS_DISTILL_WORKERS` (default 2).** The GPU-heavy orient backfill (`crs distill-missing`, `qwen2.5:7b`) can be **offloaded to a separate idle machine** (e.g. a spare Mac mini) that reads/writes the same shared PG — the primary dev box stays free. Tuning gotcha: **`workers=4` stalls qwen2.5:7b on an M4** (memory-bandwidth-bound — 4 parallel 7B generations thrash, ~0 throughput); **`workers=2` is the sweet spot** (~9–12 s/row warm).
+- **Dedicated-machine setup traps** (from wiring a Mac mini as the distill worker): (a) the `crs` release binary is arch-portable (copy arm64→arm64) — only `ollama` + the models (`qwen2.5:7b` + `bge-m3`) need pulling locally; (b) `CRS_PG_PASSWORD` may come from your **shell profile** with only an empty fallback in `env.sh` — a headless/new machine has no profile, so write the real password into that machine's `~/.config/crs/env.sh`; (c) the crs **client** `OLLAMA_HOST` must include the scheme (`http://127.0.0.1:11434`) — crs appends `/api/embed` without adding `http://`, so a bare `host:port` yields a reqwest **"builder error"** (`ollama serve`'s own bind address stays scheme-less).
+- **pgvector HNSW + metadata-filter caveat** (for filtered vector search): pgvector HNSW **post-filters** — a selective `WHERE` on the vector leg silently returns **0 rows** (the `ef_search` candidates get filtered out before `LIMIT`). Fix: `SET hnsw.iterative_scan = relaxed_order` (pgvector ≥ 0.8) recovers recall at **~+3 ms warm** (noise vs. the embed + WAN budget). Lexical (GIN) filters are cheap and correct; reserve `iterative_scan` for the vector legs.
+- **VERSION realigned to 1.26.0** — was stale at 1.23.0 (the v1.24.0 / v1.25.0 changelog entries shipped without a VERSION-file bump); SKILL.md frontmatter version synced too.
+
 ### v1.25.0 — `osearch` default front door + auto-prompt hook on osearch (cross-platform timeout / circuit-breaker)
 
 `osearch` (orient→recall→pin RRF fusion — unions the semantic `vsearch` + lexical `csearch` legs over the same archive, drilled back to raw msg) is now the **default front door**; `vsearch`/`csearch` stay as manual single-leg shortcuts. Adaptive weighting: NL queries (`?`/`？` or ≥12 chars) weight the semantic leg 2×; short exact-token / IP / hostname queries use equal weights. The orient layer is GPU-populated on a Mac (`crs distill-missing`); where empty, RRF guarantees osearch ≥ vsearch, so it's always a safe default (sqlite-only backend: osearch unavailable → use `vsearch`).
