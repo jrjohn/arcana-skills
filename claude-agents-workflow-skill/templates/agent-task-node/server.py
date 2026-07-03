@@ -50,6 +50,7 @@ STUB_RESPONSES = {
     "sweep": {"checked": 14, "red": [], "retriggered": 0, "summary": "stub: all repos green"},
     "decide": {"action": "merge", "resolved": True, "reason": "stub: build green, merge"},
     "escalate": {"resolution": "recorded", "action": "stub: recorded for review", "reason": "stub: exhausted -> recorded"},
+    "pm-review": {"verdict": "GO", "dimensions": [{"name": "stub", "pass": True, "note": "stub"}], "feedback": "", "confidence": 0.9},
 }
 
 # --- JSON Schemas: the typed contract SonataFlow switches/retries on ---
@@ -151,6 +152,18 @@ SCHEMAS = {
         },
         "required": ["action", "resolved", "reason"],
     },
+    "pm-review": {
+        "type": "object",
+        "properties": {
+            "verdict": {"type": "string", "enum": ["GO", "NOGO", "HOLD"]},
+            "dimensions": {"type": "array", "items": {"type": "object", "properties": {
+                "name": {"type": "string"}, "pass": {"type": "boolean"}, "note": {"type": "string"}},
+                "required": ["name", "pass"]}},
+            "feedback": {"type": "string"},
+            "confidence": {"type": "number"},
+        },
+        "required": ["verdict", "dimensions"],
+    },
     "escalate": {
         "type": "object",
         "properties": {
@@ -212,6 +225,18 @@ def prompt_fix(p):
         "and add them to `coverage.exclude` (same category as already-excluded entry files like src/index.ts) "
         "— do NOT pad fake tests, and never lower the threshold.\n"
         " (c) LOCKFILE out of sync (`renovate/artifacts` failed): regenerate it (`npm install`) and commit.\n"
+        "TEST FAILURES — FIX THE ROOT CAUSE, NEVER THE SCOREBOARD: a failing test is an executable "
+        "spec of intended behaviour; green is only a PROXY for correct, so do not game it. When a test "
+        "fails, FIRST adjudicate which side is actually wrong — the CODE or the TEST — using the "
+        "requirement / PR intent, the acceptance criteria, and the assertion's git blame. If the CODE "
+        "violates the intended behaviour, fix the CODE (this is the default assumption). Do NOT weaken, "
+        "loosen, delete, skip, `.only`/`xit`, or re-point a test ASSERTION to match buggy code just to "
+        "go green — that silently discards the intent and is WORSE than a red that flags the problem "
+        "(same principle as coverage above: never lower the bar to pass it). Weakening or removing a "
+        "test is a SPEC change, not a fix: only do it when the test genuinely encodes obsolete/incorrect "
+        "behaviour, and then say so explicitly in the commit message + report. If you cannot confidently "
+        "tell whether the code or the test is the source of truth, DO NOT guess and DO NOT touch the "
+        "test — set action=escalate, pushed=false, and hand it to a human with your findings.\n"
         "CLOSE THE LOOP — apply the fix where the failing pipeline will actually RE-TEST it, so the "
         "flow's next Build can go green on its own (do NOT leave the fix in a separate un-merged PR "
         "that the failing build never sees — that is the #1 reason a run gets stuck at human handoff):\n"
@@ -445,7 +470,43 @@ def prompt_audit(p):
     )
 
 
-PROMPTS = {"diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "scan-stale": prompt_scan_stale, "rebase": prompt_rebase, "audit": prompt_audit}
+def prompt_pm_review(p):
+    return (
+        "You are the PM readiness gate (your PM skill carries the full rubric). A gated PR was "
+        "produced by the SA -> SD -> (UI/UX) -> Implement pipeline. Decide whether it satisfies the "
+        "manager's requirement and is READY to ship, or must iterate.\n"
+        f"PR: {p.get('prUrl')}  (subject: {p.get('job') or p.get('subject')})\n"
+        f"Inspect the ACTUAL change first: `gh pr diff {p.get('prUrl') or ''}` and `gh pr view "
+        f"{p.get('prUrl') or ''}`. Judge against the evidence, do not trust summaries.\n"
+        f"- SRS (acceptance criteria to trace): {str(p.get('srs'))[:4000]}\n"
+        f"- SDD (design to conform to): {str(p.get('sdd'))[:3000]}\n"
+        f"- UI/UX spec (usability target, if user-facing): {str(p.get('uiuxSpec'))[:3000]}\n"
+        f"- SIBLING features in this SAME initiative (each with its verdict/state — cross-check against "
+        f"these, like a countersigner reading prior sign-offs): {str(p.get('siblings'))[:2800]}\n"
+        "HARD PRE-GATE first: quality bars (arch-qube>=90 + SonarQube gate OK + tests green — a green CI "
+        "check-rollup implies all three; or query the Sonar API with $SONARQUBE_TOKEN). Unmet -> NOGO(quality).\n"
+        "Then the FIVE dimensions: (1) usability - audit the built UI in the diff against the UX rubric; you "
+        "CAN catch objective violations (equal-weight N-quadrant dumps, non-collapsible toolbars, no "
+        "progressive disclosure, cognitive overload, off-scan-path primary actions, tiny targets, WCAG/state "
+        "gaps) -> NOGO with the fix; ONLY genuinely subjective/brand calls -> HOLD. (2) completeness - every "
+        "SRS AC-N traceable to code + a test in the diff; list missing ACs. (3) design conformance - matches "
+        "SDD layers/approach + arch-qube. (4) schedule - not stuck. (5) goal-fit - actually solves the "
+        "requirement / advances the manager's goal, not a hollow shell.\n"
+        "(6) cross-feature (only if `siblings` non-empty) - like a countersigner reading prior sign-offs: "
+        "does this feature OVERLAP/duplicate a sibling? is it CONSISTENT with siblings (naming, UX pattern, "
+        "API shape)? are its DEPENDENCIES satisfied - a sibling this needs must be COMPLETED with verdict GO; "
+        "if a needed sibling is not yet GO, return NOGO/HOLD and name which sibling to wait for. do the "
+        "features TOGETHER cover the goal (flag gaps)?\n"
+        "ANTI-GOODHART (non-negotiable): never lower/soften an AC, design, or UX bar to reach GO; no dimension "
+        "passes without cited evidence; if the SAME gap survived the previous round -> HOLD (do not churn).\n"
+        f"Previous round verdict (no-progress detection): {str(p.get('pmReview'))[:1500]}\n"
+        f"Iteration (pmAttempts): {p.get('pmAttempts')}\n"
+        "Return the verdict JSON (verdict GO|NOGO|HOLD, per-dimension pass+note citing evidence, and if NOGO "
+        "a concrete actionable `feedback` naming the exact gap + fix so Implement resolves it in ONE pass)."
+    )
+
+
+PROMPTS = {"diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "scan-stale": prompt_scan_stale, "rebase": prompt_rebase, "audit": prompt_audit, "pm-review": prompt_pm_review}
 
 
 def _resume(payload):
@@ -489,7 +550,92 @@ def _skill_flags(payload):
     return ["--append-system-prompt-file", md, "--add-dir", skill_dir]
 
 
-def _invoke_claude(prompt, schema, payload, wall):
+def _perm_flags(payload):
+    """Opt-in `--dangerously-skip-permissions`, ONLY when the caller sets
+    `skip_permissions` (the `implement` verb does). Safe there because the code is
+    written inside an isolated container on a throwaway clone and the PR is opened
+    by a deterministic finalizer downstream — bounded blast radius — and it avoids
+    the mounted claude-home allow-list gap that blocks git/gh in default mode."""
+    return ["--dangerously-skip-permissions"] if payload.get("skip_permissions") else []
+
+
+def _dir_flags(payload):
+    """Extra working dirs Claude may read/write (`add_dirs`), e.g. the implement
+    verb's cloned repo workdir. Each becomes an `--add-dir <path>`."""
+    out = []
+    for d in payload.get("add_dirs") or []:
+        if isinstance(d, str) and d:
+            out += ["--add-dir", d]
+    return out
+
+
+WORK_ROOT = os.environ.get("WORK_ROOT", "/work")
+
+
+def _safe_seg(v):
+    """Filesystem-safe path segment from a piid/node value."""
+    return "".join(c for c in str(v) if c.isalnum() or c in "-_") or "x"
+
+
+def _workspace(payload):
+    """Per-(instance, node) working dir: $WORK_ROOT/<piid>/<node>/. Gives every node of
+    every process instance its own cwd, so concurrent flows — including multiple instances
+    of the SAME flow (fan-out children) — never share a working directory or clobber files."""
+    piid, node = payload.get("_piid"), payload.get("_node")
+    if not piid or not node:
+        return None
+    ws = os.path.join(WORK_ROOT, _safe_seg(piid), _safe_seg(node))
+    try:
+        os.makedirs(ws, exist_ok=True)
+        return ws
+    except OSError:
+        return None
+
+
+def _instance_claude_config(piid):
+    """Per-instance isolated Claude config dir ($WORK_ROOT/<piid>/.claude), seeded once from
+    the mounted /root/.claude auth. Concurrent instances then keep their own session state
+    (.claude.json) instead of contending on one shared ~/.claude (and never write back to
+    the host mount). Returns the dir for CLAUDE_CONFIG_DIR, or None to fall back to default."""
+    if not piid:
+        return None
+    cfg = os.path.join(WORK_ROOT, _safe_seg(piid), ".claude")
+    try:
+        creds = os.path.join(cfg, ".credentials.json")
+        if not os.path.exists(creds):
+            os.makedirs(cfg, exist_ok=True)
+            if os.path.exists("/root/.claude/.credentials.json"):
+                shutil.copy("/root/.claude/.credentials.json", creds)
+            dst_json = os.path.join(cfg, ".claude.json")
+            if os.path.exists("/root/.claude.json"):
+                shutil.copy("/root/.claude.json", dst_json)
+            else:
+                with open(dst_json, "w") as f:
+                    f.write("{}")
+        return cfg
+    except OSError:
+        return None
+
+
+class RateLimitError(RuntimeError):
+    """Claude hit a rate/usage limit (HTTP 429/529 or 'Overloaded'). Distinct from other
+    failures so the worker can back off + NOT count it toward an instance's retry budget."""
+
+
+_RATE_RE = re.compile(r"rate.?limit|overloaded|usage limit|too many requests|\b429\b|\b529\b", re.I)
+
+
+def _rate_limited(status, text):
+    """True if an HTTP status / claude error text signals a rate or usage limit."""
+    try:
+        if int(status) in (429, 529):
+            return True
+    except (TypeError, ValueError):
+        pass
+    return bool(text and _RATE_RE.search(str(text)))
+
+
+def _invoke_claude(prompt, schema, payload, wall, cwd=None):
     """Core Claude invocation shared by the static-verb path (run_claude) and the
     control-inverted generic executor (run_claude_generic). `prompt` + `schema`
     (a JSON string) are already resolved; `wall` is the wall-clock kill in seconds.
@@ -508,15 +654,30 @@ def _invoke_claude(prompt, schema, payload, wall):
             console_path = os.path.join(console_dir, keep(piid) + "__" + keep(node) + ".jsonl")
         except OSError:
             console_path = None
+    # Claude refuses --dangerously-skip-permissions as root unless it believes it's
+    # in a sandbox. The agent-task-node container IS an isolated sandbox, so signal
+    # it via IS_SANDBOX=1 (only for skip-permissions runs; others inherit env).
+    # Per-instance / per-node isolation: own cwd + own Claude config dir, so concurrent
+    # flows (incl. many instances of the same flow) never share a working dir or session
+    # state. Falls back to the shared default when _piid/_node are absent (direct calls).
+    ws = _workspace(payload)
+    if ws and cwd is None:
+        cwd = ws
+    run_env = dict(os.environ)
+    cfg_dir = _instance_claude_config(payload.get("_piid"))
+    if cfg_dir:
+        run_env["CLAUDE_CONFIG_DIR"] = cfg_dir
+    if payload.get("skip_permissions"):
+        run_env["IS_SANDBOX"] = "1"
     if console_path:
         cmd = [CLAUDE, "-p", prompt, "--json-schema", schema,
-               "--output-format", "stream-json", "--verbose"] + _resume(payload) + _skill_flags(payload)
+               "--output-format", "stream-json", "--verbose"] + _resume(payload) + _skill_flags(payload) + _perm_flags(payload) + _dir_flags(payload)
         if MODEL:
             cmd += ["--model", MODEL]
         collected = []
         with open(console_path, "w") as cf:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE, text=True)
+                                    stderr=subprocess.PIPE, text=True, cwd=cwd, env=run_env)
             # wall-clock kill: without it an abandoned run streams forever (a Fix
             # orphan ran 8h17m on 2026-06-04). fix gets 30 min for local build
             # verification; everything else the standard TIMEOUT.
@@ -535,6 +696,8 @@ def _invoke_claude(prompt, schema, payload, wall):
                 _killer.cancel()
         if proc.returncode != 0:
             err = proc.stderr.read()[:500] if proc.stderr else ""
+            if _rate_limited(None, err):
+                raise RateLimitError(f"claude rate-limited (exit {proc.returncode}): {err}")
             raise RuntimeError(f"claude exit {proc.returncode}: {err}")
         env = {}
         for line in collected:
@@ -546,15 +709,21 @@ def _invoke_claude(prompt, schema, payload, wall):
                 env = ev
     else:
         cmd = [CLAUDE, "-p", prompt, "--json-schema", schema,
-               "--output-format", "json"] + _resume(payload) + _skill_flags(payload)
+               "--output-format", "json"] + _resume(payload) + _skill_flags(payload) + _perm_flags(payload) + _dir_flags(payload)
         if MODEL:
             cmd += ["--model", MODEL]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=wall)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=wall, cwd=cwd, env=run_env)
         if proc.returncode != 0:
+            if _rate_limited(None, proc.stderr):
+                raise RateLimitError(f"claude rate-limited (exit {proc.returncode}): {proc.stderr[:500]}")
             raise RuntimeError(f"claude exit {proc.returncode}: {proc.stderr[:500]}")
         env = json.loads(proc.stdout.strip())
     if env.get("is_error") or env.get("api_error_status"):
-        raise RuntimeError(f"claude api error: {env.get('api_error_status') or str(env.get('result',''))[:300]}")
+        _aerr = env.get("api_error_status")
+        _amsg = str(env.get("result", ""))[:300]
+        if _rate_limited(_aerr, _amsg) or _rate_limited(_aerr, str(_aerr)):
+            raise RateLimitError(f"claude api rate-limited: {_aerr or _amsg}")
+        raise RuntimeError(f"claude api error: {_aerr or _amsg}")
     so = env.get("structured_output")
     if so is None:
         raise RuntimeError(f"no structured_output in claude result: {str(env)[:300]}")
@@ -678,7 +847,7 @@ def run_claude(task, payload):
         return STUB_RESPONSES[task]
     schema = json.dumps(SCHEMAS[task])
     prompt = _with_memory(PROMPTS[task](payload), payload)
-    wall = 1800 if task == "fix" else TIMEOUT
+    wall = 1800 if task in ("fix", "pm-review") else TIMEOUT
     return _invoke_claude(prompt, schema, payload, wall)
 
 
@@ -1020,6 +1189,246 @@ def publish_flow(payload):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# --- Implement verb: AI writes real code → GATED PR (self-development) ----------
+# The missing piece for "AI BPM self-develops its own CODE features". Combines the
+# two halves already proven on this platform: the fix verb's Claude-driven code
+# writing (_invoke_claude) + publish_flow's deterministic gated-PR finalizer.
+# Unlike fix (repo inferred from a job string, Claude clones ambiguously) every
+# hard-coded assumption is parameterized: repo / base / slug / skill.
+IMPLEMENT_REPO_ALLOWLIST = set(
+    (os.environ.get("IMPLEMENT_REPOS") or "jrjohn/arcana-ai-bpm").split(","))
+_SLUG_RE = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
+
+
+def _ensure_claude_config():
+    """`claude --dangerously-skip-permissions` errors if `~/.claude.json` is absent
+    (normal mode auto-creates it on first run). On a freshly-(re)built container the
+    implement verb could be the first claude call — restore the newest backup (or a
+    minimal stub) so skip-permissions mode doesn't fail. Best-effort no-op if present."""
+    home = os.path.expanduser("~")
+    cfg = os.path.join(home, ".claude.json")
+    if os.path.exists(cfg):
+        return
+    try:
+        bdir = os.path.join(home, ".claude", "backups")
+        backups = sorted(f for f in os.listdir(bdir) if f.startswith(".claude.json.backup")) \
+            if os.path.isdir(bdir) else []
+        if backups:
+            shutil.copy(os.path.join(bdir, backups[-1]), cfg)
+        else:
+            with open(cfg, "w") as f:
+                f.write("{}")
+    except Exception:
+        pass
+
+
+def implement_flow(payload):
+    """AI code-implementation → GATED PR.
+
+    Phases: (A) deterministic clone <repo>@<base> into a temp workdir;
+    (B) Claude writes the feature per `design`, binding `ai_skill` (e.g.
+    arcana-angular-developer-skill), running IN the workdir with skip-permissions
+    + --add-dir so it can read/write the repo and write tests; (C) deterministic
+    branch/commit/push + `gh pr create` GATED PR (never merges, never deploys —
+    quality gates + merge-flow gate the actual merge).
+
+    payload: { repo, base, slug, ai_skill, prompt, design?, branchPrefix?, wall? }
+    returns: { prUrl, branch, summary, filesChanged, pushed } | { error }
+    """
+    repo = (payload.get("repo") or "").strip()
+    base = (payload.get("base") or "").strip()
+    slug = (payload.get("slug") or "").strip()
+    instruction = (payload.get("prompt") or "").strip()
+    branch_prefix = (payload.get("branchPrefix") or "feat/").strip()
+
+    if repo not in IMPLEMENT_REPO_ALLOWLIST:
+        return {"error": "repo %r not in implement allowlist %s"
+                % (repo, sorted(IMPLEMENT_REPO_ALLOWLIST))}
+    if not _SLUG_RE.match(slug):
+        return {"error": "invalid slug %r: must match ^[a-z][a-z0-9-]{0,63}$" % slug}
+    if not base:
+        return {"error": "base branch required"}
+    if not instruction:
+        return {"error": "prompt (implementation instruction) required"}
+
+    token = os.environ.get("GH_TOKEN", "")
+    branch = "%s%s" % (branch_prefix, slug)
+    # Clone under this (instance, node) workspace so concurrent implement runs are isolated;
+    # fall back to a temp dir for direct calls that carry no _piid/_node.
+    ws = _workspace(payload)
+    tmp = ws or tempfile.mkdtemp(prefix="implement-%s-" % slug)
+    workdir = os.path.join(tmp, "repo")
+    try:
+        # --- Phase A: clone the base branch ---
+        # workspace persists across a rework loop (same instance+node), so clear any prior
+        # clone before re-cloning (mkdtemp used to give a fresh dir each call).
+        shutil.rmtree(workdir, ignore_errors=True)
+        clone_url = "https://x-access-token:%s@github.com/%s" % (token, repo)
+        c = subprocess.run(
+            ["git", "clone", "--depth", "1", "--branch", base, clone_url, workdir],
+            capture_output=True, text=True, timeout=300)
+        if c.returncode != 0:
+            return {"error": "clone failed: %s" % (c.stderr or c.stdout)[-500:]}
+
+        # --- Phase B: Claude writes code in the workdir (bound to the dev skill) ---
+        design = payload.get("design")
+        design_str = json.dumps(design, ensure_ascii=False)[:12000] if design is not None else ""
+        full_prompt = (
+            instruction
+            + "\n\n## 目標\n在目前工作目錄（已 clone 的 repo）實作此功能，嚴格遵守 repo 既有架構慣例"
+              "（你載入的 developer skill 已含 Clean Arch / MVVM / arch-qube 規範），並**寫對應單元測試**。\n"
+              "## 交付前自我驗證（重要）\n開 PR 前**必須**讓受影響的子專案在本地編譯通過：進到該子專案（例如 `dashboard/`）跑 "
+              "`npm ci && npm run build`，有編譯錯就修到綠；並為新功能寫**會通過的單元測試**。**不要交出沒編譯過的碼**"
+              "——下游 CI（build + ng test + arch-qube + Sonar）會擋，交紅碼只會被 PM NOGO 退回重做、白費一輪。"
+              "時間預算內以「編得過、架構乾淨、測試通過」為第一優先；最後簡述你改了什麼。\n"
+            + ("\n## 設計 (SRS/SDD)\n```json\n" + design_str + "\n```\n" if design_str else ""))
+        sch = payload.get("ai_output_schema") or {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string"},
+                "filesChanged": {"type": "array", "items": {"type": "string"}},
+                "testsPass": {"type": "boolean"}},
+            "required": ["summary"]}
+        schema = json.dumps(sch) if not isinstance(sch, str) else sch
+        _ensure_claude_config()           # skip-permissions needs ~/.claude.json present
+        cp = dict(payload)
+        cp["skip_permissions"] = True     # bounded: throwaway clone in a sandbox
+        cp["add_dirs"] = [workdir]
+        result = _invoke_claude(full_prompt, schema, cp,
+                                int(payload.get("wall") or 2400), cwd=workdir)
+        summary = result.get("summary") if isinstance(result, dict) else str(result)
+
+        # --- Phase C: deterministic gated PR ---
+        def _git(*args):
+            return subprocess.run(["git", "-C", workdir, *args],
+                                  capture_output=True, text=True, timeout=120)
+        _git("checkout", "-b", branch)
+
+        # --- Phase B.5: build gate — compile affected sub-app(s) BEFORE opening the PR.
+        # implement used to push unverified code → ci/angular went red → PmReview NOGO churn.
+        # Compile locally; on failure feed the errors back to Claude (bounded) so the PR that
+        # lands actually builds. No browser here → ng test/coverage stay CI-gated. A persistent
+        # RED still opens the PR (never worse than the old behaviour) but is flagged in the body.
+        BUILD_CMDS = {"dashboard": "(npm ci || npm install) && npm run build"}
+        def _changed_subapps():
+            tops = set()
+            for ln in _git("status", "--porcelain").stdout.splitlines():
+                p = ln[3:].strip().strip('"')
+                if " -> " in p:
+                    p = p.split(" -> ", 1)[1]
+                tops.add(p.split("/", 1)[0])
+            return tops
+        def _build_gate():
+            for d in sorted(_changed_subapps()):
+                cmd = BUILD_CMDS.get(d)
+                sub = os.path.join(workdir, d)
+                if not cmd or not os.path.isdir(sub):
+                    continue
+                b = subprocess.run(["sh", "-c", cmd], capture_output=True, text=True,
+                                   timeout=900, cwd=sub)
+                if b.returncode != 0:
+                    return d, (b.stderr or b.stdout)[-4000:]
+            return None
+        build_status = "OK"
+        gate = _build_gate()
+        _gate_tries = 0
+        while gate is not None and _gate_tries < 2:
+            _gate_tries += 1
+            _d, _errlog = gate
+            fix_prompt = ("你剛在此工作目錄實作的功能，`%s/` 的 `npm run build` 編譯失敗。"
+                          "以下是編譯錯誤輸出，請只改必要的檔把它修到**編譯通過**，不要動無關的檔：\n\n"
+                          "```\n%s\n```\n" % (_d, _errlog))
+            try:
+                result = _invoke_claude(fix_prompt, schema, cp,
+                                        int(payload.get("wall") or 1800), cwd=workdir)
+                if isinstance(result, dict) and result.get("summary"):
+                    summary = result.get("summary")
+            except Exception as e:
+                build_status = "fix-invoke-error: %s" % e
+                break
+            gate = _build_gate()
+        if gate is not None and not build_status.startswith("fix-invoke"):
+            build_status = "RED: %s build failing after %d fix attempt(s)" % (gate[0], _gate_tries)
+
+        _git("add", "-A")
+        cm = _git("-c", "user.email=agent@arcana.boo", "-c", "user.name=AI-BPM Implementer",
+                  "commit", "-m", "feat: %s" % slug)
+        if cm.returncode != 0:
+            if "nothing to commit" in (cm.stdout + cm.stderr):
+                return {"error": "implement produced no changes for %s" % slug,
+                        "summary": summary, "pushed": False}
+            return {"error": "commit failed: %s" % (cm.stderr or cm.stdout)[-500:]}
+        diff = _git("diff", "--name-only", "%s..HEAD" % base)
+        files_changed = [l for l in diff.stdout.splitlines() if l.strip()]
+        # dry_run: prove the clone + Claude-writes-code phase without opening a PR.
+        if payload.get("dry_run"):
+            stat = _git("diff", "--stat", "%s..HEAD" % base)
+            return {"dry_run": True, "branch": branch, "summary": summary,
+                    "filesChanged": files_changed, "diffstat": stat.stdout[-2000:],
+                    "pushed": False}
+        ps = _git("push", "-u", "origin", branch, "--force")
+        if ps.returncode != 0:
+            return {"error": "push failed: %s" % (ps.stderr or ps.stdout)[-500:]}
+        body = ("AI-implemented feature `%s`.\n\n"
+                "This is a **GATED** PR — written by the AI-BPM Implement node, NOT a "
+                "self-deploy. Quality gates (CI build + tests + arch-qube) + merge-flow "
+                "gate the actual merge/deploy. Do not auto-merge without the green gate.\n\n"
+                "Local build gate: %s\n\n"
+                "Summary: %s\n" % (slug, build_status, summary or "(none)"))
+        env = dict(os.environ)
+        if token:
+            env["GH_TOKEN"] = token
+        pr = subprocess.run(
+            ["gh", "pr", "create", "-R", repo, "--base", base, "--head", branch,
+             "--title", "feat: %s" % slug, "--body", body],
+            capture_output=True, text=True, timeout=120, cwd=workdir, env=env)
+        if pr.returncode != 0:
+            return {"error": "pr create failed: %s" % (pr.stderr or pr.stdout)[-500:],
+                    "branch": branch, "filesChanged": files_changed}
+        pr_url = pr.stdout.strip().splitlines()[-1] if pr.stdout.strip() else ""
+        return {"prUrl": pr_url, "branch": branch, "summary": summary,
+                "filesChanged": files_changed, "pushed": True, "buildStatus": build_status}
+    except subprocess.TimeoutExpired:
+        return {"error": "implement timed out"}
+    except RateLimitError:
+        raise  # propagate so do_POST returns 429 → worker trips the rate-limit breaker
+    except Exception as e:
+        return {"error": "implement failed: %s" % e}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_flow(payload):
+    """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted
+    docker.sock against a target URL. The runner runs REAL e2e (falsifiable, screenshot-backed),
+    builds a testcase Excel, uploads the evidence to MinIO, and prints a compact testReport JSON
+    (prefixed `TESTREPORT:`). We parse + return it. Fail-safe: any error -> allPass:false so the
+    flow REWORKS rather than passing unverified code. Chromium/build tooling live in the runner
+    image, NOT this agent image — the agent only needs the mounted docker.sock."""
+    keep = lambda v: "".join(c for c in str(v) if c.isalnum() or c in "-_") or "adhoc"
+    piid = keep(payload.get("_piid") or payload.get("slug") or "adhoc")
+    net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
+    cmd = ["docker", "run", "--rm", "--network", net,
+           "-e", "TARGET_URL=" + os.environ.get("TEST_TARGET_URL", "http://aaf-dashboard:80"),
+           "-e", "MINIO_URL=" + os.environ.get("TEST_MINIO_URL", "http://aaf-minio:9000"),
+           "-e", "MINIO_USER=" + os.environ.get("MINIO_ROOT_USER", "minioadmin"),
+           "-e", "MINIO_PASS=" + os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin"),
+           "-e", "MINIO_BUCKET=arcana-attachments",
+           "-e", "INSTANCE=" + piid,
+           os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local")]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+        line = next((l for l in reversed((r.stdout or "").splitlines())
+                     if l.startswith("TESTREPORT:")), "")
+        if line:
+            return json.loads(line[len("TESTREPORT:"):])
+        tail = ((r.stderr or "") + (r.stdout or ""))[-400:]
+        return {"allPass": False, "total": 0, "passed": 0,
+                "reason": "runner emitted no TESTREPORT (exit %s): %s" % (r.returncode, tail)}
+    except Exception as e:
+        return {"allPass": False, "total": 0, "passed": 0, "reason": "test runner invoke failed: %s" % e}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, obj):
         body = json.dumps(obj).encode()
@@ -1037,7 +1446,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         task = self.path.rsplit("/", 1)[-1]
-        if task not in PROMPTS and task not in ("release", "execute", "publish-flow"):
+        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test"):
             return self._send(404, {"error": f"unknown task {task}"})
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -1051,11 +1460,18 @@ class Handler(BaseHTTPRequestHandler):
                 result = run_claude_generic(payload)
             elif task == "publish-flow":
                 result = publish_flow(payload)
+            elif task == "implement":
+                result = implement_flow(payload)
+            elif task == "test":
+                result = test_flow(payload)
             else:
                 result = run_claude(task, payload)
             self._send(200, result)
         except subprocess.TimeoutExpired:
             self._send(504, {"error": "task timeout"})
+        except RateLimitError as e:
+            # distinct 429 so the worker can back off + not burn the instance's retries
+            self._send(429, {"error": str(e), "rate_limited": True})
         except Exception as e:
             self._send(500, {"error": str(e)})
 
