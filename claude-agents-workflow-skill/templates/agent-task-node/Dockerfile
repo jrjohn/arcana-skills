@@ -5,6 +5,13 @@
 ARG BASE_IMAGE=daily-ci-agent:latest
 FROM ${BASE_IMAGE}
 
+# do_test dispatches to the playwright runner image via the mounted docker.sock — so add just
+# the docker CLI (static aarch64 binary, ~50MB; talks to /var/run/docker.sock, no in-image
+# daemon). Chromium / build tooling stay in the runner image, not here.
+RUN curl -fsSL https://download.docker.com/linux/static/stable/aarch64/docker-27.5.1.tgz -o /tmp/d.tgz \
+    && tar xzf /tmp/d.tgz -C /tmp && install /tmp/docker/docker /usr/local/bin/docker \
+    && rm -rf /tmp/d.tgz /tmp/docker
+
 # server.py only needs python3 (already present in the agent image).
 COPY server.py /usr/local/bin/agent-task-node.py
 
