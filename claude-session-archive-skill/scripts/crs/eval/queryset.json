@@ -1,0 +1,19 @@
+[
+  {"nl":"最近幾天做的 distill-missing 精練回填","entity":"distill-missing","category":"date-scoped","since":"2026-07-01"},
+  {"nl":"最近幾天怎麼建 msg_distilled 側表","entity":"msg_distilled","category":"date-scoped","since":"2026-07-01"},
+  {"nl":"六月評估的 openfortivpn 能不能用","entity":"openfortivpn","category":"date-scoped","since":"2026-06-01","until":"2026-06-30"},
+  {"nl":"六月處理的廣播 deny log 噪音","entity":"local-in-deny-broadcast","category":"date-scoped","since":"2026-06-01","until":"2026-06-30"},
+  {"nl":"六月做的 ChaCha 加密","entity":"ChaCha","category":"date-scoped","since":"2026-06-01","until":"2026-06-30"},
+
+  {"nl":"network 上 openfortivpn 的相容性","entity":"openfortivpn","category":"project-scoped","project":"network"},
+  {"nl":"network 的廣播 deny log 清理","entity":"local-in-deny-broadcast","category":"project-scoped","project":"network"},
+  {"nl":"stm32 的 ChaCha 實作","entity":"ChaCha","category":"project-scoped","project":"stm32"},
+  {"nl":"esp32 的 ChaCha 加密","entity":"ChaCha","category":"project-scoped","project":"esp32"},
+
+  {"nl":"swap 空間怎麼清掉的","entity":"swapoff","category":"nl-concept"},
+  {"nl":"pgvector HNSW 的 iterative scan 怎麼用","entity":"iterative_scan","category":"nl-concept"},
+  {"nl":"ChaCha20 加密是怎麼實作的","entity":"ChaCha","category":"nl-concept"},
+  {"nl":"openfortivpn 現在還有在維護嗎","entity":"openfortivpn","category":"nl-concept"},
+  {"nl":"廣播 deny log 噪音到底怎麼清乾淨","entity":"local-in-deny-broadcast","category":"nl-concept"},
+  {"nl":"精練缺漏的 row 怎麼補齊","entity":"distill-missing","category":"nl-concept"}
+]

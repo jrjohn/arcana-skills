@@ -167,6 +167,7 @@ enum Cmd {
     #[cfg(feature = "pg-backend")]
     Osearch {
         query: String,
+        /// Explicit project override (beats auto-extraction).
         project: Option<String>,
         #[arg(long, default_value = "10")]
         limit: usize,
@@ -174,6 +175,21 @@ enum Cmd {
         no_img: bool,
         #[arg(long = "with-id")]
         with_id: bool,
+        /// Manual since override in relative hours (beats auto date-extraction).
+        #[arg(long)]
+        since: Option<i64>,
+    },
+    /// Baseline RAG eval: precision@k / recall@k / MRR of osearch vs an automated
+    /// pg_fts ∩ metadata ground-truth oracle over a query set. (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    OsearchEval {
+        #[arg(long, default_value = "eval/queryset.json")]
+        queryset: String,
+        #[arg(long, default_value = "15")]
+        k: usize,
+        /// "osearch" (baseline, no filters) or "osearch-selfquery" (auto-extract date/project).
+        #[arg(long, default_value = "osearch")]
+        variant: String,
     },
     /// OCR image content blocks referenced by [IMG:<sha>] sentinels in msg.content,
     /// inserting results into image_ocr_cache + image_ocr. Mirrors embed-missing.
@@ -3106,7 +3122,8 @@ struct PgRow {
 }
 
 #[cfg(feature = "pg-backend")]
-fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, limit: usize, include_img: bool) -> Result<Vec<PgRow>> {
+fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, limit: usize, include_img: bool,
+          since: Option<chrono::DateTime<Utc>>, until: Option<chrono::DateTime<Utc>>) -> Result<Vec<PgRow>> {
     // MATERIALIZED CTE forces planner to use GIN index on content_tsv (otherwise
     // PG walks msg_ts_idx backward + filter, scanning thousands of rows; observed
     // 432ms server, 16K filter rows). With CTE, GIN runs first → small result →
@@ -3131,12 +3148,14 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
              WHERE content_tsv @@ plainto_tsquery('simple', $1)
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
+               AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
              UNION ALL
              SELECT id, ts, project, session_id, role, tool_name, content
              FROM msg
              WHERE id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1))
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
+               AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
          ),
          img_hits AS MATERIALIZED (
              SELECT id, ts, project, session_id,
@@ -3144,6 +3163,7 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
              FROM image_ocr
              WHERE content_tsv @@ plainto_tsquery('simple', $1)
                AND ($2::text IS NULL OR project LIKE $2)
+               AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
          ),
          hits AS (
              SELECT * FROM msg_hits
@@ -3166,12 +3186,14 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
              WHERE content_tsv @@ plainto_tsquery('simple', $1)
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
+               AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
              UNION ALL
              SELECT id, ts, project, session_id, role, tool_name, content
              FROM msg
              WHERE id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1))
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
+               AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
          ),
          deduped AS (
              SELECT DISTINCT ON (content)
@@ -3181,7 +3203,7 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
          SELECT id, ts, project, session_id, role, tool_name, content
          FROM deduped ORDER BY ts DESC LIMIT $3"
     };
-    let rows = client.query(sql, &[&query, &proj_like, &(limit as i64)])?;
+    let rows = client.query(sql, &[&query, &proj_like, &(limit as i64), &since, &until])?;
     Ok(rows.iter().map(|r| PgRow {
         id: r.get(0),
         ts: r.get(1),
@@ -3195,7 +3217,8 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
 }
 
 #[cfg(feature = "pg-backend")]
-fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize, include_img: bool) -> Result<Vec<PgRow>> {
+fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize, include_img: bool,
+          since: Option<chrono::DateTime<Utc>>, until: Option<chrono::DateTime<Utc>>) -> Result<Vec<PgRow>> {
     // HNSW-first plan (MATERIALIZED) — without this, the planner picks Seq Scan
     // when filters are added alongside ORDER BY embedding <=> v, blowing
     // execution from ~20ms (HNSW) to ~6s (seq scan + sort over 100k+ rows).
@@ -3224,6 +3247,17 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
     // connection but every vsearch resets to the same value, so no leak.
     let ef = std::cmp::max(over_fetch as i32, 100);
     client.execute(&format!("SET hnsw.ef_search = {ef}"), &[]).ok();
+    // Date-filtered HNSW: pgvector post-filters, so a selective ts predicate can
+    // drop every ef_search candidate → 0 rows. iterative_scan re-walks the graph
+    // until enough filtered rows are found (~+3ms warm; measured). Only when a date
+    // filter is active — reset to off otherwise so unfiltered/project-only queries
+    // keep today's exact fast path on this pooled connection.
+    if since.is_some() || until.is_some() {
+        client.execute("SET hnsw.iterative_scan = 'relaxed_order'", &[]).ok();
+        client.execute("SET hnsw.max_scan_tuples = 20000", &[]).ok();
+    } else {
+        client.execute("SET hnsw.iterative_scan = 'off'", &[]).ok();
+    }
     // v1.15+: image_ocr UNION'd in with dist × 1.10 (~score × 0.91 de-emphasis)
     // so UI-screenshot noise doesn't crowd out real conversation rows while
     // still letting data-heavy screenshots (logs, tables) appear in top-N
@@ -3237,6 +3271,7 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
                  FROM msg
                  WHERE embedding IS NOT NULL
                    AND ($1::text IS NULL OR project LIKE $1)
+                   AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
                  ORDER BY embedding <=> '{lit}'::vector
                  LIMIT $2
              ),
@@ -3247,6 +3282,7 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
                  FROM image_ocr
                  WHERE embedding IS NOT NULL
                    AND ($1::text IS NULL OR project LIKE $1)
+                   AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
                  ORDER BY embedding <=> '{lit}'::vector
                  LIMIT $2
              ),
@@ -3272,6 +3308,7 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
                  FROM msg
                  WHERE embedding IS NOT NULL
                    AND ($1::text IS NULL OR project LIKE $1)
+                   AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
                  ORDER BY embedding <=> '{lit}'::vector
                  LIMIT $2
              ),
@@ -3287,7 +3324,7 @@ fn pg_vec(client: &mut postgres::Client, http: &reqwest::blocking::Client, query
              LIMIT $3"
         )
     };
-    let rows = client.query(&sql, &[&proj_like, &over_fetch, &(limit as i64)])?;
+    let rows = client.query(&sql, &[&proj_like, &over_fetch, &(limit as i64), &since, &until])?;
     Ok(rows.iter().map(|r| PgRow {
         id: r.get(0),
         ts: r.get(1),
@@ -3305,8 +3342,8 @@ fn pg_hybrid(client: &mut postgres::Client, http: &reqwest::blocking::Client, qu
     // RRF (Reciprocal Rank Fusion) k=60, weight vec=0.7, fts=0.3
     // image_ocr rows already de-emphasized inside pg_vec (dist × 1.10); FTS path
     // relies on ts-DESC + DISTINCT ON dedup for natural de-emphasis.
-    let fts = pg_fts(client, query, project, limit * 3, include_img)?;
-    let vec = pg_vec(client, http, query, project, limit * 3, include_img)?;
+    let fts = pg_fts(client, query, project, limit * 3, include_img, None, None)?;
+    let vec = pg_vec(client, http, query, project, limit * 3, include_img, None, None)?;
     use std::collections::HashMap;
     type Key = (Option<chrono::DateTime<Utc>>, String, String);
     let key = |r: &PgRow| -> Key { (r.ts, r.role.clone(), r.content.clone()) };
@@ -3490,9 +3527,9 @@ fn handle_client(
     let t0 = std::time::Instant::now();
     let mut conn = pool.get()?;
     let rows = match mode {
-        "vec" => pg_vec(&mut *conn, &http, query, project, limit, include_img)?,
+        "vec" => pg_vec(&mut *conn, &http, query, project, limit, include_img, None, None)?,
         "hybrid" => pg_hybrid(&mut *conn, &http, query, project, limit, include_img)?,
-        _ => pg_fts(&mut *conn, query, project, limit, include_img)?,
+        _ => pg_fts(&mut *conn, query, project, limit, include_img, None, None)?,
     };
     let query_ms = t0.elapsed().as_millis();
 
@@ -3785,9 +3822,9 @@ fn pg_search_dispatch(mode: &str, query: &str, project: Option<&str>, limit: usi
     let http = http_client()?;
     let t1 = std::time::Instant::now();
     let rows = match mode {
-        "vec" => pg_vec(&mut pg, &http, query, project, limit, include_img)?,
+        "vec" => pg_vec(&mut pg, &http, query, project, limit, include_img, None, None)?,
         "hybrid" => pg_hybrid(&mut pg, &http, query, project, limit, include_img)?,
-        _ => pg_fts(&mut pg, query, project, limit, include_img)?,
+        _ => pg_fts(&mut pg, query, project, limit, include_img, None, None)?,
     };
     let query_ms = t1.elapsed().as_millis();
     Ok((rows, connect_ms, query_ms, "direct"))
@@ -4005,26 +4042,37 @@ fn pg_distill_orient(client: &mut postgres::Client, http: &reqwest::blocking::Cl
 // stopword fragments and buried the perfect semantic hit. RRF lets a row that is
 // #1 in the semantic (recall) leg surface even if the lexical leg is noisy.
 #[cfg(feature = "pg-backend")]
-fn cmd_osearch(query: &str, project: Option<&str>, limit: usize, no_img: bool, with_id: bool) -> Result<()> {
-    let include_img = !no_img;
+struct OsearchResult {
+    /// (row, leg-tag e.g. "pin+recall"), highest fused-score first, truncated to limit.
+    ranked: Vec<(PgRow, String)>,
+    pin_n: usize,
+    recall_n: usize,
+    orient_n: usize,
+    fused_n: usize,
+}
+
+// Fetch the three legs + adaptive-weighted RRF fusion; returns the ranked rows
+// (truncated to `limit`) + per-leg counts. Shared by `cmd_osearch` (prints) and
+// `cmd_osearch_eval` (scores) so both walk the identical ranking path.
+#[cfg(feature = "pg-backend")]
+fn osearch_ranked(pg: &mut postgres::Client, http: &reqwest::blocking::Client,
+                  query: &str, project: Option<&str>, limit: usize, include_img: bool,
+                  since: Option<chrono::DateTime<Utc>>, until: Option<chrono::DateTime<Utc>>) -> OsearchResult {
     // Over-fetch per leg so RRF has cross-leg material to fuse, then trim to limit.
     let pool = (limit * 3).max(20);
-    let mut pg = pg_connect()?;
-    let http = http_client()?;
-    let pin = pg_fts(&mut pg, query, project, pool, include_img).unwrap_or_default();
-    let recall = pg_vec(&mut pg, &http, query, project, pool, include_img).unwrap_or_default();
-    let orient = match pg_distill_orient(&mut pg, &http, query, project, pool) {
+    let pin = pg_fts(pg, query, project, pool, include_img, since, until).unwrap_or_default();
+    let recall = pg_vec(pg, http, query, project, pool, include_img, since, until).unwrap_or_default();
+    // orient: v1 project-only, NO ts — msg_distilled has no ts column; a post-KNN
+    // join-filter on msg.ts would collapse (iterative_scan can't help). ADD-only;
+    // union's pin+recall carry date-scoped queries.
+    let orient = match pg_distill_orient(pg, http, query, project, pool) {
         Ok(v) => v,
         Err(e) => { eprintln!("  (orient skipped: {e})"); Vec::new() }
     };
 
     // Adaptive weighted RRF — cheap query routing without a classifier:
-    //   • Natural-language query (has ? / ？, or long) → recall (semantic) 2× weight,
-    //     so the lexical pin leg's stopword-fragment noise can't bury the answer.
-    //   • Short exact-token / entity / IP / hostname query → equal weights (1:1:1),
-    //     so pin's exact match + recall's agreement win (keeps the eval gate green).
-    // The question mark is the strongest NL signal; CJK has no spaces so length is
-    // the fallback. A bare entity term (品質法規部, FortiGate, an IP) stays equal-weight.
+    //   • Natural-language query (has ? / ？, or long) → recall (semantic) 2× weight.
+    //   • Short exact-token / entity / IP / hostname query → equal weights (1:1:1).
     let qchars = query.chars().count();
     let is_nl = query.contains('?') || query.contains('？') || qchars >= 12;
     let recall_w = if is_nl { 2.0_f64 } else { 1.0 };
@@ -4041,21 +4089,288 @@ fn cmd_osearch(query: &str, project: Option<&str>, limit: usize, no_img: bool, w
             row_of.entry(key).or_insert(r);
         }
     }
-    let mut ranked: Vec<i64> = score.keys().copied().collect();
-    ranked.sort_by(|a, b| score[b].partial_cmp(&score[a]).unwrap_or(std::cmp::Ordering::Equal));
+    let mut ranked_ids: Vec<i64> = score.keys().copied().collect();
+    ranked_ids.sort_by(|a, b| score[b].partial_cmp(&score[a]).unwrap_or(std::cmp::Ordering::Equal));
+    let fused_n = score.len();
+    let ranked: Vec<(PgRow, String)> = ranked_ids.iter().take(limit)
+        .map(|key| (row_of[key].clone(), legs_of[key].join("+")))
+        .collect();
+    OsearchResult { ranked, pin_n: pin.len(), recall_n: recall.len(), orient_n: orient.len(), fused_n }
+}
 
-    let mut shown = 0usize;
-    for key in ranked.iter().take(limit) {
-        let r = row_of[key];
-        let tag = legs_of[key].join("+");
+// ─────────────────────────── self-query (rules-based, no LLM) ───────────────────────────
+// Known project slugs matched as whole tokens. Short/common ones (ai, go) are
+// deliberately excluded — too many false positives; use the explicit positional
+// project arg for those.
+#[cfg(feature = "pg-backend")]
+const PROJECT_SLUGS: &[&str] = &["network","aaf","esp32","stm32","harmonyos","android","ios","react","vue","python","springboot","nodejs","windows","embedded"];
+
+// True if `tok` appears in `s` bounded by non-alphanumerics (case-insensitive).
+#[cfg(feature = "pg-backend")]
+fn contains_token(s: &str, tok: &str) -> bool {
+    let (low, t) = (s.to_lowercase(), tok.to_lowercase());
+    let b = low.as_bytes();
+    let mut start = 0;
+    while let Some(p) = low[start..].find(&t) {
+        let i = start + p; let after = i + t.len();
+        let before_ok = i == 0 || !b[i - 1].is_ascii_alphanumeric();
+        let after_ok = after >= b.len() || !b[after].is_ascii_alphanumeric();
+        if before_ok && after_ok { return true; }
+        start = after;
+    }
+    false
+}
+
+// Remove whole-token occurrences of `tok` (case-insensitive) from `s`.
+#[cfg(feature = "pg-backend")]
+fn strip_token(s: &str, tok: &str) -> String {
+    let (low, t) = (s.to_lowercase(), tok.to_lowercase());
+    let b = low.as_bytes();
+    let (mut out, mut start) = (String::new(), 0usize);
+    while let Some(p) = low[start..].find(&t) {
+        let i = start + p; let after = i + t.len();
+        let before_ok = i == 0 || !b[i - 1].is_ascii_alphanumeric();
+        let after_ok = after >= b.len() || !b[after].is_ascii_alphanumeric();
+        if before_ok && after_ok { out.push_str(&s[start..i]); out.push(' '); }
+        else { out.push_str(&s[start..after]); }
+        start = after;
+    }
+    out.push_str(&s[start..]); out
+}
+
+// Parse an explicit day-count: "<digits>天" (近N天/最近N天/過去N天) or "N days".
+#[cfg(feature = "pg-backend")]
+fn parse_n_days(s: &str) -> Option<i64> {
+    let chars: Vec<char> = s.chars().collect();
+    for i in 0..chars.len() {
+        if chars[i] == '天' {
+            let mut j = i; let mut num = String::new();
+            while j > 0 && chars[j - 1].is_ascii_digit() { j -= 1; num.insert(0, chars[j]); }
+            if let Ok(n) = num.parse::<i64>() { if n > 0 && n <= 3650 { return Some(n); } }
+        }
+    }
+    let low = s.to_lowercase();
+    if let Some(p) = low.find("day") {
+        let pre: String = low[..p].chars().rev().take_while(|c| c.is_whitespace() || c.is_ascii_digit()).collect();
+        let num: String = pre.chars().filter(|c| c.is_ascii_digit()).collect();
+        if let Ok(n) = num.parse::<i64>() { if n > 0 && n <= 3650 { return Some(n); } }
+    }
+    None
+}
+
+// Rules-based metadata extraction. Returns (cleaned_query, since, until, project).
+// Conservative: unmatched → original query + all None, so osearch stays byte-
+// identical to pre-self-query for plain queries.
+#[cfg(feature = "pg-backend")]
+fn extract_filters(query: &str) -> (String, Option<chrono::DateTime<Utc>>, Option<chrono::DateTime<Utc>>, Option<String>) {
+    use chrono::{Datelike, Duration, TimeZone};
+    let now = Utc::now();
+    let mid = |y: i32, m: u32, d: u32| Utc.with_ymd_and_hms(y, m, d, 0, 0, 0).single();
+    let day_start = |d: chrono::DateTime<Utc>| mid(d.year(), d.month(), d.day()).unwrap_or(d);
+    let month_range = |y: i32, m: u32| {
+        let s = mid(y, m, 1);
+        let (ny, nm) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
+        (s, mid(ny, nm, 1).map(|x| x - Duration::seconds(1)))
+    };
+    let mut cleaned = query.to_string();
+    let mut since: Option<chrono::DateTime<Utc>> = None;
+    let mut until: Option<chrono::DateTime<Utc>> = None;
+
+    // absolute month — Chinese numeral (longest-first), digit N月, English. Year = current.
+    let cn: [(&str, u32); 12] = [("十二月",12),("十一月",11),("十月",10),("九月",9),("八月",8),("七月",7),("六月",6),("五月",5),("四月",4),("三月",3),("二月",2),("一月",1)];
+    for (name, m) in cn { if cleaned.contains(name) { let (s,e)=month_range(now.year(),m); since=s; until=e; cleaned=cleaned.replace(name," "); break; } }
+    if since.is_none() {
+        for m in (1..=12u32).rev() { let pat = format!("{}月", m);
+            if cleaned.contains(&pat) { let (s,e)=month_range(now.year(),m); since=s; until=e; cleaned=cleaned.replace(&pat," "); break; } }
+    }
+    if since.is_none() {
+        let en: [(&str, u32); 12] = [("january",1),("february",2),("march",3),("april",4),("may",5),("june",6),("july",7),("august",8),("september",9),("october",10),("november",11),("december",12)];
+        let low = cleaned.to_lowercase();
+        for (name, m) in en { if contains_token(&low, name) { let (s,e)=month_range(now.year(),m); since=s; until=e; cleaned=strip_token(&cleaned,name); break; } }
+    }
+
+    // relative windows (only if no absolute month matched)
+    if since.is_none() {
+        let rules: &[(&[&str], i64, i64)] = &[
+            (&["今天","今日","today"], 0, -1),
+            (&["昨天","昨日","yesterday"], 1, 1),
+            (&["前天"], 2, 2),
+            (&["上週","上星期","上禮拜","last week"], -102, -102),
+            (&["這週","本週","這星期","this week"], -103, -103),
+            (&["上個月","上月","last month"], -100, -100),
+            (&["這個月","本月","this month"], -101, -101),
+            (&["最近幾天","近幾天","這幾天","最近","近期","recently","recent"], 7, -1),
+        ];
+        for (phrases, sd, ud) in rules {
+            let hit = phrases.iter().any(|p| cleaned.contains(p) || cleaned.to_lowercase().contains(&p.to_lowercase()));
+            if !hit { continue; }
+            if *sd == -100 { let (y,m) = if now.month()==1 {(now.year()-1,12)} else {(now.year(),now.month()-1)}; let (s,e)=month_range(y,m); since=s; until=e; }
+            else if *sd == -101 { since = mid(now.year(), now.month(), 1); until = None; }
+            else if *sd == -102 { // 上週 = previous calendar week (Mon 00:00 .. Sun 23:59:59)
+                let dow = now.weekday().num_days_from_monday() as i64;
+                let this_mon = day_start(now - Duration::days(dow));
+                since = Some(this_mon - Duration::days(7));
+                until = Some(this_mon - Duration::seconds(1));
+            }
+            else if *sd == -103 { // 這週 = this calendar week (Mon 00:00 .. now)
+                let dow = now.weekday().num_days_from_monday() as i64;
+                since = Some(day_start(now - Duration::days(dow)));
+                until = None;
+            }
+            else {
+                since = Some(day_start(now - Duration::days(*sd)));
+                until = if *ud < 0 { None } else { Some(day_start(now - Duration::days(*ud)) + Duration::days(1) - Duration::seconds(1)) };
+            }
+            for p in *phrases { if p.chars().all(|c| c.is_ascii()) { cleaned = strip_token(&cleaned, p); } else { cleaned = cleaned.replace(p, " "); } }
+            break;
+        }
+    }
+    // explicit "近N天 / N days"
+    if since.is_none() { if let Some(n) = parse_n_days(&cleaned) { since = Some(day_start(now - Duration::days(n))); } }
+
+    // project slug (whole-token)
+    let mut project: Option<String> = None;
+    for slug in PROJECT_SLUGS {
+        if contains_token(&cleaned, slug) { project = Some((*slug).to_string()); cleaned = strip_token(&cleaned, slug); break; }
+    }
+
+    // Drop orphan particles left when a stripped date/project word had a trailing
+    // 的/了 etc. (e.g. "上週的 distill" → "的 distill" → "distill").
+    const PARTICLES: [&str; 9] = ["的","了","之","嗎","呢","啊","吧","得","地"];
+    let cleaned = cleaned.split_whitespace().filter(|t| !PARTICLES.contains(t)).collect::<Vec<_>>().join(" ");
+    (cleaned, since, until, project)
+}
+
+#[cfg(feature = "pg-backend")]
+fn cmd_osearch(query: &str, project: Option<&str>, limit: usize, no_img: bool, with_id: bool, since_hours: Option<i64>) -> Result<()> {
+    let include_img = !no_img;
+    // Self-query: auto-extract date/project from the NL query; explicit args win.
+    let (cleaned, ex_since, ex_until, ex_project) = extract_filters(query);
+    let auto_fired = ex_since.is_some() || ex_until.is_some() || ex_project.is_some();
+    let eff_project: Option<String> = project.map(|s| s.to_string()).or(ex_project.clone());
+    let eff_since = since_hours.map(|h| Utc::now() - chrono::Duration::hours(h)).or(ex_since);
+    let eff_until = if since_hours.is_some() { None } else { ex_until };
+    let text: &str = if auto_fired && !cleaned.trim().is_empty() { cleaned.as_str() } else { query };
+
+    // Note only when AUTO-extraction fired — an explicit `osearch 'x' network` stays
+    // byte-identical to today (no note, no cleaned-query change, no filter unless typed).
+    if auto_fired {
+        eprintln!("# self-query: q='{}' since={:?} until={:?} project={:?}", text,
+            eff_since.map(|d| d.format("%Y-%m-%d").to_string()),
+            eff_until.map(|d| d.format("%Y-%m-%d").to_string()), eff_project);
+    }
+
+    let mut pg = pg_connect()?;
+    let http = http_client()?;
+    let r = osearch_ranked(&mut pg, &http, text, eff_project.as_deref(), limit, include_img, eff_since, eff_until);
+    for (row, tag) in &r.ranked {
         let prefix = if with_id {
-            format!("id={} sid={} ", r.id.unwrap_or(-1), r.session_id.chars().take(8).collect::<String>())
+            format!("id={} sid={} ", row.id.unwrap_or(-1), row.session_id.chars().take(8).collect::<String>())
         } else { String::new() };
-        println!("{}[{}] {}", prefix, tag, fmt_pg_row(r, 200));
-        shown += 1;
+        println!("{}[{}] {}", prefix, tag, fmt_pg_row(row, 200));
     }
     eprintln!("\n# osearch(RRF): pin={} recall={} orient={} → {} fused, top {} shown",
-        pin.len(), recall.len(), orient.len(), score.len(), shown);
+        r.pin_n, r.recall_n, r.orient_n, r.fused_n, r.ranked.len());
+    Ok(())
+}
+
+// ─────────────────────────── osearch-eval (Phase 0 baseline) ───────────────────────────
+// Measures current osearch precision@k / recall@k / MRR against an automated
+// ground-truth oracle: GT = pg_fts(entity) ∩ (project? ∩ date-range?). Baseline
+// only — osearch is run on the bare NL query with NO metadata hint, so the score
+// reveals how much a metadata-scoped query loses without self-query.
+#[cfg(feature = "pg-backend")]
+#[derive(serde::Deserialize)]
+struct EvalQuery {
+    nl: String,
+    entity: String,
+    category: String,
+    #[serde(default)]
+    project: Option<String>,
+    #[serde(default)]
+    since: Option<String>,
+    #[serde(default)]
+    until: Option<String>,
+}
+
+#[cfg(feature = "pg-backend")]
+fn parse_day(s: &str) -> Option<chrono::DateTime<Utc>> {
+    chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+        .and_then(|d| d.and_hms_opt(0, 0, 0))
+        .map(|ndt| chrono::DateTime::<Utc>::from_naive_utc_and_offset(ndt, Utc))
+}
+
+#[cfg(feature = "pg-backend")]
+fn cmd_osearch_eval(queryset_path: &str, k: usize, variant: &str) -> Result<()> {
+    use std::collections::HashSet;
+    let raw = std::fs::read_to_string(queryset_path)
+        .map_err(|e| anyhow!("read {}: {}", queryset_path, e))?;
+    let queries: Vec<EvalQuery> = serde_json::from_str(&raw)
+        .map_err(|e| anyhow!("parse {}: {}", queryset_path, e))?;
+    let mut pg = pg_connect()?;
+    let http = http_client()?;
+
+    // (category, precision, recall, mrr) accumulators
+    use std::collections::BTreeMap;
+    let mut by_cat: BTreeMap<String, (f64, f64, f64, usize)> = BTreeMap::new();
+    let mut ov = (0.0_f64, 0.0_f64, 0.0_f64, 0usize);
+    let mut skipped: Vec<String> = Vec::new();
+
+    println!("{:<12} {:>5} {:>5} {:>5} {:>5}  query", "category", "P@k", "R@k", "MRR", "|GT|");
+    println!("{}", "-".repeat(78));
+    for q in &queries {
+        // Reconnect per query — a single long-lived connection over WAN drops mid-eval,
+        // silently emptying every subsequent GT/search (pg_fts Err → unwrap_or_default).
+        // A fresh connection per query is robust (eval is not perf-critical).
+        pg = match pg_connect() { Ok(c) => c, Err(e) => { eprintln!("  [reconnect err: {}]", e); continue; } };
+        // GT: lexical oracle for the entity, filtered by project (via pg_fts) + date.
+        let since = q.since.as_deref().and_then(parse_day);
+        let until = q.until.as_deref().and_then(parse_day);
+        let gt_rows = match pg_fts(&mut pg, &q.entity, q.project.as_deref(), 300, false, None, None) {
+            Ok(v) => v,
+            Err(e) => { eprintln!("  [pg_fts err '{}': {}]", q.entity, e); Vec::new() }
+        };
+        let gt: HashSet<i64> = gt_rows.iter().filter(|r| {
+            let ok_since = since.map_or(true, |s| r.ts.map_or(false, |t| t >= s));
+            let ok_until = until.map_or(true, |u| r.ts.map_or(false, |t| t <= u));
+            ok_since && ok_until
+        }).filter_map(|r| r.id).collect();
+        if gt.is_empty() { skipped.push(format!("{} (entity={})", q.nl, q.entity)); continue; }
+
+        // variant "osearch" = baseline (bare NL, no hint). "osearch-selfquery" =
+        // auto-extract date/project from the NL query and apply them (the A/B).
+        let res = if variant == "osearch-selfquery" {
+            let (cq, s, u, p) = extract_filters(&q.nl);
+            let qtext = if cq.trim().is_empty() { q.nl.clone() } else { cq };
+            osearch_ranked(&mut pg, &http, &qtext, p.as_deref(), k, false, s, u)
+        } else {
+            osearch_ranked(&mut pg, &http, &q.nl, None, k, false, None, None)
+        };
+        let topk: Vec<i64> = res.ranked.iter().filter_map(|(r, _)| r.id).collect();
+        let hits = topk.iter().filter(|id| gt.contains(id)).count();
+        let precision = hits as f64 / k as f64;
+        let recall = hits as f64 / std::cmp::min(gt.len(), k) as f64;
+        let mrr = topk.iter().position(|id| gt.contains(id))
+            .map_or(0.0, |p| 1.0 / (p as f64 + 1.0));
+
+        println!("{:<12} {:>5.3} {:>5.3} {:>5.3} {:>5}  {}",
+            q.category, precision, recall, mrr, gt.len(), q.nl);
+        let e = by_cat.entry(q.category.clone()).or_insert((0.0, 0.0, 0.0, 0));
+        e.0 += precision; e.1 += recall; e.2 += mrr; e.3 += 1;
+        ov.0 += precision; ov.1 += recall; ov.2 += mrr; ov.3 += 1;
+    }
+    println!("{}", "-".repeat(78));
+    println!("=== averages (variant={}, k={}) ===", variant, k);
+    for (cat, (p, r, m, n)) in &by_cat {
+        println!("  {:<14} n={:<2} P@k={:.3}  R@k={:.3}  MRR={:.3}", cat, n, p/ *n as f64, r/ *n as f64, m/ *n as f64);
+    }
+    if ov.3 > 0 {
+        println!("  {:<14} n={:<2} P@k={:.3}  R@k={:.3}  MRR={:.3}", "OVERALL", ov.3, ov.0/ov.3 as f64, ov.1/ov.3 as f64, ov.2/ov.3 as f64);
+    }
+    if !skipped.is_empty() {
+        println!("\nskipped {} (empty GT — entity not lexically found within date/project):", skipped.len());
+        for s in &skipped { println!("  - {}", s); }
+    }
     Ok(())
 }
 
@@ -4080,7 +4395,9 @@ fn main() -> Result<()> {
         #[cfg(feature = "pg-backend")]
         Cmd::DistillMissing { workers, limit, project_prefix } => cmd_distill_missing(workers, limit, project_prefix),
         #[cfg(feature = "pg-backend")]
-        Cmd::Osearch { query, project, limit, no_img, with_id } => cmd_osearch(&query, project.as_deref(), limit, no_img, with_id),
+        Cmd::Osearch { query, project, limit, no_img, with_id, since } => cmd_osearch(&query, project.as_deref(), limit, no_img, with_id, since),
+        #[cfg(feature = "pg-backend")]
+        Cmd::OsearchEval { queryset, k, variant } => cmd_osearch_eval(&queryset, k, &variant),
         Cmd::Doctor => cmd_doctor(),
         Cmd::PruneVec { dry_run } => cmd_prune_vec(dry_run),
         #[cfg(feature = "pg-backend")]
