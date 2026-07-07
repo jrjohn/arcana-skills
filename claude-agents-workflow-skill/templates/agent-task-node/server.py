@@ -1494,6 +1494,12 @@ def test_flow(payload):
     repo = payload.get("repo") or ""
     _, branch = _pr_url_and_branch(payload)
     cmd = ["docker", "run", "--rm", "--network", net,
+           # claude auth for the runner's AI semantic review step (uiux-ai-review.mjs): pass the
+           # SAME long-lived OAuth token the agent uses (env, not a shared-home mount — the mount
+           # caused a .credentials backup/corruption race). Empty/invalid -> the runner's
+           # `command -v claude` + login check skips the AI pass (not fatal).
+           "-e", "CLAUDE_CODE_OAUTH_TOKEN=" + os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", ""),
+           "-e", "IS_SANDBOX=1",
            "-e", "MINIO_URL=" + os.environ.get("TEST_MINIO_URL", "http://aaf-minio:9000"),
            "-e", "MINIO_USER=" + os.environ.get("MINIO_ROOT_USER", "minioadmin"),
            "-e", "MINIO_PASS=" + os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin"),
