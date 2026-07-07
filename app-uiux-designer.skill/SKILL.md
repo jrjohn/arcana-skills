@@ -917,6 +917,7 @@ node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/validate-iframe-
 | 平台 | `references/platforms/{ios-hig,material-design,wcag}.md` |
 | 心理學 | `references/psychology/{gestalt,cognitive,emotional}.md` |
 | 程式碼生成 | `references/code-gen/{react,angular,swiftui,compose}.md` |
+| **版面與 UX 稽核 ★** | `references/{layout-workspace-patterns,ux-audit-rubric,design-system}.md` — 設計/稽核**必讀**:column budget(避免「N 格」擠壓)、4 版面原型、漸進揭露、design-token、可量測門檻。uiux 節點產 spec 與 PM 節點驗可用性共用此標準。 |
 
 ### 必要模組 HTML 模板
 
