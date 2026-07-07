@@ -484,8 +484,18 @@ def prompt_pm_review(p):
         f"- UI/UX spec (usability target, if user-facing): {str(p.get('uiuxSpec'))[:3000]}\n"
         f"- SIBLING features in this SAME initiative (each with its verdict/state — cross-check against "
         f"these, like a countersigner reading prior sign-offs): {str(p.get('siblings'))[:2800]}\n"
-        "HARD PRE-GATE first: quality bars (arch-qube>=90 + SonarQube gate OK + tests green — a green CI "
-        "check-rollup implies all three; or query the Sonar API with $SONARQUBE_TOKEN). Unmet -> NOGO(quality).\n"
+        f"- TEST NODE RESULT (the platform's OWN CI — it built THIS exact PR and ran feature testcases + the "
+        f"AI semantic gate on it): {str(p.get('testReport'))[:2600]}\n"
+        "HARD PRE-GATE first: (a) BUILD — the implement result's `buildStatus` (also printed as `Local build "
+        "gate:` in the PR body) is DETERMINISTIC: `OK` means the code compiled via `npm ci && npm run build`, so "
+        "it BUILDS — treat that as ground truth and NEVER read the implement Summary's prose as a build failure "
+        "(the Summary is unreliable LLM self-narration; buildStatus/Local-build-gate is the fact). `RED:` = it "
+        "genuinely will not compile -> NOGO. (b) TESTS/QUALITY — the TEST NODE above already ran this exact PR "
+        "build through the platform's own CI; its `testReport` is your PRIMARY quality evidence: allPass=false or "
+        "a non-empty failures[] -> NOGO(quality) naming the failing testcases; aiFindings with severity=fail -> "
+        "NOGO citing them. A separate green CI check-rollup / SonarQube is CONFIRMATORY but NOT required — do NOT "
+        "HOLD merely because SONARQUBE_TOKEN / CI env is unset when the testReport is present. arch-qube>=90 "
+        "still applies where it is checkable. Bars unmet -> NOGO(quality).\n"
         "Then the FIVE dimensions: (1) usability - audit the built UI in the diff against the UX rubric; you "
         "CAN catch objective violations (equal-weight N-quadrant dumps, non-collapsible toolbars, no "
         "progressive disclosure, cognitive overload, off-scan-path primary actions, tiny targets, WCAG/state "
@@ -1530,6 +1540,100 @@ def test_flow(payload):
         return {"allPass": False, "total": 0, "passed": 0, "reason": "test runner invoke failed: %s" % e}
 
 
+def uiux_audit_flow(payload):
+    """Deterministic UI/UX self-audit -> auto-open GATED PRs (the detection->action wiring).
+    Runs the AI semantic gate (uiux-ai-review) against the DEPLOYED dashboard via the test-runner,
+    then for each FAIL finding starts ONE sdlc-code-flow — a gated PR that STOPS at the PR: the
+    flow's own Test + PM gates decide the merge, nothing auto-merges here. Deduped by a
+    deterministic slug (against active sdlc-flows AND open PRs) and capped (UIUX_AUDIT_MAX) so a
+    single run never floods the fleet. Returns {findings, fails, started, skipped, triggered}."""
+    net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
+    base = payload.get("base_url") or os.environ.get("UIUX_AUDIT_BASE", "http://aaf-dashboard:80")
+    routes = payload.get("routes") or os.environ.get(
+        "UIUX_AUDIT_ROUTES",
+        "/workflow,/org,/evaluation,/approvals,/governance,/form-designer,/designer,/profile")
+    engine = os.environ.get("ENGINE_URL", "http://aaf-kogito-bpmn:8080")
+    di = os.environ.get("DATA_INDEX_URL", "http://aaf-data-index:8080")
+    repo = payload.get("repo") or os.environ.get("UIUX_AUDIT_REPO", "jrjohn/arcana-ai-bpm")
+    target_base = payload.get("target_base") or os.environ.get("UIUX_AUDIT_TARGET_BASE", "main")
+    _cap = payload.get("cap")  # explicit None check so cap=0 (dry-run) is honoured, not falsy->default
+    cap = int(_cap if _cap is not None else os.environ.get("UIUX_AUDIT_MAX", "2"))
+
+    def _curl_json(method, url, body=None, timeout=60):
+        cmd = ["curl", "-s", "-X", method, url, "-H", "Content-Type: application/json"]
+        if body is not None:
+            cmd += ["-d", json.dumps(body)]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            return json.loads(r.stdout or "{}")
+        except Exception:
+            return {}
+
+    # 1. run the AI semantic gate in the test-runner (playwright screenshots + claude vision)
+    cmd = ["docker", "run", "--rm", "--network", net,
+           "-e", "CLAUDE_CODE_OAUTH_TOKEN=" + os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", ""),
+           "-e", "IS_SANDBOX=1", "-e", "UIUX_BASE=" + base, "-e", "UIUX_ROUTES=" + routes,
+           "--entrypoint", "node",
+           os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local"), "/e2e/uiux-ai-review.mjs"]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+    except subprocess.TimeoutExpired:
+        return {"findings": 0, "started": 0, "error": "audit gate timed out"}
+    line = next((l for l in reversed((r.stdout or "").splitlines()) if l.startswith('{"routes')), "")
+    try:
+        data = json.loads(line)
+    except Exception:
+        return {"findings": 0, "started": 0, "error": "audit gate produced no findings json",
+                "tail": (r.stdout or r.stderr or "")[-300:]}
+    fails = [f for f in data.get("findings", []) if f.get("severity") == "fail"]
+
+    # 2. dedup: slugs of currently-active sdlc-flows (don't re-open what's in flight)
+    active_slugs = set()
+    q = {"query": "{ ProcessInstances(where:{processId:{equal:\"sdlc-code-flow\"},"
+                  "state:{equal:ACTIVE}}){ variables } }"}
+    for pi in (_curl_json("POST", di + "/graphql", q, 30).get("data", {}) or {}).get("ProcessInstances", []) or []:
+        v = pi.get("variables")
+        v = json.loads(v) if isinstance(v, str) else (v or {})
+        if v.get("slug"):
+            active_slugs.add(v["slug"])
+
+    def _slug(route, kind):
+        s = ("uiux-" + (route or "").strip("/").replace("/", "-") + "-" + (kind or "issue")).lower()
+        s = re.sub(r"[^a-z0-9-]+", "-", s).strip("-")[:60]
+        return s or "uiux-audit"
+
+    env = dict(os.environ)
+    started, skipped, triggered = 0, 0, []
+    for f in fails:
+        if started >= cap:
+            break
+        slug = _slug(f.get("route", ""), f.get("kind", "issue"))
+        if slug in active_slugs:
+            skipped += 1
+            continue
+        try:  # open PR on this deterministic branch already? then it's covered — skip
+            chk = subprocess.run(["gh", "pr", "list", "-R", repo, "--head", "feat/" + slug,
+                                  "--state", "open", "--json", "number"],
+                                 capture_output=True, text=True, timeout=60, env=env)
+            if chk.returncode == 0 and json.loads(chk.stdout or "[]"):
+                skipped += 1
+                continue
+        except Exception:
+            pass
+        fr = ("[UI/UX 自動稽核] %s — %s。請依 app-uiux-designer rubric 修正此問題(純前端 dashboard,"
+              "不動後端 API);修好後同一畫面應通過 AI 語意 gate。" % (f.get("route", ""), f.get("detail", "")))
+        sr = _curl_json("POST", engine + "/sdlc-code-flow",
+                        {"feature_request": fr, "repo": repo, "base": target_base,
+                         "slug": slug, "uiFacing": "true"}, 60)
+        if sr.get("id"):
+            started += 1
+            triggered.append(slug)
+        else:
+            skipped += 1
+    return {"findings": len(data.get("findings", [])), "fails": len(fails),
+            "started": started, "skipped": skipped, "triggered": triggered, "cap": cap}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, obj):
         body = json.dumps(obj).encode()
@@ -1547,7 +1651,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         task = self.path.rsplit("/", 1)[-1]
-        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test"):
+        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "uiux-audit"):
             return self._send(404, {"error": f"unknown task {task}"})
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -1565,6 +1669,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = implement_flow(payload)
             elif task == "test":
                 result = test_flow(payload)
+            elif task == "uiux-audit":
+                result = uiux_audit_flow(payload)
             else:
                 result = run_claude(task, payload)
             self._send(200, result)
