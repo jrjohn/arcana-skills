@@ -558,7 +558,12 @@ def _skill_flags(payload):
     md = os.path.join(skill_dir, "SKILL.md")
     if not os.path.isfile(md):
         return []
-    return ["--append-system-prompt-file", md, "--add-dir", skill_dir]
+    # Isolation (anti-pollution): exactly ONE contract skill is force-injected above. Disable the
+    # Skill tool so the agent CANNOT auto-discover/invoke the other ~50 skills that the mounted
+    # ~/.claude/skills exposes — same-nature skills (angular/react/vue/requirements/…) would
+    # pollute a focused SA/SD/uiux/implement/PM node. The intended skill stays fully active via the
+    # appended system prompt; the node uses that one and only that one.
+    return ["--append-system-prompt-file", md, "--add-dir", skill_dir, "--disallowedTools", "Skill"]
 
 
 def _perm_flags(payload):
