@@ -163,7 +163,8 @@ SCHEMAS = {
             "feedback": {"type": "string"},
             "confidence": {"type": "number"},
         },
-        "required": ["verdict", "dimensions"],
+        "backlog": {"type": "array", "items": {"type": "object", "properties": {"feature_request": {"type": "string"}, "slug": {"type": "string"}, "uiFacing": {"type": "string"}, "priority": {"type": "integer"}}, "required": ["feature_request", "slug"]}},
+            "required": ["verdict", "dimensions"],
     },
     "escalate": {
         "type": "object",
@@ -508,6 +509,10 @@ def prompt_pm_review(p):
         "API shape)? are its DEPENDENCIES satisfied - a sibling this needs must be COMPLETED with verdict GO; "
         "if a needed sibling is not yet GO, return NOGO/HOLD and name which sibling to wait for. do the "
         "features TOGETHER cover the goal (flag gaps)?\n"
+        "OUT-OF-SCOPE FINDINGS: a gate/test finding NOT in this feature's scope must not block/HOLD "
+        "this PR and must NOT be dropped either — you own the product backlog: convert each real one "
+        "into a `backlog` item (feature_request one concrete sentence + slug + uiFacing + priority), "
+        "deduped against siblings. HOLD is only for THIS feature's own human-decision gaps.\n"
         "ANTI-GOODHART (non-negotiable): never lower/soften an AC, design, or UX bar to reach GO; no dimension "
         "passes without cited evidence; if the SAME gap survived the previous round -> HOLD (do not churn).\n"
         f"Previous round verdict (no-progress detection): {str(p.get('pmReview'))[:1500]}\n"
