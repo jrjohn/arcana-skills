@@ -162,9 +162,9 @@ SCHEMAS = {
                 "required": ["name", "pass"]}},
             "feedback": {"type": "string"},
             "confidence": {"type": "number"},
+            "backlog": {"type": "array", "items": {"type": "object", "properties": {"feature_request": {"type": "string"}, "slug": {"type": "string"}, "uiFacing": {"type": "string"}, "priority": {"type": "integer"}}, "required": ["feature_request", "slug"]}},
         },
-        "backlog": {"type": "array", "items": {"type": "object", "properties": {"feature_request": {"type": "string"}, "slug": {"type": "string"}, "uiFacing": {"type": "string"}, "priority": {"type": "integer"}}, "required": ["feature_request", "slug"]}},
-            "required": ["verdict", "dimensions"],
+        "required": ["verdict", "dimensions"],
     },
     "escalate": {
         "type": "object",
@@ -1458,16 +1458,12 @@ def _gen_testcases(payload):
         "Acceptance criteria (SRS):\n" + (srs or "(none)") + "\n\n"
         "The feature's code (PR diff — use the REAL selectors / visible text from here):\n"
         + (diff or "(none)") + "\n\n"
-        "GROUNDING — a WORKING testcase for THIS app (copy its route + selector style). The Org\n"
-        "Designer is at route `/org`; its container is `.org-designer`, tree rows are `.org-row`.\n"
-        "The feature under test is rendered on this SAME `/org` page — navigate there first:\n"
-        "export const testcases = [\n"
-        "  { id: 'ORG-ADD-01', name: '...', run: async ({ page, assert, shot, base }) => {\n"
-        "      await page.goto(`${base}/org`, { waitUntil: 'domcontentloaded' });\n"
-        "      await page.waitForSelector('.org-designer', { timeout: 20000 });\n"
-        "      const n = await page.locator('.org-row').count();\n"
-        "      assert(n > 0, `expected rows, got ${n}`);\n"
-        "  } },\n];\n\n"
+        "GROUNDING — the feature's ROUTE and SELECTORS must come from the PR diff above: read the\n"
+        "app.routes.ts changes for the route, and the new components' HTML templates for real\n"
+        "classes/text. NEVER reuse another feature's route or selector as a guess — e.g. `/org`\n"
+        "and `.org-designer` belong to the Org feature and are WRONG unless this diff touches them.\n"
+        "If the diff shows no obvious container class, wait on visible text from the feature's\n"
+        "template (getByText) instead of inventing a selector.\n\n"
         "Write a JavaScript ES module exporting `testcases`, EXACTLY this shape:\n"
         "export const testcases = [\n"
         "  { id: 'FEAT-01', name: '<short zh desc>', run: async ({ page, assert, shot, base, shared }) => {\n"
