@@ -1302,7 +1302,7 @@ def implement_flow(payload):
 
         # --- Phase B: Claude writes code in the workdir (bound to the dev skill) ---
         design = payload.get("design")
-        design_str = json.dumps(design, ensure_ascii=False)[:12000] if design is not None else ""
+        design_str = json.dumps(design, ensure_ascii=False)[:8000] if design is not None else ""
         full_prompt = (
             instruction
             + "\n\n## 目標\n在目前工作目錄（已 clone 的 repo）實作此功能，嚴格遵守 repo 既有架構慣例"
@@ -1325,7 +1325,7 @@ def implement_flow(payload):
         cp["skip_permissions"] = True     # bounded: throwaway clone in a sandbox
         cp["add_dirs"] = [workdir]
         result = _invoke_claude(full_prompt, schema, cp,
-                                int(payload.get("wall") or 2400), cwd=workdir)
+                                int(payload.get("wall") or 3300), cwd=workdir)  # 55min: finish in ONE attempt (avoid ×3 retry)
         summary = result.get("summary") if isinstance(result, dict) else str(result)
 
         # --- Phase C: deterministic gated PR ---
