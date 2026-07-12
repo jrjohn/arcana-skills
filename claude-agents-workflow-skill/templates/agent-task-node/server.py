@@ -696,6 +696,15 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
         if MODEL:
             cmd += ["--model", MODEL]
         collected = []
+        # Retries of the same node reuse the SAME <piid>__<node>.jsonl path; opening "w"
+        # would clobber the FAILED attempt we most need to debug (a timed-out implement
+        # leaves no trace otherwise). Archive a non-empty prior attempt to a timestamped
+        # sibling first — the live path stays clean for the current attempt, history kept.
+        try:
+            if os.path.exists(console_path) and os.path.getsize(console_path) > 0:
+                os.replace(console_path, "%s.%d.jsonl" % (console_path[:-6], int(time.time())))
+        except OSError:
+            pass
         with open(console_path, "w") as cf:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, text=True, cwd=cwd, env=run_env)
