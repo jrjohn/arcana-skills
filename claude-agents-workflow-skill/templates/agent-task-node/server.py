@@ -1488,11 +1488,19 @@ def _gen_testcases(payload):
                          "properties": {"testcasesMjs": {"type": "string"}},
                          "required": ["testcasesMjs"]})
     try:
-        out = _invoke_claude(prompt, schema, payload, wall=300)
+        # 600s: generating a full Playwright module from a large diff regularly exceeds
+        # 300s (and a silent None here demotes the run to the org REGRESSION set, whose
+        # pre-existing failures then churn the feature's rework loop for nothing).
+        out = _invoke_claude(prompt, schema, payload, wall=600)
         mjs = ((out or {}).get("testcasesMjs") or "").replace("```javascript", "") \
             .replace("```js", "").replace("```", "").strip()
-        return mjs if "export const testcases" in mjs else None
-    except Exception:
+        if "export const testcases" not in mjs:
+            print("[agent-task-node] testcase GEN produced no module (len=%d) — falling back to regression"
+                  % len(mjs), flush=True)
+            return None
+        return mjs
+    except Exception as e:
+        print("[agent-task-node] testcase GEN failed: %s — falling back to regression" % e, flush=True)
         return None
 
 
