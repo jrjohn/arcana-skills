@@ -486,7 +486,7 @@ def prompt_pm_review(p):
         f"- SIBLING features in this SAME initiative (each with its verdict/state — cross-check against "
         f"these, like a countersigner reading prior sign-offs): {str(p.get('siblings'))[:2800]}\n"
         f"- TEST NODE RESULT (the platform's OWN CI — it built THIS exact PR and ran feature testcases + the "
-        f"AI semantic gate on it): {str(p.get('testReport'))[:2600]}\n"
+        f"AI semantic gate + a GOAL-DIRECTED JOURNEY WALKTHROUGH on it): {str(p.get('testReport'))[:2800]}\n"
         "HARD PRE-GATE first: (a) BUILD — the implement result's `buildStatus` (also printed as `Local build "
         "gate:` in the PR body) is DETERMINISTIC: `OK` means the code compiled via `npm ci && npm run build`, so "
         "it BUILDS — treat that as ground truth and NEVER read the implement Summary's prose as a build failure "
@@ -494,7 +494,11 @@ def prompt_pm_review(p):
         "genuinely will not compile -> NOGO. (b) TESTS/QUALITY — the TEST NODE above already ran this exact PR "
         "build through the platform's own CI; its `testReport` is your PRIMARY quality evidence: allPass=false or "
         "a non-empty failures[] -> NOGO(quality) naming the failing testcases; aiFindings with severity=fail -> "
-        "NOGO citing them. A separate green CI check-rollup / SonarQube is CONFIRMATORY but NOT required — do NOT "
+        "NOGO citing them. **journeyFindings with kind=journey-blocked -> NOGO, HIGHEST PRIORITY**: a BLOCKED "
+        "journey means a real user CANNOT COMPLETE the core task — the feature RENDERS but the action is "
+        "unreachable (rendered != actionable, e.g. 'as 簽核者 cannot reach 核准 — the row opened a read-only "
+        "view'); this is the class the diff/screenshot review misses, NOGO naming the blocked journey + reason "
+        "so Implement wires the missing path. A separate green CI check-rollup / SonarQube is CONFIRMATORY but NOT required — do NOT "
         "HOLD merely because SONARQUBE_TOKEN / CI env is unset when the testReport is present. arch-qube>=90 "
         "still applies where it is checkable. Bars unmet -> NOGO(quality).\n"
         "Then the FIVE dimensions: (1) usability - audit the built UI in the diff against the UX rubric; you "
@@ -1513,6 +1517,61 @@ def _gen_testcases(payload):
         return None
 
 
+def _gen_journeys(payload):
+    """T4-3: derive 1-3 GOAL-DIRECTED user journeys (persona + goal + start route) from the ACs + PR
+    diff, for the journey-walk gate. The gate drives the live preview toward each goal and FAILS if a
+    journey is BLOCKED (the task cannot be completed) — the class of bug static screenshots miss
+    ("the page renders, but there is no way to sign"). Journeys are NON-MUTATING: they verify the
+    action control is REACHABLE, never actually submit/approve/delete. Returns a JSON-array string, or
+    None to skip the journey gate (non-UI feature / no source)."""
+    if str(payload.get("uiFacing", "")).strip().lower() not in ("true", "1", "yes"):
+        return None  # backend-only feature → no UI journey
+    srs = payload.get("srs") or ""
+    if isinstance(srs, (dict, list)):
+        srs = json.dumps(srs, ensure_ascii=False)
+    url, _ = _pr_url_and_branch(payload)
+    diff = ""
+    if url:
+        try:
+            diff = (subprocess.run(["gh", "pr", "diff", url], capture_output=True, text=True,
+                                   timeout=90).stdout or "")[:12000]
+        except Exception:
+            diff = ""
+    if not (srs or diff):
+        return None
+    prompt = (
+        "You define GOAL-DIRECTED user journeys for a UI walkthrough gate. The gate drives a LIVE "
+        "preview of the app (already logged in as admin) toward each goal and FAILS the journey if the "
+        "user CANNOT complete the task (the control to act is unreachable).\n\n"
+        "Acceptance criteria (SRS):\n" + (srs or "(none)") + "\n\n"
+        "The feature's code (PR diff — routes come from app.routes.ts changes, personas/actions from "
+        "the new templates):\n" + (diff or "(none)") + "\n\n"
+        "Define 1-3 journeys for the feature's PRIMARY user task(s). Each = one persona completing one "
+        "real task.\n"
+        "CRITICAL — NON-MUTATING: each goal MUST end at 'confirm the <action button / decision panel> "
+        "is present and reachable (do NOT press it)', NEVER 'submit / approve / delete / start it'. "
+        "Reaching the point where the user COULD act is the pass; a page that renders but exposes no "
+        "such control is exactly the FAIL to catch (rendered != actionable).\n"
+        "Each journey: persona (zh role, e.g. 簽核者/申請人/管理員), goal (zh, one concrete task ending "
+        "at a reachable control, include '不要真的按下'), start (the route from the diff, e.g. /todo).\n"
+        "Output strictly JSON: {\"journeys\":[{\"persona\":\"...\",\"goal\":\"...\",\"start\":\"/...\"}]}. No prose."
+    )
+    schema = json.dumps({"type": "object", "additionalProperties": False,
+                         "properties": {"journeys": {"type": "array", "items": {
+                             "type": "object", "additionalProperties": False,
+                             "properties": {"persona": {"type": "string"}, "goal": {"type": "string"},
+                                            "start": {"type": "string"}},
+                             "required": ["persona", "goal", "start"]}}},
+                         "required": ["journeys"]})
+    try:
+        out = _invoke_claude(prompt, schema, payload, wall=300)
+        js = [j for j in ((out or {}).get("journeys") or []) if j.get("goal") and j.get("start")][:3]
+        return json.dumps(js, ensure_ascii=False) if js else None
+    except Exception as e:
+        print("[agent-task-node] journey GEN failed: %s — skipping journey gate" % e, flush=True)
+        return None
+
+
 def test_flow(payload):
     """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted docker.sock.
     T4: when a PR branch is known, the runner clones + builds it and serves a preview so e2e run
@@ -1547,6 +1606,9 @@ def test_flow(payload):
     gen = _gen_testcases(payload)  # T4-2: feature-specific testcases (else default regression)
     if gen:
         cmd += ["-e", "TESTCASES_B64=" + base64.b64encode(gen.encode()).decode()]
+    jrn = _gen_journeys(payload)  # T4-3: goal-directed journeys for the walkthrough gate (UI features)
+    if jrn:
+        cmd += ["-e", "JOURNEYS_B64=" + base64.b64encode(jrn.encode()).decode()]
     cmd.append(os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local"))
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=2400)

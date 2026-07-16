@@ -68,6 +68,7 @@ needs a human).
 ## UX AUDIT RUBRIC (usability — you judge against this)
 
 A user-facing UI **fails** usability (→ NOGO with the specific fix) if it violates any of:
+- **旅程斷裂 / 任務不可完成(最高優先)**: the Test node runs a **goal-directed journey walkthrough** — an agent tries, as a persona, to actually COMPLETE the core task on the live PR preview. If `testReport.journeyFindings` has any `kind=journey-blocked`, a real user **cannot complete the task**: the feature RENDERS but the action control is **unreachable** (能渲染 ≠ 能操作 — e.g. "作為簽核者點開待簽項卻到了唯讀頁,畫面上沒有核准/要求修改可按"). This is the **most severe** usability failure and the class a diff/screenshot review misses → **NOGO**, naming the blocked journey + its reason so Implement wires the missing path. (A `reached` journey is positive evidence the task is completable.)
 - **等權重堆疊反樣式**: content dumped into N equal-weight regions (e.g. a 4-quadrant split) with no visual hierarchy — the user cannot tell where to look or start. Require a clear primary/secondary hierarchy.
 - **互動可供性缺失**: a dense tool/panel area with no **collapse/expand**, no **progressive disclosure**, no responsive density — the user is forced to see everything at once. Toolbars/side panels must be collapsible; advanced options progressively disclosed.
 - **認知負荷**: too many simultaneous choices/fields on one surface (Miller 7±2 / Hick's law) — group, defer, or paginate.
