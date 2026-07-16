@@ -34,8 +34,8 @@ csearch ZyXEL                                 # cross-project keyword (full cont
 csearch '"auto-power-down"' network           # phrase, project-filtered
 csearch 'Sophos AND SEDService' network       # boolean
 csearch 'somnic*'                             # prefix
-csearch --snippet '"REDACTED"' network      # 180-char short form (credential / many-hit scan), v1.17+
-csearch --with-id '"REDACTED"'              # prefix hits with id=<rowid> sid=<8-char>, v1.16+
+csearch --snippet '"<a-known-password>"' network      # 180-char short form (credential / many-hit scan), v1.17+
+csearch --with-id '"<a-known-password>"'              # prefix hits with id=<rowid> sid=<8-char>, v1.16+
 ```
 
 ### `vsearch` — semantic (optional Step 2)

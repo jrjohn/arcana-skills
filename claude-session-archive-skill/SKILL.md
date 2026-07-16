@@ -223,10 +223,10 @@ csearch --limit 100 '"per-ip-70m"' network        # exact phrase
 csearch --limit 3 '"Domain Name Server"' network
 
 # 180-char snippet per hit — credential / short-token lookups, when scanning many hits
-csearch --snippet --limit 20 '"REDACTED"' network
+csearch --snippet --limit 20 '"<a-known-password>"' network
 
 # Add row id + session_id prefix — for SELECT-by-primary-key later
-csearch --with-id '"REDACTED"' network
+csearch --with-id '"<a-known-password>"' network
 
 # `--full` is still accepted but is a no-op since v1.17 (default is already full)
 csearch --full --limit 1 '"FortiGate API token"' network

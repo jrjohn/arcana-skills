@@ -16,7 +16,7 @@ from pathlib import Path
 
 NB_URL    = 'http://10.0.0.204:8006'
 NB_USER   = 'admin'
-NB_PASS   = 'REDACTED'
+NB_PASS   = os.environ.get('NETBOX_PASS', '')
 FG_HOST   = '10.0.0.1'
 FG_TOKEN_FILE = '/root/.fg_token'
 OUT       = '/opt/mis-log-db/ip-names.tsv'
