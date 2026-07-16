@@ -64,6 +64,9 @@ needs a human).
    - **Consistency** — is naming / UX pattern / API shape consistent with siblings (so the set feels like one product, not N disjoint bolt-ons)?
    - **Dependency satisfaction** — if this feature needs a sibling (e.g. "version-compare" needs "versioning"), that sibling must be `state=COMPLETED` **and** `verdict=GO`. If a needed sibling is not yet GO → **NOGO/HOLD naming which sibling to wait for** (do not build on an unbuilt base).
    - **Goal-level completeness** — do the features TOGETHER cover the manager's goal? Flag missing pieces the backlog didn't cover.
+7. **⑦ IA 一致性 / 全-app 冗餘 (whole-app, not just siblings)** — using the **APP NAVIGATION MAP** in `data` (all EXISTING top-level features + routes, fetched at the base ref), judge this feature against the WHOLE product, not only this initiative's siblings:
+   - **Redundant re-slice** — does it add a list/view that shows the **same data an existing feature already shows** (e.g. a new 「流程追蹤」 that lists instances a 「流程監控」 menu item already lists)? A redundant nav item, or two menu entries doing the same job, or an IA that leaves users unsure where to go → **NOGO proposing to MERGE into the existing surface** (or a consolidation backlog item), not a parallel duplicate.
+   - Distinguish a genuinely-NEW capability (fine to add) from a redundant RE-SLICE of existing data. Only flag REAL overlap — proximity to an existing feature is not itself a problem. This is the cross-feature blind spot the diff/screenshot review misses because it never sees the whole nav.
 
 ## UX AUDIT RUBRIC (usability — you judge against this)
 

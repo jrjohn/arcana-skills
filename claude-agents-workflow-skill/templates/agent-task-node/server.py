@@ -472,6 +472,33 @@ def prompt_audit(p):
     )
 
 
+def _fetch_app_map(payload):
+    """B (IA-redundancy critic): fetch the app's WHOLE navigation map (all existing top-level
+    features + routes) at the BASE ref, so the PM can judge redundancy against EVERY existing
+    feature — not just this initiative's `siblings`. This is what catches "a new 流程追蹤 view when
+    流程監控 already lists those instances". Best-effort (empty on failure so the PM degrades to the
+    siblings-only check). Paths default to the dashboard nav/routes; a per-app Project Profile can
+    override navPath/routesPath (the generalization seam). Returns a compact string."""
+    repo = payload.get("repo") or ""
+    base = payload.get("base") or "main"
+    if not repo:
+        return ""
+    paths = [payload.get("navPath") or "dashboard/src/app/core/navigation/nav.config.ts",
+             payload.get("routesPath") or "dashboard/src/app/app.routes.ts"]
+    out = []
+    for pth in paths:
+        try:
+            r = subprocess.run(["gh", "api", f"repos/{repo}/contents/{pth}?ref={base}", "--jq", ".content"],
+                               capture_output=True, text=True, timeout=30)
+            raw = "".join((r.stdout or "").split())
+            content = base64.b64decode(raw).decode("utf-8", "replace") if raw else ""
+            if content:
+                out.append(f"# {pth}\n{content[:3500]}")
+        except Exception:
+            pass
+    return "\n\n".join(out)[:7000]
+
+
 def prompt_pm_review(p):
     return (
         "You are the PM readiness gate (your PM skill carries the full rubric). A gated PR was "
@@ -485,6 +512,9 @@ def prompt_pm_review(p):
         f"- UI/UX spec (usability target, if user-facing): {str(p.get('uiuxSpec'))[:3000]}\n"
         f"- SIBLING features in this SAME initiative (each with its verdict/state — cross-check against "
         f"these, like a countersigner reading prior sign-offs): {str(p.get('siblings'))[:2800]}\n"
+        f"- APP NAVIGATION MAP — ALL existing top-level features + routes at base `{p.get('base') or 'main'}` "
+        f"(to judge IA redundancy against the WHOLE app, not just siblings): "
+        f"{_fetch_app_map(p) or '(unavailable — degrade to the siblings check)'}\n"
         f"- TEST NODE RESULT (the platform's OWN CI — it built THIS exact PR and ran feature testcases + the "
         f"AI semantic gate + a GOAL-DIRECTED JOURNEY WALKTHROUGH on it): {str(p.get('testReport'))[:2800]}\n"
         "HARD PRE-GATE first: (a) BUILD — the implement result's `buildStatus` (also printed as `Local build "
@@ -513,6 +543,15 @@ def prompt_pm_review(p):
         "API shape)? are its DEPENDENCIES satisfied - a sibling this needs must be COMPLETED with verdict GO; "
         "if a needed sibling is not yet GO, return NOGO/HOLD and name which sibling to wait for. do the "
         "features TOGETHER cover the goal (flag gaps)?\n"
+        "(7) IA COHERENCE / whole-app redundancy - using the APP NAVIGATION MAP above (ALL existing "
+        "features, NOT just siblings): does this feature DUPLICATE or substantially OVERLAP an existing "
+        "one — a new list/view showing the same data a menu item already shows (e.g. a '追蹤/tracking' "
+        "page when a '監控/monitoring' page already lists those instances), or a redundant nav item / "
+        "two menu entries doing the same job / an IA that will confuse users about where to go? "
+        "Distinguish a genuinely-NEW capability from a redundant RE-SLICE of existing data. If redundant "
+        "-> NOGO proposing to MERGE into the existing surface (or file a consolidation backlog item), "
+        "rather than shipping a parallel duplicate view. (Only flag real overlap — a new capability that "
+        "merely lives near an existing one is fine.)\n"
         "OUT-OF-SCOPE FINDINGS: a gate/test finding NOT in this feature's scope must not block/HOLD "
         "this PR and must NOT be dropped either — you own the product backlog: convert each real one "
         "into a `backlog` item (feature_request one concrete sentence + slug + uiFacing + priority), "
