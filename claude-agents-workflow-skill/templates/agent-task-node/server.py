@@ -464,6 +464,31 @@ def _resume(payload):
     return ["--resume", str(sid)] if sid else []
 
 
+def _skill_flags(payload):
+    """Real skill binding: if the node's contract names a skill (`ai_skill`), load
+    that skill by name — inject its SKILL.md as an appended system prompt and expose
+    its dir so referenced files resolve. This is how an SDLC-conductor node binds a
+    role skill (e.g. app-requirements-skill for SA) instead of inlining the method.
+
+    Path-guarded: `ai_skill` must be a safe slug AND resolve inside `SKILLS_DIR`;
+    an unknown/missing skill or unset SKILLS_DIR is a silent no-op (never fails the
+    task — the node still runs on its `ai_prompt` alone)."""
+    name = (payload.get("ai_skill") or "").strip()
+    if not name or not re.match(r"^[a-z][a-z0-9._-]+$", name):
+        return []
+    skills_dir = os.environ.get("SKILLS_DIR", "")
+    if not skills_dir:
+        return []
+    root = os.path.realpath(skills_dir)
+    skill_dir = os.path.realpath(os.path.join(root, name))
+    if skill_dir != root and not skill_dir.startswith(root + os.sep):
+        return []  # containment guard against traversal
+    md = os.path.join(skill_dir, "SKILL.md")
+    if not os.path.isfile(md):
+        return []
+    return ["--append-system-prompt-file", md, "--add-dir", skill_dir]
+
+
 def _invoke_claude(prompt, schema, payload, wall):
     """Core Claude invocation shared by the static-verb path (run_claude) and the
     control-inverted generic executor (run_claude_generic). `prompt` + `schema`
@@ -485,7 +510,7 @@ def _invoke_claude(prompt, schema, payload, wall):
             console_path = None
     if console_path:
         cmd = [CLAUDE, "-p", prompt, "--json-schema", schema,
-               "--output-format", "stream-json", "--verbose"] + _resume(payload)
+               "--output-format", "stream-json", "--verbose"] + _resume(payload) + _skill_flags(payload)
         if MODEL:
             cmd += ["--model", MODEL]
         collected = []
@@ -521,7 +546,7 @@ def _invoke_claude(prompt, schema, payload, wall):
                 env = ev
     else:
         cmd = [CLAUDE, "-p", prompt, "--json-schema", schema,
-               "--output-format", "json"] + _resume(payload)
+               "--output-format", "json"] + _resume(payload) + _skill_flags(payload)
         if MODEL:
             cmd += ["--model", MODEL]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=wall)
@@ -662,7 +687,7 @@ def run_claude(task, payload):
 # `ai_prompt` (instruction) + `ai_output_schema` (the result contract) as process
 # variables; the worker forwards them here as payload `prompt` / `output_schema`,
 # plus the full process `data`. A new business domain needs NO new platform code.
-_GENERIC_DROP = {"ai_prompt", "ai_output_schema", "sid", "_sid", "_piid", "_node",
+_GENERIC_DROP = {"ai_prompt", "ai_output_schema", "ai_skill", "sid", "_sid", "_piid", "_node",
                  "prompt", "output_schema", "data"}
 
 
