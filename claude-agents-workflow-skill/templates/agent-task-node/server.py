@@ -472,6 +472,51 @@ def prompt_audit(p):
     )
 
 
+# --- C (generalization): per-app Project Profile — how to build/run/review THIS app. Read from the
+# target repo's `.arcana/project.json` at the base ref, merged over the dashboard defaults, so the
+# journey-walkthrough + IA gates work on OTHER apps (a repo drops its own profile: different appDir/
+# buildCmd/auth/navPath). Absent profile → dashboard defaults (aaf's own values) → zero regression. ---
+_PROFILE_DEFAULTS = {
+    "app": {"appDir": "dashboard", "buildCmd": "npm run build", "distGlob": "dist"},
+    "run": {"previewPort": 8087, "apiTarget": "http://aaf-arcana-cloud-rust:8080"},
+    "auth": {"user": "boss", "pass": "pw", "usernameSelector": "#login-username",
+             "passwordSelector": "#login-password"},
+    "nav": {"navPath": "dashboard/src/app/core/navigation/nav.config.ts",
+            "routesPath": "dashboard/src/app/app.routes.ts"},
+    "personas": ["簽核者", "申請人", "管理員"],
+    "qualityBar": {"coverage": 80, "archQube": 90},
+}
+
+
+def _load_profile(payload):
+    """The target repo's `.arcana/project.json` at the base ref (run-recipe + nav paths + personas),
+    merged over the dashboard defaults. Best-effort + cached on the payload. The single seam another
+    app plugs into; absent → dashboard defaults (aaf unaffected)."""
+    if "_profile" in payload:
+        return payload["_profile"]
+    import copy
+    prof = copy.deepcopy(_PROFILE_DEFAULTS)
+    repo = payload.get("repo") or ""
+    base = payload.get("base") or "main"
+    if repo:
+        try:
+            r = subprocess.run(
+                ["gh", "api", f"repos/{repo}/contents/.arcana/project.json?ref={base}", "--jq", ".content"],
+                capture_output=True, text=True, timeout=25)
+            raw = "".join((r.stdout or "").split())
+            if raw:
+                loaded = json.loads(base64.b64decode(raw).decode("utf-8", "replace"))
+                for k, v in loaded.items():
+                    if isinstance(v, dict) and isinstance(prof.get(k), dict):
+                        prof[k].update(v)
+                    elif not k.startswith("$"):
+                        prof[k] = v
+        except Exception:
+            pass
+    payload["_profile"] = prof
+    return prof
+
+
 def _fetch_app_map(payload):
     """B (IA-redundancy critic): fetch the app's WHOLE navigation map (all existing top-level
     features + routes) at the BASE ref, so the PM can judge redundancy against EVERY existing
@@ -483,8 +528,9 @@ def _fetch_app_map(payload):
     base = payload.get("base") or "main"
     if not repo:
         return ""
-    paths = [payload.get("navPath") or "dashboard/src/app/core/navigation/nav.config.ts",
-             payload.get("routesPath") or "dashboard/src/app/app.routes.ts"]
+    nav = _load_profile(payload).get("nav", {})
+    paths = [nav.get("navPath") or "dashboard/src/app/core/navigation/nav.config.ts",
+             nav.get("routesPath") or "dashboard/src/app/app.routes.ts"]
     out = []
     for pth in paths:
         try:
@@ -1591,8 +1637,9 @@ def _gen_journeys(payload):
         "is present and reachable (do NOT press it)', NEVER 'submit / approve / delete / start it'. "
         "Reaching the point where the user COULD act is the pass; a page that renders but exposes no "
         "such control is exactly the FAIL to catch (rendered != actionable).\n"
-        "Each journey: persona (zh role, e.g. 簽核者/申請人/管理員), goal (zh, one concrete task ending "
-        "at a reachable control, include '不要真的按下'), start (the route from the diff, e.g. /todo).\n"
+        "Each journey: persona (a role this app serves — prefer one of: "
+        + "/".join(_load_profile(payload).get("personas") or ["使用者"]) + "), goal (zh, one concrete task "
+        "ending at a reachable control, include '不要真的按下'), start (the route from the diff, e.g. /todo).\n"
         "Output strictly JSON: {\"journeys\":[{\"persona\":\"...\",\"goal\":\"...\",\"start\":\"/...\"}]}. No prose."
     )
     schema = json.dumps({"type": "object", "additionalProperties": False,
@@ -1637,6 +1684,16 @@ def test_flow(payload):
            "-e", "MINIO_BUCKET=arcana-attachments",
            "-e", "INSTANCE=" + piid,
            "-e", "API_TARGET=" + os.environ.get("TEST_API_TARGET", "http://aaf-arcana-cloud-rust:8080")]
+    # C: per-app run-recipe from the Project Profile (defaults = dashboard, so aaf is unchanged). The
+    # runner + journey/uiux mjs read these instead of hard-coding the dashboard build/port/login.
+    _pf = _load_profile(payload)
+    cmd += ["-e", "APP_SUBDIR=" + str(_pf["app"].get("appDir", "dashboard")),
+            "-e", "BUILD_CMD=" + str(_pf["app"].get("buildCmd", "npm run build")),
+            "-e", "PREVIEW_PORT=" + str(_pf["run"].get("previewPort", 8087)),
+            "-e", "UIUX_USER=" + str(_pf["auth"].get("user", "boss")),
+            "-e", "UIUX_PASS=" + str(_pf["auth"].get("pass", "pw")),
+            "-e", "JW_USER=" + str(_pf["auth"].get("user", "boss")),
+            "-e", "JW_PASS=" + str(_pf["auth"].get("pass", "pw"))]
     if repo and branch:  # T4-1: build the PR branch and test its real code
         cmd += ["-e", "REPO=" + repo, "-e", "BRANCH=" + branch,
                 "-e", "GH_TOKEN=" + os.environ.get("GH_TOKEN", "")]
