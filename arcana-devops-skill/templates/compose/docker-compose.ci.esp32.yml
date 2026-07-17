@@ -19,7 +19,7 @@
 
 services:
   esp32-build:
-    image: espressif/idf:v5.5.2
+    image: espressif/idf:v6.0.2
     working_dir: /project
     environment:
       - HOME=/tmp

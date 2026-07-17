@@ -42,7 +42,7 @@
 # on context changes. Prefer compose for CI pipelines.
 # ============================================
 
-FROM espressif/idf:v5.5.2 AS builder
+FROM espressif/idf:v6.0.2 AS builder
 
 # Set target chip (esp32, esp32s2, esp32s3, esp32c3, esp32c6, esp32h2)
 ARG IDF_TARGET=esp32
