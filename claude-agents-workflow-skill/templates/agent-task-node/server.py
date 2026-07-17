@@ -1113,6 +1113,8 @@ def run_release(payload):
 # deploy. Modelled on run_release's git/gh-via-subprocess structure.
 
 PROC_ID_RE = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
+# 拋轉計算 companion DMN: a bare .dmn filename (no path traversal, no slashes)
+DMN_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}\.dmn$")
 PUBLISH_REPO = os.environ.get("PUBLISH_REPO", "jrjohn/arcana-ai-bpm")
 # whitespace below is load-bearing: it must match the golden proto byte-for-byte
 # (data-index-protobufs/demo-generic.proto). Tabs for indent, trailing spaces,
@@ -1194,11 +1196,17 @@ def publish_flow(payload):
     GATED PR on arcana-ai-bpm — never merges, never deploys. CI (kogito build)
     + human / merge-flow gate the actual deploy.
 
-    payload: { processId, bpmnXml, dry_run? }
+    payload: { processId, bpmnXml, dmnXml?, dmnFileName?, dry_run? }
     returns: { prUrl, branch } | { proto, files, processId } (dry_run) | { error }
+
+    拋轉計算: a flow whose businessRuleTask invokes a generated companion DMN passes
+    it as dmnXml/dmnFileName; it lands in the SAME gated PR (both or neither), since
+    publishing the BPMN alone would deploy a flow bound to a DMN that isn't there.
     """
     process_id = (payload.get("processId") or "").strip()
     bpmn_xml = payload.get("bpmnXml") or ""
+    dmn_xml = payload.get("dmnXml") or ""
+    dmn_file_name = (payload.get("dmnFileName") or "").strip()
     dry_run = bool(payload.get("dry_run"))
 
     # --- validate / sanitize (prevents path traversal + bad filenames) ---
@@ -1226,6 +1234,17 @@ def publish_flow(payload):
         "kogito-bpmn/src/main/resources/boo/arcana/%s.bpmn2" % process_id: bpmn_xml,
         "data-index-protobufs/%s.proto" % process_id: proto,
     }
+
+    # --- 拋轉計算: the companion DMN ships in the same PR as the BPMN that binds it ---
+    if dmn_xml.strip() or dmn_file_name:
+        if not (dmn_xml.strip() and dmn_file_name):
+            return {"error": "dmnXml and dmnFileName must be provided together"}
+        # sanitize: a bare .dmn filename, no path traversal
+        if not DMN_NAME_RE.match(dmn_file_name):
+            return {"error": "invalid dmnFileName %r: must match ^[a-z0-9][a-z0-9._-]*\\.dmn$"
+                    % dmn_file_name}
+        rel_files["bpmn/%s" % dmn_file_name] = dmn_xml
+        rel_files["kogito-bpmn/src/main/resources/boo/arcana/%s" % dmn_file_name] = dmn_xml
 
     # --- dry run: scaffold into a temp dir, skip push/PR (locally verifiable) ---
     if dry_run:
@@ -1287,6 +1306,11 @@ def publish_flow(payload):
                 "- `kogito-bpmn/src/main/resources/boo/arcana/%s.bpmn2`\n"
                 "- `data-index-protobufs/%s.proto`\n"
                 % (process_id, process_id, process_id, process_id))
+        if dmn_file_name:
+            body += ("- `bpmn/%s`\n- `kogito-bpmn/src/main/resources/boo/arcana/%s`\n"
+                     "  (拋轉計算 companion DMN — the flow's businessRuleTask binds it "
+                     "by namespace/model, so it ships in this same PR)\n"
+                     % (dmn_file_name, dmn_file_name))
         env = dict(os.environ)
         if token:
             env["GH_TOKEN"] = token
