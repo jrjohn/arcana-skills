@@ -1306,6 +1306,13 @@ def publish_flow(payload):
                 "- `kogito-bpmn/src/main/resources/boo/arcana/%s.bpmn2`\n"
                 "- `data-index-protobufs/%s.proto`\n"
                 % (process_id, process_id, process_id, process_id))
+        # RBAC P2 provenance — INFORMATIONAL only. Authorization lives in the
+        # read-API's flow_meta table; the PR body just records who published what
+        # tier so a human reading the PR sees it without querying PG.
+        author = payload.get("authorUsername") or ""
+        tier = payload.get("tier") or ""
+        if author or tier:
+            body += "\nProvenance: author `%s` · tier `%s`\n" % (author or "?", tier or "personal")
         if dmn_file_name:
             body += ("- `bpmn/%s`\n- `kogito-bpmn/src/main/resources/boo/arcana/%s`\n"
                      "  (拋轉計算 companion DMN — the flow's businessRuleTask binds it "
