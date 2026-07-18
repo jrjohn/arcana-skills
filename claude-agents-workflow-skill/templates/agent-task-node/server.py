@@ -1043,9 +1043,35 @@ def prompt_generic(payload):
     parts = [instruction]
     if business:
         parts.append("\n\n## Input data\n```json\n"
-                     + json.dumps(business, ensure_ascii=False, indent=2)[:8000]
+                     + _bounded_json(business)
                      + "\n```")
     return "\n".join(parts)
+
+
+def _bounded_json(business, cap=24000):
+    """Serialize node input data for prompt embedding WITHOUT silently amputating
+    late keys. The old raw `[:8000]` slice cut the JSON mid-string, so any key
+    sorting after a fat one vanished — a `goal` after a bloated `existing` made the
+    decompose node effectively blind (2026-07-19 incident). Strategy: full dump if
+    it fits; else bound long string leaves / long arrays per-value and retry; only
+    then hard-cap WITH an explicit marker so the model knows data is incomplete."""
+    txt = json.dumps(business, ensure_ascii=False, indent=2)
+    if len(txt) <= cap:
+        return txt
+
+    def bound(v):
+        if isinstance(v, str) and len(v) > 600:
+            return v[:600] + "…[truncated]"
+        if isinstance(v, list):
+            return [bound(x) for x in v[:80]] + (["…[%d more truncated]" % (len(v) - 80)] if len(v) > 80 else [])
+        if isinstance(v, dict):
+            return {k: bound(x) for k, x in v.items()}
+        return v
+
+    txt = json.dumps(bound(business), ensure_ascii=False, indent=2)
+    if len(txt) <= cap:
+        return txt
+    return txt[:cap] + "\n…(DATA TRUNCATED at %d chars — later keys may be missing; say so if a needed field is absent)" % cap
 
 
 def run_claude_generic(payload):
