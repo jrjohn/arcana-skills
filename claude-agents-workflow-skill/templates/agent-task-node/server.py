@@ -31,6 +31,7 @@ import shutil
 import subprocess
 import re
 import time
+import hashlib
 import tempfile
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -631,33 +632,59 @@ def _resume(payload):
 
 
 def _skill_flags(payload):
-    """Real skill binding: if the node's contract names a skill (`ai_skill`), load
-    that skill by name — inject its SKILL.md as an appended system prompt and expose
-    its dir so referenced files resolve. This is how an SDLC-conductor node binds a
-    role skill (e.g. app-requirements-skill for SA) instead of inlining the method.
+    """Real skill binding, 1–5 skills per node (John, 2026-07-18): `ai_skill` is a
+    comma-separated list of skill names; each resolved skill's SKILL.md is injected
+    as an appended system prompt (in listed order — put the ROLE skill first, support
+    skills after) and its dir exposed so referenced files resolve. More than 5 →
+    only the first 5 load (logged), keeping the context cost bounded.
 
-    Path-guarded: `ai_skill` must be a safe slug AND resolve inside `SKILLS_DIR`;
-    an unknown/missing skill or unset SKILLS_DIR is a silent no-op (never fails the
-    task — the node still runs on its `ai_prompt` alone)."""
-    name = (payload.get("ai_skill") or "").strip()
-    if not name or not re.match(r"^[a-z][a-z0-9._-]+$", name):
+    Path-guarded per name: safe slug AND realpath containment inside `SKILLS_DIR`;
+    unknown/missing names are skipped (never fails the task — the node still runs on
+    its `ai_prompt` alone). Empty list = no skill (design-time validation is where
+    "an AI node MUST pick ≥1 skill" is enforced; runtime stays permissive so legacy
+    flows keep running)."""
+    raw = (payload.get("ai_skill") or "").strip()
+    if not raw:
         return []
     skills_dir = os.environ.get("SKILLS_DIR", "")
     if not skills_dir:
         return []
     root = os.path.realpath(skills_dir)
-    skill_dir = os.path.realpath(os.path.join(root, name))
-    if skill_dir != root and not skill_dir.startswith(root + os.sep):
-        return []  # containment guard against traversal
-    md = os.path.join(skill_dir, "SKILL.md")
-    if not os.path.isfile(md):
+    names = [n.strip() for n in raw.split(",") if n.strip()]
+    if len(names) > 5:
+        print("[agent-task-node] ai_skill lists %d skills; loading first 5" % len(names), flush=True)
+        names = names[:5]
+    parts, dirs = [], []
+    for name in names:
+        if not re.match(r"^[a-z][a-z0-9._-]+$", name):
+            continue
+        skill_dir = os.path.realpath(os.path.join(root, name))
+        if skill_dir != root and not skill_dir.startswith(root + os.sep):
+            continue  # containment guard against traversal
+        md = os.path.join(skill_dir, "SKILL.md")
+        if not os.path.isfile(md):
+            continue
+        try:
+            parts.append("# ===== SKILL: %s =====\n\n" % name + open(md, encoding="utf-8").read())
+            dirs.append(skill_dir)
+        except Exception:
+            continue
+    if not parts:
         return []
-    # Isolation (anti-pollution): exactly ONE contract skill is force-injected above. Disable the
-    # Skill tool so the agent CANNOT auto-discover/invoke the other ~50 skills that the mounted
-    # ~/.claude/skills exposes — same-nature skills (angular/react/vue/requirements/…) would
-    # pollute a focused SA/SD/uiux/implement/PM node. The intended skill stays fully active via the
-    # appended system prompt; the node uses that one and only that one.
-    return ["--append-system-prompt-file", md, "--add-dir", skill_dir, "--disallowedTools", "Skill"]
+    # Concatenate into ONE appended system-prompt file — repeated
+    # --append-system-prompt-file flags have unspecified CLI semantics, a single
+    # merged file is deterministic. Listed order = precedence order.
+    merged = os.path.join(tempfile.gettempdir(), "skills-%s.md" % hashlib.sha256(
+        ",".join(names).encode()).hexdigest()[:12])
+    with open(merged, "w", encoding="utf-8") as f:
+        f.write("\n\n".join(parts))
+    flags = ["--append-system-prompt-file", merged]
+    for d in dirs:
+        flags += ["--add-dir", d]
+    # Isolation (anti-pollution): ONLY the contract-listed skills are force-injected.
+    # Disable the Skill tool so the agent cannot auto-discover the other ~50 mounted
+    # skills — the node uses its listed set and only that set.
+    return flags + ["--disallowedTools", "Skill"]
 
 
 def _perm_flags(payload):
