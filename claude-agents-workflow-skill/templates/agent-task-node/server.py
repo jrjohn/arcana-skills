@@ -1905,6 +1905,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/healthz":
             self._send(200, {"ok": True})
+        elif self.path == "/skills":
+            # Skill catalogue for the designer's node picker: every dir in SKILLS_DIR
+            # holding a SKILL.md. Only the agent container mounts the skills volume,
+            # so the read-API proxies this instead of listing a dir it doesn't have.
+            skills_dir = os.environ.get("SKILLS_DIR", "")
+            names = []
+            if skills_dir and os.path.isdir(skills_dir):
+                for entry in sorted(os.listdir(skills_dir)):
+                    if os.path.isfile(os.path.join(skills_dir, entry, "SKILL.md")):
+                        names.append(entry)
+            self._send(200, {"skills": names})
         else:
             self._send(404, {"error": "not found"})
 
