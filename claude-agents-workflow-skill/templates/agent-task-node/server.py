@@ -1655,6 +1655,21 @@ def _gen_journeys(payload):
             diff = ""
     if not (srs or diff):
         return None
+    # 以人為本 (Phase B): journey generation runs under arcana-journey-test-skill —
+    # persona WORK CHAINS across features with endpoint-state acceptance, not just
+    # single-screen reachability. Mutating goals are produced ONLY when
+    # JOURNEY_MUTATE=1 (isolated API_TARGET; the preview's /api proxies to a REAL
+    # backend by default, and mutating real data is never acceptable).
+    gen_payload = dict(payload)
+    gen_payload["ai_skill"] = "arcana-journey-test-skill"
+    mutate = os.environ.get("JOURNEY_MUTATE", "") == "1"
+    mutate_note = (
+        "MUTATION MODE IS ON (isolated stack): goals may really press submit/approve and MUST "
+        "assert the endpoint state (success toast / list gains a row / status change) — not seeing "
+        "it = BLOCKED.\n" if mutate else
+        "CRITICAL — NON-MUTATING: each goal MUST end at 'confirm the <action control> is present "
+        "and reachable (do NOT press it)'. Reaching the point where the user COULD act is the "
+        "pass.\n")
     prompt = (
         "You define GOAL-DIRECTED user journeys for a UI walkthrough gate. The gate drives a LIVE "
         "preview of the app (already logged in as admin) toward each goal and FAILS the journey if the "
@@ -1663,11 +1678,11 @@ def _gen_journeys(payload):
         "The feature's code (PR diff — routes come from app.routes.ts changes, personas/actions from "
         "the new templates):\n" + (diff or "(none)") + "\n\n"
         "Define 1-3 journeys for the feature's PRIMARY user task(s). Each = one persona completing one "
-        "real task.\n"
-        "CRITICAL — NON-MUTATING: each goal MUST end at 'confirm the <action button / decision panel> "
-        "is present and reachable (do NOT press it)', NEVER 'submit / approve / delete / start it'. "
-        "Reaching the point where the user COULD act is the pass; a page that renders but exposes no "
-        "such control is exactly the FAIL to catch (rendered != actionable).\n"
+        "real WORK CHAIN (multi-screen numbered steps are welcome — follow your skill's chain "
+        "library, trimmed to what this PR touches).\n"
+        + mutate_note +
+        "Every goal also appends the 以人為本 observation clause from your skill (system words / "
+        "fake data / dead buttons / inhuman error copy => finding).\n"
         "Each journey: persona (a role this app serves — prefer one of: "
         + "/".join(_load_profile(payload).get("personas") or ["使用者"]) + "), goal (zh, one concrete task "
         "ending at a reachable control, include '不要真的按下'), start (the route from the diff, e.g. /todo).\n"
@@ -1681,7 +1696,7 @@ def _gen_journeys(payload):
                              "required": ["persona", "goal", "start"]}}},
                          "required": ["journeys"]})
     try:
-        out = _invoke_claude(prompt, schema, payload, wall=300)
+        out = _invoke_claude(prompt, schema, gen_payload, wall=420)
         js = [j for j in ((out or {}).get("journeys") or []) if j.get("goal") and j.get("start")][:3]
         return json.dumps(js, ensure_ascii=False) if js else None
     except Exception as e:
