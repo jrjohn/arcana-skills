@@ -676,8 +676,13 @@ def _skill_flags(payload):
     # merged file is deterministic. Listed order = precedence order.
     merged = os.path.join(tempfile.gettempdir(), "skills-%s.md" % hashlib.sha256(
         ",".join(names).encode()).hexdigest()[:12])
-    with open(merged, "w", encoding="utf-8") as f:
+    # Atomic publish: concurrent tasks with the same skill set share this path, and a
+    # plain truncate-write could hand a parallel `claude` process a half-written file.
+    # Write to a unique sibling then os.replace() — readers see old or new, never torn.
+    tmp = merged + ".%d.tmp" % os.getpid()
+    with open(tmp, "w", encoding="utf-8") as f:
         f.write("\n\n".join(parts))
+    os.replace(tmp, merged)
     flags = ["--append-system-prompt-file", merged]
     for d in dirs:
         flags += ["--add-dir", d]
