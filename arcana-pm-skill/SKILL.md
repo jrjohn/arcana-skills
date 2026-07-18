@@ -47,6 +47,23 @@ curl -s -u "$SONARQUBE_TOKEN:" "$SONAR_HOST_URL/api/measures/component?component
 ```
 If the hard bars are not met → **NOGO(quality)** with the failing bar named. Never GO on unverified quality.
 
+## 以人為本 — the FIRST rubric (before any visual rule)
+
+Every GO/NOGO judgement starts with four human-centered questions (John, 2026-07-18).
+If any answer is "no", that is a finding — cite the screen and the words on it:
+
+1. **語彙 / Language** — does the screen speak the USER's words, not system words?
+   (「待辦事項」 not "pending human tasks"; 「審核中心」 not "approvals inbox". A label
+   an employee wouldn't say out loud to a colleague is a finding.)
+2. **動線 / Flow-of-the-day** — does it meet the user at their moment? Where did they
+   come from, what do they do here, where do they go next? A screen that needs a
+   manual ("then go to X and apply it yourself") is a finding — link the action.
+3. **負荷 / Cognitive load** — one job one entry point; everything visible is usable
+   (no disabled admin panels rendered at employees, no mock data, no dead buttons —
+   寧可沒有,不可是假的).
+4. **寬容 / Forgiveness** — errors in human words, actions reversible or confirmed,
+   state always visible (loading/empty/error all designed).
+
 ## The five dimensions (the manager's requirement)
 
 Gather evidence with tools — `gh pr diff <prUrl>` for the actual change, the SRS
@@ -54,9 +71,16 @@ Gather evidence with tools — `gh pr diff <prUrl>` for the actual change, the S
 plus the APIs above. Judge each; a single failed dimension → NOGO (or HOLD if it
 needs a human).
 
-1. **①符合人使用 / Usability** — for user-facing features, audit the built UI in the PR diff against the **UX AUDIT RUBRIC** below and `data.uiuxSpec`. You *can* catch objective UX violations — do not punt them to a human. Only genuinely subjective/brand/aesthetic calls → HOLD.
+1. **①符合人使用 / Usability** — for user-facing features, audit the built UI in the PR diff against the **以人為本 rubric above**, the **UX AUDIT RUBRIC** below and `data.uiuxSpec`. You *can* catch objective UX violations — do not punt them to a human. Only genuinely subjective/brand/aesthetic calls → HOLD.
+   **Machine-gate acceptance lines** (read them from `data.testReport` — they are facts, not opinions):
+   - `tokenLintRegressions` non-empty → NOGO (new raw hex/px styling outside the design tokens).
+   - `i18nLintRegressions` non-empty → NOGO (new hardcoded CJK a translate pipe can never reach).
+   - `uiuxFindings` now carry a `bp` tag (375/768/1280) — a fail at ANY breakpoint counts; do not excuse mobile breakage as "desktop looks fine".
+   - `journeyFindings` remain the highest-priority NOGO (renders ≠ actionable).
 2. **②功能是否遺漏 / Completeness** — every SRS acceptance criterion (AC-1..N) must be traceable to code + a test in the PR diff. List any AC with no implementation/test → NOGO with the exact missing ACs.
-3. **③是否符合設計 / Design conformance** — the PR's structure follows the SDD's layers/approach; arch-qube green already enforces architecture. Flag deviations from the agreed design.
+3. **③是否符合設計 / Design conformance** — TWO tracks, both required:
+   - **Architecture**: the PR's structure follows the SDD's layers/approach; arch-qube green already enforces this. Flag deviations from the agreed design.
+   - **Visual design system**: new UI must compose EXISTING shared components and design tokens (`var(--…)`), not reinvent an inbox/list/panel or hand-roll colors/spacing — `tokenLintTotal` rising or a fresh one-off component where a shared one exists is a conformance finding, exactly like an architecture violation.
 4. **④時程 / Schedule** — sanity-check cycle time / that the flow is not stuck. (If eval APIs are wired: `GET $REST/api/v1/evaluation/summary`, `GET $REST/api/v1/definitions/` for errored/suspended. If not reachable, note "schedule not measured".)
 5. **⑤滿足經理要求 / Goal-fit** — does this advance the manager's north-star goal? (If wired: `GET $REST/api/v1/evolution/objective/<processId>` for the weighted objective; compare metrics via `objective_score`. Otherwise judge qualitatively: does the delivered feature actually solve the requirement in `data.srs` / the manager's goal, not a hollow shell?)
 6. **⑥跨功能 / Cross-feature (only when `data.siblings` is non-empty)** — you are one countersigner among many for a shared initiative; **read the other sign-offs**. `data.siblings` lists the other features of this backlog, each with its `verdict`/`state`. Judge:
@@ -122,10 +146,18 @@ feature backlog** — the set of features that, once each is built, fulfil the g
 feature becomes one child `sdlc-code-flow` run.
 
 Rules:
+- **IA first (功能樹意識)** — BEFORE slicing features, sketch the target FEATURE TREE:
+  which screens/nav entries exist after the goal is met, which personas use each, and
+  where each new capability LIVES in that tree. When `data` carries an APP NAVIGATION
+  MAP or an IA decision doc, treat it as the authority. Never emit a feature that adds
+  a second entry point for a job an existing screen already owns — emit a CONSOLIDATION
+  feature instead ("merge X into Y") . IA decisions themselves (merging/renaming/
+  deleting screens) are their own features, sliced whole — never split one IA decision
+  across features.
 - **Coverage** — enumerate the functional areas the goal implies; don't miss obvious ones (for a "complete X manager" goal, think through the full CRUD + lifecycle + views a real user needs).
 - **Granularity** — one feature = one independently-deliverable, independently-testable capability (roughly one PR's worth). Not so fine it's a single button; not so coarse it's the whole product. No two features overlapping in scope.
 - **Priority** — order by user value + dependency (foundational features first).
-- **Per feature emit**: `feature_request` (ONE concrete sentence an SA can analyse — the user-facing capability + primary interaction), `slug` (kebab-case unique id), `uiFacing` ("true" if it has a user-facing UI, else "false"), `priority` (1 = highest).
+- **Per feature emit**: `feature_request` (ONE concrete sentence an SA can analyse — the user-facing capability + primary interaction), `slug` (kebab-case unique id), `uiFacing` ("true" ONLY if it renders user-facing UI — a backend/API/gate feature is "false"; when unsure say "false", the reviewer will bounce a mislabel), `priority` (1 = highest).
 - Propose the FULL set; the fan-out step dedups against already-running features and caps how many start — you do not need to check what exists.
 
 Output strictly `{ "features": [ { "feature_request", "slug", "uiFacing", "priority" }, ... ] }`. No prose.

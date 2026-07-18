@@ -116,6 +116,23 @@ Verify after wiring: `npm run build && npm run test -- --watch=false --browsers=
 
 ---
 
+## 🎯 Product-Quality Rules(產品級 UI — machine-gated,違反會被 run-test 硬閘擋下)
+
+以人為本(最高原則):畫面用使用者的話(員工語彙,如「待辦事項」「審核中心」),
+動線接續使用者當下任務,看得到的都是可用的(不渲染 disabled 的整塊管理區、不留假資料/死按鈕)。
+
+1. **共享元件優先** — loading 用 busy-overlay;頁頭用 page-header;空/載入/錯誤三態用
+   skeleton/empty/error 三件套;錯誤提示走共用 toast/error 服務。**不准再發明** inbox/
+   list/panel/spinner 的第二個版本;缺共享元件時先建在 `presentation/shared/` 再用。
+2. **Design tokens** — scss 一律 `var(--…)`(`_tokens.scss` 為唯一源)。裸 hex/px 會被
+   **token-lint 回歸閘**(e2e/token-lint.mjs)直接 FAIL — 寫之前想 token 名。
+3. **i18n** — 模板不寫死中文;一律 `| translate` + 在 i18n.service 補 zh-TW/en 兩份 key。
+   新硬編碼 CJK 行會被 **i18n-lint 回歸閘** FAIL。
+4. **斷點** — 375/768/1280 三寬都要能用(多欄→摺疊/抽屜;寬表→容器內橫捲,頁面本身
+   永不橫捲)。uiux-review 三斷點都會量,任一斷點 FAIL 即擋。
+5. **a11y 最低線** — 可互動控件都有可及名稱(aria-label/labelledby)、動態回饋區
+   aria-live、目標尺寸 ≥40px、鍵盤可達。
+
 ## Rules Priority
 
 ### 🔴 CRITICAL (Must Fix Immediately)

@@ -16,6 +16,35 @@ description: |
 
 ---
 
+## 🎯 MODE: Product uiuxSpec(sdlc-code-flow 的 uiux 節點用 — 與原型產生器互斥)
+
+當呼叫方要的是精簡 `uiuxSpec`(如 sdlc-code-flow 的 uiux 節點,明示不跑 Phase-3
+出圖/DOCX pipeline)時,**跳過本檔全部 MANDATORY 原型驗證**,改交付「可被機器閘驗收
+的產品設計 spec」。此模式的第一原則是**以人為本**(John 2026-07-18 定):
+
+0. **以人為本四問**先於一切視覺規則 — 語彙(用使用者的話,員工聽得懂:「待辦事項」
+   不是 "pending tasks")、動線(從哪來/做什麼/去哪)、負荷(一個 job 一個入口,
+   看得到的都是可用的)、寬容(錯誤講人話、可回復、三態齊全)。
+
+spec 必含六節,每節都要「可驗收」(對應 run-test 的機器閘,不是形容詞):
+1. **元件指定** — 指名要複用的既有共享元件(busy-overlay/page-header/skeleton-empty-
+   error 三件套/toast 服務/既有 table+search+pagination pattern)。禁止發明第二個
+   inbox/list/panel;若真無現成元件,明說「新增共享元件 X 並落在 presentation/shared/」。
+2. **Token 引用** — 顏色/間距/字階一律 `var(--…)`(來源 `_tokens.scss`);spec 裡不准
+   出現裸 hex/px(token-lint 回歸閘會擋)。
+3. **三態+文案** — loading/empty/error 各自的呈現與**人話文案**(zh-TW+en 皆給,
+   i18n key 命名跟現有 namespace;新硬編碼中文會被 i18n-lint 擋)。
+4. **斷點行為** — 375/768/1280 三寬各自的版面策略(欄數摺疊/抽屜化/表格橫捲容器);
+   uiux-review 三斷點都會量。
+5. **a11y 條款** — 可聚焦控件的 aria 名稱、鍵盤路徑、對比要求(WCAG AA 具體值)。
+6. **驗收旅程** — 1-2 條 persona 旅程(起點路由→目標動作),journey-walk 可直接執行。
+
+Nielsen 10 heuristics 作為自查表(可見狀態/貼近真實/使用者控制/一致/防錯/辨識優於
+回憶/彈性/極簡/錯誤恢復/求助)。輸出仍受呼叫方 schema 約束;此模式下本節優先於
+下方所有 CRITICAL/MANDATORY 規則。
+
+---
+
 ## 與 app-requirements-skill 整合
 
 ```
