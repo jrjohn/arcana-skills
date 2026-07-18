@@ -183,6 +183,15 @@ Phase 4: Document Completion Phase (One-time Generation)
 
 ## Mandatory Rules
 
+⚠️ **AC Verifiability Rule (BLOCKING — every SRS acceptance criterion)**
+```
+每條 AC 必須是「可觀察斷言」,禁止散文式 AC。
+```
+- [ ] 形式限兩種:**Given/When/Then**,或**端點狀態**(「做了 X 之後,在 <畫面/API 路徑> 應可觀察到 Y」)
+- [ ] 每條 AC 必須指名**在哪裡觀察**(UI 路由或 API 路徑)與**觀察到什麼**(具體可比對的狀態/文案/欄位)
+- [ ] 理由:下游 test 節點會把 AC 自動翻成可執行測項(UI→journey 走查;非 UI→GET 端點斷言)— 散文式 AC 翻不成測項,等於不可驗收
+- [ ] 自檢:寫完每條 AC 問「一個腳本能只靠這句話判 pass/fail 嗎?」不能 → 重寫
+
 ⚠️ **Phase 0 Rules (BLOCKING - Highest Priority) - Step 0**
 ```
 ⚠️ Requirements interview must be completed before writing any documents

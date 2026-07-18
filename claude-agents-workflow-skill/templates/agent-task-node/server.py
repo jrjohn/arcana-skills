@@ -1736,6 +1736,64 @@ def _gen_journeys(payload):
         return None
 
 
+def _gen_api_checks(payload):
+    """AC→API acceptance for NON-UI features (uiFacing=false) — the counterpart of
+    _gen_journeys: derive up to 6 GET-only endpoint-state checks from the SRS ACs + PR
+    diff, executed deterministically by the runner's api-checks.mjs against the real
+    read-API. Each check asserts an OBSERVABLE state (status + optional stable response
+    substring), so a backend AC is verified by execution, not only by implement's own
+    unit tests. Non-mutating by construction (GET /api/* only). Returns a JSON-array
+    string, or None to skip (UI feature / no source)."""
+    if str(payload.get("uiFacing", "")).strip().lower() in ("true", "1", "yes"):
+        return None  # UI feature → the journey gate owns acceptance
+    srs = payload.get("srs") or ""
+    if isinstance(srs, (dict, list)):
+        srs = json.dumps(srs, ensure_ascii=False)
+    url, _ = _pr_url_and_branch(payload)
+    diff = ""
+    if url:
+        try:
+            diff = (subprocess.run(["gh", "pr", "diff", url], capture_output=True, text=True,
+                                   timeout=90).stdout or "")[:12000]
+        except Exception:
+            diff = ""
+    if not (srs or diff):
+        return None
+    prompt = (
+        "You define API-level ACCEPTANCE CHECKS for a backend feature. A deterministic runner "
+        "will log in as admin and execute each check with a plain GET against the real API, "
+        "asserting the HTTP status and (optionally) a stable substring of the response body.\n\n"
+        "Acceptance criteria (SRS):\n" + (srs or "(none)") + "\n\n"
+        "The feature's code (PR diff — real routes come from the router/controller changes):\n"
+        + (diff or "(none)") + "\n\n"
+        "Rules:\n"
+        "- Up to 6 checks covering the feature's PRIMARY ACs; fewer is fine.\n"
+        "- GET only, path MUST start with /api/ and MUST exist in the diff or be a known route — "
+        "NEVER invent paths; if an AC has no GET-observable state, skip it.\n"
+        "- expectContains: a SHORT stable substring (a JSON key like \"skills\" — never volatile "
+        "values like timestamps/ids).\n"
+        "- name: zh, states WHICH AC this check proves.\n"
+        "Output strictly JSON: {\"checks\":[{\"name\":\"...\",\"path\":\"/api/v1/...\","
+        "\"expectStatus\":200,\"expectContains\":\"...\"}]}. No prose."
+    )
+    schema = json.dumps({"type": "object", "additionalProperties": False,
+                         "properties": {"checks": {"type": "array", "items": {
+                             "type": "object", "additionalProperties": False,
+                             "properties": {"name": {"type": "string"}, "path": {"type": "string"},
+                                            "expectStatus": {"type": "integer"},
+                                            "expectContains": {"type": "string"}},
+                             "required": ["name", "path", "expectStatus"]}}},
+                         "required": ["checks"]})
+    try:
+        out = _invoke_claude(prompt, schema, dict(payload), wall=300)
+        cs = [c for c in ((out or {}).get("checks") or [])
+              if str(c.get("path", "")).startswith("/api/")][:6]
+        return json.dumps(cs, ensure_ascii=False) if cs else None
+    except Exception as e:
+        print("[agent-task-node] api-check GEN failed: %s — skipping AC-API gate" % e, flush=True)
+        return None
+
+
 def test_flow(payload):
     """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted docker.sock.
     T4: when a PR branch is known, the runner clones + builds it and serves a preview so e2e run
@@ -1783,6 +1841,9 @@ def test_flow(payload):
     jrn = _gen_journeys(payload)  # T4-3: goal-directed journeys for the walkthrough gate (UI features)
     if jrn:
         cmd += ["-e", "JOURNEYS_B64=" + base64.b64encode(jrn.encode()).decode()]
+    apc = _gen_api_checks(payload)  # AC→API acceptance (non-UI features)
+    if apc:
+        cmd += ["-e", "API_CHECKS_B64=" + base64.b64encode(apc.encode()).decode()]
     cmd.append(os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local"))
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=2400)

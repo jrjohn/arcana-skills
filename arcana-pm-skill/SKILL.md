@@ -77,6 +77,7 @@ needs a human).
    - `i18nLintRegressions` non-empty → NOGO (new hardcoded CJK a translate pipe can never reach).
    - `uiuxFindings` now carry a `bp` tag (375/768/1280) — a fail at ANY breakpoint counts; do not excuse mobile breakage as "desktop looks fine".
    - `journeyFindings` remain the highest-priority NOGO (renders ≠ actionable).
+   - `apiChecksFail` > 0 (non-UI features) → that AC is **unproven by execution** → NOGO naming the failed check, unless you can cite concrete evidence the CHECK itself is wrong (hallucinated path) — then record that as a finding instead of excusing the AC.
 2. **②功能是否遺漏 / Completeness** — every SRS acceptance criterion (AC-1..N) must be traceable to code + a test in the PR diff. List any AC with no implementation/test → NOGO with the exact missing ACs.
 3. **③是否符合設計 / Design conformance** — TWO tracks, both required:
    - **Architecture**: the PR's structure follows the SDD's layers/approach; arch-qube green already enforces this. Flag deviations from the agreed design.
