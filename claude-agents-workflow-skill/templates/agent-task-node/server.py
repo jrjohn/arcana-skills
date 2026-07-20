@@ -1824,6 +1824,209 @@ def _gen_api_checks(payload):
         return None
 
 
+
+
+# ── PR-built backend: stop testing a PR's frontend against somebody else's backend ──────────
+#
+# The preview has always proxied `/api` to the DEPLOYED read-API, so a PR that changed Rust was
+# invisible to every gate: journey, api-checks and the RBAC gates all talked to a backend that
+# did not contain the change under review. On 2026-07-20 that was 8 of 12 real defects — the
+# flow could write those fixes and could not verify a single one, while reporting green.
+#
+# So when a PR touches the backend, build ITS read-API and point the gates at that instead.
+#
+# Two deliberate limits, because the smallest thing that answers "is the PR's backend correct"
+# is much smaller than a full private stack:
+#   - only the read-API is rebuilt. The engine is BPMN compiled at image build and gated
+#     separately by maven; Kafka/data-index carry no PR code.
+#   - the database is a THROWAWAY COPY of the dev one (10 MB, ~0.1s to dump), not a fresh
+#     schema. Real data means the gates behave normally instead of failing on an empty org
+#     tree, and a copy means an unreviewed migration in the PR cannot touch the shared DB —
+#     which it would, since migrations run at startup.
+
+_PR_BACKEND_PATHS = ("arcana-cloud-rust/",)
+
+
+def _touches_backend(work, base, repo="", branch=""):
+    """Does this PR change backend code? `git diff --name-only` against the base ref.
+
+    A shallow clone has no base ref until it is fetched, and the first version of this silently
+    swallowed that failure and answered "no backend change" — so the expensive, correct path was
+    skipped and the run looked deliberately cheap instead of broken. When the diff cannot be
+    computed we now answer YES: paying for a build we might not need is recoverable, testing a
+    backend change against the deployed API while reporting green is not.
+    """
+    # Ask GitHub first: it knows the PR's file list without needing history the shallow clone
+    # does not have. `git` stays as the offline fallback.
+    if repo and branch:
+        r = subprocess.run(
+            ["gh", "api", f"repos/{repo}/pulls?head={repo.split('/')[0]}:{branch}&state=all",
+             "--jq", ".[0].number"], capture_output=True, text=True, timeout=90)
+        num = (r.stdout or "").strip()
+        if num.isdigit():
+            f = subprocess.run(["gh", "api", f"repos/{repo}/pulls/{num}/files", "--paginate",
+                                "--jq", ".[].filename"], capture_output=True, text=True, timeout=120)
+            if f.returncode == 0 and (f.stdout or "").strip():
+                return any(x.startswith(pref) for x in f.stdout.splitlines()
+                           for pref in _PR_BACKEND_PATHS)
+    subprocess.run(["git", "-C", work, "fetch", "--depth", "50", "origin", base],
+                   capture_output=True, timeout=300)
+    for ref in (f"origin/{base}", base):
+        r = subprocess.run(["git", "-C", work, "diff", "--name-only", f"{ref}...HEAD"],
+                           capture_output=True, text=True, timeout=60)
+        if r.returncode == 0 and (r.stdout or "").strip():
+            return any(f.startswith(p) for f in r.stdout.splitlines() for p in _PR_BACKEND_PATHS)
+    print("[agent-task-node] pr-backend: cannot diff against %s — assuming the backend changed"
+          % base, flush=True)
+    return True
+
+
+def _pg_exec(sql, db="postgres"):
+    return subprocess.run(
+        ["docker", "exec", os.environ.get("TEST_PG_CONTAINER", "aaf-kogito-pg"),
+         "psql", "-U", os.environ.get("TEST_PG_USER", "kogito"), "-d", db, "-tAc", sql],
+        capture_output=True, text=True, timeout=180)
+
+
+def _start_pr_backend(repo, branch, base, piid, net):
+    """Build the PR's read-API + give it a throwaway copy of the dev DB. Returns
+    `(api_target, teardown)`; `(None, teardown)` when it does not apply or could not be built.
+
+    Never raises: a backend preview that cannot be built must degrade to today's behaviour
+    (test against the deployed API) rather than fail the node for an infrastructure problem —
+    but it says WHICH happened, because a silently skipped isolation is how you end up
+    trusting a green that never exercised the change.
+    """
+    tag = piid[:12].lower() or "adhoc"
+    cname, dbname, image = f"aaf-pr-api-{tag}", f"arcana_pr_{tag}", f"aaf-pr-api:{tag}"
+    src = tempfile.mkdtemp(prefix="pr-backend-")
+    state = {"container": None, "db": None, "image": None, "src": src}
+
+    def teardown():
+        if state["container"]:
+            subprocess.run(["docker", "rm", "-f", state["container"]], capture_output=True, timeout=120)
+        if state["db"]:
+            _pg_exec(f'DROP DATABASE IF EXISTS "{state["db"]}" WITH (FORCE)')
+        if state["image"]:
+            subprocess.run(["docker", "rmi", "-f", state["image"]], capture_output=True, timeout=120)
+        shutil.rmtree(state["src"], ignore_errors=True)
+
+    try:
+        auth = ""
+        if os.environ.get("GH_TOKEN"):
+            auth = "x-access-token:" + os.environ["GH_TOKEN"] + "@"
+        clone = subprocess.run(
+            ["git", "clone", "--depth", "50", "--branch", branch,
+             f"https://{auth}github.com/{repo}", src],
+            capture_output=True, text=True, timeout=600)
+        if clone.returncode != 0:
+            print("[agent-task-node] " + "pr-backend: clone failed, falling back to the deployed API", flush=True)
+            return None, teardown
+        if not _touches_backend(src, base, repo, branch):
+            print("[agent-task-node] " + "pr-backend: PR does not touch the backend — deployed API is the right target", flush=True)
+            return None, teardown
+
+        print("[agent-task-node] " + "pr-backend: building the PR's read-API (this is the point — its own code, not the deployed one)", flush=True)
+        b = subprocess.run(
+            ["docker", "build", "-f", "Dockerfile.flow", "-t", image, "."],
+            cwd=os.path.join(src, "arcana-cloud-rust"), capture_output=True, text=True, timeout=3000)
+        if b.returncode != 0:
+            print("[agent-task-node] " + "pr-backend: BUILD FAILED — " + (b.stderr or "")[-400:], flush=True)
+            return "BUILD_FAILED", teardown
+        state["image"] = image
+
+        # Throwaway copy of the dev DB: real data, and migrations in the PR stay contained.
+        _pg_exec(f'DROP DATABASE IF EXISTS "{dbname}" WITH (FORCE)')
+        c = _pg_exec(f'CREATE DATABASE "{dbname}"')
+        if c.returncode != 0:
+            print("[agent-task-node] " + "pr-backend: could not create the throwaway DB — " + (c.stderr or "")[-200:], flush=True)
+            return None, teardown
+        state["db"] = dbname
+        pg = os.environ.get("TEST_PG_CONTAINER", "aaf-kogito-pg")
+        user = os.environ.get("TEST_PG_USER", "kogito")
+        subprocess.run(
+            ["docker", "exec", pg, "sh", "-c",
+             f'pg_dump -U {user} -d arcana | psql -q -U {user} -d "{dbname}"'],
+            capture_output=True, text=True, timeout=600)
+
+        # `docker create` + `docker cp` + `docker start`, not `-d -v`: this agent runs INSIDE a
+        # container, so a `-v` source path would be resolved on the docker HOST and silently mount
+        # nothing. `docker cp` streams from the client's own filesystem, so the PR's clone reaches
+        # the container. The BPMN dir is not optional — /definitions reads it, and without it the
+        # API answers `[]` for every flow, which looks like a working backend serving an empty
+        # system and would fail the gates for entirely the wrong reason.
+        # Names are deterministic, so a crash that skipped teardown would block every later run
+        # on this instance with a name conflict. Clear the corpse first.
+        subprocess.run(["docker", "rm", "-f", cname], capture_output=True, timeout=120)
+        run = subprocess.run(
+            ["docker", "create", "--name", cname, "--network", net,
+             "-e", f"ARCANA__DATABASE__URL=postgres://{user}:{user}@{pg}:5432/{dbname}",
+             "-e", f"DATAINDEX_PG=postgres://{user}:{user}@{pg}:5432/dataindex",
+             "-e", "ARCANA_ENVIRONMENT=production",
+             "-e", "ARCANA__REDIS__ENABLED=false",
+             "-e", "ARCANA__SECURITY__GRPC_TLS_ENABLED=false",
+             "-e", "ARCANA__SECURITY__JWT_SECRET=" + os.environ.get(
+                 "JWT_SECRET", "local-dev-jwt-secret-change-me-0123456789"),
+             "-e", "AUTH_MODE=ldap",
+             "-e", "LDAP_URL=ldap://aaf-openldap:389",
+             "-e", "LDAP_BASE_DN=dc=arcana,dc=local",
+             "-e", "LDAP_USER_BASE=ou=people,dc=arcana,dc=local",
+             "-e", "LDAP_GROUP_BASE=ou=groups,dc=arcana,dc=local",
+             "-e", "LDAP_BIND_DN=cn=admin,dc=arcana,dc=local",
+             "-e", "LDAP_BIND_PW=admin",
+             "-e", "DATA_INDEX_URL=http://aaf-data-index:8080",
+             "-e", "AGENT_TASK_URL=" + os.environ.get("AGENT_TASK_URL", "http://agent-task-node:8090"),
+             image],
+            capture_output=True, text=True, timeout=300)
+        if run.returncode != 0:
+            print("[agent-task-node] " + "pr-backend: container create failed — " + (run.stderr or "")[-300:], flush=True)
+            return None, teardown
+        state["container"] = cname
+        for sub in ("bpmn", "usage", "console"):
+            d = os.path.join(src, sub)
+            if os.path.isdir(d):
+                subprocess.run(["docker", "cp", d + "/.", f"{cname}:/app/{sub}"],
+                               capture_output=True, timeout=300)
+        st = subprocess.run(["docker", "start", cname], capture_output=True, text=True, timeout=120)
+        if st.returncode != 0:
+            print("[agent-task-node] " + "pr-backend: container failed to start — " + (st.stderr or "")[-300:], flush=True)
+            return None, teardown
+
+        target = f"http://{cname}:8080"
+        for _ in range(60):
+            probe = subprocess.run(
+                ["docker", "run", "--rm", "--network", net, "curlimages/curl:latest",
+                 "-sf", "-o", "/dev/null", f"{target}/api/v1/definitions"],
+                capture_output=True, timeout=60)
+            if probe.returncode == 0:
+                print("[agent-task-node] " + f"pr-backend: the PR's read-API is live at {target} — gates now test THIS code", flush=True)
+                return target, teardown
+            time.sleep(3)
+        # Built but will not run. Falling back to the deployed API here would recreate exactly the
+        # blindness this whole mechanism exists to remove — a green earned against code that is not
+        # the code under review. Stop, and hand over the startup log so a human can tell the two
+        # causes apart: the PR's backend is broken, or the throwaway DB carries migrations this
+        # branch does not have (it is a copy of the CURRENT dev DB, so a PR based on an older ref
+        # can legitimately be behind it).
+        logs = subprocess.run(["docker", "logs", "--tail", "30", cname],
+                              capture_output=True, text=True, timeout=120)
+        tail = ((logs.stderr or "") + (logs.stdout or "")).strip()[-600:]
+        if not tail:
+            # It can genuinely exit with nothing on either stream — observed with an older
+            # arcana-server. Saying "no output" plus the exit code beats an empty quote that
+            # reads like the log was lost.
+            code = subprocess.run(["docker", "inspect", cname, "--format", "{{.State.ExitCode}}"],
+                                  capture_output=True, text=True, timeout=60)
+            tail = ("the process exited with code %s and wrote nothing to stdout/stderr; "
+                    "reproduce with: docker run --rm --network %s %s"
+                    % ((code.stdout or "?").strip(), net, image))
+        print("[agent-task-node] pr-backend: read-API never became ready — " + tail, flush=True)
+        return "UNHEALTHY:" + tail, teardown
+    except Exception as e:
+        print("[agent-task-node] " + f"pr-backend: {type(e).__name__}: {e}", flush=True)
+        return None, teardown
+
+
 def test_flow(payload):
     """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted docker.sock.
     T4: when a PR branch is known, the runner clones + builds it and serves a preview so e2e run
@@ -1837,6 +2040,29 @@ def test_flow(payload):
     net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
     repo = payload.get("repo") or ""
     _, branch = _pr_url_and_branch(payload)
+    base = payload.get("base") or "main"
+    # A PR that changes the backend gets its OWN read-API built and pointed at; otherwise the
+    # deployed one stays the right target and nothing extra is paid. `teardown` runs in the
+    # finally below — a leaked container would poison every later run on this network.
+    api_target = os.environ.get("TEST_API_TARGET", "http://aaf-arcana-cloud-rust:8080")
+    pr_teardown = lambda: None
+    pr_backend_used = False
+    if repo and branch:
+        built, pr_teardown = _start_pr_backend(repo, branch, base, piid, net)
+        if isinstance(built, str) and built.startswith("UNHEALTHY:"):
+            pr_teardown()
+            return {"testReport": json.dumps({
+                "allPass": False, "total": 0, "passed": 0,
+                "reason": "PR backend built but would not start: " + built[len("UNHEALTHY:"):][-300:]})}
+        if built == "BUILD_FAILED":
+            # Unbuildable backend is a failing test, not a fallback: shipping it would break
+            # the deployed API, and testing the OLD one would report green for exactly that.
+            pr_teardown()
+            return {"testReport": json.dumps({
+                "allPass": False, "total": 0, "passed": 0,
+                "reason": "PR backend build FAILED (unbuildable backend code)"})}
+        if built:
+            api_target, pr_backend_used = built, True
     cmd = ["docker", "run", "--rm", "--network", net,
            # claude auth for the runner's AI semantic review step (uiux-ai-review.mjs): pass the
            # SAME long-lived OAuth token the agent uses (env, not a shared-home mount — the mount
@@ -1849,7 +2075,7 @@ def test_flow(payload):
            "-e", "MINIO_PASS=" + os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin"),
            "-e", "MINIO_BUCKET=arcana-attachments",
            "-e", "INSTANCE=" + piid,
-           "-e", "API_TARGET=" + os.environ.get("TEST_API_TARGET", "http://aaf-arcana-cloud-rust:8080")]
+           "-e", "API_TARGET=" + api_target]
     # C: per-app run-recipe from the Project Profile (defaults = dashboard, so aaf is unchanged). The
     # runner + journey/uiux mjs read these instead of hard-coding the dashboard build/port/login.
     _pf = _load_profile(payload)
@@ -1887,12 +2113,19 @@ def test_flow(payload):
         if line:
             rep = json.loads(line[len("TESTREPORT:"):])
             rep["featureTests"] = bool(gen)  # true = tested THIS feature; false = regression only
+            # Which backend answered matters as much as the result: a green earned against the
+            # DEPLOYED api says nothing about a PR that changed the backend, and the PM has to be
+            # able to tell those two greens apart.
+            rep["prBackendTested"] = pr_backend_used
             return rep
         tail = ((r.stderr or "") + (r.stdout or ""))[-400:]
         return {"allPass": False, "total": 0, "passed": 0,
                 "reason": "runner emitted no TESTREPORT (exit %s): %s" % (r.returncode, tail)}
     except Exception as e:
         return {"allPass": False, "total": 0, "passed": 0, "reason": "test runner invoke failed: %s" % e}
+    finally:
+        # Always: a leaked container/DB would poison every later run on this network.
+        pr_teardown()
 
 
 def uiux_audit_flow(payload):
