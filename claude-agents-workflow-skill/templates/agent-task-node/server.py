@@ -2030,6 +2030,58 @@ def _start_pr_backend(repo, branch, base, piid, net):
         return None, teardown
 
 
+
+
+def _post_commit_status(repo, branch, rep):
+    """Report the test node's verdict to GitHub as a commit status.
+
+    Jenkins never built this repo — no commit in its history has ever carried a status — so
+    `gh pr checks` had nothing to report and the green-PR automerge chain, which gates on
+    exactly that, could never fire. Ten PRs piled up behind a signal that was never sent.
+
+    The platform is already its own CI, and a stricter one than a build would be: it compiles
+    the PR's frontend AND backend, runs the lints, drives the UI, and walks whole business
+    chains as several people. All it was missing was telling GitHub.
+
+    The description carries what was NOT verified, not just the verdict. A green that
+    silently skipped the scenario walk, or ran against the deployed backend rather than the
+    PR's, is worth strictly less than one that did neither — and the person reading a single
+    line of check summary is exactly who needs to know which kind they are looking at.
+    """
+    if not repo or not branch:
+        return
+    try:
+        sha = subprocess.run(
+            ["gh", "api", f"repos/{repo}/commits/{branch}", "--jq", ".sha"],
+            capture_output=True, text=True, timeout=90).stdout.strip()
+        if not sha:
+            return
+        ok = bool(rep.get("allPass"))
+        caveats = []
+        if rep.get("staleGates"):
+            caveats.append("gates missing from runner")
+        if not rep.get("prBackendTested") and rep.get("prBackendApplicable"):
+            caveats.append("deployed backend, not the PR's")
+        if not rep.get("scenarioRan"):
+            caveats.append("no scenario walk")
+        if not rep.get("featureTests"):
+            caveats.append("regression only")
+        desc = "%s/%s testcases" % (rep.get("passed", 0), rep.get("total", 0))
+        if caveats:
+            desc += " — unverified: " + ", ".join(caveats)
+        subprocess.run(
+            ["gh", "api", "-X", "POST", f"repos/{repo}/statuses/{sha}",
+             "-f", "state=" + ("success" if ok else "failure"),
+             "-f", "context=arcana/sdlc-test",
+             "-f", "description=" + desc[:138]],
+            capture_output=True, timeout=90)
+        print("[agent-task-node] posted commit status arcana/sdlc-test=%s on %s: %s"
+              % ("success" if ok else "failure", sha[:8], desc), flush=True)
+    except Exception as e:
+        # Never let reporting break the node — the verdict itself is already computed.
+        print("[agent-task-node] commit status post failed: %s" % e, flush=True)
+
+
 def test_flow(payload):
     """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted docker.sock.
     T4: when a PR branch is known, the runner clones + builds it and serves a preview so e2e run
@@ -2050,6 +2102,9 @@ def test_flow(payload):
     api_target = os.environ.get("TEST_API_TARGET", "http://aaf-arcana-cloud-rust:8080")
     pr_teardown = lambda: None
     pr_backend_used = False
+    # Whether a PR-built backend was even APPLICABLE — a frontend-only PR that legitimately
+    # skipped it must not be reported as "unverified backend".
+    pr_backend_applicable = False
     if repo and branch:
         built, pr_teardown = _start_pr_backend(repo, branch, base, piid, net)
         if isinstance(built, str) and built.startswith("UNHEALTHY:"):
@@ -2066,6 +2121,7 @@ def test_flow(payload):
                 "reason": "PR backend build FAILED (unbuildable backend code)"})}
         if built:
             api_target, pr_backend_used = built, True
+            pr_backend_applicable = True
     cmd = ["docker", "run", "--rm", "--network", net,
            # claude auth for the runner's AI semantic review step (uiux-ai-review.mjs): pass the
            # SAME long-lived OAuth token the agent uses (env, not a shared-home mount — the mount
@@ -2122,10 +2178,14 @@ def test_flow(payload):
             # DEPLOYED api says nothing about a PR that changed the backend, and the PM has to be
             # able to tell those two greens apart.
             rep["prBackendTested"] = pr_backend_used
+            rep["prBackendApplicable"] = pr_backend_applicable
+            _post_commit_status(repo, branch, rep)
             return rep
         tail = ((r.stderr or "") + (r.stdout or ""))[-400:]
-        return {"allPass": False, "total": 0, "passed": 0,
-                "reason": "runner emitted no TESTREPORT (exit %s): %s" % (r.returncode, tail)}
+        bad = {"allPass": False, "total": 0, "passed": 0,
+               "reason": "runner emitted no TESTREPORT (exit %s): %s" % (r.returncode, tail)}
+        _post_commit_status(repo, branch, bad)
+        return bad
     except Exception as e:
         return {"allPass": False, "total": 0, "passed": 0, "reason": "test runner invoke failed: %s" % e}
     finally:
