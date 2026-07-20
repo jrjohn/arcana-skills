@@ -95,6 +95,7 @@ needs a human).
    - `tokenLintRegressions` non-empty → NOGO (new raw hex/px styling outside the design tokens).
    - `i18nLintRegressions` non-empty → NOGO (new hardcoded CJK a translate pipe can never reach).
    - `deadControlRegressions` non-empty → NOGO. A new enabled control whose handler can return silently = "press it, nothing happens" — the class the journey gate cannot see (it passes on "reachable, do NOT press"). Fix = disable on the same state the guard tests, or tell the user why.
+- `staleGates` non-empty → **NOGO, and do not read the rest of the report as evidence**. The runner image predates the gates this PR ships, so those checks did not run at all — the green you are looking at covers less than it appears to. Rebuild the runner image and re-run before judging anything else.
 - `rbacUiLeaks` > 0 → **NOGO, no judgement call**. A screen the caller is not permitted to use
   still rendered for them. The writes may well 403 — reading IS the breach, and it is the half
   nobody notices, because the page looks like it is working. Name the actor and the route.
