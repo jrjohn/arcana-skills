@@ -95,6 +95,12 @@ needs a human).
    - `tokenLintRegressions` non-empty → NOGO (new raw hex/px styling outside the design tokens).
    - `i18nLintRegressions` non-empty → NOGO (new hardcoded CJK a translate pipe can never reach).
    - `deadControlRegressions` non-empty → NOGO. A new enabled control whose handler can return silently = "press it, nothing happens" — the class the journey gate cannot see (it passes on "reachable, do NOT press"). Fix = disable on the same state the guard tests, or tell the user why.
+- `rbacUiLeaks` > 0 → **NOGO, no judgement call**. A screen the caller is not permitted to use
+  still rendered for them. The writes may well 403 — reading IS the breach, and it is the half
+  nobody notices, because the page looks like it is working. Name the actor and the route.
+- `rbacUiFail` > 0 with no leaks → still NOGO, but say which direction: a control offered to
+  someone who cannot use it (dead door, bounces with no explanation), or a control withheld
+  from someone who can (they simply cannot find the feature). Both are real; neither is cosmetic.
    - `uiuxFindings` now carry a `bp` tag (375/768/1280) — a fail at ANY breakpoint counts; do not excuse mobile breakage as "desktop looks fine".
    - `journeyFindings` remain the highest-priority NOGO (renders ≠ actionable).
    - `apiChecksFail` > 0 (non-UI features) → that AC is **unproven by execution** → NOGO naming the failed check, unless you can cite concrete evidence the CHECK itself is wrong (hallucinated path) — then record that as a finding instead of excusing the AC.

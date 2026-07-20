@@ -481,7 +481,11 @@ _PROFILE_DEFAULTS = {
     "app": {"appDir": "dashboard", "buildCmd": "npm run build", "distGlob": "dist"},
     "run": {"previewPort": 8087, "apiTarget": "http://aaf-arcana-cloud-rust:8080"},
     "auth": {"user": "boss", "pass": "pw", "usernameSelector": "#login-username",
-             "passwordSelector": "#login-password"},
+             "passwordSelector": "#login-password",
+             # RBAC UI gate: needs >=2 personas with DIFFERENT permissions, because every
+             # assertion it makes is about the DIFFERENCE between them (an admin alone
+             # proves nothing about what a plain employee is offered). Empty disables it.
+             "rbacActors": "boss:pw,lin:pw,wang:pw"},
     "nav": {"navPath": "dashboard/src/app/core/navigation/nav.config.ts",
             "routesPath": "dashboard/src/app/app.routes.ts"},
     "personas": ["簽核者", "申請人", "管理員"],
@@ -1855,7 +1859,12 @@ def test_flow(payload):
             "-e", "UIUX_USER=" + str(_pf["auth"].get("user", "boss")),
             "-e", "UIUX_PASS=" + str(_pf["auth"].get("pass", "pw")),
             "-e", "JW_USER=" + str(_pf["auth"].get("user", "boss")),
-            "-e", "JW_PASS=" + str(_pf["auth"].get("pass", "pw"))]
+            "-e", "JW_PASS=" + str(_pf["auth"].get("pass", "pw")),
+            # The screen->function map is parsed from the app's OWN nav config (already in the
+            # profile), so the gate follows a renamed/moved guard instead of restating it.
+            "-e", "RBACUI_ACTORS=" + str(_pf["auth"].get("rbacActors", "")),
+            "-e", "RBACUI_NAV_CONFIG=/work/repo/" + str(_pf["nav"].get(
+                "navPath", "dashboard/src/app/core/navigation/nav.config.ts"))]
     if repo and branch:  # T4-1: build the PR branch and test its real code
         cmd += ["-e", "REPO=" + repo, "-e", "BRANCH=" + branch,
                 "-e", "GH_TOKEN=" + os.environ.get("GH_TOKEN", "")]
