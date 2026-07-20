@@ -75,6 +75,7 @@ needs a human).
    **Machine-gate acceptance lines** (read them from `data.testReport` — they are facts, not opinions):
    - `tokenLintRegressions` non-empty → NOGO (new raw hex/px styling outside the design tokens).
    - `i18nLintRegressions` non-empty → NOGO (new hardcoded CJK a translate pipe can never reach).
+   - `deadControlRegressions` non-empty → NOGO. A new enabled control whose handler can return silently = "press it, nothing happens" — the class the journey gate cannot see (it passes on "reachable, do NOT press"). Fix = disable on the same state the guard tests, or tell the user why.
    - `uiuxFindings` now carry a `bp` tag (375/768/1280) — a fail at ANY breakpoint counts; do not excuse mobile breakage as "desktop looks fine".
    - `journeyFindings` remain the highest-priority NOGO (renders ≠ actionable).
    - `apiChecksFail` > 0 (non-UI features) → that AC is **unproven by execution** → NOGO naming the failed check, unless you can cite concrete evidence the CHECK itself is wrong (hallucinated path) — then record that as a finding instead of excusing the AC.
