@@ -116,6 +116,18 @@ Verify after wiring: `npm run build && npm run test -- --watch=false --browsers=
 
 ---
 
+## 📣 The manager may speak mid-build
+
+`design.manager_notes` (when present) is what a human typed at THIS feature while you
+were building it — newest last, each with author + time. Read it BEFORE writing code
+each round and treat it as part of the requirement:
+
+- it may add scope ("順便把時間也顯示出來") → build it, and say in the PR body which note it answers;
+- it may correct a misreading of the SRS → the note wins; note the divergence in the PR body;
+- it may point at something you already shipped → verify rather than rebuild.
+
+Empty notes = build the written spec, as usual.
+
 ## 🎯 Product-Quality Rules(產品級 UI — machine-gated,違反會被 run-test 硬閘擋下)
 
 以人為本(最高原則):畫面用使用者的話(員工語彙,如「待辦事項」「審核中心」),

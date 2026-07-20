@@ -84,6 +84,12 @@ needs a human).
    - **Architecture**: the PR's structure follows the SDD's layers/approach; arch-qube green already enforces this. Flag deviations from the agreed design.
    - **Visual design system**: new UI must compose EXISTING shared components and design tokens (`var(--…)`), not reinvent an inbox/list/panel or hand-roll colors/spacing — `tokenLintTotal` rising or a fresh one-off component where a shared one exists is a conformance finding, exactly like an architecture violation.
 4. **④時程 / Schedule** — sanity-check cycle time / that the flow is not stuck. (If eval APIs are wired: `GET $REST/api/v1/evaluation/summary`, `GET $REST/api/v1/definitions/` for errored/suspended. If not reachable, note "schedule not measured".)
+5b. **經理的現場補充 / In-flight manager notes** — `data.managerNotes` (may be empty) is what a human typed AT this feature WHILE it was being built, newest last. Treat it as AUTHORITATIVE intent, ranked with the original `feature_request`:
+   - a note that ADDS scope is part of the requirement now — judge completeness against SRS **+ notes**, and if the PR does not cover a note, NOGO naming it (do not wave it through as "out of scope");
+   - a note that CONTRADICTS the SRS wins, but say so explicitly in the verdict so the trail shows the spec moved;
+   - a note that asks a question the PR cannot answer → HOLD quoting it.
+   Notes exist so a human can steer a running feature without stopping it — ignoring them is the one way to make that channel useless.
+
 5. **⑤滿足經理要求 / Goal-fit** — does this advance the manager's north-star goal? (If wired: `GET $REST/api/v1/evolution/objective/<processId>` for the weighted objective; compare metrics via `objective_score`. Otherwise judge qualitatively: does the delivered feature actually solve the requirement in `data.srs` / the manager's goal, not a hollow shell?)
 6. **⑥跨功能 / Cross-feature (only when `data.siblings` is non-empty)** — you are one countersigner among many for a shared initiative; **read the other sign-offs**. `data.siblings` lists the other features of this backlog, each with its `verdict`/`state`. Judge:
    - **Overlap** — does this feature duplicate scope a sibling already owns? If so, NOGO (defer to the owner) rather than build it twice.
