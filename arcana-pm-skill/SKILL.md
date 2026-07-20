@@ -95,6 +95,8 @@ needs a human).
    - `tokenLintRegressions` non-empty → NOGO (new raw hex/px styling outside the design tokens).
    - `i18nLintRegressions` non-empty → NOGO (new hardcoded CJK a translate pipe can never reach).
    - `deadControlRegressions` non-empty → NOGO. A new enabled control whose handler can return silently = "press it, nothing happens" — the class the journey gate cannot see (it passes on "reachable, do NOT press"). Fix = disable on the same state the guard tests, or tell the user why.
+- `scenarioFail` > 0 → **NOGO**. A business chain no longer completes end to end: name the scenario and the first failing step, because the step that fails is rarely the step that broke. `scenarioRan` false means it was SKIPPED (no PR-built backend to mutate safely) — that is not a pass, and a feature touching approvals or permissions should not ship on it.
+- `castProblems` non-empty → the harness could not seat its actors (missing account, no Postgres role). Fix the fixture; do not read the absent scenario result as green.
 - `prBackendTested` **false on a PR that changed the backend** → the gates ran against the DEPLOYED API, so nothing here is evidence about the change under review. Say so in the verdict instead of counting the green: this is the same shape as a stale runner, one layer down. True means the PR's own read-API was built and served every gate.
 - `staleGates` non-empty → **NOGO, and do not read the rest of the report as evidence**. The runner image predates the gates this PR ships, so those checks did not run at all — the green you are looking at covers less than it appears to. Rebuild the runner image and re-run before judging anything else.
 - `rbacUiLeaks` > 0 → **NOGO, no judgement call**. A screen the caller is not permitted to use

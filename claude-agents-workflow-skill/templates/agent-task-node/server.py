@@ -485,7 +485,10 @@ _PROFILE_DEFAULTS = {
              # RBAC UI gate: needs >=2 personas with DIFFERENT permissions, because every
              # assertion it makes is about the DIFFERENCE between them (an admin alone
              # proves nothing about what a plain employee is offered). Empty disables it.
-             "rbacActors": "boss:pw,lin:pw,wang:pw"},
+             "rbacActors": "boss:pw,lin:pw,wang:pw",
+             # scenario-walk casts by ROLE, because a business chain is about handing state
+             # between identities. Empty disables it.
+             "scenarioActors": '{"employee":"wang:pw","manager":"lin:pw","admin":"boss:pw"}'},
     "nav": {"navPath": "dashboard/src/app/core/navigation/nav.config.ts",
             "routesPath": "dashboard/src/app/app.routes.ts"},
     "personas": ["簽核者", "申請人", "管理員"],
@@ -2089,6 +2092,8 @@ def test_flow(payload):
             # The screen->function map is parsed from the app's OWN nav config (already in the
             # profile), so the gate follows a renamed/moved guard instead of restating it.
             "-e", "RBACUI_ACTORS=" + str(_pf["auth"].get("rbacActors", "")),
+            # Only meaningful with a PR-built backend; the harness itself refuses a shared API.
+            "-e", "SW_ACTORS=" + (str(_pf["auth"].get("scenarioActors", "")) if pr_backend_used else ""),
             "-e", "RBACUI_NAV_CONFIG=/work/repo/" + str(_pf["nav"].get(
                 "navPath", "dashboard/src/app/core/navigation/nav.config.ts"))]
     if repo and branch:  # T4-1: build the PR branch and test its real code
