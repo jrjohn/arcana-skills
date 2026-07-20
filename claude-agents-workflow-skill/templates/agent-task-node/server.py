@@ -1685,7 +1685,15 @@ def _api_grounding_block(payload):
         "\n\nAPI GROUNDING — these are the ONLY endpoint paths this application calls, read from "
         "its own repository layer. If an assertion needs an API, use one of these VERBATIM; do "
         "not shorten, re-nest or invent a variant, and do not write a 'try several candidates' "
-        "loop — a probe that guesses reports the product broken when only the guess was:\n  "
+        "loop — a probe that guesses reports the product broken when only the guess was.\n"
+        "Call them ONLY through the injected `api(path)` helper, never `page.request.*` directly: "
+        "this app holds its token in localStorage and attaches it with an interceptor, so a raw "
+        "request carries no Authorization header and every protected endpoint answers 401 — a "
+        "failure the test causes and then blames on the product.\n"
+        "Assert on the STATUS CODE, and on a response field ONLY if that exact field name appears "
+        "in the diff or SRS. Do not infer one from the endpoint's name — a check that expects "
+        "`permissions` from an endpoint returning `functions` fails a working API and reads as a "
+        "product defect.\n  "
         + "\n  ".join(paths[:60])
     )
 
