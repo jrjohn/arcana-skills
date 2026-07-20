@@ -64,6 +64,25 @@ If any answer is "no", that is a finding — cite the screen and the words on it
 4. **寬容 / Forgiveness** — errors in human words, actions reversible or confirmed,
    state always visible (loading/empty/error all designed).
 
+## 🔒 長工作三條(節點契約 — 出自 COR/AFP/NTP,只取最小可用版)
+
+長流程的失效不是「AI 不夠聰明」,是**它在殘缺輸入上很有信心地產出了東西**(2026-07-19 實證:
+decompose 的 prompt 被截斷、`goal` 整段消失,它照樣交出一份 backlog,連燒兩輪)。三條規則,
+每一條都必須做到:
+
+1. **進場自檢** — 動工前逐項確認需要的輸入都在且完整(空值、佔位字串、被截斷的 JSON、
+   「(none)」都算不完整)。缺 → **停下並點名缺哪一項**,不要猜、不要用預設值填補、
+   不要「先做能做的部分」。這是唯一能在三十分鐘前停損的機制。
+2. **出場驗收** — 交付前用**可觀察條件**自檢:下一棒需要的每一項我都產出了嗎?格式合法嗎?
+   引用得到嗎?沒過就修到過再交,不要把驗證外包給下游。
+3. **交接摘要** — 輸出最後附一份 ≤20 行的 `handoff`:**完成什麼 / 關鍵決定與理由 /
+   下一棒要注意什麼**。context 被壓縮或換人接手時,靠它復原的是「為什麼這樣做」——
+   那正是壓縮最先丟掉的東西。
+
+**本 skill 的具體對照**:進場=`data.srs` / `data.testReport` / PR URL 缺任一項就先講明
+「這一輪判不了什麼」再判(不要用猜的填補證據);出場=每個維度都有引證來源;
+交接=verdict 之外附 handoff,寫清「這輪確認過什麼、下一輪不必重驗什麼」。
+
 ## The five dimensions (the manager's requirement)
 
 Gather evidence with tools — `gh pr diff <prUrl>` for the actual change, the SRS

@@ -128,6 +128,25 @@ each round and treat it as part of the requirement:
 
 Empty notes = build the written spec, as usual.
 
+## 🔒 長工作三條(節點契約 — 出自 COR/AFP/NTP,只取最小可用版)
+
+長流程的失效不是「AI 不夠聰明」,是**它在殘缺輸入上很有信心地產出了東西**(2026-07-19 實證:
+decompose 的 prompt 被截斷、`goal` 整段消失,它照樣交出一份 backlog,連燒兩輪)。三條規則,
+每一條都必須做到:
+
+1. **進場自檢** — 動工前逐項確認需要的輸入都在且完整(空值、佔位字串、被截斷的 JSON、
+   「(none)」都算不完整)。缺 → **停下並點名缺哪一項**,不要猜、不要用預設值填補、
+   不要「先做能做的部分」。這是唯一能在三十分鐘前停損的機制。
+2. **出場驗收** — 交付前用**可觀察條件**自檢:下一棒需要的每一項我都產出了嗎?格式合法嗎?
+   引用得到嗎?沒過就修到過再交,不要把驗證外包給下游。
+3. **交接摘要** — 輸出最後附一份 ≤20 行的 `handoff`:**完成什麼 / 關鍵決定與理由 /
+   下一棒要注意什麼**。context 被壓縮或換人接手時,靠它復原的是「為什麼這樣做」——
+   那正是壓縮最先丟掉的東西。
+
+**本 skill 的具體對照**:進場=SRS/SDD/uiuxSpec/manager_notes 缺哪一項就講明再動工;
+出場=build 綠、單元測試綠、四道 lint(token/i18n/dead-control/a11y)零新增債;
+交接=PR body 就是 handoff,寫清「回應了哪些 AC 與哪些 manager note、什麼刻意沒做」。
+
 ## 🎯 Product-Quality Rules(產品級 UI — machine-gated,違反會被 run-test 硬閘擋下)
 
 以人為本(最高原則):畫面用使用者的話(員工語彙,如「待辦事項」「審核中心」),
