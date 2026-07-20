@@ -1629,6 +1629,67 @@ def _pr_url_and_branch(payload):
     return url, (branch or payload.get("branch") or "")
 
 
+
+
+def _api_path_inventory(payload):
+    """The API paths the app ACTUALLY calls, read from its own repository layer.
+
+    The generators were told to ground UI routes and selectors in the diff and never guess —
+    and were told nothing at all about API paths, so they invented candidate lists. On PR #71
+    every generated testcase probed `/api/me/permissions`, `/me/permissions` and
+    `/api/v1/me/permissions`; the real path is `/api/v1/users/me/permissions`. All four
+    testcases and all three AC checks failed against a URL the product has never had.
+
+    A false RED costs as much as a false green: it teaches people the gate is noise, and then
+    the real failure is the one nobody looks at. So hand over the inventory instead of asking
+    the model to remember an API surface it cannot see.
+
+    Best-effort and cached on the payload; an empty list simply leaves the prompt as it was.
+    """
+    if "_api_paths" in payload:
+        return payload["_api_paths"]
+    paths, repo = [], payload.get("repo") or ""
+    # Read the PR's OWN ref, not the base: a feature that ADDS an endpoint is exactly the case
+    # where the generator has nothing to go on, and inventorying `main` would leave that new
+    # path out — sending the model back to guessing for the one endpoint under test.
+    _, _br = _pr_url_and_branch(payload)
+    base = _br or payload.get("base") or "main"
+    src_dir = str(_load_profile(payload)["app"].get("apiDir", "dashboard/src/app/repository/impl"))
+    try:
+        listing = subprocess.run(
+            ["gh", "api", f"repos/{repo}/contents/{src_dir}?ref={base}", "--jq", ".[].name"],
+            capture_output=True, text=True, timeout=90).stdout.split()
+        for name in listing:
+            if not name.endswith(".ts") or name.endswith(".spec.ts"):
+                continue
+            body = subprocess.run(
+                ["gh", "api", f"repos/{repo}/contents/{src_dir}/{name}?ref={base}",
+                 "--jq", ".content"], capture_output=True, text=True, timeout=90).stdout
+            raw = base64.b64decode("".join(body.split())).decode("utf-8", "replace") if body.strip() else ""
+            for m in re.finditer(r"['\"`](v1/[A-Za-z0-9_\-/:${}.]+)['\"`]", raw):
+                p = "/api/" + m.group(1)
+                if p not in paths:
+                    paths.append(p)
+    except Exception as e:
+        print("[agent-task-node] api inventory unavailable: %s" % e, flush=True)
+    payload["_api_paths"] = sorted(paths)
+    return payload["_api_paths"]
+
+
+def _api_grounding_block(payload):
+    """The prompt fragment that stops a generator inventing endpoints."""
+    paths = _api_path_inventory(payload)
+    if not paths:
+        return ""
+    return (
+        "\n\nAPI GROUNDING — these are the ONLY endpoint paths this application calls, read from "
+        "its own repository layer. If an assertion needs an API, use one of these VERBATIM; do "
+        "not shorten, re-nest or invent a variant, and do not write a 'try several candidates' "
+        "loop — a probe that guesses reports the product broken when only the guess was:\n  "
+        + "\n  ".join(paths[:60])
+    )
+
+
 def _gen_testcases(payload):
     """T4-2: generate feature-specific Playwright testcases (.mjs) from the ACs + the PR diff, so
     the Test gate checks THIS feature (not just org regression). Returns the .mjs text, or None to
@@ -1681,6 +1742,7 @@ def _gen_testcases(payload):
     schema = json.dumps({"type": "object", "additionalProperties": False,
                          "properties": {"testcasesMjs": {"type": "string"}},
                          "required": ["testcasesMjs"]})
+    prompt += _api_grounding_block(payload)
     try:
         # 600s: generating a full Playwright module from a large diff regularly exceeds
         # 300s (and a silent None here demotes the run to the org REGRESSION set, whose
@@ -1817,6 +1879,7 @@ def _gen_api_checks(payload):
                                             "expectContains": {"type": "string"}},
                              "required": ["name", "path", "expectStatus"]}}},
                          "required": ["checks"]})
+    prompt += _api_grounding_block(payload)
     try:
         out = _invoke_claude(prompt, schema, dict(payload), wall=300)
         cs = [c for c in ((out or {}).get("checks") or [])
