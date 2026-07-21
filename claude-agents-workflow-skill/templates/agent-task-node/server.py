@@ -2153,6 +2153,97 @@ def _post_commit_status(repo, branch, rep):
         print("[agent-task-node] commit status post failed: %s" % e, flush=True)
 
 
+
+
+# ── Read-only access to the RUNNING system, for the nodes that have to diagnose it ──────────
+#
+# implement / pm-review hold the source and the diff and nothing else, so an entire class of
+# problem is structurally invisible to them: the code is right and the running thing is not.
+# Every hard diagnosis on 2026-07-20 needed exactly this and none of it was available —
+# whether `requester` actually survived into the engine's variables (F-5), whether the
+# deployed bundle contained the component at all (a two-day-old image serving a "missing"
+# feature), whether a user has a Postgres role (F-1).
+#
+# Read-only on purpose and by construction, not by convention: the `arcana_readonly` login has
+# SELECT and nothing else, so a diagnosing node cannot repair what it is looking at — a fix
+# must still travel through a gated PR, and a node that could edit production would make the
+# whole review chain optional.
+
+_SITE_MAX = 8000
+
+
+def _site_sql(query, db="arcana"):
+    """Run one read-only SELECT against the live database. Returns text (truncated).
+
+    Rejects anything that is not a SELECT/WITH before it reaches the wire. This prefix check is
+    the SECOND line, not the only one — it is trivially defeated by `SELECT 1; DROP TABLE x`,
+    which it lets through and the DATABASE then refuses ("must be owner of table"). Verified
+    both ways on 2026-07-20. Keep both: the check gives a node a clear reason instead of a
+    stack trace, and the grant is what actually makes the guarantee true.
+    """
+    q = (query or "").strip().rstrip(";")
+    if not re.match(r"(?is)^\s*(select|with|explain|show)\b", q):
+        return "refused: read-only site access takes SELECT/WITH/EXPLAIN/SHOW only"
+    if not re.match(r"^[A-Za-z0-9_]+$", db or ""):
+        return "refused: bad database name"
+    try:
+        r = subprocess.run(
+            ["docker", "exec", "-e", "PGPASSWORD=" + os.environ.get("SITE_PG_PASS", "readonly"),
+             os.environ.get("TEST_PG_CONTAINER", "aaf-kogito-pg"),
+             "psql", "-U", os.environ.get("SITE_PG_USER", "arcana_readonly"),
+             "-h", "127.0.0.1", "-d", db, "-P", "pager=off", "-c", q],
+            capture_output=True, text=True, timeout=120)
+        return ((r.stdout or "") + (r.stderr or ""))[:_SITE_MAX]
+    except Exception as e:
+        return f"site sql failed: {e}"
+
+
+def _site_http(path, base=None):
+    """GET a path on the DEPLOYED app — the artifact users actually receive.
+
+    The question "is this component even in the bundle the browser is being served?" cannot be
+    answered from the repository, and answering it wrongly cost two days of a feature looking
+    broken when it had simply never been deployed.
+    """
+    base = base or os.environ.get("SITE_APP_URL", "http://aaf-dashboard:80")
+    try:
+        r = subprocess.run(
+            ["docker", "run", "--rm", "--network",
+             os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default"),
+             "curlimages/curl:latest", "-s", "-m", "30", base + path],
+            capture_output=True, text=True, timeout=120)
+        return (r.stdout or "")[:_SITE_MAX]
+    except Exception as e:
+        return f"site http failed: {e}"
+
+
+def _site_images():
+    """What is actually RUNNING, and since when — the 'merged ≠ deployed' question."""
+    try:
+        r = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.CreatedAt}}"],
+            capture_output=True, text=True, timeout=60)
+        return (r.stdout or "")[:_SITE_MAX]
+    except Exception as e:
+        return f"site images failed: {e}"
+
+
+def site_flow(payload):
+    """`site` verb — read-only observation of the running system.
+
+    `{"kind": "sql", "query": "...", "db": "arcana"}` | `{"kind": "http", "path": "/..."}` |
+    `{"kind": "images"}`
+    """
+    kind = (payload.get("kind") or "").lower()
+    if kind == "sql":
+        return {"kind": "sql", "result": _site_sql(payload.get("query", ""), payload.get("db", "arcana"))}
+    if kind == "http":
+        return {"kind": "http", "result": _site_http(payload.get("path", "/"), payload.get("base"))}
+    if kind == "images":
+        return {"kind": "images", "result": _site_images()}
+    return {"error": "kind must be one of: sql, http, images"}
+
+
 def test_flow(payload):
     """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted docker.sock.
     T4: when a PR branch is known, the runner clones + builds it and serves a preview so e2e run
@@ -2386,7 +2477,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         task = self.path.rsplit("/", 1)[-1]
-        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "uiux-audit"):
+        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "uiux-audit", "site"):
             return self._send(404, {"error": f"unknown task {task}"})
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -2402,6 +2493,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = publish_flow(payload)
             elif task == "implement":
                 result = implement_flow(payload)
+            elif task == "site":
+                # Read-only observation of the RUNNING system, for nodes whose diagnosis needs
+                # more than the repo. Cannot write anything: the DB login holds SELECT only.
+                result = site_flow(payload)
             elif task == "test":
                 result = test_flow(payload)
             elif task == "uiux-audit":
