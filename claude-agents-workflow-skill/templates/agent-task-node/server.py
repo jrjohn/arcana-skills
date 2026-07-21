@@ -488,7 +488,7 @@ _PROFILE_DEFAULTS = {
              "rbacActors": "boss:pw,lin:pw,wang:pw",
              # scenario-walk casts by ROLE, because a business chain is about handing state
              # between identities. Empty disables it.
-             "scenarioActors": '{"employee":"wang:pw","manager":"lin:pw","admin":"boss:pw"}'},
+             "scenarioActors": '{"employee":"wang:pw","manager":"lin:pw","admin":"boss:pw","finance":"wang:pw"}'},
     "nav": {"navPath": "dashboard/src/app/core/navigation/nav.config.ts",
             "routesPath": "dashboard/src/app/app.routes.ts"},
     "personas": ["簽核者", "申請人", "管理員"],
@@ -726,6 +726,204 @@ def _safe_seg(v):
     return "".join(c for c in str(v) if c.isalnum() or c in "-_") or "x"
 
 
+def _instance_root(piid):
+    return os.path.join(WORK_ROOT, _safe_seg(piid)) if piid else None
+
+
+def _freeze(path):
+    """Seal a finished instance's workspace: it is that run's audit record.
+
+    TAMPER-EVIDENT, NOT TAMPER-PROOF — and the difference is stated here because assuming the
+    stronger property is how an audit trail becomes worthless without anyone noticing. This
+    agent runs as root, and root ignores permission bits; `/work` is a bind mount, so the
+    immutable attribute is unavailable too. Measured, not assumed: with `chmod -R a-w` applied,
+    a write from this process still succeeded.
+
+    So freezing does two things. `chmod -R a-w` stops ordinary tooling and accidental writes —
+    real, just not sufficient. The manifest is what actually carries the guarantee: a SHA-256
+    of every file, written at seal time, against which `_verify_frozen` can later prove whether
+    the record still says what it said. Prevention needs a non-root runtime or a
+    write-once store; until then, detection is the honest claim.
+    """
+    ok = True
+    try:
+        digests = {}
+        for dirpath, dirnames, filenames in os.walk(path):
+            dirnames[:] = [d for d in dirnames if d != ".git"]
+            for fn in filenames:
+                if fn in (".frozen.sha256", ".workspace.json"):
+                    continue
+                full = os.path.join(dirpath, fn)
+                rel = os.path.relpath(full, path)
+                try:
+                    h = hashlib.sha256()
+                    with open(full, "rb") as fh:
+                        for chunk in iter(lambda: fh.read(1 << 20), b""):
+                            h.update(chunk)
+                    digests[rel] = h.hexdigest()
+                except OSError:
+                    continue
+        with open(os.path.join(path, ".frozen.sha256"), "w") as f:
+            json.dump({"sealedFiles": len(digests), "digests": digests}, f)
+        marker = os.path.join(path, ".workspace.json")
+        if os.path.isfile(marker):
+            meta = json.load(open(marker))
+            meta["frozen"] = True
+            meta["sealedFiles"] = len(digests)
+            with open(marker, "w") as f:
+                json.dump(meta, f, ensure_ascii=False)
+        subprocess.run(["chmod", "-R", "a-w", path], capture_output=True, timeout=120)
+    except Exception as e:
+        ok = False
+        print("[agent-task-node] could not seal %s: %s" % (path, e), flush=True)
+    return ok
+
+
+def _verify_frozen(path):
+    """Does a sealed workspace still hold what it held? Returns (ok, [changed paths])."""
+    man = os.path.join(path, ".frozen.sha256")
+    if not os.path.isfile(man):
+        return False, ["(never sealed)"]
+    digests = json.load(open(man)).get("digests", {})
+    bad = []
+    for rel, want in digests.items():
+        full = os.path.join(path, rel)
+        try:
+            h = hashlib.sha256()
+            with open(full, "rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+            if h.hexdigest() != want:
+                bad.append(rel)
+        except OSError:
+            bad.append(rel + " (missing)")
+    return (not bad), bad
+
+
+def _copy_tree(src, dst):
+    """Copy a previous workspace. Reflink (copy-on-write) when the filesystem offers it,
+    otherwise a real copy.
+
+    Explicitly NOT hardlinks: they share inodes, so an append or an in-place edit in the new
+    run would rewrite the frozen original — a silent violation of the one property this whole
+    scheme exists to provide, and one nobody would notice until an audit asked.
+    """
+    r = subprocess.run(["cp", "-a", "--reflink=auto", src, dst], capture_output=True, text=True, timeout=1800)
+    if r.returncode == 0:
+        return True, "reflink/copy"
+    r = subprocess.run(["cp", "-a", src, dst], capture_output=True, text=True, timeout=1800)
+    return (r.returncode == 0), ("copy" if r.returncode == 0 else (r.stderr or "")[-200:])
+
+
+def _resolve_workspace_source(payload):
+    """Which previous instance this run continues from.
+
+    Explicit `workspaceFrom` (an instance id) or the sentinel "latest" — the newest frozen
+    workspace carrying the same slug. Anything else (absent / "new") starts clean. Declared at
+    START, per the flow contract: a run that discovers its own history halfway through cannot
+    be reasoned about, and a default of "whatever was most recently on disk" would make two
+    identical starts behave differently.
+    """
+    want = str(payload.get("workspaceFrom") or "").strip()
+    if not want or want in ("new", "none"):
+        return None
+    piid = payload.get("_piid") or ""
+    if want != "latest":
+        src = _instance_root(want)
+        return src if src and os.path.isdir(src) else None
+    slug = (payload.get("slug") or "").strip()
+    if not slug:
+        return None
+    best, best_mt = None, -1
+    try:
+        for name in os.listdir(WORK_ROOT):
+            if name == _safe_seg(piid):
+                continue
+            root = os.path.join(WORK_ROOT, name)
+            marker = os.path.join(root, ".workspace.json")
+            if not os.path.isfile(marker):
+                continue
+            try:
+                meta = json.load(open(marker))
+            except Exception:
+                continue
+            # Only a FROZEN workspace is a safe source: an unfrozen one may still be being
+            # written by a live run, and copying it mid-write yields a state that never existed.
+            if meta.get("slug") != slug or not meta.get("frozen"):
+                continue
+            mt = os.path.getmtime(marker)
+            if mt > best_mt:
+                best, best_mt = root, mt
+    except OSError:
+        return None
+    return best
+
+
+def _ensure_instance_workspace(payload):
+    """Create this instance's workspace once, copying a previous run when asked.
+
+    The workspace is per INSTANCE, not per node: SA / SD / uiux / implement all work in the
+    same checkout, so a design node can `ls` the code it is designing against instead of being
+    handed a lossy description of it. Nodes previously each got their own empty directory,
+    which is why SD spent minutes calling `gh api` to rediscover a repo layout every run — and
+    still wrote file paths that do not exist.
+    """
+    piid = payload.get("_piid")
+    root = _instance_root(piid)
+    if not root:
+        return None
+    marker = os.path.join(root, ".workspace.json")
+    if os.path.isfile(marker):
+        return root
+    meta = {"instance": piid, "slug": payload.get("slug") or "", "from": None, "frozen": False}
+    src = _resolve_workspace_source(payload)
+    if src:
+        ok, how = _copy_tree(src, root)
+        if ok:
+            # Writable again: the COPY is this run's scratch. The source stays frozen.
+            subprocess.run(["chmod", "-R", "u+w", root], capture_output=True, timeout=300)
+            meta["from"] = os.path.basename(src)
+            meta["how"] = how
+            # Freeze the source now that something descends from it. Lineage without
+            # immutability is a citation to a document that can still be edited.
+            _freeze(src)
+            print("[agent-task-node] workspace %s copied from %s (%s)" % (piid, meta["from"], how), flush=True)
+        else:
+            meta["copyError"] = how
+            print("[agent-task-node] workspace copy failed (%s) — starting clean" % how, flush=True)
+    try:
+        os.makedirs(root, exist_ok=True)
+        with open(marker, "w") as f:
+            json.dump(meta, f, ensure_ascii=False)
+    except OSError:
+        return None
+    return root
+
+
+def _ensure_checkout(payload):
+    """The instance workspace's git checkout — the ground every node stands on.
+
+    Cloned once per instance (or inherited from the copied workspace), at `<instance>/repo`.
+    """
+    root = _ensure_instance_workspace(payload)
+    repo = (payload.get("repo") or "").strip()
+    if not root or not repo:
+        return None
+    wd = os.path.join(root, "repo")
+    if os.path.isdir(os.path.join(wd, ".git")):
+        return wd
+    base = (payload.get("base") or "main").strip()
+    token = os.environ.get("GH_TOKEN", "")
+    url = "https://x-access-token:%s@github.com/%s" % (token, repo)
+    shutil.rmtree(wd, ignore_errors=True)
+    c = subprocess.run(["git", "clone", "--depth", "1", "--branch", base, url, wd],
+                       capture_output=True, text=True, timeout=600)
+    if c.returncode != 0:
+        print("[agent-task-node] checkout failed: %s" % (c.stderr or "")[-200:], flush=True)
+        return None
+    return wd
+
+
 def _workspace(payload):
     """Per-(instance, node) working dir: $WORK_ROOT/<piid>/<node>/. Gives every node of
     every process instance its own cwd, so concurrent flows — including multiple instances
@@ -733,6 +931,11 @@ def _workspace(payload):
     piid, node = payload.get("_piid"), payload.get("_node")
     if not piid or not node:
         return None
+    # Inside the instance's checkout when there is one, so every node works in the real
+    # repository rather than an empty directory beside it.
+    wd = _ensure_checkout(payload)
+    if wd:
+        return wd
     ws = os.path.join(WORK_ROOT, _safe_seg(piid), _safe_seg(node))
     try:
         os.makedirs(ws, exist_ok=True)
@@ -1029,6 +1232,95 @@ def _generic_schema(payload):
     return sch
 
 
+def _repo_layout(payload):
+    """The repository's REAL shape — top-level source directories and the stack markers that
+    say what it is written in.
+
+    The design nodes (SA / SD / uiux) receive a feature request and nothing else. Asked to
+    produce a file plan, they produce one for the most common project they can imagine. On
+    2026-07-21 the SD node designed a NestJS backend with `src/flows/flows.controller.ts` and
+    an Angular CLI layout for a repo whose backend is Rust/axum under
+    `arcana-cloud-rust/crates/` — nineteen file paths, none of which existed, and an endpoint
+    the product has never had. The reasoning was sound; the ground was invented.
+
+    That is the same defect already fixed downstream for the test generators: the model cannot
+    see the repository, so telling it not to guess is useless — it has to be handed the facts.
+    One tree call, cached on the payload.
+    """
+    if "_repo_layout" in payload:
+        return payload["_repo_layout"]
+    out = {"dirs": [], "stack": []}
+    repo = payload.get("repo") or ""
+    _, _br = _pr_url_and_branch(payload)
+    ref = _br or payload.get("base") or "main"
+    if not repo:
+        payload["_repo_layout"] = out
+        return out
+    try:
+        raw = subprocess.run(
+            ["gh", "api", f"repos/{repo}/git/trees/{ref}?recursive=1",
+             "--jq", '.tree[] | select(.type=="blob") | .path'],
+            capture_output=True, text=True, timeout=120).stdout.split()
+        MARKERS = {"Cargo.toml": "Rust (cargo)", "pom.xml": "Java/Maven",
+                   "go.mod": "Go", "package.json": "Node/npm",
+                   "requirements.txt": "Python", "pyproject.toml": "Python"}
+        skip = ("node_modules/", "target/", "dist/", ".git/", "usage/")
+        dirs, stack = {}, []
+        for p in raw:
+            if p.startswith(skip) or any(x in p for x in skip):
+                continue
+            base = p.rsplit("/", 1)[-1]
+            if base in MARKERS:
+                where = p.rsplit("/", 1)[0] if "/" in p else "(root)"
+                entry = f"{MARKERS[base]} — {where}"
+                if entry not in stack:
+                    stack.append(entry)
+            # Directory of the file, capped at depth 4 so the sketch stays readable.
+            d = "/".join(p.split("/")[:-1][:4])
+            if d:
+                dirs[d] = dirs.get(d, 0) + 1
+        # Collapse per language, shallowest path first. Unfiltered, a repo with a dozen Rust
+        # crates fills the list with Rust and pushes the FRONT END off it — the half of the
+        # 2026-07-21 hallucination that invented an Angular CLI layout.
+        by_lang = {}
+        for e in stack:
+            lang, where = e.split(" — ", 1)
+            by_lang.setdefault(lang, []).append(where)
+        out["stack"] = [
+            f"{lang} — " + ", ".join(sorted(w, key=lambda x: (x.count("/"), x))[:2])
+            for lang, w in by_lang.items()
+        ]
+        # Busiest directories first: where the code actually lives.
+        out["dirs"] = [d for d, _ in sorted(dirs.items(), key=lambda kv: -kv[1])[:60]]
+    except Exception as e:
+        print("[agent-task-node] repo layout unavailable: %s" % e, flush=True)
+    payload["_repo_layout"] = out
+    return out
+
+
+def _repo_grounding_block(payload):
+    """The prompt fragment that stops a design node inventing a stack."""
+    lay = _repo_layout(payload)
+    if not lay["dirs"] and not lay["stack"]:
+        return ""
+    paths = _api_path_inventory(payload)
+    b = ["\n\nREPOSITORY GROUNDING — this is the repository the work lands in, read from the "
+         "branch itself. Design AGAINST it. Every file path you name must sit under one of the "
+         "directories below, and you may not assume a framework that is not in the stack list: a "
+         "plan written for a project that does not exist costs a full implement round and reads, "
+         "to whoever gets the PR, as though the feature was attempted and failed."]
+    if lay["stack"]:
+        b.append("Stack (from its own manifests):\n  " + "\n  ".join(lay["stack"]))
+    if lay["dirs"]:
+        b.append("Source directories (busiest first):\n  " + "\n  ".join(lay["dirs"]))
+    if paths:
+        b.append("Existing API paths — extend this surface, do not invent a parallel one:\n  "
+                 + "\n  ".join(paths[:40]))
+    b.append("If the request cannot be placed in this layout, say so in your output instead of "
+             "relocating the project.")
+    return "\n\n".join(b)
+
+
 def prompt_generic(payload):
     instruction = payload.get("prompt") or ""
     data = dict(payload.get("data") or {})
@@ -1052,6 +1344,10 @@ def prompt_generic(payload):
         parts.append("\n\n## Input data\n```json\n"
                      + _bounded_json(business)
                      + "\n```")
+    # Ground every AI node that plans work against a repo. Cheap (one cached tree call) and
+    # only appended when a `repo` is actually known, so non-repo flows are untouched.
+    if payload.get("repo"):
+        parts.append(_repo_grounding_block(payload))
     return "\n".join(parts)
 
 
@@ -1470,20 +1766,36 @@ def implement_flow(payload):
     branch = "%s%s" % (branch_prefix, slug)
     # Clone under this (instance, node) workspace so concurrent implement runs are isolated;
     # fall back to a temp dir for direct calls that carry no _piid/_node.
-    ws = _workspace(payload)
-    tmp = ws or tempfile.mkdtemp(prefix="implement-%s-" % slug)
-    workdir = os.path.join(tmp, "repo")
+    # The instance's own checkout — the SAME one SA / SD / uiux read, so implement builds on
+    # what they actually looked at rather than a private clone they never saw.
+    workdir = _ensure_checkout(payload)
+    if not workdir:
+        tmp = tempfile.mkdtemp(prefix="implement-%s-" % slug)
+        workdir = os.path.join(tmp, "repo")
     try:
-        # --- Phase A: clone the base branch ---
-        # workspace persists across a rework loop (same instance+node), so clear any prior
-        # clone before re-cloning (mkdtemp used to give a fresh dir each call).
-        shutil.rmtree(workdir, ignore_errors=True)
+        # --- Phase A: put the checkout on a fresh branch off `base` ---
+        # Inherited (copied) or cloned, it may sit on any ref and carry a previous run's
+        # edits. Reset hard: a feature branch that quietly starts from someone else's
+        # uncommitted work produces a diff nobody can account for.
         clone_url = "https://x-access-token:%s@github.com/%s" % (token, repo)
-        c = subprocess.run(
-            ["git", "clone", "--depth", "1", "--branch", base, clone_url, workdir],
-            capture_output=True, text=True, timeout=300)
-        if c.returncode != 0:
-            return {"error": "clone failed: %s" % (c.stderr or c.stdout)[-500:]}
+        if not os.path.isdir(os.path.join(workdir, ".git")):
+            shutil.rmtree(workdir, ignore_errors=True)
+            c = subprocess.run(
+                ["git", "clone", "--depth", "1", "--branch", base, clone_url, workdir],
+                capture_output=True, text=True, timeout=300)
+            if c.returncode != 0:
+                return {"error": "clone failed: %s" % (c.stderr or c.stdout)[-500:]}
+        else:
+            subprocess.run(["git", "-C", workdir, "remote", "set-url", "origin", clone_url],
+                           capture_output=True, text=True, timeout=60)
+            f = subprocess.run(["git", "-C", workdir, "fetch", "--depth", "1", "origin", base],
+                               capture_output=True, text=True, timeout=300)
+            if f.returncode != 0:
+                return {"error": "fetch failed: %s" % (f.stderr or f.stdout)[-500:]}
+            subprocess.run(["git", "-C", workdir, "reset", "--hard", "FETCH_HEAD"],
+                           capture_output=True, text=True, timeout=120)
+            subprocess.run(["git", "-C", workdir, "clean", "-fd"],
+                           capture_output=True, text=True, timeout=120)
 
         # --- Phase B: Claude writes code in the workdir (bound to the dev skill) ---
         design = payload.get("design")
