@@ -1928,11 +1928,34 @@ def implement_flow(payload):
         env = dict(os.environ)
         if token:
             env["GH_TOKEN"] = token
+        # A rework round pushes to the SAME branch, so the PR usually already exists — the
+        # commits are on it either way. Creating is the FIRST round's job, not every round's.
+        # Reported as an error, "a pull request for branch X already exists" landed in the
+        # `pr` process variable and the PM node read it as a failed delivery: the loop was
+        # working exactly as designed and the flow said it had broken.
+        existing = subprocess.run(
+            ["gh", "pr", "list", "-R", repo, "--head", branch, "--state", "open",
+             "--json", "url", "--jq", ".[0].url"],
+            capture_output=True, text=True, timeout=120, env=env).stdout.strip()
+        if existing:
+            return {"prUrl": existing, "branch": branch, "summary": summary,
+                    "filesChanged": files_changed, "pushed": True,
+                    "buildStatus": build_status, "prReused": True}
         pr = subprocess.run(
             ["gh", "pr", "create", "-R", repo, "--base", base, "--head", branch,
              "--title", "feat: %s" % slug, "--body", body],
             capture_output=True, text=True, timeout=120, cwd=workdir, env=env)
         if pr.returncode != 0:
+            # Lost a race, or the listing missed it: recover the URL rather than fail a round
+            # whose code is already pushed.
+            recovered = subprocess.run(
+                ["gh", "pr", "list", "-R", repo, "--head", branch, "--state", "open",
+                 "--json", "url", "--jq", ".[0].url"],
+                capture_output=True, text=True, timeout=120, env=env).stdout.strip()
+            if recovered:
+                return {"prUrl": recovered, "branch": branch, "summary": summary,
+                        "filesChanged": files_changed, "pushed": True,
+                        "buildStatus": build_status, "prReused": True}
             return {"error": "pr create failed: %s" % (pr.stderr or pr.stdout)[-500:],
                     "branch": branch, "filesChanged": files_changed}
         pr_url = pr.stdout.strip().splitlines()[-1] if pr.stdout.strip() else ""
