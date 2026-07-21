@@ -726,6 +726,24 @@ def _safe_seg(v):
     return "".join(c for c in str(v) if c.isalnum() or c in "-_") or "x"
 
 
+def _pv(payload, key, default=""):
+    """A flow variable, wherever the dispatcher happened to put it.
+
+    `do_implement` sends `repo`/`base`/`slug` at the top level; `do_execute` — which drives
+    SA / SD / uiux — sends every instance variable nested under `data` instead. Code reading
+    only the top level therefore worked for implement and silently did nothing for the design
+    nodes: the repo checkout was never created and the grounding block never reached a prompt,
+    while both looked wired. Nothing errored, so the failure presented as "the model still
+    guesses paths" rather than "the fix never ran".
+    """
+    v = payload.get(key)
+    if v in (None, ""):
+        d = payload.get("data")
+        if isinstance(d, dict):
+            v = d.get(key)
+    return v if v not in (None, "") else default
+
+
 def _instance_root(piid):
     return os.path.join(WORK_ROOT, _safe_seg(piid)) if piid else None
 
@@ -824,14 +842,14 @@ def _resolve_workspace_source(payload):
     be reasoned about, and a default of "whatever was most recently on disk" would make two
     identical starts behave differently.
     """
-    want = str(payload.get("workspaceFrom") or "").strip()
+    want = str(_pv(payload, "workspaceFrom")).strip()
     if not want or want in ("new", "none"):
         return None
     piid = payload.get("_piid") or ""
     if want != "latest":
         src = _instance_root(want)
         return src if src and os.path.isdir(src) else None
-    slug = (payload.get("slug") or "").strip()
+    slug = str(_pv(payload, "slug")).strip()
     if not slug:
         return None
     best, best_mt = None, -1
@@ -875,7 +893,7 @@ def _ensure_instance_workspace(payload):
     marker = os.path.join(root, ".workspace.json")
     if os.path.isfile(marker):
         return root
-    meta = {"instance": piid, "slug": payload.get("slug") or "", "from": None, "frozen": False}
+    meta = {"instance": piid, "slug": _pv(payload, "slug"), "from": None, "frozen": False}
     src = _resolve_workspace_source(payload)
     if src:
         ok, how = _copy_tree(src, root)
@@ -906,13 +924,13 @@ def _ensure_checkout(payload):
     Cloned once per instance (or inherited from the copied workspace), at `<instance>/repo`.
     """
     root = _ensure_instance_workspace(payload)
-    repo = (payload.get("repo") or "").strip()
+    repo = str(_pv(payload, "repo")).strip()
     if not root or not repo:
         return None
     wd = os.path.join(root, "repo")
     if os.path.isdir(os.path.join(wd, ".git")):
         return wd
-    base = (payload.get("base") or "main").strip()
+    base = str(_pv(payload, "base", "main")).strip()
     token = os.environ.get("GH_TOKEN", "")
     url = "https://x-access-token:%s@github.com/%s" % (token, repo)
     shutil.rmtree(wd, ignore_errors=True)
@@ -1250,9 +1268,9 @@ def _repo_layout(payload):
     if "_repo_layout" in payload:
         return payload["_repo_layout"]
     out = {"dirs": [], "stack": []}
-    repo = payload.get("repo") or ""
+    repo = _pv(payload, "repo")
     _, _br = _pr_url_and_branch(payload)
-    ref = _br or payload.get("base") or "main"
+    ref = _br or _pv(payload, "base", "main")
     if not repo:
         payload["_repo_layout"] = out
         return out
@@ -1346,7 +1364,7 @@ def prompt_generic(payload):
                      + "\n```")
     # Ground every AI node that plans work against a repo. Cheap (one cached tree call) and
     # only appended when a `repo` is actually known, so non-repo flows are untouched.
-    if payload.get("repo"):
+    if _pv(payload, "repo"):
         parts.append(_repo_grounding_block(payload))
     return "\n".join(parts)
 
@@ -1769,6 +1787,11 @@ def implement_flow(payload):
     # The instance's own checkout — the SAME one SA / SD / uiux read, so implement builds on
     # what they actually looked at rather than a private clone they never saw.
     workdir = _ensure_checkout(payload)
+    # Only the FALLBACK dir is ours to delete. The instance checkout must survive this call:
+    # it is what a later run copies forward and what the seal hashes. Left unset, the cleanup
+    # below crashed with an unbound `tmp` the moment a real checkout existed — implement failed
+    # three times and the run was aborted, for a variable that was never assigned.
+    tmp = None
     if not workdir:
         tmp = tempfile.mkdtemp(prefix="implement-%s-" % slug)
         workdir = os.path.join(tmp, "repo")
@@ -1922,7 +1945,8 @@ def implement_flow(payload):
     except Exception as e:
         return {"error": "implement failed: %s" % e}
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        if tmp:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 def _pr_url_and_branch(payload):
@@ -1960,12 +1984,12 @@ def _api_path_inventory(payload):
     """
     if "_api_paths" in payload:
         return payload["_api_paths"]
-    paths, repo = [], payload.get("repo") or ""
+    paths, repo = [], _pv(payload, "repo")
     # Read the PR's OWN ref, not the base: a feature that ADDS an endpoint is exactly the case
     # where the generator has nothing to go on, and inventorying `main` would leave that new
     # path out — sending the model back to guessing for the one endpoint under test.
     _, _br = _pr_url_and_branch(payload)
-    base = _br or payload.get("base") or "main"
+    base = _br or _pv(payload, "base", "main")
     src_dir = str(_load_profile(payload)["app"].get("apiDir", "dashboard/src/app/repository/impl"))
     try:
         listing = subprocess.run(
