@@ -2244,6 +2244,98 @@ def site_flow(payload):
     return {"error": "kind must be one of: sql, http, images"}
 
 
+
+
+def smoke_flow(payload):
+    """`smoke` verb — does the DEPLOYED artifact actually work? (C)
+
+    The definition of done stopped at a green PR, and that is one step short of the thing the
+    user receives. On 2026-07-19/20 a feature was reported missing for two days while its code
+    sat merged: the deployed image was older than the branch, and nginx served a cached
+    index.html pinning browsers to the previous bundle. Both were invisible to every gate,
+    because every gate tested a PREVIEW built from source — never the artifact.
+
+    So this asks the only question that survives a merge: is the running system, as users get
+    it, still working? It runs AFTER deploy, against the real URL, and it is deliberately the
+    same scenario suite the test node uses — a business chain that completed on the PR's own
+    backend and no longer completes on the deployed one is exactly the regression this exists
+    to catch, and reusing it means there is no second definition of "working" to drift.
+
+    Non-negotiable: it must fail on "could not reach the deployment" too. A smoke that treats
+    an unreachable app as nothing-to-report would sign off on an outage.
+    """
+    app = payload.get("appUrl") or os.environ.get("SITE_APP_URL", "http://aaf-dashboard:80")
+    api = payload.get("apiUrl") or os.environ.get("TEST_API_TARGET", "http://aaf-arcana-cloud-rust:8080")
+    net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
+    # The RBAC gate casts as `user:pass,user:pass`; `scenarioActors` is a role→credential JSON
+    # for the chain scenarios. Passing one where the other is expected silently seats no actors
+    # at all, which the gate then reports as three login failures — a harness mismatch wearing
+    # the costume of a broken deployment.
+    actors = payload.get("actors") or str(_load_profile(payload)["auth"].get("rbacActors", ""))
+    out = {"appUrl": app, "apiUrl": api}
+
+    # 1. Is the app being served at all, and is it the build we think it is?
+    idx = _site_http("/", app)
+    out["appServed"] = bool(idx) and "<" in idx
+    m = re.search(r"(main-[A-Z0-9]+\.js)", idx or "")
+    out["bundle"] = m.group(1) if m else None
+
+    # 2. Does the API answer, and does auth still work end to end?
+    who = payload.get("smokeUser") or str(_load_profile(payload)["auth"].get("user", "boss"))
+    pw = payload.get("smokePass") or str(_load_profile(payload)["auth"].get("pass", "pw"))
+    login = subprocess.run(
+        ["docker", "run", "--rm", "--network", net, "curlimages/curl:latest", "-s", "-m", "30",
+         "-o", "/dev/null", "-w", "%{http_code}", "-X", "POST", f"{api}/api/v1/auth/login",
+         "-H", "Content-Type: application/json",
+         "-d", json.dumps({"username_or_email": who, "password": pw})],
+        capture_output=True, text=True, timeout=120)
+    out["loginStatus"] = (login.stdout or "").strip()
+    out["apiAlive"] = out["loginStatus"] == "200"
+
+    # 3. A real user-facing check that changes NOTHING.
+    #
+    #    The mutating business chains deliberately do NOT run here, and scenario-walk refuses
+    #    them anyway: proving a deployment works by filing real leave requests on it is not a
+    #    smoke test, it is damage. What CAN be asked of a live system is whether it offers each
+    #    identity exactly what they may have — the RBAC UI gate logs in as several people,
+    #    navigates, and reads. It would have caught the deployed-but-unguarded `/org` that
+    #    exposed the whole staff directory.
+    if actors:
+        r = subprocess.run(
+            ["docker", "run", "--rm", "--network", net,
+             "-e", "RBACUI_BASE=" + app, "-e", "RBACUI_ACTORS=" + actors,
+             "-e", "RBACUI_NAV_CONFIG=/e2e/nav.config.ts",
+             "--entrypoint", "node",
+             os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local"),
+             "/e2e/rbac-ui-gate.mjs"],
+            capture_output=True, text=True, timeout=1200)
+        line = next((l for l in reversed((r.stdout or "").splitlines())
+                     if l.startswith("RBACUI:")), "")
+        try:
+            g = json.loads(line[len("RBACUI:"):]) if line else {}
+        except Exception:
+            g = {}
+        out["rbacUiTotal"] = int(g.get("total", 0) or 0)
+        out["rbacUiFail"] = int(g.get("fail", 0) or 0)
+        out["rbacUiLeaks"] = int(g.get("leaks", 0) or 0)
+        out["rbacUiRan"] = out["rbacUiTotal"] > 0
+    else:
+        out["rbacUiRan"] = False
+
+    # Business chains are NOT exercised here. Saying so keeps a shallow pass from reading like
+    # the deep one the test node produces — the whole point of this file is that a green must
+    # not claim more than it verified.
+    out["chainsExercised"] = False
+
+    out["allPass"] = bool(out["appServed"] and out["apiAlive"]
+                          and out.get("rbacUiFail", 0) == 0)
+    if not out["allPass"]:
+        out["reason"] = ("deployment unreachable" if not (out["appServed"] and out["apiAlive"])
+                         else "the deployed app offers someone a screen they may not have")
+    print("[agent-task-node] smoke: " + json.dumps(out, ensure_ascii=False)[:400], flush=True)
+    return out
+
+
 def test_flow(payload):
     """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted docker.sock.
     T4: when a PR branch is known, the runner clones + builds it and serves a preview so e2e run
@@ -2477,7 +2569,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         task = self.path.rsplit("/", 1)[-1]
-        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "uiux-audit", "site"):
+        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "uiux-audit", "site", "smoke"):
             return self._send(404, {"error": f"unknown task {task}"})
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -2493,6 +2585,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = publish_flow(payload)
             elif task == "implement":
                 result = implement_flow(payload)
+            elif task == "smoke":
+                # AFTER deploy, against the artifact users receive — the step the DoD was
+                # missing when a merged feature spent two days looking broken.
+                result = smoke_flow(payload)
             elif task == "site":
                 # Read-only observation of the RUNNING system, for nodes whose diagnosis needs
                 # more than the repo. Cannot write anything: the DB login holds SELECT only.
