@@ -1336,7 +1336,49 @@ def _repo_grounding_block(payload):
                  + "\n  ".join(paths[:40]))
     b.append("If the request cannot be placed in this layout, say so in your output instead of "
              "relocating the project.")
+    state = _productization_state(payload)
+    if state:
+        b.append(state)
     return "\n\n".join(b)
+
+
+def _productization_state(payload):
+    """Current verified state of the product, from the CDP full-function walk committed at
+    `docs/productization/function-walk.json`.
+
+    A design node otherwise starts blind to what already works and re-specifies covered ground.
+    The walk records, per function, whether it is reachable, whether its negative boundary holds,
+    and — crucially — whether its business chain has actually been exercised (`chainCovered`) or
+    only its entrance. Feeding it in points the design at the UNCOVERED cells instead of retesting
+    green ones, and stops it treating an entrance-only check as proof the chain works.
+
+    Read from the instance checkout (this run's cwd), so it is the branch's own state, not a
+    stale copy fetched separately. Absent file = nothing appended; this never fails a node.
+    """
+    root = _instance_root(payload.get("_piid"))
+    if not root:
+        return ""
+    path = os.path.join(root, "repo", "docs/productization/function-walk.json")
+    try:
+        rpt = json.load(open(path))
+    except Exception:
+        return ""
+    s = rpt.get("summary", {})
+    lines = [
+        "PRODUCT STATE — from the CDP function walk (docs/productization/function-walk.json, "
+        "schema %s). This is what is already verified; design toward the gaps, not the greens."
+        % rpt.get("schemaVersion", "?"),
+        "Coverage: positive %s/%s, negative(entrance) %s/%s."
+        % (s.get("positivePass"), s.get("positiveTotal"),
+           s.get("negativePass"), s.get("negativeTotal")),
+    ]
+    unc = s.get("chainUncovered", [])
+    if unc:
+        lines.append(
+            "Business chains NOT yet exercised by any run (entrance-only) — a feature touching "
+            "one of these must not be called done on a UI check alone; its real gate is "
+            "scenario-walk / flow-sim: " + ", ".join(unc))
+    return "\n  ".join(lines)
 
 
 def prompt_generic(payload):
