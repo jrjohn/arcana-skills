@@ -1378,6 +1378,20 @@ def _productization_state(payload):
             "Business chains NOT yet exercised by any run (entrance-only) — a feature touching "
             "one of these must not be called done on a UI check alone; its real gate is "
             "scenario-walk / flow-sim: " + ", ".join(unc))
+    # Point at the design model + naming rules rather than transcribe them — the nodes run in the
+    # checkout and can read the file, which never goes stale the way a copied prompt fragment does.
+    # One rule is inlined because it is the highest-signal and the easiest to violate: the naming
+    # axis is what-must-I-do vs what-am-I-watching, not who-sent-what.
+    tree = os.path.join(root, "repo", "docs/productization/function-tree.md")
+    if os.path.exists(tree):
+        lines.append(
+            "A product function tree (WHO x WHEN) with the PRECISE execution-period model and "
+            "naming rules is at docs/productization/function-tree.md — READ IT before designing "
+            "anything on the my-flows / approvals surface or naming a user-facing label. "
+            "Standing rule: the vocabulary axis is action-state (待辦 = requires my action, "
+            "incl. unsubmitted drafts; 流程追蹤 = flows I have touched, auto), NEVER the mailbox "
+            "metaphor (收件匣 / 送件匣) — a draft is not 'received' and a flow I signed is not "
+            "'sent', so those words are wrong by construction.")
     return "\n  ".join(lines)
 
 
