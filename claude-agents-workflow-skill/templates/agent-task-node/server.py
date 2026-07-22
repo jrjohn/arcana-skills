@@ -2046,6 +2046,36 @@ def _pr_url_and_branch(payload):
 
 
 
+def _touched_flows(payload):
+    """The business flows this PR changed — the process ids of any .bpmn2 in its file list.
+
+    The scenario gate is scoped to these so a feature answers for the flows it TOUCHED, not the
+    repo's whole scenario backlog: changing leave-approval.bpmn2 must not be blocked by an unrelated
+    gap in purchase. A UI feature changes no .bpmn2 → empty → the gate is a no-op. Cached; best
+    effort (an unreadable PR just yields none, and the gate then no-ops rather than false-blocking).
+    """
+    if "_touched_flows" in payload:
+        return payload["_touched_flows"]
+    flows, repo = [], payload.get("repo") or ""
+    url, _ = _pr_url_and_branch(payload)
+    num = ""
+    m = re.search(r"/pull/(\d+)", url or "")
+    if m:
+        num = m.group(1)
+    try:
+        if repo and num:
+            files = subprocess.run(
+                ["gh", "api", f"repos/{repo}/pulls/{num}/files", "--paginate", "--jq", ".[].filename"],
+                capture_output=True, text=True, timeout=90).stdout.split()
+            for fn in files:
+                if fn.endswith(".bpmn2"):
+                    flows.append(os.path.basename(fn)[:-6])
+    except Exception as e:
+        print("[agent-task-node] touched-flows unavailable: %s" % e, flush=True)
+    payload["_touched_flows"] = sorted(set(flows))
+    return payload["_touched_flows"]
+
+
 def _api_path_inventory(payload):
     """The API paths the app ACTUALLY calls, read from its own repository layer.
 
@@ -2825,6 +2855,11 @@ def test_flow(payload):
             # gate was silently skipped and the green means less than it looks". Without this
             # the skip is invisible: scenarioRan=false reads identically in both cases.
             "-e", "SW_EXPECTED=" + ("1" if pr_backend_applicable else ""),
+            # Scenario gate: the business flows this PR actually changed. The runner runs the
+            # scenario matrix scoped to these, so a feature is judged on the flows it touched — a
+            # changed .bpmn2 whose required 7W1H cell has no falsifiable scenario blocks the test,
+            # a UI feature that touches no flow is a no-op.
+            "-e", "SCENARIO_TOUCHED=" + ",".join(_touched_flows(payload)),
             "-e", "RBACUI_NAV_CONFIG=/work/repo/" + str(_pf["nav"].get(
                 "navPath", "dashboard/src/app/core/navigation/nav.config.ts"))]
     if repo and branch:  # T4-1: build the PR branch and test its real code
