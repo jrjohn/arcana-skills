@@ -2763,6 +2763,12 @@ def test_flow(payload):
             "-e", "RBACUI_ACTORS=" + str(_pf["auth"].get("rbacActors", "")),
             # Only meaningful with a PR-built backend; the harness itself refuses a shared API.
             "-e", "SW_ACTORS=" + (str(_pf["auth"].get("scenarioActors", "")) if pr_backend_used else ""),
+            # Whether the business chain SHOULD have run. Set when this PR touches the backend,
+            # so the runner can tell "no backend change, legitimately not run" from "backend
+            # change, but the isolated backend never came up, so the one mutating multi-actor
+            # gate was silently skipped and the green means less than it looks". Without this
+            # the skip is invisible: scenarioRan=false reads identically in both cases.
+            "-e", "SW_EXPECTED=" + ("1" if pr_backend_applicable else ""),
             "-e", "RBACUI_NAV_CONFIG=/work/repo/" + str(_pf["nav"].get(
                 "navPath", "dashboard/src/app/core/navigation/nav.config.ts"))]
     if repo and branch:  # T4-1: build the PR branch and test its real code
