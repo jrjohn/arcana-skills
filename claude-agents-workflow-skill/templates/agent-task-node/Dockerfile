@@ -13,6 +13,12 @@ RUN curl -fsSL https://download.docker.com/linux/static/stable/aarch64/docker-27
     && rm -rf /tmp/d.tgz /tmp/docker
 
 # server.py only needs python3 (already present in the agent image).
+# flow-sim binary (linux) for S3b in-pipeline scenario auto-fill — the agent runs the divergence
+# proof itself. Built separately (cargo build --bin flow-sim in a linux rust container) and copied
+# in; kept out of git (.gitignore) as a build artifact.
+COPY flow-sim /usr/local/bin/flow-sim
+RUN chmod +x /usr/local/bin/flow-sim
+
 COPY server.py /usr/local/bin/agent-task-node.py
 
 ENV PORT=8090 \

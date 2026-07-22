@@ -2076,6 +2076,104 @@ def _touched_flows(payload):
     return payload["_touched_flows"]
 
 
+def _scenario_autofill(payload):
+    """S3b: in-pipeline auto-fill. For each touched flow with an uncovered required cell, an AI
+    drafts a falsifiable scenario pair and the machine PROVES it diverges against a throwaway
+    engine; proven pairs are committed to the PR. Opt-in (SCENARIO_AUTOFILL=1). It NEVER silently
+    passes a gap: an unproven or unfillable cell is returned for escalate, and S3a still blocks.
+
+    Caveat, stated because it bounds correctness: the throwaway engine runs the DEPLOYED flows
+    (the arcana/kogito-bpmn image), so a scenario is proven against the deployed shape of the flow.
+    When a PR changes the flow STRUCTURE, that proof is against the old shape — S3a's static check
+    on the PR's own .bpmn2 still blocks a genuinely new uncovered cell, so nothing passes unproven.
+    Full correctness needs the PR's compiled engine (a maven build), deferred.
+    """
+    if os.environ.get("SCENARIO_AUTOFILL") != "1":
+        return {"ran": False, "reason": "disabled (SCENARIO_AUTOFILL!=1)"}
+    touched = _touched_flows(payload)
+    if not touched:
+        return {"ran": False, "reason": "no touched business flow"}
+    flow_sim = os.environ.get("FLOW_SIM_BIN", "/usr/local/bin/flow-sim")
+    if not os.path.exists(flow_sim):
+        return {"ran": False, "reason": "flow-sim binary not in agent image"}
+    net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
+    repo = payload.get("repo") or ""
+    _, branch = _pr_url_and_branch(payload)
+    if not (repo and branch):
+        return {"ran": False, "reason": "no repo/branch"}
+    token = os.environ.get("GH_TOKEN", "")
+    eng = "aaf-sim-autofill-" + (_safe_seg(payload.get("_piid")) or "adhoc")[:12]
+    src = tempfile.mkdtemp(prefix="autofill-")
+    filled, escalate = {}, []
+
+    def curl(url):
+        r = subprocess.run(["docker", "run", "--rm", "--network", net, "curlimages/curl:latest",
+                            "-s", "-o", "/dev/null", "-w", "%{http_code}", url],
+                           capture_output=True, text=True, timeout=30)
+        return r.stdout.strip()
+
+    try:
+        auth = ("x-access-token:%s@" % token) if token else ""
+        c = subprocess.run(["git", "clone", "--depth", "1", "--branch", branch,
+                            "https://%sgithub.com/%s" % (auth, repo), src],
+                           capture_output=True, text=True, timeout=300)
+        if c.returncode != 0:
+            return {"ran": False, "reason": "clone failed: " + (c.stderr or "")[-160:]}
+        if not os.path.exists(os.path.join(src, "scripts/scenario-autofill.py")):
+            return {"ran": False, "reason": "PR has no scenario-autofill.py (pre-S2 branch)"}
+
+        subprocess.run(["docker", "rm", "-f", eng], capture_output=True, timeout=60)
+        r = subprocess.run(
+            ["docker", "run", "-d", "--name", eng, "--network", net,
+             "-e", "JDBC_URL=jdbc:postgresql://kogito-pg:5432/workflow",
+             "-e", "POSTGRES_USER=kogito", "-e", "POSTGRES_PASSWORD=kogito",
+             "-e", "KAFKA_BOOTSTRAP=kafka:9092", "-e", "KOGITO_SERVICE_URL=http://%s:8080" % eng,
+             "arcana/kogito-bpmn:1.0.0"],
+            capture_output=True, text=True, timeout=120)
+        if r.returncode != 0:
+            return {"ran": False, "reason": "engine start failed: " + (r.stderr or "")[-160:]}
+        ready = False
+        for _ in range(50):
+            if curl("http://%s:8080/q/health/ready" % eng) == "200":
+                ready = True
+                break
+            time.sleep(3)
+        if not ready:
+            return {"ran": False, "reason": "throwaway engine never became ready"}
+
+        env = dict(os.environ)
+        env.update({
+            "FLOW_SIM": flow_sim,
+            "SIM_ENGINE_URL": "http://%s:8080" % eng,
+            "SIM_API_URL": os.environ.get("TEST_API_TARGET", "http://aaf-arcana-cloud-rust:8080"),
+            "ENGINE_URL": "http://aaf-kogito-bpmn:8080",
+            "SIM_DATA_INDEX_URL": os.environ.get("TEST_DATAINDEX", "http://aaf-data-index:8080"),
+            "BPMN_DIR": os.path.join(src, "kogito-bpmn/src/main/resources/boo/arcana"),
+            "CLAUDE": CLAUDE,
+        })
+        for flow in touched:
+            af = subprocess.run(["python3", os.path.join(src, "scripts/scenario-autofill.py"), flow],
+                                capture_output=True, text=True, timeout=2400, env=env, cwd=src)
+            tail = (af.stdout or "")[-400:]
+            print("[agent-task-node] autofill %s: rc=%s %s" % (flow, af.returncode, tail.replace("\n", " ")), flush=True)
+            if af.returncode == 0 and "無需自動補" not in af.stdout:
+                filled[flow] = "filled"
+            elif af.returncode != 0:
+                escalate.append(flow)
+
+        if filled:
+            def g(*a):
+                return subprocess.run(["git", "-C", src, *a], capture_output=True, text=True, timeout=120)
+            g("add", "scripts/sample-scenarios")
+            g("-c", "user.email=agent@arcana.boo", "-c", "user.name=AI-BPM Scenario Gate",
+              "commit", "-m", "test(scenario): auto-fill proven-falsifiable scenarios for " + ", ".join(filled))
+            g("push", "origin", branch)
+        return {"ran": True, "filled": sorted(filled), "escalate": sorted(escalate)}
+    finally:
+        subprocess.run(["docker", "rm", "-f", eng], capture_output=True, timeout=60)
+        shutil.rmtree(src, ignore_errors=True)
+
+
 def _api_path_inventory(payload):
     """The API paths the app ACTUALLY calls, read from its own repository layer.
 
@@ -2821,6 +2919,16 @@ def test_flow(payload):
         if built:
             api_target, pr_backend_used = built, True
             pr_backend_applicable = True
+
+    # S3b: before the test run, auto-fill any uncovered scenario cell of a touched flow and push
+    # the proven scenarios to the PR — so the scenario gate (S3a) inside the runner then sees the
+    # coverage complete. Opt-in and best-effort: disabled or unfillable leaves the gap for S3a to
+    # block. Runs before the runner clones, so the pushed scenarios are in the branch it pulls.
+    autofill = _scenario_autofill(payload)
+    if autofill.get("ran"):
+        print("[agent-task-node] scenario autofill: filled=%s escalate=%s"
+              % (autofill.get("filled"), autofill.get("escalate")), flush=True)
+
     cmd = ["docker", "run", "--rm", "--network", net,
            # claude auth for the runner's AI semantic review step (uiux-ai-review.mjs): pass the
            # SAME long-lived OAuth token the agent uses (env, not a shared-home mount — the mount
@@ -2889,6 +2997,10 @@ def test_flow(payload):
             # able to tell those two greens apart.
             rep["prBackendTested"] = pr_backend_used
             rep["prBackendApplicable"] = pr_backend_applicable
+            # S3b: what the in-pipeline scenario auto-fill did (or why it didn't). An escalate here
+            # means a touched flow's cell could not be filled falsifiably — the scenario gate in
+            # the runner then blocks it, so this is legible rather than a silent skip.
+            rep["scenarioAutofill"] = autofill
             _post_commit_status(repo, branch, rep)
             return rep
         tail = ((r.stderr or "") + (r.stdout or ""))[-400:]
