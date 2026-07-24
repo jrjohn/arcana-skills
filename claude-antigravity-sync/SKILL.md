@@ -3,18 +3,32 @@ name: claude-antigravity-sync
 description: Synchronizes Claude Code Agent Jobs into Antigravity conversations, PostgreSQL RAG archive, and manages CLI bridge tools (agjobs, agload).
 ---
 
-# Claude Code Trajectory Sync Skill
+# Claude Code & Antigravity Trajectory Sync Skill
 
-This skill governs the synchronization, recall, and management of **Claude Code Agent Jobs (`~/.claude/jobs/`)** inside **Antigravity**.
+This skill provides full, bi-directional knowledge synchronization and automated menu registration for **Claude Code Agent Jobs (`~/.claude/jobs/`)** inside **Antigravity**.
 
-## Architecture Overview
+---
+
+## 📦 1-Click Quick Installation
+
+To install this skill and all CLI bridge tools (`agjobs`, `agload`, Python scripts, launchd daemon) on any machine:
+
+```bash
+git clone https://github.com/jrjohn/arcana-skills.git
+cd arcana-skills/claude-antigravity-sync
+./install.sh
+```
+
+---
+
+## 🏗️ Architecture Overview
 
 ```
 [Claude Code Jobs] ~/.claude/jobs/*/state.json
        │
        ├── 1. Transcripts Sync ──► ~/.gemini/antigravity/brain/claude-*/.system_generated/logs/transcript.jsonl
        │
-       ├── 2. Native Conversations ──► agentapi new-conversation (Registers in state.vscdb & Conversations sidebar)
+       ├── 2. Native Conversations ──► agentapi new-conversation (Registers in Conversations sidebar)
        │
        └── 3. Vector & RAG Archive ──► PostgreSQL archive_main@arcana.boo (bge-m3 1024-dim embeddings)
 ```
@@ -24,18 +38,27 @@ This skill governs the synchronization, recall, and management of **Claude Code 
 
 ---
 
-## Command & Tool Reference
+## 🛠️ Package File Structure
 
-| Tool / CLI | Path | Description |
-|---|---|---|
-| `agjobs` | `/Users/jrjohn/bin/agjobs` | Displays live overview of Needs Input, Working, and Completed Claude agent tasks. |
-| `agload` | `/Users/jrjohn/bin/agload` | Loads and resumes context of any Claude Code job by name or session ID. |
-| `agentapi` | `/Users/jrjohn/.gemini/antigravity/bin/agentapi` | Official Antigravity CLI to create native conversations. |
-| `sync_all.sh` | `/Users/jrjohn/antigravity-archive/sync_all.sh` | Master sync script executed every 15 mins by launchd (`com.jrjohn.antigravity-archive.plist`). |
+```text
+claude-antigravity-sync/
+├── SKILL.md                              # Skill definition & agent instructions
+├── install.sh                            # 1-Click installer script
+├── bin/
+│   ├── agjobs                            # CLI tool to list live jobs & conversations
+│   └── agload                            # CLI tool to load/resume any job
+└── scripts/
+    ├── sync_claude_to_antigravity.py     # Converts jobs to brain transcripts
+    ├── batch_create_conversations.py     # Uses official agentapi to create native UI items
+    ├── claude_jobs_aggregator.py         # Aggregates live jobs & conversations
+    ├── ag2archive_pg.py                  # Syncs vector embeddings to PostgreSQL
+    ├── sync_all.sh                       # Master sync execution script
+    └── com.jrjohn.antigravity-archive.plist # Launchd background daemon config
+```
 
 ---
 
-## Agent Instructions & Rules
+## 🤖 Agent Instructions & Rules
 
 1. **When User asks to load or continue a job** (e.g., `"載入 Somnics Cloud 統計"`, `"繼續 MIS"`):
    - Execute `/Users/jrjohn/bin/agload "<job_name>"` to read current state.
