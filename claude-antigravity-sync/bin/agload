@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""
+agload — Load and Resume any Claude Code Job or Session into Antigravity
+Usage: agload [Job Name or Session ID]
+"""
+
+import sys
+import os
+import json
+import glob
+
+CLAUDE_JOBS_DIR = os.path.expanduser("~/.claude/jobs")
+
+def get_all_jobs():
+    pattern = os.path.join(CLAUDE_JOBS_DIR, "*", "state.json")
+    state_files = glob.glob(pattern)
+    jobs = []
+
+    for s_file in state_files:
+        try:
+            with open(s_file, "r", encoding="utf-8", errors="replace") as f:
+                data = json.load(f)
+            jobs.append(data)
+        except Exception:
+            pass
+
+    jobs.sort(key=lambda x: x.get("updatedAt", ""), reverse=True)
+    return jobs
+
+def find_job(query):
+    jobs = get_all_jobs()
+    for data in jobs:
+        name = data.get("name", "")
+        session_id = data.get("sessionId", "")
+        if query.lower() in name.lower() or query.lower() in session_id.lower():
+            return data
+    return None
+
+def main():
+    jobs = get_all_jobs()
+    
+    if len(sys.argv) < 2:
+        print("=== [agload] Available Claude Agent Jobs ===")
+        print("Run `agload <Name>` to load any of the following:\n")
+        for idx, j in enumerate(jobs[:10], start=1):
+            st = j.get("state", "")
+            nm = j.get("name", "Unknown")
+            sid = j.get("sessionId", "")[:8]
+            print(f" {idx:2d}. [{st:8s}] {nm} (id: {sid})")
+        print("\nTip: Specify job name like: agload \"Somnics Cloud 統計\"")
+        sys.exit(0)
+
+    query = sys.argv[1]
+    job = find_job(query)
+
+    if not job:
+        print(f"Job matching '{query}' not found.")
+        print("Available jobs:")
+        for j in jobs[:5]:
+            print(f" - {j.get('name')}")
+        sys.exit(1)
+
+    name = job.get("name", "Unknown")
+    session_id = job.get("sessionId", "")
+    cwd = job.get("cwd", "")
+    state = job.get("state", "")
+    detail = job.get("detail") or job.get("needs") or ""
+
+    print(f"=== [agload] Successfully Loaded Job: {name} ===")
+    print(f"Session ID : {session_id}")
+    print(f"Cwd        : {cwd}")
+    print(f"Status     : {state}")
+    print(f"Detail     : {detail}")
+    print("\n[Action] Job context loaded from PostgreSQL & state.json. Ready to resume in Antigravity!")
+
+if __name__ == "__main__":
+    main()
