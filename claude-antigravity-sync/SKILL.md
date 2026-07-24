@@ -1,5 +1,5 @@
 ---
-name: claude-trajectory-sync
+name: claude-antigravity-sync
 description: Synchronizes Claude Code Agent Jobs into Antigravity conversations, PostgreSQL RAG archive, and manages CLI bridge tools (agjobs, agload).
 ---
 
