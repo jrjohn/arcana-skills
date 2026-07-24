@@ -116,54 +116,6 @@ Verify after wiring: `npm run build && npm run test -- --watch=false --browsers=
 
 ---
 
-## 📣 The manager may speak mid-build
-
-`design.manager_notes` (when present) is what a human typed at THIS feature while you
-were building it — newest last, each with author + time. Read it BEFORE writing code
-each round and treat it as part of the requirement:
-
-- it may add scope ("順便把時間也顯示出來") → build it, and say in the PR body which note it answers;
-- it may correct a misreading of the SRS → the note wins; note the divergence in the PR body;
-- it may point at something you already shipped → verify rather than rebuild.
-
-Empty notes = build the written spec, as usual.
-
-## 🔒 長工作三條(節點契約 — 出自 COR/AFP/NTP,只取最小可用版)
-
-長流程的失效不是「AI 不夠聰明」,是**它在殘缺輸入上很有信心地產出了東西**(2026-07-19 實證:
-decompose 的 prompt 被截斷、`goal` 整段消失,它照樣交出一份 backlog,連燒兩輪)。三條規則,
-每一條都必須做到:
-
-1. **進場自檢** — 動工前逐項確認需要的輸入都在且完整(空值、佔位字串、被截斷的 JSON、
-   「(none)」都算不完整)。缺 → **停下並點名缺哪一項**,不要猜、不要用預設值填補、
-   不要「先做能做的部分」。這是唯一能在三十分鐘前停損的機制。
-2. **出場驗收** — 交付前用**可觀察條件**自檢:下一棒需要的每一項我都產出了嗎?格式合法嗎?
-   引用得到嗎?沒過就修到過再交,不要把驗證外包給下游。
-3. **交接摘要** — 輸出最後附一份 ≤20 行的 `handoff`:**完成什麼 / 關鍵決定與理由 /
-   下一棒要注意什麼**。context 被壓縮或換人接手時,靠它復原的是「為什麼這樣做」——
-   那正是壓縮最先丟掉的東西。
-
-**本 skill 的具體對照**:進場=SRS/SDD/uiuxSpec/manager_notes 缺哪一項就講明再動工;
-出場=build 綠、單元測試綠、四道 lint(token/i18n/dead-control/a11y)零新增債;
-交接=PR body 就是 handoff,寫清「回應了哪些 AC 與哪些 manager note、什麼刻意沒做」。
-
-## 🎯 Product-Quality Rules(產品級 UI — machine-gated,違反會被 run-test 硬閘擋下)
-
-以人為本(最高原則):畫面用使用者的話(員工語彙,如「待辦事項」「審核中心」),
-動線接續使用者當下任務,看得到的都是可用的(不渲染 disabled 的整塊管理區、不留假資料/死按鈕)。
-
-1. **共享元件優先** — loading 用 busy-overlay;頁頭用 page-header;空/載入/錯誤三態用
-   skeleton/empty/error 三件套;錯誤提示走共用 toast/error 服務。**不准再發明** inbox/
-   list/panel/spinner 的第二個版本;缺共享元件時先建在 `presentation/shared/` 再用。
-2. **Design tokens** — scss 一律 `var(--…)`(`_tokens.scss` 為唯一源)。裸 hex/px 會被
-   **token-lint 回歸閘**(e2e/token-lint.mjs)直接 FAIL — 寫之前想 token 名。
-3. **i18n** — 模板不寫死中文;一律 `| translate` + 在 i18n.service 補 zh-TW/en 兩份 key。
-   新硬編碼 CJK 行會被 **i18n-lint 回歸閘** FAIL。
-4. **斷點** — 375/768/1280 三寬都要能用(多欄→摺疊/抽屜;寬表→容器內橫捲,頁面本身
-   永不橫捲)。uiux-review 三斷點都會量,任一斷點 FAIL 即擋。
-5. **a11y 最低線** — 可互動控件都有可及名稱(aria-label/labelledby)、動態回饋區
-   aria-live、目標尺寸 ≥40px、鍵盤可達。
-
 ## Rules Priority
 
 ### 🔴 CRITICAL (Must Fix Immediately)
@@ -1744,22 +1696,3 @@ export class ItemListComponent {
 | ng-bootstrap | 19.0+ |
 | Dexie | 4.0+ |
 | @ngx-translate | Latest |
-
-## 現場觀察(`site` verb)—— 當「碼是對的、跑起來不是」
-
-你手上只有原始碼與 diff,所以有一整類問題對你是結構性不可見的:程式碼正確,而執行中的系統不是那樣。
-2026-07-20 的每一個關鍵診斷都需要它 —— `requester` 有沒有真的進到引擎變數、送出去的 bundle 裡到底有沒有
-那個元件(部署映像比分支舊兩天)、某個使用者有沒有對應的 PG role。
-
-請 agent 執行 `site` verb,**唯讀**:
-
-| kind | 問的問題 |
-|---|---|
-| `sql` | 資料實際長什麼樣(SELECT / WITH / EXPLAIN / SHOW 才放行) |
-| `http` | 使用者**真正收到**的成品(不是你 build 出來的那份) |
-| `images` | 現在跑的是哪個映像、何時起的 —— 「merged ≠ deployed」的那一問 |
-
-它寫不了任何東西:DB 帳號只有 SELECT,而且那是 GRANT 保證的,不是約定。所以**修正仍必須走 gated PR** ——
-一個能直接改正式環境的節點,會讓整條審查鏈變成可選的。
-
-**什麼時候該用**:你準備說「在我分支上是好的」當作對正式環境的證據時。那句話正是它要取代的。

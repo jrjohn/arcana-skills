@@ -16,54 +16,6 @@ description: |
 
 ---
 
-## 🔒 長工作三條(節點契約 — 出自 COR/AFP/NTP,只取最小可用版)
-
-長流程的失效不是「AI 不夠聰明」,是**它在殘缺輸入上很有信心地產出了東西**(2026-07-19 實證:
-decompose 的 prompt 被截斷、`goal` 整段消失,它照樣交出一份 backlog,連燒兩輪)。三條規則,
-每一條都必須做到:
-
-1. **進場自檢** — 動工前逐項確認需要的輸入都在且完整(空值、佔位字串、被截斷的 JSON、
-   「(none)」都算不完整)。缺 → **停下並點名缺哪一項**,不要猜、不要用預設值填補、
-   不要「先做能做的部分」。這是唯一能在三十分鐘前停損的機制。
-2. **出場驗收** — 交付前用**可觀察條件**自檢:下一棒需要的每一項我都產出了嗎?格式合法嗎?
-   引用得到嗎?沒過就修到過再交,不要把驗證外包給下游。
-3. **交接摘要** — 輸出最後附一份 ≤20 行的 `handoff`:**完成什麼 / 關鍵決定與理由 /
-   下一棒要注意什麼**。context 被壓縮或換人接手時,靠它復原的是「為什麼這樣做」——
-   那正是壓縮最先丟掉的東西。
-
-**本 skill 的具體對照**:進場=SRS 與既有 design token/共用元件清單;出場=每個畫面都有
-可機器驗收的規格(斷點、狀態、token 名);交接=handoff 寫清「沿用了哪些既有元件、
-哪些是新增的以及為什麼」。
-
-## 🎯 MODE: Product uiuxSpec(sdlc-code-flow 的 uiux 節點用 — 與原型產生器互斥)
-
-當呼叫方要的是精簡 `uiuxSpec`(如 sdlc-code-flow 的 uiux 節點,明示不跑 Phase-3
-出圖/DOCX pipeline)時,**跳過本檔全部 MANDATORY 原型驗證**,改交付「可被機器閘驗收
-的產品設計 spec」。此模式的第一原則是**以人為本**(John 2026-07-18 定):
-
-0. **以人為本四問**先於一切視覺規則 — 語彙(用使用者的話,員工聽得懂:「待辦事項」
-   不是 "pending tasks")、動線(從哪來/做什麼/去哪)、負荷(一個 job 一個入口,
-   看得到的都是可用的)、寬容(錯誤講人話、可回復、三態齊全)。
-
-spec 必含六節,每節都要「可驗收」(對應 run-test 的機器閘,不是形容詞):
-1. **元件指定** — 指名要複用的既有共享元件(busy-overlay/page-header/skeleton-empty-
-   error 三件套/toast 服務/既有 table+search+pagination pattern)。禁止發明第二個
-   inbox/list/panel;若真無現成元件,明說「新增共享元件 X 並落在 presentation/shared/」。
-2. **Token 引用** — 顏色/間距/字階一律 `var(--…)`(來源 `_tokens.scss`);spec 裡不准
-   出現裸 hex/px(token-lint 回歸閘會擋)。
-3. **三態+文案** — loading/empty/error 各自的呈現與**人話文案**(zh-TW+en 皆給,
-   i18n key 命名跟現有 namespace;新硬編碼中文會被 i18n-lint 擋)。
-4. **斷點行為** — 375/768/1280 三寬各自的版面策略(欄數摺疊/抽屜化/表格橫捲容器);
-   uiux-review 三斷點都會量。
-5. **a11y 條款** — 可聚焦控件的 aria 名稱、鍵盤路徑、對比要求(WCAG AA 具體值)。
-6. **驗收旅程** — 1-2 條 persona 旅程(起點路由→目標動作),journey-walk 可直接執行。
-
-Nielsen 10 heuristics 作為自查表(可見狀態/貼近真實/使用者控制/一致/防錯/辨識優於
-回憶/彈性/極簡/錯誤恢復/求助)。輸出仍受呼叫方 schema 約束;此模式下本節優先於
-下方所有 CRITICAL/MANDATORY 規則。
-
----
-
 ## 與 app-requirements-skill 整合
 
 ```
@@ -965,7 +917,6 @@ node ~/.claude/skills/app-uiux-designer.skill/templates/ui-flow/validate-iframe-
 | 平台 | `references/platforms/{ios-hig,material-design,wcag}.md` |
 | 心理學 | `references/psychology/{gestalt,cognitive,emotional}.md` |
 | 程式碼生成 | `references/code-gen/{react,angular,swiftui,compose}.md` |
-| **版面與 UX 稽核 ★** | `references/{layout-workspace-patterns,ux-audit-rubric,design-system}.md` — 設計/稽核**必讀**:column budget(避免「N 格」擠壓)、4 版面原型、漸進揭露、design-token、可量測門檻。uiux 節點產 spec 與 PM 節點驗可用性共用此標準。 |
 
 ### 必要模組 HTML 模板
 

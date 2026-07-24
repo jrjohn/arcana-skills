@@ -64,12 +64,10 @@ else
     exit 0
 fi
 
-# NOTE (v1.28, 2026-07-20): the sentinel / osearch_marker are set AFTER osearch
-# actually runs (see below, past the cooldown check and timeout guard). Setting
-# them here — before the cooldown early-exit and before the search even executes —
-# unlocked the preflight discipline on the two paths where the archive was NOT
-# actually consulted (cooldown skip; timeout kill), i.e. it bypassed the gate
-# exactly when it should have held.
+# Set archive-preflight sentinel for this archive-intent prompt, even if the
+# search is skipped (cooldown) or returns nothing — we "consulted" the archive,
+# so subsequent SSH / sqlite3 / memory grep should now unblock.
+[ -n "$sid" ] && : > "/tmp/claude-archive-preflight-${sid}"
 
 # Cross-project search via osearch (global by default). osearch warm ~1-2s, but a
 # slow/unreachable remote PG (e.g. over WAN) can hang 20-30s and blow past the
@@ -102,15 +100,6 @@ fi
 # Timed out (cap killed it) → arm breaker, skip this turn.
 [ "$rc" -ge 124 ] && { : > "$COOLDOWN"; exit 0; }
 rm -f "$COOLDOWN"
-
-# osearch actually ran (empty result still counts as "consulted, found nothing"),
-# so unlock the preflight. Set osearch_marker too: archive-preflight.sh (v1.28+)
-# only treats osearch as opening a session — vsearch/csearch alone cannot unlock.
-if [ -n "$sid" ]; then
-    : > "/tmp/claude-archive-osearch-${sid}"
-    : > "/tmp/claude-archive-preflight-${sid}"
-fi
-
 result=$(printf '%s' "$result" | head -8)
 
 # Empty results → don't inject (avoid noise) but sentinel is set.

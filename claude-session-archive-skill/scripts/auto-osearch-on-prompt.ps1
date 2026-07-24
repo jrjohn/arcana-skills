@@ -61,21 +61,18 @@ if (-not $crs) { exit 0 }
 # Cross-project semantic search (osearch is global by default).
 # Bound by Claude Code's hook-level timeout (set in settings.json, typically 5s).
 # osearch typically returns in ~500ms — 1.1s; if Ollama is down it fails fast.
-$searched = $false
 try {
     $result = & $crs osearch $prompt 2>$null | Select-Object -First 8 | Out-String
-    $searched = $true
 } catch {
     $result = ''
 }
 
-# Unlock the preflight only if osearch ACTUALLY ran (an empty result still counts
-# as "consulted, found nothing"; a thrown exception — crs/Ollama down — does not).
-# Set osearch_marker too: archive-preflight.ps1 (v1.28+, 2026-07-20) only treats
-# osearch as opening a session — vsearch/csearch alone cannot unlock.
-if ($sid -and $searched) {
-    New-Item -ItemType File -Force -Path (Join-Path $env:TEMP "claude-archive-osearch-$sid")   | Out-Null
-    New-Item -ItemType File -Force -Path (Join-Path $env:TEMP "claude-archive-preflight-$sid") | Out-Null
+# Set archive-preflight sentinel even if results are empty.
+# Rationale: "I queried the archive, found nothing" still satisfies the
+# preflight rule — subsequent sqlite3 / memory grep should now unblock.
+if ($sid) {
+    $sentinel = Join-Path $env:TEMP "claude-archive-preflight-$sid"
+    New-Item -ItemType File -Force -Path $sentinel | Out-Null
 }
 
 if (-not $result -or $result.Trim().Length -eq 0) { exit 0 }

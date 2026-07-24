@@ -5,20 +5,7 @@
 ARG BASE_IMAGE=daily-ci-agent:latest
 FROM ${BASE_IMAGE}
 
-# do_test dispatches to the playwright runner image via the mounted docker.sock — so add just
-# the docker CLI (static aarch64 binary, ~50MB; talks to /var/run/docker.sock, no in-image
-# daemon). Chromium / build tooling stay in the runner image, not here.
-RUN curl -fsSL https://download.docker.com/linux/static/stable/aarch64/docker-27.5.1.tgz -o /tmp/d.tgz \
-    && tar xzf /tmp/d.tgz -C /tmp && install /tmp/docker/docker /usr/local/bin/docker \
-    && rm -rf /tmp/d.tgz /tmp/docker
-
 # server.py only needs python3 (already present in the agent image).
-# flow-sim binary (linux) for S3b in-pipeline scenario auto-fill — the agent runs the divergence
-# proof itself. Built separately (cargo build --bin flow-sim in a linux rust container) and copied
-# in; kept out of git (.gitignore) as a build artifact.
-COPY flow-sim /usr/local/bin/flow-sim
-RUN chmod +x /usr/local/bin/flow-sim
-
 COPY server.py /usr/local/bin/agent-task-node.py
 
 ENV PORT=8090 \

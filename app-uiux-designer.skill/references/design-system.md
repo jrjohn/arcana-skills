@@ -2,8 +2,6 @@
 
 This document provides a complete methodology for building scalable design systems, applicable to App and Web projects.
 
-> **本專案實例(Arcana dashboard)**:本檔是**泛用方法論**;實際 token 值定義在 app 的 `dashboard/src/app/shared/styles/_tokens.scss`(`:root` CSS 變數,疊在 Bootstrap `--bs-*` 上)。實作**一律 `var(--…)`,禁止裸 hex/px**。版面怎麼用這些 token(欄數、原型、漸進揭露)見 **`layout-workspace-patterns.md`**。
-
 ## Table of Contents
 1. [Design System Overview](#design-system-overview)
 2. [Design Tokens](#design-tokens)
