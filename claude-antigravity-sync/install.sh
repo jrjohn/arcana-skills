@@ -34,7 +34,7 @@ cp "$SCRIPT_DIR/SKILL.md" "$SKILL_TARGET/SKILL.md"
 
 # 5. Install & Load launchd daemon
 if [ -f "$SCRIPT_DIR/scripts/com.jrjohn.antigravity-archive.plist" ]; then
-    cp "$SCRIPT_DIR/scripts/com.jrjohn.antigravity-archive.plist" "$LAUNCHD_PLIST"
+    sed "s|/Users/jrjohn|$HOME|g" "$SCRIPT_DIR/scripts/com.jrjohn.antigravity-archive.plist" > "$LAUNCHD_PLIST"
     launchctl unload "$LAUNCHD_PLIST" 2>/dev/null || true
     launchctl load "$LAUNCHD_PLIST"
     echo "✓ Background Launchd Daemon loaded: com.jrjohn.antigravity-archive"
