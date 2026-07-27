@@ -514,6 +514,35 @@ def _deep_merge(base, over):
     return base
 
 
+def _registry_project(repo, branch):
+    """Ask the platform's project registry about this (repo, branch).
+
+    Returns {"asked": False} when no registry is configured — the pipeline then falls back to
+    the hardcoded allowlist, marked second-class in the report, exactly as a declared gate
+    list is. Returns {"error": ...} when a registry IS configured and cannot be reached: that
+    must never degrade into "not registered" (which refuses everything) nor into the
+    allowlist (which is the copy the registry exists to replace). Both are answers a caller
+    has to make on purpose.
+    """
+    url = (os.environ.get("SDLC_REGISTRY_URL") or "").rstrip("/")
+    if not url:
+        return {"asked": False}
+    if not url.startswith("http"):
+        url = "http://" + url
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url, timeout=15) as r:
+            body = json.load(r)
+    except Exception as e:
+        return {"asked": True, "error": str(e)}
+    if body.get("error"):
+        return {"asked": True, "error": body["error"]}
+    match = next((p for p in (body.get("projects") or [])
+                  if (p.get("repo") or "").lower() == repo.lower()
+                  and (p.get("integrationBranch") or "") == branch), None)
+    return {"asked": True, "project": match}
+
+
 def preflight(payload):
     """Can this pipeline legitimately run against this repo? Answered in seconds, before a
     single AI session is paid for. Returns {"ok": bool, "reason": str, "checks": [...]}.
@@ -542,10 +571,33 @@ def preflight(payload):
 
     if not repo:
         return fail("no repo declared — nothing to check this pipeline against")
-    if repo not in IMPLEMENT_REPO_ALLOWLIST:
-        return fail("repo %r is not in the pipeline allowlist %s (checked BEFORE any AI session, "
-                    "not at implement)" % (repo, sorted(IMPLEMENT_REPO_ALLOWLIST)))
-    checks.append("allowlist: ok")
+
+    # May this pipeline spend on this repo? The registry is the authority; the hardcoded
+    # allowlist is a copy of the answer, in another language, in another repo. Same
+    # first-class/second-class split the gate policy uses: asked beats declared, and which
+    # one answered is recorded, because a copy can disagree while looking like agreement.
+    reg = _registry_project(repo, base)
+    if reg.get("error"):
+        return fail("project registry unreachable (%s) — refusing rather than falling back to "
+                    "the hardcoded allowlist, which is a copy that can disagree with it"
+                    % reg["error"])
+    if reg.get("asked"):
+        proj = reg.get("project")
+        if not proj:
+            return fail("no registered SDLC project for %s@%s — register it (status starts at "
+                        "'onboarding') before the pipeline may spend on it" % (repo, base))
+        if proj.get("status") != "active":
+            return fail("project %r is %r, not 'active' — registered is not the same as "
+                        "authorised to spend" % (proj.get("projectId"), proj.get("status")))
+        checks.append("registry: %s (%s, %s)" % (proj.get("projectId"), proj.get("tier"),
+                                                 proj.get("status")))
+        payload["_sdlc_project"] = proj
+    else:
+        if repo not in IMPLEMENT_REPO_ALLOWLIST:
+            return fail("repo %r is not in the pipeline allowlist %s (checked BEFORE any AI "
+                        "session, not at implement)" % (repo, sorted(IMPLEMENT_REPO_ALLOWLIST)))
+        checks.append("allowlist: ok (second-class — SDLC_REGISTRY_URL unset, so this is a "
+                      "hardcoded copy of what the registry knows)")
 
     prof = _load_profile(payload)
     declared = prof.get("_ref")
