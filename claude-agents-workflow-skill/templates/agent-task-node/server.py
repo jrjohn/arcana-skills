@@ -982,9 +982,46 @@ def _instance_claude_config(piid):
             else:
                 with open(dst_json, "w") as f:
                     f.write("{}")
+        _seed_instance_settings(cfg)
         return cfg
     except OSError:
         return None
+
+
+# Tool permissions for a headless run. Seeded separately from the credentials above so
+# instances created before this existed pick it up too.
+#
+# Without a settings.json in CLAUDE_CONFIG_DIR there are no allow rules at all, and a
+# `claude -p` run has no human to approve anything — so the first Bash command it needs
+# simply fails. That is not hypothetical: the SCAN node reported
+#   "SCAN aborted: `gh pr list` was blocked by the permission sandbox (requires approval)"
+# and returned zero PRs while looking like a normal completion. The mounted /root/.claude
+# has the rules but the per-instance dir never inherited them.
+#
+# Deliberately NOT a copy of the host's settings.json: that carries hooks (archive
+# preflight, auto-osearch), a statusline and plugins that are meaningless-to-broken in
+# this container. Only the tool permissions are seeded, and only what a bounded agent
+# working on a throwaway clone needs. This is strictly narrower than the
+# `--dangerously-skip-permissions` the implement / pm-review verbs already pass.
+_AGENT_SETTINGS = {
+    "permissions": {"allow": ["Bash", "Read", "Edit", "Write", "WebFetch(domain:*)"]},
+    "includeCoAuthoredBy": False,
+}
+
+
+def _seed_instance_settings(cfg):
+    """Write the headless permission rules into an instance config dir (idempotent)."""
+    path = os.path.join(cfg, "settings.json")
+    if os.path.exists(path):
+        return
+    try:
+        os.makedirs(cfg, exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(_AGENT_SETTINGS, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)          # atomic: a concurrent run never reads a half file
+    except OSError as e:
+        print("[agent-task-node] could not seed instance settings: %s" % e, flush=True)
 
 
 class RateLimitError(RuntimeError):
