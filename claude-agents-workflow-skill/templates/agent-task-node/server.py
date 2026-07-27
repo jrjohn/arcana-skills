@@ -2206,6 +2206,22 @@ def _scenario_autofill(payload):
     flow_sim = os.environ.get("FLOW_SIM_BIN", "/usr/local/bin/flow-sim")
     if not os.path.exists(flow_sim):
         return {"ran": False, "reason": "flow-sim binary not in agent image"}
+    # This binary is a build artifact copied into the image by hand, with nothing tying it to
+    # the source it was built from. "The simulator ran and found nothing" has therefore never
+    # carried a claim about WHICH simulator — the same gap the stale-image gate closed for
+    # services. Demand a schema it understands; an unreadable answer means an old copy, and
+    # an old copy is notRun, not a pass.
+    _need_schema = int(os.environ.get("FLOW_SIM_MIN_SCHEMA", "1"))
+    try:
+        _v = json.loads(subprocess.run([flow_sim, "--version"], capture_output=True, text=True,
+                                       timeout=30).stdout or "{}")
+        _have = int(_v.get("scenarioSchema", 0))
+    except Exception as e:
+        return {"ran": False, "reason": "flow-sim --version unreadable (%s) — too old to trust" % e}
+    if _have < _need_schema:
+        return {"ran": False,
+                "reason": "flow-sim scenario schema %s < required %s — stale binary in image"
+                          % (_have, _need_schema)}
     net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
     repo = payload.get("repo") or ""
     _, branch = _pr_url_and_branch(payload)
