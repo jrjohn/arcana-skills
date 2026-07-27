@@ -175,6 +175,16 @@ SCHEMAS = {
                 "assumption": {"type": "string"}, "because": {"type": "string"}},
                 "required": ["assumption"]}},
             "outOfScope": {"type": "array", "items": {"type": "string"}},
+            # New work or a continuation, CHECKED against what this product has actually
+            # run — not copied from the submitter's tick. `verified` says whether the claim
+            # was confirmed against that list, so a downstream reader can tell a checked
+            # answer from an unchecked one.
+            "continuation": {"type": "object", "properties": {
+                "kind": {"type": "string", "enum": ["new", "continue"]},
+                "slug": {"type": "string"},
+                "verified": {"type": "boolean"},
+                "why": {"type": "string"}},
+                "required": ["kind", "verified"]},
         },
         "required": ["sufficient", "understanding", "openQuestions"],
     },
@@ -680,6 +690,54 @@ def _flow_inventory(payload, workdir):
     return {"flows": sorted(cells), "requiredCells": cells, "uncovered": uncovered}
 
 
+
+def _existing_features(payload):
+    """What has already been built (or is being built) FOR THIS REPO, from the Data Index.
+
+    Mechanical, and it exists so the intake node can CHECK the answer to "is this new or a
+    continuation" rather than believe it. A person reaching for this pipeline rarely
+    remembers whether a slug was used eighteen months ago; two features in this product have
+    already been started twice, and nothing asked.
+
+    Keyed on (repo, slug) — a slug names a feature within a product, not across products.
+    """
+    di = (os.environ.get("SIM_DATA_INDEX_URL") or os.environ.get("DATA_INDEX_URL")
+          or os.environ.get("TEST_DATAINDEX") or "").rstrip("/")
+    repo = str(_pv(payload, "repo")).strip()
+    if not (di and repo):
+        return None
+    if not di.startswith("http"):
+        di = "http://" + di
+    q = ('{ ProcessInstances(where:{processId:{equal:"sdlc-code-flow"}, '
+         'state:{in:[ACTIVE,COMPLETED]}}){ id state variables } }')
+    try:
+        import urllib.request
+        req = urllib.request.Request(di + "/graphql",
+                                     data=json.dumps({"query": q}).encode("utf-8"),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=20) as r:
+            rows = (json.load(r).get("data") or {}).get("ProcessInstances") or []
+    except Exception as e:
+        print("[agent-task-node] existing-features unavailable: %s" % e, flush=True)
+        return None
+    out = []
+    for i in rows:
+        v = i.get("variables")
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except Exception:
+                v = {}
+        v = v or {}
+        slug = (v.get("slug") or "").strip()
+        if not slug or (v.get("repo") or "").lower() != repo.lower():
+            continue
+        out.append({"slug": slug, "state": i.get("state"), "instance": i.get("id"),
+                    "hasPr": bool(v.get("pr")),
+                    "request": (str(v.get("feature_request") or ""))[:120]})
+    return out or []
+
+
 def project_context(payload, workdir=None):
     """What project this work belongs to — assembled from the tree and the running system,
     never from the model's recollection.
@@ -725,6 +783,12 @@ def project_context(payload, workdir=None):
     if notes:
         out["humanNotes"] = str(notes)[:2000]
 
+    feats = _existing_features(payload)
+    if feats is None:
+        missing.append("this product's existing features (Data Index unreachable)")
+    elif feats:
+        out["alreadyBuilt"] = feats[:40]
+
     inv = _flow_inventory(payload, workdir)
     if inv:
         out["flows"] = inv["flows"]
@@ -744,6 +808,7 @@ def project_brief(payload, workdir=None):
     parts = ["\n## 這個專案是什麼 —— 你正在其中工作的產品現況\n",
              "以下每一項都是從樹裡或執行中的系統**機械擷取**的,不是任何人的敘述。\n"]
     label = {"personas": "使用者角色", "existingFeatures": "已存在的功能與路由",
+             "alreadyBuilt": "這個產品已經跑過(或正在跑)的 feature —— 用來判斷這是新案還是延續",
              "inFlight": "同批正在開發的功能", "humanNotes": "人類在此功能上留下的指示",
              "flows": "本產品的業務流程", "verificationGaps": "尚未被可證偽情境覆蓋的驗證維度"}
     for k, v in ctx.items():
@@ -758,6 +823,39 @@ def project_brief(payload, workdir=None):
               "一段編造的專案現況與真的無法區分,而它會讓後面每一個節點更確信一件可能錯的事。\n")
     return "".join(parts)
 
+
+
+
+def _intake_form_section(p):
+    """The human's answers, and what was asked of them last round.
+
+    A round that cannot see the previous one just asks the same questions again — the loop
+    then costs the person time and returns nothing, which is how a human-in-the-loop step
+    gets removed for being annoying rather than for being wrong.
+    """
+    raw = p.get("intakeForm")
+    rnd = p.get("intakeRound") or 0
+    if not raw:
+        return "\n## 表單狀態\n第 1 輪,尚無填答內容。\n"
+    try:
+        form = json.loads(raw) if isinstance(raw, str) else raw
+    except Exception:
+        form = {"(unparsed)": str(raw)[:2000]}
+    label = {"feature_request": "需求描述", "target_users": "服務對象", "placement": "放在哪裡",
+             "acceptance": "怎麼算做完", "out_of_scope": "這次不做什麼",
+             "pm_answers": "對上輪追問的回覆", "pm_questions": "上輪的追問",
+             "pm_assumptions": "上輪採取的假設"}
+    parts = ["\n## 使用者填答(第 %s 輪)\n" % (int(rnd) + 1)]
+    for k, v in (form or {}).items():
+        if v not in (None, "", [], {}):
+            parts.append("\n### %s\n%s\n" % (label.get(k, k),
+                         json.dumps(v, ensure_ascii=False) if not isinstance(v, str) else v))
+    parts.append(
+        "\n**這一輪的規則**:上面「對上輪追問的回覆」若已回答某題,該題就**不要再問**。"
+        "只問**這次填答之後仍然無法決定**的事。重複追問已經回答過的東西,會讓這個迴圈"
+        "變成消耗對方時間而不產出資訊 —— 那正是這種人機迴圈被移除的原因,"
+        "而它被移除的理由通常是「很煩」,不是「它錯了」。\n")
+    return "".join(parts)
 
 
 def prompt_intake(p):
@@ -782,7 +880,8 @@ def prompt_intake(p):
         "你是這個產品的 PM。任務**不是**決定要不要做,而是把「這個需求在這個產品裡到底是什麼」"
         "弄清楚,並且把**還不清楚的部分明確列出來**,讓後面寫規格的人有依據、而不是自己猜。\n\n"
         "## 需求(原始輸入)\n" + str(p.get("feature_request") or p.get("goal") or "(未提供)") + "\n"
-        + project_brief(p, p.get("_workdir"))
+        + _intake_form_section(p)
+        + project_brief(p, _ensure_checkout(p) if p.get("_piid") else p.get("_workdir"))
         + "\n## 你要產出什麼\n"
         "1. `understanding`:用產品的語言重述這個需求 —— 它服務哪個角色、放在現有 IA 的哪裡、"
         "與已存在的哪些功能相鄰或重疊。**只根據上面機械擷取的事實**,不要引入你的先驗印象。\n"
@@ -791,7 +890,16 @@ def prompt_intake(p):
         "沒有問題就給空陣列 —— 不要為了看起來嚴謹而湊。\n"
         "3. `assumptions`:每一條未決問題,你**為了讓工作能繼續**而採取的立場,以及為什麼。"
         "這些會原樣傳給 SA,並且會被當成**假設而非需求**看待。\n"
-        "4. `outOfScope`:明確不做的事 —— 界線沒畫,範圍就會在 implement 階段自己長大。\n\n"
+        "4. `outOfScope`:明確不做的事 —— 界線沒畫,範圍就會在 implement 階段自己長大。\n"
+        "5. `continuation`:`{\"kind\": \"new|continue\", \"slug\": \"…\", \"verified\": true|false, \"why\": \"…\"}`"
+        " —— 這是新案還是延續既有 feature。**必須拿上面『這個產品已經跑過的 feature』清單查證,"
+        "不得照抄填答者的勾選**。兩個方向的錯不對稱:當成新案會重做已經做過的事(浪費,但看得見);"
+        "當成延續會把改動疊到別人的工作區上(可能不可逆,而且沒人會發現)。\n"
+        "  · 填答說「延續」但該 slug 不在清單裡 → `verified:false`,並列為 **blocking** 問題,"
+        "不要靜默改判成新案。\n"
+        "  · 填答說「新案」但清單裡有名稱或描述高度相近的 → 也要問,"
+        "因為本產品已經有兩個 feature 被起過兩次,而每次都沒有人被問過。\n"
+        "  · 清單本身取不到 → `verified:false` 並說明無法查證,不得假裝查過。\n\n"
         "## 紀律\n"
         "- 上面標為「取不到」的資訊,就是**未知**。不得用聽起來合理的敘述補位:"
         "一段編造的專案現況與真的無法區分,而它會讓後面每個節點更確信一件可能錯的事。\n"
