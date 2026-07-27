@@ -837,10 +837,20 @@ def _resolve_workspace_source(payload):
     """Which previous instance this run continues from.
 
     Explicit `workspaceFrom` (an instance id) or the sentinel "latest" — the newest frozen
-    workspace carrying the same slug. Anything else (absent / "new") starts clean. Declared at
-    START, per the flow contract: a run that discovers its own history halfway through cannot
-    be reasoned about, and a default of "whatever was most recently on disk" would make two
-    identical starts behave differently.
+    workspace carrying the same (repo, slug). Anything else (absent / "new") starts clean.
+    Declared at START, per the flow contract: a run that discovers its own history halfway
+    through cannot be reasoned about, and a default of "whatever was most recently on disk"
+    would make two identical starts behave differently.
+
+    The key is (repo, slug), not slug. A slug names a feature within a product; `dark-mode`
+    in one repo is not the continuation of `dark-mode` in another. Inheriting across products
+    hands SA/SD/uiux another product's tree as their ground truth — and they would not
+    notice, because a workspace looks exactly like a workspace.
+
+    A marker with no `repo` is not adoptable once the payload declares one: it cannot be
+    shown to be about this product, and starting clean is the recoverable error where
+    continuing from the wrong tree is not. Markers written from here on carry it, so this
+    self-heals.
     """
     want = str(_pv(payload, "workspaceFrom")).strip()
     if not want or want in ("new", "none"):
@@ -850,6 +860,7 @@ def _resolve_workspace_source(payload):
         src = _instance_root(want)
         return src if src and os.path.isdir(src) else None
     slug = str(_pv(payload, "slug")).strip()
+    repo = str(_pv(payload, "repo")).strip()
     if not slug:
         return None
     best, best_mt = None, -1
@@ -868,6 +879,8 @@ def _resolve_workspace_source(payload):
             # Only a FROZEN workspace is a safe source: an unfrozen one may still be being
             # written by a live run, and copying it mid-write yields a state that never existed.
             if meta.get("slug") != slug or not meta.get("frozen"):
+                continue
+            if repo and str(meta.get("repo") or "").lower() != repo.lower():
                 continue
             mt = os.path.getmtime(marker)
             if mt > best_mt:
@@ -893,7 +906,11 @@ def _ensure_instance_workspace(payload):
     marker = os.path.join(root, ".workspace.json")
     if os.path.isfile(marker):
         return root
-    meta = {"instance": piid, "slug": _pv(payload, "slug"), "from": None, "frozen": False}
+    # `repo` is part of the workspace's identity, not decoration: without it a later
+    # `workspaceFrom:"latest"` cannot tell which product this tree belongs to, and lineage
+    # you cannot key on is lineage you cannot trust.
+    meta = {"instance": piid, "slug": _pv(payload, "slug"), "repo": str(_pv(payload, "repo")).strip(),
+            "from": None, "frozen": False}
     src = _resolve_workspace_source(payload)
     if src:
         ok, how = _copy_tree(src, root)
@@ -918,10 +935,50 @@ def _ensure_instance_workspace(payload):
     return root
 
 
+def _feature_branch(payload, slug):
+    """The branch a feature is developed on. One definition, because it is an identity.
+
+    Branch namespaces are per-repo, so `feat/dark-mode` in two products is two branches and
+    needs no product prefix. What DID diverge is that the branch was built from a
+    configurable `branchPrefix` in one place and hardcoded as `"feat/" + slug` in the
+    duplicate-PR check in another: set `branchPrefix` and that check queries a head that
+    never exists, finds no open PR, and starts a duplicate child on every scan — silently,
+    since "no PR found" and "no PR for the branch I guessed" look identical.
+    """
+    return "%s%s" % ((payload.get("branchPrefix") or "feat/").strip(), slug)
+
+
+def _remote_repo(wd):
+    """The `owner/name` an existing checkout actually points at, lowercased, or "" if it has
+    no origin.
+
+    `repo` is the GitHub `owner/name` form everywhere in this file (`gh -R`, the implement
+    allowlist), so that is the identity to recover — and it is always the LAST TWO segments,
+    which is what makes this robust across the shapes a remote can take: the clone here
+    embeds a token (`https://x-access-token:...@host/o/n`), a human checkout may be
+    `git@host:o/n.git` or `ssh://git@host/o/n`, and an enterprise host may carry a port.
+    Peeling prefixes one rule at a time gets each of those subtly wrong (a port reads as a
+    path segment); taking the tail does not.
+    """
+    r = subprocess.run(["git", "-C", wd, "remote", "get-url", "origin"],
+                       capture_output=True, text=True, timeout=30)
+    url = (r.stdout or "").strip()
+    if r.returncode != 0 or not url:
+        return ""
+    parts = [p for p in re.split(r"[/:]", re.sub(r"\.git$", "", url)) if p]
+    return "/".join(parts[-2:]).lower() if len(parts) >= 2 else ""
+
+
 def _ensure_checkout(payload):
     """The instance workspace's git checkout — the ground every node stands on.
 
     Cloned once per instance (or inherited from the copied workspace), at `<instance>/repo`.
+
+    An inherited checkout is only reusable if it is a checkout OF THE DECLARED REPO. It used
+    to be enough that `.git` existed, which meant a workspace continued from another product
+    silently made SA/SD/uiux reason about the wrong tree — the most expensive kind of wrong,
+    because every node downstream treats a checkout as ground truth and nothing looks broken.
+    Mismatch is not an error to report and continue past; it is re-cloned.
     """
     root = _ensure_instance_workspace(payload)
     repo = str(_pv(payload, "repo")).strip()
@@ -929,11 +986,21 @@ def _ensure_checkout(payload):
         return None
     wd = os.path.join(root, "repo")
     if os.path.isdir(os.path.join(wd, ".git")):
-        return wd
+        have = _remote_repo(wd)
+        if have == repo.lower():
+            return wd
+        print("[agent-task-node] inherited checkout is %s, need %s — re-cloning"
+              % (have or "(no origin)", repo), flush=True)
     base = str(_pv(payload, "base", "main")).strip()
     token = os.environ.get("GH_TOKEN", "")
     url = "https://x-access-token:%s@github.com/%s" % (token, repo)
     shutil.rmtree(wd, ignore_errors=True)
+    if os.path.exists(wd):
+        # An inherited tree descends from a frozen one (`chmod -R a-w`), so the first pass
+        # can leave part of it behind — and `git clone` into a non-empty directory fails
+        # with a message about the destination, never about the stale tree that caused it.
+        subprocess.run(["chmod", "-R", "u+w", wd], capture_output=True, timeout=300)
+        shutil.rmtree(wd, ignore_errors=True)
     c = subprocess.run(["git", "clone", "--depth", "1", "--branch", base, url, wd],
                        capture_output=True, text=True, timeout=600)
     if c.returncode != 0:
@@ -1861,7 +1928,6 @@ def implement_flow(payload):
     base = (payload.get("base") or "").strip()
     slug = (payload.get("slug") or "").strip()
     instruction = (payload.get("prompt") or "").strip()
-    branch_prefix = (payload.get("branchPrefix") or "feat/").strip()
 
     if repo not in IMPLEMENT_REPO_ALLOWLIST:
         return {"error": "repo %r not in implement allowlist %s"
@@ -1874,7 +1940,7 @@ def implement_flow(payload):
         return {"error": "prompt (implementation instruction) required"}
 
     token = os.environ.get("GH_TOKEN", "")
-    branch = "%s%s" % (branch_prefix, slug)
+    branch = _feature_branch(payload, slug)
     # Clone under this (instance, node) workspace so concurrent implement runs are isolated;
     # fall back to a temp dir for direct calls that carry no _piid/_node.
     # The instance's own checkout — the SAME one SA / SD / uiux read, so implement builds on
@@ -3136,7 +3202,7 @@ def uiux_audit_flow(payload):
             skipped += 1
             continue
         try:  # open PR on this deterministic branch already? then it's covered — skip
-            chk = subprocess.run(["gh", "pr", "list", "-R", repo, "--head", "feat/" + slug,
+            chk = subprocess.run(["gh", "pr", "list", "-R", repo, "--head", _feature_branch(payload, slug),
                                   "--state", "open", "--json", "number"],
                                  capture_output=True, text=True, timeout=60, env=env)
             if chk.returncode == 0 and json.loads(chk.stdout or "[]"):
