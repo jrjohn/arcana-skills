@@ -38,7 +38,7 @@ echo "=== $(date '+%F %T') distill-backfill CONTINUOUS (batch=$BATCH gap=${GAP}s
 while true; do
   curl -s --max-time 4 http://localhost:11434/api/tags >/dev/null 2>&1 \
     || { echo "$(date '+%F %T') ollama down, exit (launchd KeepAlive will relaunch)"; exit 0; }
-  out=$("$CRS" distill-missing --limit "$BATCH" --workers 1 2>&1)
+  out=$("$CRS" distill-missing --limit "$BATCH" --workers "${CRS_DISTILL_WORKERS:-2}" 2>&1)
   echo "$out" | grep -E "pending|chunk persisted|done\." | tail -2
 
   # --- milestone markers (every 10k 📍, every 50k 🎯) ---
