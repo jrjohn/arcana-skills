@@ -2093,7 +2093,7 @@ def _touched_flows(payload):
     """
     if "_touched_flows" in payload:
         return payload["_touched_flows"]
-    flows, repo = [], payload.get("repo") or ""
+    flows, paths, repo = [], [], payload.get("repo") or ""
     url, _ = _pr_url_and_branch(payload)
     num = ""
     m = re.search(r"/pull/(\d+)", url or "")
@@ -2107,9 +2107,16 @@ def _touched_flows(payload):
             for fn in files:
                 if fn.endswith(".bpmn2"):
                     flows.append(os.path.basename(fn)[:-6])
+                    # Keep the PATH, not just the stem. The gate can then read exactly the files
+                    # this PR changed instead of re-deriving a directory from a hardcoded layout —
+                    # which is how it used to report "ran, found nothing" while pointed at a tree
+                    # that did not exist. We already have the paths here; throwing them away was
+                    # the whole bug.
+                    paths.append(fn)
     except Exception as e:
         print("[agent-task-node] touched-flows unavailable: %s" % e, flush=True)
     payload["_touched_flows"] = sorted(set(flows))
+    payload["_touched_flow_paths"] = sorted(set(paths))
     return payload["_touched_flows"]
 
 
@@ -3005,6 +3012,11 @@ def test_flow(payload):
             # changed .bpmn2 whose required 7W1H cell has no falsifiable scenario blocks the test,
             # a UI feature that touches no flow is a no-op.
             "-e", "SCENARIO_TOUCHED=" + ",".join(_touched_flows(payload)),
+            # The PR's own paths: the gate reads exactly these files instead of guessing a
+            # directory. And EXPECTED says a gate that should have run but did not is a
+            # failure, not a silent skip — the same rule scenario-walk already lives by.
+            "-e", "SCENARIO_TOUCHED_PATHS=" + ",".join(payload.get("_touched_flow_paths") or []),
+            "-e", "SCENARIO_GATE_EXPECTED=" + ("1" if _touched_flows(payload) else "0"),
             "-e", "RBACUI_NAV_CONFIG=/work/repo/" + str(_pf["nav"].get(
                 "navPath", "dashboard/src/app/core/navigation/nav.config.ts"))]
     if repo and branch:  # T4-1: build the PR branch and test its real code
