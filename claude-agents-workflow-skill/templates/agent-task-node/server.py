@@ -543,6 +543,88 @@ def _registry_project(repo, branch):
     return {"asked": True, "project": match}
 
 
+def _required_cells(payload, workdir):
+    """The verification dimensions each of this product's flows MUST have covered.
+
+    Derived from BPMN structure by the same script the gate runs, so it is available the
+    moment the flow exists — before any code is written, and without a diff to ground it.
+
+    This is the half of the exam paper that is worth handing over early. The other half —
+    generated Playwright cases — cannot move: `_gen_testcases` grounds itself in `gh pr
+    diff` to get the real routes and selectors, and before implement there is no PR, so an
+    early version would invent the selectors it exists to avoid inventing.
+
+    Returns {flow: [cells]} or {} when the product ships no derivation script.
+    """
+    script = os.path.join(workdir or "", "scripts/scenario-matrix.py")
+    if not workdir or not os.path.isfile(script):
+        return {}
+    prof = _load_profile(payload).get("flow", {})
+    env = dict(os.environ)
+    env["SM_CODE_ROOT"] = workdir
+    env["SCENARIO_JSON"] = "1"
+    for k, v in (("SM_FLOW_DIR", prof.get("flowDir")),
+                 ("SM_SIM_DIR", prof.get("scenarioDir")),
+                 ("SCENARIO_PROFILE", prof.get("scenarioProfile"))):
+        if v:
+            env[k] = str(v)
+    try:
+        r = subprocess.run(["python3", script], capture_output=True, text=True,
+                           timeout=120, env=env, cwd=workdir)
+        return (json.loads(r.stdout or "{}") or {}).get("cellsRequired", {}) or {}
+    except Exception as e:
+        print("[agent-task-node] required-cells unavailable: %s" % e, flush=True)
+        return {}
+
+
+def _acceptance_brief(payload, workdir):
+    """What this implementation will be judged against, stated BEFORE it is written.
+
+    TDD's value is not that tests exist — it is that the specification becomes executable
+    ahead of the implementation, so the implementation is constrained by it. For a model the
+    working half of that mechanism is simply KNOWING THE ACCEPTANCE CRITERIA IN ADVANCE; a
+    red bar first is the human-facing half.
+
+    Implement used to receive srs / sdd / uiuxSpec / rework_feedback / manager_notes and
+    nothing about how it would be checked, while `_gen_testcases` ran afterwards inside the
+    test node — a second AI session re-reading the same SRS. That is not merely test-after;
+    the exam and the answer share a source.
+
+    So the two halves are labelled honestly rather than blurred:
+
+      requiredCells is DETERMINISTIC and independent. It comes from the flow's structure,
+      not from anyone's reading of the spec, so it is the one constraint that cannot be
+      satisfied by re-interpreting the SRS the same way twice.
+
+      The acceptance criteria come from the SRS, which the pipeline itself wrote. They
+      constrain, and they do not independently verify. Saying so is the difference between
+      a check and a reminder that looks like one.
+    """
+    parts = []
+    srs = payload.get("srs") or (payload.get("design") or {}).get("srs")
+    if srs:
+        txt = json.dumps(srs, ensure_ascii=False) if isinstance(srs, (dict, list)) else str(srs)
+        parts.append(
+            "\n## 你將被什麼檢驗 —— 驗收條件(來自 SRS,實作前就已存在)\n"
+            "```json\n" + txt[:6000] + "\n```\n"
+            "這些條件是本次 PR 的及格線,不是參考資料。動手前先讀完,"
+            "並在交付說明裡逐條說明你如何滿足它們。\n"
+            "> 注意:這份 SRS 是本管線自己產出的,所以它**約束**你,但它**不是獨立驗證**——"
+            "同一份規格被讀兩次不會變成兩個證據。\n")
+    cells = _required_cells(payload, workdir)
+    if cells:
+        lines = "\n".join("- `%s`:%s" % (f, "、".join(c)) for f, c in sorted(cells.items()) if c)
+        if lines:
+            parts.append(
+                "\n## 你將被什麼檢驗 —— 必須覆蓋的驗證維度(從流程結構確定性推導)\n"
+                + lines + "\n"
+                "若本次改動觸及上列任何流程,該流程的每一個維度都必須有**可證偽**的情境覆蓋"
+                "(反例真的被拒、對照組真的分歧),否則情境閘會擋下這個 PR。\n"
+                "> 這一份**不是**任何人對規格的詮釋,是從 BPMN 結構機械導出的——"
+                "所以它是唯一無法靠「把同一份 SRS 再讀一次」滿足的約束。\n")
+    return "".join(parts)
+
+
 def preflight(payload):
     """Can this pipeline legitimately run against this repo? Answered in seconds, before a
     single AI session is paid for. Returns {"ok": bool, "reason": str, "checks": [...]}.
@@ -2152,7 +2234,9 @@ def implement_flow(payload):
               "`npm ci && npm run build`，有編譯錯就修到綠；並為新功能寫**會通過的單元測試**。**不要交出沒編譯過的碼**"
               "——下游 CI（build + ng test + arch-qube + Sonar）會擋，交紅碼只會被 PM NOGO 退回重做、白費一輪。"
               "時間預算內以「編得過、架構乾淨、測試通過」為第一優先；最後簡述你改了什麼。\n"
-            + ("\n## 設計 (SRS/SDD)\n```json\n" + design_str + "\n```\n" if design_str else ""))
+            + ("\n## 設計 (SRS/SDD)\n```json\n" + design_str + "\n```\n" if design_str else "")
+            # The exam paper, handed over before the work rather than after it.
+            + _acceptance_brief(payload, workdir))
         sch = payload.get("ai_output_schema") or {
             "type": "object",
             "properties": {
