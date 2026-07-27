@@ -496,31 +496,274 @@ _PROFILE_DEFAULTS = {
 }
 
 
+def _deep_merge(base, over):
+    """`over` onto `base`, recursively. Returns `base`, mutated.
+
+    A one-level update() replaces whole sub-trees: a profile setting `sim.readApi.login`
+    silently deleted every other key under `sim.readApi`. The loss is invisible — the caller
+    reads a default that is no longer there and gets "" — so it presents as the feature never
+    having worked rather than as a config that overwrote its neighbours.
+    """
+    for k, v in (over or {}).items():
+        if k.startswith("$"):
+            continue  # $repo / $branch are identity claims, checked elsewhere, never merged
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _deep_merge(base[k], v)
+        else:
+            base[k] = v
+    return base
+
+
+def _registry_project(repo, branch):
+    """Ask the platform's project registry about this (repo, branch).
+
+    Returns {"asked": False} when no registry is configured — the pipeline then falls back to
+    the hardcoded allowlist, marked second-class in the report, exactly as a declared gate
+    list is. Returns {"error": ...} when a registry IS configured and cannot be reached: that
+    must never degrade into "not registered" (which refuses everything) nor into the
+    allowlist (which is the copy the registry exists to replace). Both are answers a caller
+    has to make on purpose.
+    """
+    url = (os.environ.get("SDLC_REGISTRY_URL") or "").rstrip("/")
+    if not url:
+        return {"asked": False}
+    if not url.startswith("http"):
+        url = "http://" + url
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url, timeout=15) as r:
+            body = json.load(r)
+    except Exception as e:
+        return {"asked": True, "error": str(e)}
+    if body.get("error"):
+        return {"asked": True, "error": body["error"]}
+    match = next((p for p in (body.get("projects") or [])
+                  if (p.get("repo") or "").lower() == repo.lower()
+                  and (p.get("integrationBranch") or "") == branch), None)
+    return {"asked": True, "project": match}
+
+
+def _required_cells(payload, workdir):
+    """The verification dimensions each of this product's flows MUST have covered.
+
+    Derived from BPMN structure by the same script the gate runs, so it is available the
+    moment the flow exists — before any code is written, and without a diff to ground it.
+
+    This is the half of the exam paper that is worth handing over early. The other half —
+    generated Playwright cases — cannot move: `_gen_testcases` grounds itself in `gh pr
+    diff` to get the real routes and selectors, and before implement there is no PR, so an
+    early version would invent the selectors it exists to avoid inventing.
+
+    Returns {flow: [cells]} or {} when the product ships no derivation script.
+    """
+    script = os.path.join(workdir or "", "scripts/scenario-matrix.py")
+    if not workdir or not os.path.isfile(script):
+        return {}
+    prof = _load_profile(payload).get("flow", {})
+    env = dict(os.environ)
+    env["SM_CODE_ROOT"] = workdir
+    env["SCENARIO_JSON"] = "1"
+    for k, v in (("SM_FLOW_DIR", prof.get("flowDir")),
+                 ("SM_SIM_DIR", prof.get("scenarioDir")),
+                 ("SCENARIO_PROFILE", prof.get("scenarioProfile"))):
+        if v:
+            env[k] = str(v)
+    try:
+        r = subprocess.run(["python3", script], capture_output=True, text=True,
+                           timeout=120, env=env, cwd=workdir)
+        return (json.loads(r.stdout or "{}") or {}).get("cellsRequired", {}) or {}
+    except Exception as e:
+        print("[agent-task-node] required-cells unavailable: %s" % e, flush=True)
+        return {}
+
+
+def _acceptance_brief(payload, workdir):
+    """What this implementation will be judged against, stated BEFORE it is written.
+
+    TDD's value is not that tests exist — it is that the specification becomes executable
+    ahead of the implementation, so the implementation is constrained by it. For a model the
+    working half of that mechanism is simply KNOWING THE ACCEPTANCE CRITERIA IN ADVANCE; a
+    red bar first is the human-facing half.
+
+    Implement used to receive srs / sdd / uiuxSpec / rework_feedback / manager_notes and
+    nothing about how it would be checked, while `_gen_testcases` ran afterwards inside the
+    test node — a second AI session re-reading the same SRS. That is not merely test-after;
+    the exam and the answer share a source.
+
+    So the two halves are labelled honestly rather than blurred:
+
+      requiredCells is DETERMINISTIC and independent. It comes from the flow's structure,
+      not from anyone's reading of the spec, so it is the one constraint that cannot be
+      satisfied by re-interpreting the SRS the same way twice.
+
+      The acceptance criteria come from the SRS, which the pipeline itself wrote. They
+      constrain, and they do not independently verify. Saying so is the difference between
+      a check and a reminder that looks like one.
+    """
+    parts = []
+    srs = payload.get("srs") or (payload.get("design") or {}).get("srs")
+    if srs:
+        txt = json.dumps(srs, ensure_ascii=False) if isinstance(srs, (dict, list)) else str(srs)
+        parts.append(
+            "\n## 你將被什麼檢驗 —— 驗收條件(來自 SRS,實作前就已存在)\n"
+            "```json\n" + txt[:6000] + "\n```\n"
+            "這些條件是本次 PR 的及格線,不是參考資料。動手前先讀完,"
+            "並在交付說明裡逐條說明你如何滿足它們。\n"
+            "> 注意:這份 SRS 是本管線自己產出的,所以它**約束**你,但它**不是獨立驗證**——"
+            "同一份規格被讀兩次不會變成兩個證據。\n")
+    cells = _required_cells(payload, workdir)
+    if cells:
+        lines = "\n".join("- `%s`:%s" % (f, "、".join(c)) for f, c in sorted(cells.items()) if c)
+        if lines:
+            parts.append(
+                "\n## 你將被什麼檢驗 —— 必須覆蓋的驗證維度(從流程結構確定性推導)\n"
+                + lines + "\n"
+                "若本次改動觸及上列任何流程,該流程的每一個維度都必須有**可證偽**的情境覆蓋"
+                "(反例真的被拒、對照組真的分歧),否則情境閘會擋下這個 PR。\n"
+                "> 這一份**不是**任何人對規格的詮釋,是從 BPMN 結構機械導出的——"
+                "所以它是唯一無法靠「把同一份 SRS 再讀一次」滿足的約束。\n")
+    return "".join(parts)
+
+
+def preflight(payload):
+    """Can this pipeline legitimately run against this repo? Answered in seconds, before a
+    single AI session is paid for. Returns {"ok": bool, "reason": str, "checks": [...]}.
+
+    The allowlist was checked in `implement` only — the FOURTH node. SA, SD and uiux had
+    already run, so a repo the pipeline was never allowed to touch cost three full sessions
+    before anything said no. Everything here is `gh api` and file reads.
+
+    The strongest check is that every path the profile DECLARES actually exists at the ref.
+    It uses the same information the gates need later, verified once up front — and it kills
+    the wrong-tree false green at the source rather than detecting it downstream: a gate
+    pointed at a directory that does not exist cannot report "found nothing" if the run never
+    started.
+
+    A `$repo` / `$branch` in the profile is an identity claim, and a mismatch is a REFUSAL,
+    not something to merge around. It catches the most common way a profile ends up lying:
+    copied from another repo.
+    """
+    checks, repo = [], str(_pv(payload, "repo")).strip()
+    base = str(_pv(payload, "base", "main")).strip()
+    _, pr_branch = _pr_url_and_branch(payload)
+    ref = pr_branch or base
+
+    def fail(reason):
+        return {"ok": False, "reason": reason, "checks": checks, "repo": repo, "ref": ref}
+
+    if not repo:
+        return fail("no repo declared — nothing to check this pipeline against")
+
+    # May this pipeline spend on this repo? The registry is the authority; the hardcoded
+    # allowlist is a copy of the answer, in another language, in another repo. Same
+    # first-class/second-class split the gate policy uses: asked beats declared, and which
+    # one answered is recorded, because a copy can disagree while looking like agreement.
+    reg = _registry_project(repo, base)
+    if reg.get("error"):
+        return fail("project registry unreachable (%s) — refusing rather than falling back to "
+                    "the hardcoded allowlist, which is a copy that can disagree with it"
+                    % reg["error"])
+    if reg.get("asked"):
+        proj = reg.get("project")
+        if not proj:
+            return fail("no registered SDLC project for %s@%s — register it (status starts at "
+                        "'onboarding') before the pipeline may spend on it" % (repo, base))
+        if proj.get("status") != "active":
+            return fail("project %r is %r, not 'active' — registered is not the same as "
+                        "authorised to spend" % (proj.get("projectId"), proj.get("status")))
+        checks.append("registry: %s (%s, %s)" % (proj.get("projectId"), proj.get("tier"),
+                                                 proj.get("status")))
+        payload["_sdlc_project"] = proj
+    else:
+        if repo not in IMPLEMENT_REPO_ALLOWLIST:
+            return fail("repo %r is not in the pipeline allowlist %s (checked BEFORE any AI "
+                        "session, not at implement)" % (repo, sorted(IMPLEMENT_REPO_ALLOWLIST)))
+        checks.append("allowlist: ok (second-class — SDLC_REGISTRY_URL unset, so this is a "
+                      "hardcoded copy of what the registry knows)")
+
+    prof = _load_profile(payload)
+    declared = prof.get("_ref")
+    checks.append("profile: %s" % ("read from " + declared if declared else
+                                   "absent — running on defaults"))
+
+    # Identity. A profile that names a different repo is a copy, and the copy's paths describe
+    # a tree that is not this one.
+    for key, want, what in (("$repo", repo, "repo"), ("$branch", base, "branch")):
+        claim = str(prof.get(key) or "").strip()
+        if claim and claim.lower() != want.lower():
+            return fail("profile claims %s %r but this run is %r — a profile copied from "
+                        "another project describes a tree that is not this one" % (what, claim, want))
+    if declared:
+        checks.append("identity: ok")
+
+    # Every declared path must exist at this ref. This is the one that removes the wrong-tree
+    # false green: the gate later reads these same paths.
+    paths = [p for p in [
+        prof.get("app", {}).get("appDir"),
+        prof.get("nav", {}).get("navPath"),
+        prof.get("nav", {}).get("routesPath"),
+        prof.get("flow", {}).get("flowDir"),
+        prof.get("flow", {}).get("scenarioDir"),
+    ] if p]
+    missing = []
+    for p in paths:
+        # Existence only — no --jq. The contents API answers with an object for a file and an
+        # ARRAY for a directory, so any jq path expression fails on one of the two, and the
+        # failure looks exactly like "the path is missing". `appDir` is a directory; that is
+        # how this first reported aaf's own tree as absent.
+        r = subprocess.run(["gh", "api", f"repos/{repo}/contents/{p}?ref={ref}"],
+                           capture_output=True, text=True, timeout=25)
+        if r.returncode != 0:
+            missing.append(p)
+    if missing:
+        return fail("declared path(s) do not exist at %s: %s — the gates would later read these "
+                    "and report nothing found" % (ref, ", ".join(missing)))
+    checks.append("paths: %d declared, all present at %s" % (len(paths), ref))
+
+    return {"ok": True, "reason": "", "checks": checks, "repo": repo, "ref": ref,
+            "profileRef": declared}
+
+
 def _load_profile(payload):
-    """The target repo's `.arcana/project.json` at the base ref (run-recipe + nav paths + personas),
-    merged over the dashboard defaults. Best-effort + cached on the payload. The single seam another
-    app plugs into; absent → dashboard defaults (aaf unaffected)."""
+    """The target repo's `.arcana/project.json` (run-recipe + nav paths + personas), merged over
+    the dashboard defaults. Best-effort + cached on the payload. The single seam another app plugs
+    into; absent → dashboard defaults (aaf unaffected).
+
+    Two bugs meant this seam had never actually opened:
+
+    `payload.get("repo")` is empty for every design node. `do_execute` — which drives SA, SD and
+    uiux — nests the instance variables under `data`, so the repo was invisible here and the whole
+    fetch was skipped by `if repo:`. Those three nodes have therefore always run on
+    `_PROFILE_DEFAULTS` no matter what a repo declared, and nothing errored: it presented as "the
+    model still guesses paths". `_pv` exists precisely for this and was already documented as the
+    fix for the same class of bug elsewhere.
+
+    And it read only the base ref, so the first PR to ADD a profile could not be judged under it —
+    the same problem `_api_path_inventory` already solved by trying the PR ref first.
+    """
     if "_profile" in payload:
         return payload["_profile"]
     import copy
     prof = copy.deepcopy(_PROFILE_DEFAULTS)
-    repo = payload.get("repo") or ""
-    base = payload.get("base") or "main"
+    repo = str(_pv(payload, "repo")).strip()
+    base = str(_pv(payload, "base", "main")).strip()
     if repo:
-        try:
-            r = subprocess.run(
-                ["gh", "api", f"repos/{repo}/contents/.arcana/project.json?ref={base}", "--jq", ".content"],
-                capture_output=True, text=True, timeout=25)
-            raw = "".join((r.stdout or "").split())
-            if raw:
+        _, pr_branch = _pr_url_and_branch(payload)
+        for ref in [r for r in (pr_branch, base) if r]:
+            try:
+                r = subprocess.run(
+                    ["gh", "api", f"repos/{repo}/contents/.arcana/project.json?ref={ref}",
+                     "--jq", ".content"],
+                    capture_output=True, text=True, timeout=25)
+                raw = "".join((r.stdout or "").split())
+                if not raw:
+                    continue
                 loaded = json.loads(base64.b64decode(raw).decode("utf-8", "replace"))
-                for k, v in loaded.items():
-                    if isinstance(v, dict) and isinstance(prof.get(k), dict):
-                        prof[k].update(v)
-                    elif not k.startswith("$"):
-                        prof[k] = v
-        except Exception:
-            pass
+                _deep_merge(prof, loaded)
+                prof["_ref"] = ref
+                break
+            except Exception:
+                continue
     payload["_profile"] = prof
     return prof
 
@@ -532,8 +775,9 @@ def _fetch_app_map(payload):
     流程監控 already lists those instances". Best-effort (empty on failure so the PM degrades to the
     siblings-only check). Paths default to the dashboard nav/routes; a per-app Project Profile can
     override navPath/routesPath (the generalization seam). Returns a compact string."""
-    repo = payload.get("repo") or ""
-    base = payload.get("base") or "main"
+    # `_pv`, not `.get` — this runs for the PM/design nodes, whose variables arrive under `data`.
+    repo = str(_pv(payload, "repo")).strip()
+    base = str(_pv(payload, "base", "main")).strip()
     if not repo:
         return ""
     nav = _load_profile(payload).get("nav", {})
@@ -837,10 +1081,20 @@ def _resolve_workspace_source(payload):
     """Which previous instance this run continues from.
 
     Explicit `workspaceFrom` (an instance id) or the sentinel "latest" — the newest frozen
-    workspace carrying the same slug. Anything else (absent / "new") starts clean. Declared at
-    START, per the flow contract: a run that discovers its own history halfway through cannot
-    be reasoned about, and a default of "whatever was most recently on disk" would make two
-    identical starts behave differently.
+    workspace carrying the same (repo, slug). Anything else (absent / "new") starts clean.
+    Declared at START, per the flow contract: a run that discovers its own history halfway
+    through cannot be reasoned about, and a default of "whatever was most recently on disk"
+    would make two identical starts behave differently.
+
+    The key is (repo, slug), not slug. A slug names a feature within a product; `dark-mode`
+    in one repo is not the continuation of `dark-mode` in another. Inheriting across products
+    hands SA/SD/uiux another product's tree as their ground truth — and they would not
+    notice, because a workspace looks exactly like a workspace.
+
+    A marker with no `repo` is not adoptable once the payload declares one: it cannot be
+    shown to be about this product, and starting clean is the recoverable error where
+    continuing from the wrong tree is not. Markers written from here on carry it, so this
+    self-heals.
     """
     want = str(_pv(payload, "workspaceFrom")).strip()
     if not want or want in ("new", "none"):
@@ -850,6 +1104,7 @@ def _resolve_workspace_source(payload):
         src = _instance_root(want)
         return src if src and os.path.isdir(src) else None
     slug = str(_pv(payload, "slug")).strip()
+    repo = str(_pv(payload, "repo")).strip()
     if not slug:
         return None
     best, best_mt = None, -1
@@ -868,6 +1123,8 @@ def _resolve_workspace_source(payload):
             # Only a FROZEN workspace is a safe source: an unfrozen one may still be being
             # written by a live run, and copying it mid-write yields a state that never existed.
             if meta.get("slug") != slug or not meta.get("frozen"):
+                continue
+            if repo and str(meta.get("repo") or "").lower() != repo.lower():
                 continue
             mt = os.path.getmtime(marker)
             if mt > best_mt:
@@ -893,7 +1150,11 @@ def _ensure_instance_workspace(payload):
     marker = os.path.join(root, ".workspace.json")
     if os.path.isfile(marker):
         return root
-    meta = {"instance": piid, "slug": _pv(payload, "slug"), "from": None, "frozen": False}
+    # `repo` is part of the workspace's identity, not decoration: without it a later
+    # `workspaceFrom:"latest"` cannot tell which product this tree belongs to, and lineage
+    # you cannot key on is lineage you cannot trust.
+    meta = {"instance": piid, "slug": _pv(payload, "slug"), "repo": str(_pv(payload, "repo")).strip(),
+            "from": None, "frozen": False}
     src = _resolve_workspace_source(payload)
     if src:
         ok, how = _copy_tree(src, root)
@@ -918,10 +1179,50 @@ def _ensure_instance_workspace(payload):
     return root
 
 
+def _feature_branch(payload, slug):
+    """The branch a feature is developed on. One definition, because it is an identity.
+
+    Branch namespaces are per-repo, so `feat/dark-mode` in two products is two branches and
+    needs no product prefix. What DID diverge is that the branch was built from a
+    configurable `branchPrefix` in one place and hardcoded as `"feat/" + slug` in the
+    duplicate-PR check in another: set `branchPrefix` and that check queries a head that
+    never exists, finds no open PR, and starts a duplicate child on every scan — silently,
+    since "no PR found" and "no PR for the branch I guessed" look identical.
+    """
+    return "%s%s" % ((payload.get("branchPrefix") or "feat/").strip(), slug)
+
+
+def _remote_repo(wd):
+    """The `owner/name` an existing checkout actually points at, lowercased, or "" if it has
+    no origin.
+
+    `repo` is the GitHub `owner/name` form everywhere in this file (`gh -R`, the implement
+    allowlist), so that is the identity to recover — and it is always the LAST TWO segments,
+    which is what makes this robust across the shapes a remote can take: the clone here
+    embeds a token (`https://x-access-token:...@host/o/n`), a human checkout may be
+    `git@host:o/n.git` or `ssh://git@host/o/n`, and an enterprise host may carry a port.
+    Peeling prefixes one rule at a time gets each of those subtly wrong (a port reads as a
+    path segment); taking the tail does not.
+    """
+    r = subprocess.run(["git", "-C", wd, "remote", "get-url", "origin"],
+                       capture_output=True, text=True, timeout=30)
+    url = (r.stdout or "").strip()
+    if r.returncode != 0 or not url:
+        return ""
+    parts = [p for p in re.split(r"[/:]", re.sub(r"\.git$", "", url)) if p]
+    return "/".join(parts[-2:]).lower() if len(parts) >= 2 else ""
+
+
 def _ensure_checkout(payload):
     """The instance workspace's git checkout — the ground every node stands on.
 
     Cloned once per instance (or inherited from the copied workspace), at `<instance>/repo`.
+
+    An inherited checkout is only reusable if it is a checkout OF THE DECLARED REPO. It used
+    to be enough that `.git` existed, which meant a workspace continued from another product
+    silently made SA/SD/uiux reason about the wrong tree — the most expensive kind of wrong,
+    because every node downstream treats a checkout as ground truth and nothing looks broken.
+    Mismatch is not an error to report and continue past; it is re-cloned.
     """
     root = _ensure_instance_workspace(payload)
     repo = str(_pv(payload, "repo")).strip()
@@ -929,11 +1230,21 @@ def _ensure_checkout(payload):
         return None
     wd = os.path.join(root, "repo")
     if os.path.isdir(os.path.join(wd, ".git")):
-        return wd
+        have = _remote_repo(wd)
+        if have == repo.lower():
+            return wd
+        print("[agent-task-node] inherited checkout is %s, need %s — re-cloning"
+              % (have or "(no origin)", repo), flush=True)
     base = str(_pv(payload, "base", "main")).strip()
     token = os.environ.get("GH_TOKEN", "")
     url = "https://x-access-token:%s@github.com/%s" % (token, repo)
     shutil.rmtree(wd, ignore_errors=True)
+    if os.path.exists(wd):
+        # An inherited tree descends from a frozen one (`chmod -R a-w`), so the first pass
+        # can leave part of it behind — and `git clone` into a non-empty directory fails
+        # with a message about the destination, never about the stale tree that caused it.
+        subprocess.run(["chmod", "-R", "u+w", wd], capture_output=True, timeout=300)
+        shutil.rmtree(wd, ignore_errors=True)
     c = subprocess.run(["git", "clone", "--depth", "1", "--branch", base, url, wd],
                        capture_output=True, text=True, timeout=600)
     if c.returncode != 0:
@@ -1861,7 +2172,6 @@ def implement_flow(payload):
     base = (payload.get("base") or "").strip()
     slug = (payload.get("slug") or "").strip()
     instruction = (payload.get("prompt") or "").strip()
-    branch_prefix = (payload.get("branchPrefix") or "feat/").strip()
 
     if repo not in IMPLEMENT_REPO_ALLOWLIST:
         return {"error": "repo %r not in implement allowlist %s"
@@ -1874,7 +2184,7 @@ def implement_flow(payload):
         return {"error": "prompt (implementation instruction) required"}
 
     token = os.environ.get("GH_TOKEN", "")
-    branch = "%s%s" % (branch_prefix, slug)
+    branch = _feature_branch(payload, slug)
     # Clone under this (instance, node) workspace so concurrent implement runs are isolated;
     # fall back to a temp dir for direct calls that carry no _piid/_node.
     # The instance's own checkout — the SAME one SA / SD / uiux read, so implement builds on
@@ -1924,7 +2234,9 @@ def implement_flow(payload):
               "`npm ci && npm run build`，有編譯錯就修到綠；並為新功能寫**會通過的單元測試**。**不要交出沒編譯過的碼**"
               "——下游 CI（build + ng test + arch-qube + Sonar）會擋，交紅碼只會被 PM NOGO 退回重做、白費一輪。"
               "時間預算內以「編得過、架構乾淨、測試通過」為第一優先；最後簡述你改了什麼。\n"
-            + ("\n## 設計 (SRS/SDD)\n```json\n" + design_str + "\n```\n" if design_str else ""))
+            + ("\n## 設計 (SRS/SDD)\n```json\n" + design_str + "\n```\n" if design_str else "")
+            # The exam paper, handed over before the work rather than after it.
+            + _acceptance_brief(payload, workdir))
         sch = payload.get("ai_output_schema") or {
             "type": "object",
             "properties": {
@@ -2093,7 +2405,7 @@ def _touched_flows(payload):
     """
     if "_touched_flows" in payload:
         return payload["_touched_flows"]
-    flows, repo = [], payload.get("repo") or ""
+    flows, paths, repo = [], [], payload.get("repo") or ""
     url, _ = _pr_url_and_branch(payload)
     num = ""
     m = re.search(r"/pull/(\d+)", url or "")
@@ -2107,9 +2419,16 @@ def _touched_flows(payload):
             for fn in files:
                 if fn.endswith(".bpmn2"):
                     flows.append(os.path.basename(fn)[:-6])
+                    # Keep the PATH, not just the stem. The gate can then read exactly the files
+                    # this PR changed instead of re-deriving a directory from a hardcoded layout —
+                    # which is how it used to report "ran, found nothing" while pointed at a tree
+                    # that did not exist. We already have the paths here; throwing them away was
+                    # the whole bug.
+                    paths.append(fn)
     except Exception as e:
         print("[agent-task-node] touched-flows unavailable: %s" % e, flush=True)
     payload["_touched_flows"] = sorted(set(flows))
+    payload["_touched_flow_paths"] = sorted(set(paths))
     return payload["_touched_flows"]
 
 
@@ -2133,6 +2452,22 @@ def _scenario_autofill(payload):
     flow_sim = os.environ.get("FLOW_SIM_BIN", "/usr/local/bin/flow-sim")
     if not os.path.exists(flow_sim):
         return {"ran": False, "reason": "flow-sim binary not in agent image"}
+    # This binary is a build artifact copied into the image by hand, with nothing tying it to
+    # the source it was built from. "The simulator ran and found nothing" has therefore never
+    # carried a claim about WHICH simulator — the same gap the stale-image gate closed for
+    # services. Demand a schema it understands; an unreadable answer means an old copy, and
+    # an old copy is notRun, not a pass.
+    _need_schema = int(os.environ.get("FLOW_SIM_MIN_SCHEMA", "1"))
+    try:
+        _v = json.loads(subprocess.run([flow_sim, "--version"], capture_output=True, text=True,
+                                       timeout=30).stdout or "{}")
+        _have = int(_v.get("scenarioSchema", 0))
+    except Exception as e:
+        return {"ran": False, "reason": "flow-sim --version unreadable (%s) — too old to trust" % e}
+    if _have < _need_schema:
+        return {"ran": False,
+                "reason": "flow-sim scenario schema %s < required %s — stale binary in image"
+                          % (_have, _need_schema)}
     net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
     repo = payload.get("repo") or ""
     _, branch = _pr_url_and_branch(payload)
@@ -3005,6 +3340,20 @@ def test_flow(payload):
             # changed .bpmn2 whose required 7W1H cell has no falsifiable scenario blocks the test,
             # a UI feature that touches no flow is a no-op.
             "-e", "SCENARIO_TOUCHED=" + ",".join(_touched_flows(payload)),
+            # The PR's own paths: the gate reads exactly these files instead of guessing a
+            # directory. And EXPECTED says a gate that should have run but did not is a
+            # failure, not a silent skip — the same rule scenario-walk already lives by.
+            "-e", "SCENARIO_TOUCHED_PATHS=" + ",".join(payload.get("_touched_flow_paths") or []),
+            "-e", "SCENARIO_GATE_EXPECTED=" + ("1" if _touched_flows(payload) else "0"),
+            # Where THIS product keeps its flows, its scenario library, and which cell
+            # rulebook applies. Everything else about the gate had been generalised while
+            # the one thing deciding which files it reads stayed hardcoded to aaf's layout,
+            # so the first non-aaf repo made it report "the declared flowDir does not exist"
+            # — honest, and unable to run. Paths are facts about a tree, so they come from
+            # the tree's own .arcana/project.json.
+            "-e", "SM_FLOW_DIR=" + str(_pf.get("flow", {}).get("flowDir", "")),
+            "-e", "SM_SIM_DIR=" + str(_pf.get("flow", {}).get("scenarioDir", "")),
+            "-e", "SCENARIO_PROFILE=" + str(_pf.get("flow", {}).get("scenarioProfile", "")),
             "-e", "RBACUI_NAV_CONFIG=/work/repo/" + str(_pf["nav"].get(
                 "navPath", "dashboard/src/app/core/navigation/nav.config.ts"))]
     if repo and branch:  # T4-1: build the PR branch and test its real code
@@ -3124,7 +3473,7 @@ def uiux_audit_flow(payload):
             skipped += 1
             continue
         try:  # open PR on this deterministic branch already? then it's covered — skip
-            chk = subprocess.run(["gh", "pr", "list", "-R", repo, "--head", "feat/" + slug,
+            chk = subprocess.run(["gh", "pr", "list", "-R", repo, "--head", _feature_branch(payload, slug),
                                   "--state", "open", "--json", "number"],
                                  capture_output=True, text=True, timeout=60, env=env)
             if chk.returncode == 0 and json.loads(chk.stdout or "[]"):
@@ -3181,6 +3530,18 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(n) or b"{}")
         except Exception as e:
             return self._send(400, {"error": f"bad json: {e}"})
+        # Before spending anything. The allowlist used to be checked in `implement` — the
+        # fourth node — so a repo this pipeline was never allowed to touch cost three full AI
+        # sessions (SA, SD, uiux) before anything said no. Seconds of `gh api` here instead.
+        # Payloads with no repo (decompose works from a goal) have nothing to check and skip.
+        if task in ("execute", "implement") and str(_pv(payload, "repo")).strip():
+            pf = preflight(payload)
+            if not pf["ok"]:
+                print("[agent-task-node] preflight refused: %s" % pf["reason"], flush=True)
+                return self._send(200, {"error": "preflight: " + pf["reason"],
+                                        "preflight": pf, "ran": False})
+            print("[agent-task-node] preflight ok: %s" % "; ".join(pf["checks"]), flush=True)
+
         try:
             if task == "release":
                 result = run_release(payload)
