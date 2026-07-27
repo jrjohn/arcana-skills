@@ -496,31 +496,140 @@ _PROFILE_DEFAULTS = {
 }
 
 
+def _deep_merge(base, over):
+    """`over` onto `base`, recursively. Returns `base`, mutated.
+
+    A one-level update() replaces whole sub-trees: a profile setting `sim.readApi.login`
+    silently deleted every other key under `sim.readApi`. The loss is invisible — the caller
+    reads a default that is no longer there and gets "" — so it presents as the feature never
+    having worked rather than as a config that overwrote its neighbours.
+    """
+    for k, v in (over or {}).items():
+        if k.startswith("$"):
+            continue  # $repo / $branch are identity claims, checked elsewhere, never merged
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _deep_merge(base[k], v)
+        else:
+            base[k] = v
+    return base
+
+
+def preflight(payload):
+    """Can this pipeline legitimately run against this repo? Answered in seconds, before a
+    single AI session is paid for. Returns {"ok": bool, "reason": str, "checks": [...]}.
+
+    The allowlist was checked in `implement` only — the FOURTH node. SA, SD and uiux had
+    already run, so a repo the pipeline was never allowed to touch cost three full sessions
+    before anything said no. Everything here is `gh api` and file reads.
+
+    The strongest check is that every path the profile DECLARES actually exists at the ref.
+    It uses the same information the gates need later, verified once up front — and it kills
+    the wrong-tree false green at the source rather than detecting it downstream: a gate
+    pointed at a directory that does not exist cannot report "found nothing" if the run never
+    started.
+
+    A `$repo` / `$branch` in the profile is an identity claim, and a mismatch is a REFUSAL,
+    not something to merge around. It catches the most common way a profile ends up lying:
+    copied from another repo.
+    """
+    checks, repo = [], str(_pv(payload, "repo")).strip()
+    base = str(_pv(payload, "base", "main")).strip()
+    _, pr_branch = _pr_url_and_branch(payload)
+    ref = pr_branch or base
+
+    def fail(reason):
+        return {"ok": False, "reason": reason, "checks": checks, "repo": repo, "ref": ref}
+
+    if not repo:
+        return fail("no repo declared — nothing to check this pipeline against")
+    if repo not in IMPLEMENT_REPO_ALLOWLIST:
+        return fail("repo %r is not in the pipeline allowlist %s (checked BEFORE any AI session, "
+                    "not at implement)" % (repo, sorted(IMPLEMENT_REPO_ALLOWLIST)))
+    checks.append("allowlist: ok")
+
+    prof = _load_profile(payload)
+    declared = prof.get("_ref")
+    checks.append("profile: %s" % ("read from " + declared if declared else
+                                   "absent — running on defaults"))
+
+    # Identity. A profile that names a different repo is a copy, and the copy's paths describe
+    # a tree that is not this one.
+    for key, want, what in (("$repo", repo, "repo"), ("$branch", base, "branch")):
+        claim = str(prof.get(key) or "").strip()
+        if claim and claim.lower() != want.lower():
+            return fail("profile claims %s %r but this run is %r — a profile copied from "
+                        "another project describes a tree that is not this one" % (what, claim, want))
+    if declared:
+        checks.append("identity: ok")
+
+    # Every declared path must exist at this ref. This is the one that removes the wrong-tree
+    # false green: the gate later reads these same paths.
+    paths = [p for p in [
+        prof.get("app", {}).get("appDir"),
+        prof.get("nav", {}).get("navPath"),
+        prof.get("nav", {}).get("routesPath"),
+        prof.get("flow", {}).get("flowDir"),
+        prof.get("flow", {}).get("scenarioDir"),
+    ] if p]
+    missing = []
+    for p in paths:
+        # Existence only — no --jq. The contents API answers with an object for a file and an
+        # ARRAY for a directory, so any jq path expression fails on one of the two, and the
+        # failure looks exactly like "the path is missing". `appDir` is a directory; that is
+        # how this first reported aaf's own tree as absent.
+        r = subprocess.run(["gh", "api", f"repos/{repo}/contents/{p}?ref={ref}"],
+                           capture_output=True, text=True, timeout=25)
+        if r.returncode != 0:
+            missing.append(p)
+    if missing:
+        return fail("declared path(s) do not exist at %s: %s — the gates would later read these "
+                    "and report nothing found" % (ref, ", ".join(missing)))
+    checks.append("paths: %d declared, all present at %s" % (len(paths), ref))
+
+    return {"ok": True, "reason": "", "checks": checks, "repo": repo, "ref": ref,
+            "profileRef": declared}
+
+
 def _load_profile(payload):
-    """The target repo's `.arcana/project.json` at the base ref (run-recipe + nav paths + personas),
-    merged over the dashboard defaults. Best-effort + cached on the payload. The single seam another
-    app plugs into; absent → dashboard defaults (aaf unaffected)."""
+    """The target repo's `.arcana/project.json` (run-recipe + nav paths + personas), merged over
+    the dashboard defaults. Best-effort + cached on the payload. The single seam another app plugs
+    into; absent → dashboard defaults (aaf unaffected).
+
+    Two bugs meant this seam had never actually opened:
+
+    `payload.get("repo")` is empty for every design node. `do_execute` — which drives SA, SD and
+    uiux — nests the instance variables under `data`, so the repo was invisible here and the whole
+    fetch was skipped by `if repo:`. Those three nodes have therefore always run on
+    `_PROFILE_DEFAULTS` no matter what a repo declared, and nothing errored: it presented as "the
+    model still guesses paths". `_pv` exists precisely for this and was already documented as the
+    fix for the same class of bug elsewhere.
+
+    And it read only the base ref, so the first PR to ADD a profile could not be judged under it —
+    the same problem `_api_path_inventory` already solved by trying the PR ref first.
+    """
     if "_profile" in payload:
         return payload["_profile"]
     import copy
     prof = copy.deepcopy(_PROFILE_DEFAULTS)
-    repo = payload.get("repo") or ""
-    base = payload.get("base") or "main"
+    repo = str(_pv(payload, "repo")).strip()
+    base = str(_pv(payload, "base", "main")).strip()
     if repo:
-        try:
-            r = subprocess.run(
-                ["gh", "api", f"repos/{repo}/contents/.arcana/project.json?ref={base}", "--jq", ".content"],
-                capture_output=True, text=True, timeout=25)
-            raw = "".join((r.stdout or "").split())
-            if raw:
+        _, pr_branch = _pr_url_and_branch(payload)
+        for ref in [r for r in (pr_branch, base) if r]:
+            try:
+                r = subprocess.run(
+                    ["gh", "api", f"repos/{repo}/contents/.arcana/project.json?ref={ref}",
+                     "--jq", ".content"],
+                    capture_output=True, text=True, timeout=25)
+                raw = "".join((r.stdout or "").split())
+                if not raw:
+                    continue
                 loaded = json.loads(base64.b64decode(raw).decode("utf-8", "replace"))
-                for k, v in loaded.items():
-                    if isinstance(v, dict) and isinstance(prof.get(k), dict):
-                        prof[k].update(v)
-                    elif not k.startswith("$"):
-                        prof[k] = v
-        except Exception:
-            pass
+                _deep_merge(prof, loaded)
+                prof["_ref"] = ref
+                break
+            except Exception:
+                continue
     payload["_profile"] = prof
     return prof
 
@@ -532,8 +641,9 @@ def _fetch_app_map(payload):
     流程監控 already lists those instances". Best-effort (empty on failure so the PM degrades to the
     siblings-only check). Paths default to the dashboard nav/routes; a per-app Project Profile can
     override navPath/routesPath (the generalization seam). Returns a compact string."""
-    repo = payload.get("repo") or ""
-    base = payload.get("base") or "main"
+    # `_pv`, not `.get` — this runs for the PM/design nodes, whose variables arrive under `data`.
+    repo = str(_pv(payload, "repo")).strip()
+    base = str(_pv(payload, "base", "main")).strip()
     if not repo:
         return ""
     nav = _load_profile(payload).get("nav", {})
@@ -3275,6 +3385,18 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(n) or b"{}")
         except Exception as e:
             return self._send(400, {"error": f"bad json: {e}"})
+        # Before spending anything. The allowlist used to be checked in `implement` — the
+        # fourth node — so a repo this pipeline was never allowed to touch cost three full AI
+        # sessions (SA, SD, uiux) before anything said no. Seconds of `gh api` here instead.
+        # Payloads with no repo (decompose works from a goal) have nothing to check and skip.
+        if task in ("execute", "implement") and str(_pv(payload, "repo")).strip():
+            pf = preflight(payload)
+            if not pf["ok"]:
+                print("[agent-task-node] preflight refused: %s" % pf["reason"], flush=True)
+                return self._send(200, {"error": "preflight: " + pf["reason"],
+                                        "preflight": pf, "ran": False})
+            print("[agent-task-node] preflight ok: %s" % "; ".join(pf["checks"]), flush=True)
+
         try:
             if task == "release":
                 result = run_release(payload)
