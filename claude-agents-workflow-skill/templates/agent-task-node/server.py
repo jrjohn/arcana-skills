@@ -53,6 +53,7 @@ STUB_RESPONSES = {
     "decide": {"action": "merge", "resolved": True, "reason": "stub: build green, merge"},
     "escalate": {"resolution": "recorded", "action": "stub: recorded for review", "reason": "stub: exhausted -> recorded"},
     "pm-review": {"verdict": "GO", "dimensions": [{"name": "stub", "pass": True, "note": "stub"}], "feedback": "", "confidence": 0.9},
+    "intake": {"sufficient": True, "understanding": "stub", "openQuestions": [], "assumptions": [], "outOfScope": []},
 }
 
 # --- JSON Schemas: the typed contract SonataFlow switches/retries on ---
@@ -153,6 +154,29 @@ SCHEMAS = {
             "confidence": {"type": "number"},
         },
         "required": ["action", "resolved", "reason"],
+    },
+    "intake": {
+        "type": "object",
+        "properties": {
+            # Not a decision about whether to build — that is preflight's (cheap, before
+            # spend) and PmReview's (expensive, after artifacts). This says only whether the
+            # requirement is understood well enough for someone to write a spec from it.
+            "sufficient": {"type": "boolean"},
+            "understanding": {"type": "string"},
+            "openQuestions": {"type": "array", "items": {"type": "object", "properties": {
+                "question": {"type": "string"},
+                "why": {"type": "string"},
+                # A question that BLOCKS cannot be answered by an assumption: proceeding on a
+                # guess here produces work that is confidently wrong rather than visibly
+                # incomplete.
+                "blocking": {"type": "boolean"}},
+                "required": ["question"]}},
+            "assumptions": {"type": "array", "items": {"type": "object", "properties": {
+                "assumption": {"type": "string"}, "because": {"type": "string"}},
+                "required": ["assumption"]}},
+            "outOfScope": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["sufficient", "understanding", "openQuestions"],
     },
     "pm-review": {
         "type": "object",
@@ -625,6 +649,189 @@ def _acceptance_brief(payload, workdir):
     return "".join(parts)
 
 
+
+def _flow_inventory(payload, workdir):
+    """Which business flows this product has, and where their verification stands.
+
+    Mechanical: the flow files plus the gate's own derivation. "Progress" stated as a
+    number nobody can trace is the kind of context that makes a model more confident about
+    something possibly wrong, so this reports flows and uncovered cells or it reports that
+    it could not look.
+    """
+    cells = _required_cells(payload, workdir)
+    if not cells:
+        return None
+    prof = _load_profile(payload).get("flow", {})
+    script = os.path.join(workdir or "", "scripts/scenario-matrix.py")
+    uncovered = {}
+    try:
+        env = dict(os.environ)
+        env.update({"SM_CODE_ROOT": workdir, "SCENARIO_JSON": "1"})
+        for k, v in (("SM_FLOW_DIR", prof.get("flowDir")),
+                     ("SM_SIM_DIR", prof.get("scenarioDir")),
+                     ("SCENARIO_PROFILE", prof.get("scenarioProfile"))):
+            if v:
+                env[k] = str(v)
+        r = subprocess.run(["python3", script], capture_output=True, text=True,
+                           timeout=120, env=env, cwd=workdir)
+        uncovered = (json.loads(r.stdout or "{}") or {}).get("uncovered", {}) or {}
+    except Exception:
+        uncovered = {}
+    return {"flows": sorted(cells), "requiredCells": cells, "uncovered": uncovered}
+
+
+def project_context(payload, workdir=None):
+    """What project this work belongs to — assembled from the tree and the running system,
+    never from the model's recollection.
+
+    SA writes the specification, and until now it received exactly `feature_request`, `repo`,
+    `base`, `slug` and `uiFacing`. It did not know what the product IS, what it already does,
+    what else is being built alongside, or where verification stands. Meanwhile PmReview —
+    the LAST node — got the siblings list and the whole app navigation map. The context was
+    arriving four AI sessions after the node that most needed it, which is why an SRS so
+    often reads like the spec of a standalone tool rather than the Nth feature of a product.
+
+    Every entry is either extracted or reported ABSENT. A plausible-sounding narrative in
+    place of a missing fact is the worst possible filler here: downstream cannot tell it from
+    the real thing, and it makes four subsequent nodes more confident about something nobody
+    checked. Same rule as the gates — could-not-look is not the same as nothing-there.
+    """
+    out, missing = {}, []
+    prof = _load_profile(payload)
+
+    # Only when the profile was actually READ. `_load_profile` falls back to aaf's defaults,
+    # so a product that declared nothing would otherwise be described to its own design nodes
+    # using aaf's personas — the exact "absent configuration means use aaf's" the whole
+    # generalisation effort removed, reintroduced here as context.
+    personas = prof.get("personas") if prof.get("_ref") else None
+    if personas:
+        out["personas"] = personas
+    else:
+        missing.append("personas (.arcana/project.json not read for this repo)")
+
+    app_map = _fetch_app_map(payload)
+    if app_map:
+        out["existingFeatures"] = app_map[:4000]
+    else:
+        missing.append("app navigation map")
+
+    sibs = payload.get("siblings")
+    if sibs:
+        out["inFlight"] = str(sibs)[:2000]
+    elif payload.get("backlogId"):
+        missing.append("sibling features (backlogId set but none returned)")
+
+    notes = payload.get("manager_notes") or payload.get("managerNotes")
+    if notes:
+        out["humanNotes"] = str(notes)[:2000]
+
+    inv = _flow_inventory(payload, workdir)
+    if inv:
+        out["flows"] = inv["flows"]
+        out["verificationGaps"] = inv["uncovered"] or "(none — every required cell covered)"
+    else:
+        missing.append("flow inventory / verification coverage")
+
+    return {"context": out, "unavailable": missing}
+
+
+def project_brief(payload, workdir=None):
+    """`project_context` as prose for a prompt, with the gaps named rather than smoothed over."""
+    pc = project_context(payload, workdir)
+    ctx, missing = pc["context"], pc["unavailable"]
+    if not ctx and not missing:
+        return ""
+    parts = ["\n## 這個專案是什麼 —— 你正在其中工作的產品現況\n",
+             "以下每一項都是從樹裡或執行中的系統**機械擷取**的,不是任何人的敘述。\n"]
+    label = {"personas": "使用者角色", "existingFeatures": "已存在的功能與路由",
+             "inFlight": "同批正在開發的功能", "humanNotes": "人類在此功能上留下的指示",
+             "flows": "本產品的業務流程", "verificationGaps": "尚未被可證偽情境覆蓋的驗證維度"}
+    for k, v in ctx.items():
+        body = json.dumps(v, ensure_ascii=False) if not isinstance(v, str) else v
+        parts.append("\n### %s\n%s\n" % (label.get(k, k), body))
+    if missing:
+        parts.append(
+            "\n### 取不到的部分(**不要據此想像**)\n"
+            + "".join("- %s\n" % m for m in missing)
+            + "上列資訊本次無法取得。缺少的事實請當成**未知**處理:需要它才能決定的設計,"
+              "請明確列為待確認問題,不要用聽起來合理的假設補位。"
+              "一段編造的專案現況與真的無法區分,而它會讓後面每一個節點更確信一件可能錯的事。\n")
+    return "".join(parts)
+
+
+
+def prompt_intake(p):
+    """The intake (front PM) node: understand the project, then say what is still UNKNOWN.
+
+    Its output is not a decision — admission is preflight's job (cheap, before spend) and
+    acceptability is PmReview's (expensive, after artifacts exist). Putting a judgement here
+    would answer "should we build this" twice, both times on insufficient evidence.
+
+    What it does is the thing nothing else does: turn "under-specified" from an invisible
+    condition into a written list. Today a request like "make a coverage screen" reaches SA
+    with no product context, SA silently picks answers for everything the sentence left out,
+    and those picks arrive downstream indistinguishable from requirements. The picks may even
+    be good — the problem is nobody can tell which parts were decided and which were guessed.
+
+    So: questions go to the human channel this feature already owns (`feature:<slug>`), and
+    anything still unanswered becomes a NAMED ASSUMPTION that travels with the spec. An
+    assumption someone can read and correct is worth incomparably more than the same choice
+    made silently.
+    """
+    return (
+        "你是這個產品的 PM。任務**不是**決定要不要做,而是把「這個需求在這個產品裡到底是什麼」"
+        "弄清楚,並且把**還不清楚的部分明確列出來**,讓後面寫規格的人有依據、而不是自己猜。\n\n"
+        "## 需求(原始輸入)\n" + str(p.get("feature_request") or p.get("goal") or "(未提供)") + "\n"
+        + project_brief(p, p.get("_workdir"))
+        + "\n## 你要產出什麼\n"
+        "1. `understanding`:用產品的語言重述這個需求 —— 它服務哪個角色、放在現有 IA 的哪裡、"
+        "與已存在的哪些功能相鄰或重疊。**只根據上面機械擷取的事實**,不要引入你的先驗印象。\n"
+        "2. `openQuestions`:**做這件事必須知道、但目前資料回答不了的問題**。每一條要具體到"
+        "能被一句話回答(不是「範圍為何」,而是「這個畫面要不要顯示已退休的流程?」)。"
+        "沒有問題就給空陣列 —— 不要為了看起來嚴謹而湊。\n"
+        "3. `assumptions`:每一條未決問題,你**為了讓工作能繼續**而採取的立場,以及為什麼。"
+        "這些會原樣傳給 SA,並且會被當成**假設而非需求**看待。\n"
+        "4. `outOfScope`:明確不做的事 —— 界線沒畫,範圍就會在 implement 階段自己長大。\n\n"
+        "## 紀律\n"
+        "- 上面標為「取不到」的資訊,就是**未知**。不得用聽起來合理的敘述補位:"
+        "一段編造的專案現況與真的無法區分,而它會讓後面每個節點更確信一件可能錯的事。\n"
+        "- 若某個問題不被回答就**無法**負責任地繼續,把它放進 `blocking: true`。\n"
+        "- 重述必須可被對照:引用你依據的是哪一條擷取到的事實。\n"
+    )
+
+
+def post_open_questions(payload, questions):
+    """Put the intake node's questions where a human will actually see them.
+
+    Reuses the channel this feature already has — `feature:<slug>`, the same thread
+    `manager_notes` reads back at implement and pm-review — rather than inventing a second
+    place for humans to look. A question filed somewhere nobody reads is the same as no
+    question, and this pipeline already learned that lesson once: before that thread existed,
+    the only human input to a running feature was HOLD, which stops the round.
+    """
+    slug = str(_pv(payload, "slug")).strip()
+    api = (os.environ.get("READ_API") or os.environ.get("TEST_API_TARGET") or "").rstrip("/")
+    if not (slug and api and questions):
+        return {"posted": 0, "reason": "no slug / no read-API / no questions"}
+    if not api.startswith("http"):
+        api = "http://" + api
+    body = ("【PM 待確認】此功能在規格開始前有以下未決問題。未回答者將以 intake 節點列出的"
+            "假設繼續,並在 SRS 中標為假設而非需求:\n"
+            + "".join("%d. %s\n" % (i, q) for i, q in enumerate(questions, 1)))
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            api + "/api/v1/designer/chat/note",
+            data=json.dumps({"kind": "feature", "id": slug, "text": body}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return {"posted": len(questions), "status": r.status}
+    except Exception as e:
+        # Best-effort: the questions still travel in the node's output and into SA's prompt.
+        print("[agent-task-node] could not post open questions: %s" % e, flush=True)
+        return {"posted": 0, "error": str(e)}
+
+
 def preflight(payload):
     """Can this pipeline legitimately run against this repo? Answered in seconds, before a
     single AI session is paid for. Returns {"ok": bool, "reason": str, "checks": [...]}.
@@ -788,8 +995,19 @@ def _fetch_app_map(payload):
         try:
             r = subprocess.run(["gh", "api", f"repos/{repo}/contents/{pth}?ref={base}", "--jq", ".content"],
                                capture_output=True, text=True, timeout=30)
+            # Check the exit code. Without it a gh error message gets base64-decoded into
+            # mojibake and returned AS THE APP'S NAVIGATION MAP — 230 bytes of noise that the
+            # caller cannot distinguish from a real answer, and that a model will dutifully
+            # reason about. Absence of information presented as information.
+            if r.returncode != 0:
+                continue
             raw = "".join((r.stdout or "").split())
-            content = base64.b64decode(raw).decode("utf-8", "replace") if raw else ""
+            if not raw:
+                continue
+            try:
+                content = base64.b64decode(raw, validate=True).decode("utf-8")
+            except Exception:
+                continue
             if content:
                 out.append(f"# {pth}\n{content[:3500]}")
         except Exception:
@@ -863,7 +1081,7 @@ def prompt_pm_review(p):
     )
 
 
-PROMPTS = {"diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "scan-stale": prompt_scan_stale, "rebase": prompt_rebase, "audit": prompt_audit, "pm-review": prompt_pm_review}
+PROMPTS = {"intake": prompt_intake, "diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "scan-stale": prompt_scan_stale, "rebase": prompt_rebase, "audit": prompt_audit, "pm-review": prompt_pm_review}
 
 
 def _resume(payload):
@@ -1799,10 +2017,27 @@ def _bounded_json(business, cap=24000):
     return txt[:cap] + "\n…(DATA TRUNCATED at %d chars — later keys may be missing; say so if a needed field is absent)" % cap
 
 
+# Nodes that are writing the specification / design and therefore need to know which product
+# they are writing it FOR. Deliberately a list rather than "everyone": the brief costs a repo
+# read and several API calls, and a node that only transforms its input gains nothing from it.
+_CONTEXT_NODES = {"sa", "sd", "uiux", "genflow", "intake"}
+
+
 def run_claude_generic(payload):
     if not (payload.get("prompt") or "").strip():
         raise RuntimeError("generic executor requires a non-empty `prompt`")
     prompt = _with_memory(prompt_generic(payload), payload)
+    # The design nodes used to receive feature_request / repo / base / slug / uiFacing and
+    # nothing else — no idea what the product is, what it already does, or what else is being
+    # built beside it. PmReview, the LAST node, was the only one holding the app map and the
+    # sibling list. Context arriving four AI sessions after the node that needed most of it is
+    # why an SRS so often reads like a standalone tool's spec rather than this product's Nth
+    # feature.
+    node = str(payload.get("_node") or "").strip().lower()
+    if node in _CONTEXT_NODES:
+        brief = project_brief(payload, _ensure_checkout(payload))
+        if brief:
+            prompt = prompt + "\n" + brief
     schema = json.dumps(_generic_schema(payload))
     return _invoke_claude(prompt, schema, payload, 1800)
 
