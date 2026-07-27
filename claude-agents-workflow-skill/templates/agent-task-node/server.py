@@ -3261,6 +3261,15 @@ def test_flow(payload):
             # failure, not a silent skip — the same rule scenario-walk already lives by.
             "-e", "SCENARIO_TOUCHED_PATHS=" + ",".join(payload.get("_touched_flow_paths") or []),
             "-e", "SCENARIO_GATE_EXPECTED=" + ("1" if _touched_flows(payload) else "0"),
+            # Where THIS product keeps its flows, its scenario library, and which cell
+            # rulebook applies. Everything else about the gate had been generalised while
+            # the one thing deciding which files it reads stayed hardcoded to aaf's layout,
+            # so the first non-aaf repo made it report "the declared flowDir does not exist"
+            # — honest, and unable to run. Paths are facts about a tree, so they come from
+            # the tree's own .arcana/project.json.
+            "-e", "SM_FLOW_DIR=" + str(_pf.get("flow", {}).get("flowDir", "")),
+            "-e", "SM_SIM_DIR=" + str(_pf.get("flow", {}).get("scenarioDir", "")),
+            "-e", "SCENARIO_PROFILE=" + str(_pf.get("flow", {}).get("scenarioProfile", "")),
             "-e", "RBACUI_NAV_CONFIG=/work/repo/" + str(_pf["nav"].get(
                 "navPath", "dashboard/src/app/core/navigation/nav.config.ts"))]
     if repo and branch:  # T4-1: build the PR branch and test its real code
