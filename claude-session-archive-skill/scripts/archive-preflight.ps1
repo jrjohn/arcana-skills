@@ -1,4 +1,4 @@
-# PreToolUse hook (Bash + Read) — enforce vsearch / csearch preflight before:
+# PreToolUse hook (Bash + Read) — enforce OSEARCH preflight before:
 #   (a) raw sqlite3 SEARCH (LIKE / MATCH / msg_fts / GLOB) — HARD DENY regardless of sentinel,
 #   (b) raw sqlite3 metadata against archive DB — allow only if sentinel valid,
 #   (c) Select-String / Get-Content / sls / cat / head / tail / sed / awk on a
@@ -30,15 +30,24 @@
 # allowed when the sentinel is valid.
 #
 # Why sentinel TTL (v1.11+): post-compact, the model loses procedural
-# memory of having run vsearch but the session_id (and thus sentinel)
+# memory of having searched but the session_id (and thus sentinel)
 # persists. Without a TTL, the hook would allow sqlite3 forever based on
-# a vsearch that ran 4 hours ago. 30-min TTL forces re-vsearch after any
+# a search that ran 4 hours ago. 30-min TTL forces a re-search after any
 # meaningful idle gap. auto-osearch-on-prompt.ps1 refreshes the sentinel
 # on every prompt that matches archive-intent keywords, so active
 # conversations rarely hit the TTL.
 #
+# Why osearch-only unlock (v1.28, 2026-07-20): previously osearch|vsearch|csearch
+# all refreshed the sentinel, so CLAUDE.md's "the first archive query MUST be
+# osearch" had zero enforcement — the model could silently default to vsearch/
+# csearch and skip the orient layer. Now only osearch OPENS a session (sets an
+# osearch_marker); vsearch/csearch remain freely usable as drill-down shortcuts
+# but only refresh the sentinel AFTER osearch has opened the session at least once.
+#
 # Behavior:
-#   - vsearch / csearch invocation     -> refresh sentinel, allow.
+#   - osearch invocation               -> set osearch_marker + sentinel, allow.
+#   - vsearch / csearch invocation     -> allow; refresh sentinel ONLY if osearch
+#                                         already opened this session.
 #   - sqlite3 SEARCH (LIKE/MATCH/...)  -> ALWAYS deny (sentinel irrelevant).
 #   - sqlite3 metadata against DB      -> allow only if sentinel valid (fresh).
 #   - grep/cat/.../Read on memory     -> allow only if sentinel valid.
@@ -70,6 +79,10 @@ $file_path  = if ($payload.tool_input.file_path) { [string]$payload.tool_input.f
 if (-not $session_id) { exit 0 }
 
 $sentinel = Join-Path $env:TEMP "claude-archive-preflight-$session_id"
+
+# Per-session marker: set ONLY by osearch. Records "this session has used the
+# default front door at least once". vsearch/csearch cannot open a session.
+$osearch_marker = Join-Path $env:TEMP "claude-archive-osearch-$session_id"
 
 # Sentinel TTL: 30 minutes. See header for rationale (compact gap).
 $SentinelTtlSec = 1800
@@ -106,9 +119,21 @@ function Test-SentinelValid {
     }
 }
 
-# 1. vsearch / csearch invocation -> refresh sentinel (reset mtime to now)
-if ($command -match '(^|[^A-Za-z0-9_])(vsearch|csearch)([^A-Za-z0-9_]|$)') {
+# 1. Archive search invocation -> unlock / refresh sentinel.
+#    osearch is THE default front door (orient→recall→pin: unions the vsearch and
+#    csearch legs PLUS the distilled orient layer, never worse than vsearch). Per
+#    CLAUDE.md the FIRST archive query of a session MUST be osearch, so ONLY osearch
+#    can OPEN a session (sets osearch_marker + sentinel). vsearch / csearch remain
+#    freely usable as drill-down shortcuts but do NOT unlock the gate until osearch
+#    has run at least once this session — makes "osearch first" self-enforcing.
+if ($command -match '(^|[^A-Za-z0-9_])osearch([^A-Za-z0-9_]|$)') {
+    New-Item -ItemType File -Force -Path $osearch_marker | Out-Null
     New-Item -ItemType File -Force -Path $sentinel | Out-Null
+    exit 0
+}
+if ($command -match '(^|[^A-Za-z0-9_])(vsearch|csearch)([^A-Za-z0-9_]|$)') {
+    # Counts as preflight only after osearch has opened this session.
+    if (Test-Path $osearch_marker) { New-Item -ItemType File -Force -Path $sentinel | Out-Null }
     exit 0
 }
 
@@ -123,13 +148,13 @@ if ($command -match 'sqlite3(\s|$).*(sessions\.db|claude-archive)') {
     }
     # Metadata / schema queries -> allow only if sentinel valid
     if (Test-SentinelValid) { exit 0 }
-    Deny 'Even metadata sqlite3 against sessions.db requires preflight — run vsearch or csearch first to confirm intent and unlock sentinel. (Sentinel may have expired after 30 min — post-compact gap; re-running vsearch refreshes it.)'
+    Deny 'Even metadata sqlite3 against sessions.db requires preflight — run OSEARCH first (default front door) to confirm intent and unlock the sentinel. Only osearch opens a session; vsearch/csearch alone will NOT unlock. (Sentinel may have expired after 30 min — post-compact gap; re-running a search refreshes it.)'
 }
 
 # 3. Bash/PS grep / cat / head / tail / Select-String / Get-Content / sed / awk on memory file
 if ($command -match ('(^|[^A-Za-z0-9_])(grep|sls|Select-String|Get-Content|cat|gc|head|tail|less|more|sed|awk)([^A-Za-z0-9_]|$).*' + $mem_re)) {
     if (Test-SentinelValid) { exit 0 }
-    Deny "Memory file is a stale INDEX, not source of truth. For roster / device / credential / history queries, run vsearch first (default) or csearch (known phrase / IP / identifier). Memory grep is allowed only after vsearch/csearch unlocks the sentinel — or for 'recent context I just discussed this session' lookups."
+    Deny "Memory file is a stale INDEX, not source of truth. For roster / device / credential / history queries, run OSEARCH first — osearch is the default front door; csearch is only a manual shortcut for an exact IP / hostname / filename / FTS5 phrase. Memory grep is allowed only after OSEARCH unlocks the sentinel (vsearch/csearch alone will NOT unlock a session) — or for 'recent context I just discussed this session' lookups."
 }
 
 # 4. Read tool on memory file
@@ -137,7 +162,7 @@ if ($tool_name -eq 'Read' -and $file_path -match $mem_re) {
     if (Test-SentinelValid) { exit 0 }
     # Allow MEMORY.md (the index file itself) — auto-loaded by system anyway
     if ($file_path -match '[\\/]MEMORY\.md$') { exit 0 }
-    Deny "Memory file is a stale INDEX, not source of truth. For roster / device / credential / history queries, run vsearch first (default) or csearch (known phrase / IP / identifier). Read on memory/*.md is allowed only after vsearch/csearch unlocks the sentinel — or for 'recent context I just discussed this session' lookups."
+    Deny "Memory file is a stale INDEX, not source of truth. For roster / device / credential / history queries, run OSEARCH first — osearch is the default front door; csearch is only a manual shortcut for an exact IP / hostname / filename / FTS5 phrase. Read on memory/*.md is allowed only after OSEARCH unlocks the sentinel (vsearch/csearch alone will NOT unlock a session) — or for 'recent context I just discussed this session' lookups."
 }
 
 # 5. SSH command containing investigative log-grep pattern
@@ -147,20 +172,20 @@ if ($command -match 'ssh\s' -and `
     $command -match '(grep|cat|tail|head|less|sed|awk|find|sls|Select-String|Get-Content)\s' -and `
     $command -match '(/var/log/|\.log[\s"''|]|\.log\.gz)') {
     if (Test-SentinelValid) { exit 0 }
-    Deny "About to SSH and grep/cat/tail a log file. Investigative work like this often duplicates a prior session — vsearch first to see if the answer is already in the archive. If it's genuinely a new investigation, vsearch returns 0 results and still sets the sentinel, which then unlocks subsequent SSH log queries."
+    Deny "About to SSH and grep/cat/tail a log file. Investigative work like this often duplicates a prior session — run OSEARCH first (osearch is the default front door; it unions the vsearch + csearch legs plus the distilled orient layer). If it's genuinely a new investigation, osearch returns 0 results and still unlocks the sentinel, which then unlocks subsequent SSH log queries. NOTE: only osearch opens a session — vsearch/csearch alone will NOT unlock."
 }
 
 # 6. Local grep/cat/tail on /var/log/* or *.log
 if ($command -match '(^|[^A-Za-z0-9_])(grep|sls|Select-String|Get-Content|cat|gc|tail|head|less|sed|awk)([^A-Za-z0-9_]|$)[^|]*(/var/log/|\.log[\s"''|]|\.log\.gz)') {
     if (Test-SentinelValid) { exit 0 }
-    Deny "About to grep/cat a log file locally. Same logic as remote SSH log queries — vsearch first to see if a prior session already extracted this. If genuinely new, vsearch returns 0 and the sentinel still unlocks."
+    Deny "About to grep/cat a log file locally. Same logic as remote SSH log queries — run OSEARCH first (default front door) to see if a prior session already extracted this. If genuinely new, osearch returns 0 and the sentinel still unlocks. NOTE: only osearch opens a session — vsearch/csearch alone will NOT unlock."
 }
 
 # 7. git log --grep / -S (investigative git history search)
 if ($command -match 'git\s+log\s' -and `
     $command -match '(--grep[=\s]|--all-match|-S[\s"''])') {
     if (Test-SentinelValid) { exit 0 }
-    Deny "git log --grep / -S is investigative — same logic as log file grep. vsearch first; if genuinely new investigation the sentinel still unlocks after."
+    Deny "git log --grep / -S is investigative — same logic as log file grep. Run OSEARCH first (default front door); if genuinely new investigation the sentinel still unlocks after. NOTE: only osearch opens a session — vsearch/csearch alone will NOT unlock."
 }
 
 exit 0

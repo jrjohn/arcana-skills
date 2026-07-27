@@ -1,6 +1,8 @@
 # Discipline Layer (Hooks)
 
-The archive DB by itself only stores history. The **discipline layer** is what makes Claude actually use it consistently — by enforcing "vsearch first" via PreToolUse / UserPromptSubmit hooks, instead of relying on Claude's memory of a CLAUDE.md instruction.
+The archive DB by itself only stores history. The **discipline layer** is what makes Claude actually use it consistently — by enforcing "**osearch first**" via PreToolUse / UserPromptSubmit hooks, instead of relying on Claude's memory of a CLAUDE.md instruction.
+
+> **osearch is the default front door** (orient→recall→pin: RRF-fuses the vsearch and csearch legs plus a distilled orient layer, and is never worse than vsearch). Since **v1.28 only `osearch` opens a session** — `vsearch` / `csearch` remain freely usable as drill-down shortcuts, but on their own they do **not** unlock the gate until osearch has run at least once. See the v1.28 incident below for why.
 
 This file documents the two hooks that ship with this skill, why they exist, and the sentinel mechanism they share.
 
@@ -11,12 +13,13 @@ Pure CLAUDE.md instructions are best-effort: Claude reads them, but under load (
 | Approach | Behavior under load |
 |---|---|
 | CLAUDE.md only | Claude *might* remember the rule. Drift over weeks. |
-| Hook + sentinel | Tool call is **denied** until vsearch/csearch runs. Cannot drift. |
+| Hook + sentinel | Tool call is **denied** until osearch runs. Cannot drift. |
 
 Real incidents that prompted this layer:
 - **2026-04-XX** — Claude SSHed 3 times into a device to ID `.98` before being reminded archive had the answer. Wasted 3 round-trips. → preflight hook now blocks SSH-log-grep without vsearch.
 - **2026-05-05** — Asked "who's in 品質法規部". Claude grepped memory file, hit 2/5 people (memory was a stale curated index). vsearch on archive returned 4/24 in one shot. → preflight hook now blocks memory grep without vsearch, and the rule "memory ≠ archive replacement" is encoded in the deny reason.
-- **2026-05-11** — Post-compact, Claude went straight to `sqlite3 ... sessions.db WHERE content LIKE '%X%'` for a credential lookup instead of csearch. The CLAUDE.md prose said "vsearch first" but the credential section's example *literally* used raw `sqlite3 LIKE` — that pattern survived compact as muscle memory. **Also**: the sentinel from pre-compact vsearch was still valid, so the hook allowed the sqlite3 call. → v1.11 hard-bans `sqlite3 SEARCH` (LIKE/MATCH/msg_fts/GLOB) on sessions.db regardless of sentinel, and adds 30-min sentinel TTL to force re-vsearch after compact gaps.
+- **2026-05-11** — Post-compact, Claude went straight to `sqlite3 ... sessions.db WHERE content LIKE '%X%'` for a credential lookup instead of csearch. The CLAUDE.md prose said "vsearch first" but the credential section's example *literally* used raw `sqlite3 LIKE` — that pattern survived compact as muscle memory. **Also**: the sentinel from pre-compact vsearch was still valid, so the hook allowed the sqlite3 call. → v1.11 hard-bans `sqlite3 SEARCH` (LIKE/MATCH/msg_fts/GLOB) on sessions.db regardless of sentinel, and adds 30-min sentinel TTL to force re-search after compact gaps.
+- **2026-07-20** — Claude opened the session with `csearch` / `vsearch` (never osearch), so on a disk-full alert it got only noise, misidentified the SAN vendor, and nearly acted on a false reading. CLAUDE.md said "the first archive query MUST be osearch", but the hook unlocked the sentinel for **any** of `osearch|vsearch|csearch` — so the default had *zero* enforcement and was being silently bypassed. Re-running the same query as `osearch` immediately surfaced the decisive context. → **v1.28: only `osearch` opens a session.** The preflight sets a separate `osearch_marker` on osearch; `vsearch`/`csearch` refresh the sentinel only *after* that marker exists. "osearch first" becomes mechanical rather than advisory.
 
 ## The two hooks
 
@@ -30,7 +33,7 @@ Registered against `Bash` and `Read` matchers. Inspects the tool input and appli
 |---|---|
 | `sqlite3 ... sessions.db` with `LIKE` / `MATCH` / `msg_fts` / `GLOB` | Content search must go through csearch (FTS5 — faster, supports phrase/boolean, returns ts+project+role+~258 chars). Bypassing csearch loses discipline + caching benefits. Extend csearch CLI if its defaults aren't enough — don't bypass the hook. |
 
-**Tier B — sentinel-gated (any `vsearch` / `csearch` invocation in the last 30 min unlocks):**
+**Tier B — sentinel-gated (an `osearch` invocation in the last 30 min unlocks; see below):**
 
 | Trigger | Why blocked |
 |---|---|
@@ -41,9 +44,9 @@ Registered against `Bash` and `Read` matchers. Inspects the tool input and appli
 | Local `grep|tail|cat /var/log/...` or `*.log` | Same logic for local logs |
 | `git log --grep=...` / `-S '...'` / `--all-match` | Investigative git history search — same logic |
 
-**Unblocking Tier B**: any `vsearch ...` or `csearch ...` invocation creates/refreshes the sentinel file (`/tmp/claude-archive-preflight-<session_id>`). All Tier-B patterns then unblock until the sentinel expires (30 min, see Sentinel mechanics below).
+**Unblocking Tier B (osearch-only, since v1.28)**: an `osearch ...` invocation creates the `osearch_marker` (`/tmp/claude-archive-osearch-<session_id>`) **and** the sentinel (`/tmp/claude-archive-preflight-<session_id>`). Only then do all Tier-B patterns unblock (until the sentinel expires — 30 min, see Sentinel mechanics below). A `vsearch` / `csearch` invocation *refreshes* the sentinel too, but **only if the osearch_marker already exists** — i.e. they extend a session osearch already opened, they cannot open one. This is what makes "osearch first" mechanical (see the 2026-07-20 incident above).
 
-**Critically**: vsearch/csearch returning **zero results** still sets the sentinel. The rule is "you must check archive first", not "archive must contain the answer". A genuine new investigation just gets a one-line empty result, then proceeds normally.
+**Critically**: osearch returning **zero results** still opens the session (sets marker + sentinel). The rule is "you must check archive first via the front door", not "archive must contain the answer". A genuine new investigation just gets a one-line empty result, then proceeds normally.
 
 ### 2. `auto-osearch-on-prompt.sh` — UserPromptSubmit (proactive)
 
@@ -51,7 +54,7 @@ Doesn't block anything — it preempts. When the user's prompt contains "look so
 
 1. Runs `crs osearch <prompt>` cross-project
 2. Injects top hits as `additionalContext` (Claude sees them in its first turn)
-3. Sets the preflight sentinel (we did query, even if empty)
+3. **After** osearch actually runs, sets the `osearch_marker` + preflight sentinel (an empty result still counts as "consulted"; a cooldown skip or timeout kill does **not** — those exit before the marker is set, so the gate correctly stays closed)
 
 This means common questions like *"who is .45?"* or *"did we fix the broadcast deny?"* often skip the preflight dance entirely — the answer arrives pre-injected, Claude responds directly.
 
@@ -66,10 +69,12 @@ False positives are inevitable (the regex is permissive). The cost of a false po
 ## Sentinel mechanics
 
 ```
-/tmp/claude-archive-preflight-<session_id>     # TTL: 30 minutes (since v1.11)
+/tmp/claude-archive-osearch-<session_id>       # osearch_marker — set once osearch opens the session (since v1.28)
+/tmp/claude-archive-preflight-<session_id>     # sentinel, TTL: 30 minutes (since v1.11)
 ```
 
-- **Created / refreshed by**: `vsearch` / `csearch` invocation (preflight hook), or any `auto-osearch-on-prompt` archive-trigger match. Each invocation touches the file, resetting the mtime → resetting the TTL clock.
+- **Opened by (osearch_marker + sentinel)**: an `osearch` invocation (preflight hook), or an `auto-osearch-on-prompt` archive-trigger match whose osearch actually ran. The marker is not TTL'd — once a session has gone through the front door, it stays "opened"; the sentinel below is what carries the freshness clock.
+- **Refreshed by (sentinel only)**: `vsearch` / `csearch` invocation, but **only if the osearch_marker already exists**. Each qualifying invocation touches the sentinel, resetting its mtime → resetting the TTL clock.
 - **Checked by**: preflight hook on every Tier-B Bash / Read call via `sentinel_valid()`:
   ```sh
   sentinel_valid() {
@@ -87,20 +92,21 @@ False positives are inevitable (the regex is permissive). The cost of a false po
 
 ### Why TTL exists (the compact gap)
 
-Without TTL, the sentinel created by a vsearch at minute 0 would be valid forever. If Claude Code compacts the conversation at minute 90, the model loses procedural memory of having run vsearch — but the sentinel file persists (same `session_id`). The model's next archive query post-compact could go straight to raw sqlite3 (Tier B), with the hook silently allowing it because the sentinel is still there.
+Without TTL, the sentinel created by an osearch at minute 0 would be valid forever. If Claude Code compacts the conversation at minute 90, the model loses procedural memory of having searched — but the sentinel file persists (same `session_id`). The model's next archive query post-compact could go straight to raw sqlite3 (Tier B), with the hook silently allowing it because the sentinel is still there.
 
-30-minute TTL fixes this: any meaningful idle gap or compact forces a re-vsearch. Active conversations refresh the sentinel automatically (auto-osearch-on-prompt fires on every archive-intent prompt), so users never notice the TTL — it only kicks in when the model would otherwise drift.
+30-minute TTL fixes this: any meaningful idle gap or compact forces a re-search. Active conversations refresh the sentinel automatically (auto-osearch-on-prompt fires on every archive-intent prompt), so users never notice the TTL — it only kicks in when the model would otherwise drift. (The `osearch_marker` itself is not TTL'd — a compacted session is still considered "opened" — but the sentinel it set will have expired, so Tier B still re-locks until any search refreshes it.)
 
 ### Manual override
 
-If Claude (or you) genuinely need to bypass the preflight without running vsearch — for example, in a single-purpose script that has no relation to past sessions — touch the sentinel:
+If Claude (or you) genuinely need to bypass the preflight without running osearch — for example, in a single-purpose script that has no relation to past sessions — touch **both** the marker and the sentinel (since v1.28 the marker is required to keep vsearch/csearch able to refresh):
 
 ```bash
 SID=$(cat ~/.claude/projects/<project>/<latest>.jsonl | head -1 | jq -r '.sessionId')
-: > /tmp/claude-archive-preflight-${SID}
+: > /tmp/claude-archive-osearch-${SID}     # mark session as "opened"
+: > /tmp/claude-archive-preflight-${SID}   # set the 30-min sentinel
 ```
 
-This is escape-hatch only and resets the 30-min TTL. Normal flow is: run vsearch, get results (even if empty), proceed. Note that Tier A (sqlite3 SEARCH) is NOT unlocked by the sentinel — there's no override for that, by design.
+This is escape-hatch only and resets the 30-min TTL. Normal flow is: run osearch, get results (even if empty), proceed. Note that Tier A (sqlite3 SEARCH) is NOT unlocked by the sentinel — there's no override for that, by design.
 
 ## Composition with other skills
 
@@ -124,7 +130,7 @@ Both run; both can inject `additionalContext`; Claude sees the union. Keep each 
 ## Performance notes
 
 - **Preflight overhead**: ~5ms per Bash/Read call (jq + a few greps on small input, plus a `stat` for TTL check). Hook timeout is set to 5s, but real cost is sub-frame.
-- **Auto-vsearch overhead**: ~500ms when triggered (vsearch latency dominated by Ollama embedding inference). Hook timeout is also 5s. If Ollama is down or slow, the hook fails silently (vsearch returns empty), prompt goes through unmodified — never blocks the user.
+- **Auto-osearch overhead**: ~500ms – 1.1s when triggered (latency dominated by Ollama embedding inference on the vsearch leg). Hook timeout is also 5s. If Ollama is down or slow, the hook fails silently (osearch returns empty / times out), prompt goes through unmodified — never blocks the user. Note: on a timeout/cooldown skip the marker+sentinel are **not** set, so the preflight gate correctly stays closed.
 - **No state persistence**: sentinel is `/tmp`-based; no DB writes, no I/O contention with `crs build`.
 
 ## Disabling
