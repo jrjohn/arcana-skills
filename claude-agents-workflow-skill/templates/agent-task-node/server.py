@@ -1123,6 +1123,24 @@ def _fetch_app_map(payload):
     return "\n\n".join(out)[:7000]
 
 
+
+def _report_for_pm(report):
+    """The test report as the PM should read it — and honest when it had to be shortened.
+
+    2800 characters cut the report mid-JSON, so the PM was judging a fragment while it looked
+    like the whole thing. The gate verdicts (which gate ran, which could not) live past that
+    point, which means the node deciding GO/NOGO could not see the very evidence this branch
+    spent its whole length making legible.
+    """
+    if report is None:
+        return "(無)"
+    s = report if isinstance(report, str) else json.dumps(report, ensure_ascii=False)
+    if len(s) <= 40_000:
+        return s
+    return (s[:40_000] + "\n\n[!! 測試報告在此被截斷 —— 後面還有內容。"
+            "未讀到的部分不得視為「沒有問題」,若判斷需要它請以 HOLD 要求完整報告 !!]")
+
+
 def prompt_pm_review(p):
     return (
         "You are the PM readiness gate (your PM skill carries the full rubric). A gated PR was "
@@ -1140,7 +1158,8 @@ def prompt_pm_review(p):
         f"(to judge IA redundancy against the WHOLE app, not just siblings): "
         f"{_fetch_app_map(p) or '(unavailable — degrade to the siblings check)'}\n"
         f"- TEST NODE RESULT (the platform's OWN CI — it built THIS exact PR and ran feature testcases + the "
-        f"AI semantic gate + a GOAL-DIRECTED JOURNEY WALKTHROUGH on it): {str(p.get('testReport'))[:2800]}\n"
+        f"AI semantic gate + a GOAL-DIRECTED JOURNEY WALKTHROUGH on it): "
+        f"{_report_for_pm(p.get('testReport'))}\n"
         "HARD PRE-GATE first: (a) BUILD — the implement result's `buildStatus` (also printed as `Local build "
         "gate:` in the PR body) is DETERMINISTIC: `OK` means the code compiled via `npm ci && npm run build`, so "
         "it BUILDS — treat that as ground truth and NEVER read the implement Summary's prose as a build failure "
@@ -2568,7 +2587,17 @@ def implement_flow(payload):
 
         # --- Phase B: Claude writes code in the workdir (bound to the dev skill) ---
         design = payload.get("design")
-        design_str = json.dumps(design, ensure_ascii=False)[:8000] if design is not None else ""
+        # The SRS is the most expensive artifact this pipeline makes — four rounds of intake
+        # questions bought it. Cutting it to 8000 characters handed the designer a spec that
+        # ended mid-sentence, and SD said so in its own words: "visibly truncated mid-sentence
+        # (AC-03 ends ...[truncated])". The tokens saved are worth far less than the implement
+        # round that gets built on a spec nobody could finish reading.
+        design_str = json.dumps(design, ensure_ascii=False) if design is not None else ""
+        if len(design_str) > 120_000:
+            # A cap still exists, but it is far above any real spec and it SAYS SO — a silent
+            # cut is indistinguishable from a spec that simply ended there.
+            design_str = design_str[:120_000] + "\n\n[!! 本 SRS/SDD 在此被截斷 —— 後面還有內容。" \
+                                                "缺少的部分請視為未知,不要當成規格到此為止 !!]"
         full_prompt = (
             instruction
             + "\n\n## 目標\n在目前工作目錄（已 clone 的 repo）實作此功能，嚴格遵守 repo 既有架構慣例"
