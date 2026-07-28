@@ -1825,7 +1825,17 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
     if payload.get("skip_permissions"):
         run_env["IS_SANDBOX"] = "1"
     if console_path:
-        cmd = [CLAUDE, "-p", prompt, "--json-schema", schema,
+        # The prompt goes in on stdin, not argv. Linux caps a single argv string at
+        # MAX_ARG_STRLEN (128 KiB) and the limit is in BYTES, so CJK prose hits it at
+        # roughly 43k characters. A 22k-char answer set plus a 25k-char SRS is ~145 KB and
+        # execve fails outright: "[Errno 7] Argument list too long: '/usr/bin/claude'",
+        # which is what killed the SD node three times today before the worker gave up.
+        #
+        # The old 24_000-char input cap had been hiding this — not by design, just by being
+        # small enough. Raising it to make room for a real specification uncovered the wall
+        # behind it. stdin has no such ceiling, so the size question goes back to being about
+        # the model's context, which is where it belongs.
+        cmd = [CLAUDE, "-p", "--json-schema", schema,
                "--output-format", "stream-json", "--verbose"] + _resume(payload) + _skill_flags(payload) + _perm_flags(payload) + _dir_flags(payload)
         if MODEL:
             cmd += ["--model", MODEL]
@@ -1839,8 +1849,14 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
                 os.replace(console_path, "%s.%d.jsonl" % (console_path[:-6], int(time.time())))
         except OSError:
             pass
-        with open(console_path, "w") as cf:
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+        # Feed the prompt from a file rather than writing it down a pipe: a 145 KB write
+        # would block on the 64 KB pipe buffer while this side is not yet reading stdout,
+        # and the deadlock would look like a hang rather than an error.
+        _pf = tempfile.NamedTemporaryFile("w", suffix=".prompt", delete=False, encoding="utf-8")
+        _pf.write(prompt)
+        _pf.close()
+        with open(console_path, "w") as cf, open(_pf.name, "r", encoding="utf-8") as _pin:
+            proc = subprocess.Popen(cmd, stdin=_pin, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, text=True, cwd=cwd, env=run_env)
             # wall-clock kill: without it an abandoned run streams forever (a Fix
             # orphan ran 8h17m on 2026-06-04). fix gets 30 min for local build
@@ -1858,6 +1874,10 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
                 proc.wait(timeout=TIMEOUT)
             finally:
                 _killer.cancel()
+        try:
+            os.unlink(_pf.name)
+        except OSError:
+            pass
         if proc.returncode != 0:
             err = proc.stderr.read()[:500] if proc.stderr else ""
             if _rate_limited(None, err):
@@ -1872,11 +1892,13 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
             if ev.get("type") == "result":
                 env = ev
     else:
-        cmd = [CLAUDE, "-p", prompt, "--json-schema", schema,
+        # Same reason as the streaming path above: prompt on stdin, never argv.
+        cmd = [CLAUDE, "-p", "--json-schema", schema,
                "--output-format", "json"] + _resume(payload) + _skill_flags(payload) + _perm_flags(payload) + _dir_flags(payload)
         if MODEL:
             cmd += ["--model", MODEL]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=wall, cwd=cwd, env=run_env)
+        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                              timeout=wall, cwd=cwd, env=run_env)
         if proc.returncode != 0:
             if _rate_limited(None, proc.stderr):
                 raise RateLimitError(f"claude rate-limited (exit {proc.returncode}): {proc.stderr[:500]}")
@@ -2210,30 +2232,81 @@ def prompt_generic(payload):
     return "\n".join(parts)
 
 
-def _bounded_json(business, cap=24000):
+# The keys that CARRY the specification. Bounding these is not a size optimisation —
+# it deletes the thing the node was asked to work from.
+#
+# The uniform 600-char bound below treats a 14 KB requirement the same as a repo name, so
+# the first field to be gutted was always the largest, which is always the one that matters.
+# Today that cost a full run: four rounds of intake answers (14 KB) were cut to 600 chars,
+# SA correctly refused with INPUT_INCOMPLETE, and SD then invented a design from the refusal.
+SPEC_BEARING = (
+    "feature_request", "intakeForm", "intakeReview", "srs", "sdd", "uiuxSpec",
+    "acceptance", "requiredCells", "rework_feedback", "manager_notes", "ai_input",
+    "pm_answers", "out_of_scope", "target_users", "placement",
+)
+
+
+def _bounded_json(business, cap=200_000):
     """Serialize node input data for prompt embedding WITHOUT silently amputating
     late keys. The old raw `[:8000]` slice cut the JSON mid-string, so any key
     sorting after a fat one vanished — a `goal` after a bloated `existing` made the
     decompose node effectively blind (2026-07-19 incident). Strategy: full dump if
-    it fits; else bound long string leaves / long arrays per-value and retry; only
-    then hard-cap WITH an explicit marker so the model knows data is incomplete."""
+    it fits; else bound the NON-spec-bearing leaves first, and only touch the
+    spec-bearing ones if that is not enough — naming each one that was cut.
+
+    Two things changed on 2026-07-28, both after the same failure:
+
+    `cap` was 24_000. Four rounds of intake Q&A plus the requirement come to ~18 KB of
+    prose before any other field, so a thorough requirement crossed the cap by existing.
+    200_000 is the same order as the design cap this file already uses elsewhere and is
+    small against the model's context; the point of a cap here is to stop a runaway field,
+    not to ration a specification.
+
+    Bounding was uniform at 600 chars per string leaf. Uniform means the specification and
+    the repo slug are equally expendable, so in practice the specification went first —
+    it is always the biggest. Now the fields that carry the spec are bounded last, and when
+    one is bounded the marker names it, because a model that cannot see what it is missing
+    will fill the hole itself. SA did the right thing today (refused, named the gaps) but
+    SD did not — it designed from the refusal.
+    """
     txt = json.dumps(business, ensure_ascii=False, indent=2)
     if len(txt) <= cap:
         return txt
 
-    def bound(v):
-        if isinstance(v, str) and len(v) > 600:
-            return v[:600] + "…[truncated]"
+    def bound(v, limit):
+        if isinstance(v, str) and len(v) > limit:
+            return v[:limit] + "…[truncated: %d of %d chars shown]" % (limit, len(v))
         if isinstance(v, list):
-            return [bound(x) for x in v[:80]] + (["…[%d more truncated]" % (len(v) - 80)] if len(v) > 80 else [])
+            return [bound(x, limit) for x in v[:80]] + (
+                ["…[%d more truncated]" % (len(v) - 80)] if len(v) > 80 else [])
         if isinstance(v, dict):
-            return {k: bound(x) for k, x in v.items()}
+            return {k: bound(x, limit) for k, x in v.items()}
         return v
 
-    txt = json.dumps(bound(business), ensure_ascii=False, indent=2)
+    # Pass 1: squeeze everything that is NOT carrying the specification.
+    squeezed = {k: (v if k in SPEC_BEARING else bound(v, 600)) for k, v in business.items()}
+    txt = json.dumps(squeezed, ensure_ascii=False, indent=2)
     if len(txt) <= cap:
         return txt
-    return txt[:cap] + "\n…(DATA TRUNCATED at %d chars — later keys may be missing; say so if a needed field is absent)" % cap
+
+    # Pass 2: the spec itself has to give. Say so, per field, in the data the model reads —
+    # an unannounced cut is the failure mode this whole function exists to prevent.
+    cut = []
+    for k in list(squeezed):
+        if k in SPEC_BEARING and isinstance(squeezed[k], str) and len(squeezed[k]) > 20_000:
+            cut.append(k)
+            squeezed[k] = bound(squeezed[k], 20_000)
+    if cut:
+        squeezed["_TRUNCATION_WARNING"] = (
+            "These specification fields were shortened to fit and are INCOMPLETE: %s. "
+            "Do not infer the missing content — say which field is short and stop."
+            % ", ".join(cut))
+    txt = json.dumps(squeezed, ensure_ascii=False, indent=2)
+    if len(txt) <= cap:
+        return txt
+    return txt[:cap] + (
+        "\n…(DATA TRUNCATED at %d chars — later keys may be missing; say so if a needed "
+        "field is absent)" % cap)
 
 
 # Nodes that are writing the specification / design and therefore need to know which product
