@@ -1825,7 +1825,17 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
     if payload.get("skip_permissions"):
         run_env["IS_SANDBOX"] = "1"
     if console_path:
-        cmd = [CLAUDE, "-p", prompt, "--json-schema", schema,
+        # The prompt goes in on stdin, not argv. Linux caps a single argv string at
+        # MAX_ARG_STRLEN (128 KiB) and the limit is in BYTES, so CJK prose hits it at
+        # roughly 43k characters. A 22k-char answer set plus a 25k-char SRS is ~145 KB and
+        # execve fails outright: "[Errno 7] Argument list too long: '/usr/bin/claude'",
+        # which is what killed the SD node three times today before the worker gave up.
+        #
+        # The old 24_000-char input cap had been hiding this — not by design, just by being
+        # small enough. Raising it to make room for a real specification uncovered the wall
+        # behind it. stdin has no such ceiling, so the size question goes back to being about
+        # the model's context, which is where it belongs.
+        cmd = [CLAUDE, "-p", "--json-schema", schema,
                "--output-format", "stream-json", "--verbose"] + _resume(payload) + _skill_flags(payload) + _perm_flags(payload) + _dir_flags(payload)
         if MODEL:
             cmd += ["--model", MODEL]
@@ -1839,8 +1849,14 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
                 os.replace(console_path, "%s.%d.jsonl" % (console_path[:-6], int(time.time())))
         except OSError:
             pass
-        with open(console_path, "w") as cf:
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+        # Feed the prompt from a file rather than writing it down a pipe: a 145 KB write
+        # would block on the 64 KB pipe buffer while this side is not yet reading stdout,
+        # and the deadlock would look like a hang rather than an error.
+        _pf = tempfile.NamedTemporaryFile("w", suffix=".prompt", delete=False, encoding="utf-8")
+        _pf.write(prompt)
+        _pf.close()
+        with open(console_path, "w") as cf, open(_pf.name, "r", encoding="utf-8") as _pin:
+            proc = subprocess.Popen(cmd, stdin=_pin, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, text=True, cwd=cwd, env=run_env)
             # wall-clock kill: without it an abandoned run streams forever (a Fix
             # orphan ran 8h17m on 2026-06-04). fix gets 30 min for local build
@@ -1858,6 +1874,10 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
                 proc.wait(timeout=TIMEOUT)
             finally:
                 _killer.cancel()
+        try:
+            os.unlink(_pf.name)
+        except OSError:
+            pass
         if proc.returncode != 0:
             err = proc.stderr.read()[:500] if proc.stderr else ""
             if _rate_limited(None, err):
@@ -1872,11 +1892,13 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
             if ev.get("type") == "result":
                 env = ev
     else:
-        cmd = [CLAUDE, "-p", prompt, "--json-schema", schema,
+        # Same reason as the streaming path above: prompt on stdin, never argv.
+        cmd = [CLAUDE, "-p", "--json-schema", schema,
                "--output-format", "json"] + _resume(payload) + _skill_flags(payload) + _perm_flags(payload) + _dir_flags(payload)
         if MODEL:
             cmd += ["--model", MODEL]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=wall, cwd=cwd, env=run_env)
+        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                              timeout=wall, cwd=cwd, env=run_env)
         if proc.returncode != 0:
             if _rate_limited(None, proc.stderr):
                 raise RateLimitError(f"claude rate-limited (exit {proc.returncode}): {proc.stderr[:500]}")
