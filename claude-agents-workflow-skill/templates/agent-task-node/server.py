@@ -940,6 +940,98 @@ def post_open_questions(payload, questions):
         return {"posted": 0, "error": str(e)}
 
 
+
+def dispose_pr(payload):
+    """Close out this run's PR according to how the run ended.
+
+    A PR's life was tied to nothing. The flow finished — merged, rejected, escalated,
+    aborted — and the PR stayed open regardless, so the queue only ever grew: 42 open PRs,
+    of which today's audit found five already landed by other routes and thirteen produced
+    by a single fan-out in July. Nobody was neglecting them; nothing had ever been
+    responsible for closing them.
+
+    Three endings, three dispositions, and the difference matters to whoever reads the queue:
+
+      GO       — leave it. StartMerge hands it to merge-flow; closing it here would race.
+      NOGO     — close it, with the reason. Work that was judged not good enough should not
+                 sit in the queue looking like work awaiting review.
+      HOLD     — convert to draft and say who is being waited on. A HOLD is a question for a
+                 human, and a question nobody can see is not a question.
+
+    An open PR should mean "someone could act on this". Anything else erodes that, and a
+    queue nobody trusts gets ignored wholesale — which is what happened here.
+    """
+    # The verdict is not its own variable: the PM node writes one JSON blob into `pmReview`
+    # and the gateway greps that string for "verdict":"GO". Read it the same way rather than
+    # inventing a field, so this node and the gateway can never disagree about what happened.
+    review_raw = str(_pv(payload, "pmReview") or "")
+    verdict, feedback = "", ""
+    try:
+        j = json.loads(review_raw) if review_raw.strip().startswith("{") else {}
+        verdict = str(j.get("verdict") or "").strip().upper()
+        feedback = str(j.get("feedback") or "")[:1500]
+    except Exception:
+        pass
+    if not verdict:
+        # Same tolerance for whitespace the gateway uses.
+        flat = review_raw.replace(" ", "").replace("\n", "")
+        for v in ("GO", "NOGO", "HOLD"):
+            if '"verdict":"%s"' % v in flat:
+                verdict = v
+                break
+        # NOGO contains GO as a substring; the loop checks GO first, so re-check.
+        if verdict == "GO" and '"verdict":"NOGO"' in flat:
+            verdict = "NOGO"
+    if not feedback:
+        feedback = str(_pv(payload, "feedback") or "")[:1500]
+
+    url, _ = _pr_url_and_branch(payload)
+    if not url:
+        raw = str(_pv(payload, "pr") or "")
+        if raw.strip().startswith("{"):
+            try:
+                url = str(json.loads(raw).get("prUrl") or "")
+            except Exception:
+                pass
+        elif raw.startswith("http"):
+            url = raw.strip()
+    slug = str(_pv(payload, "slug")).strip()
+    if not url:
+        return {"disposed": False, "reason": "no PR for this instance", "verdict": verdict}
+    if verdict == "GO":
+        return {"disposed": False, "reason": "GO — left open for merge-flow", "verdict": verdict,
+                "pr": url}
+
+    iid = payload.get("_piid") or ""
+    if verdict == "NOGO":
+        body = ("【自動關閉 — PM 判定 NOGO】\n\n"
+                "本輪的 PM 節點判定這份交付不足以出貨,而重試次數已用盡。\n\n"
+                "關閉而不是留著,是因為一個開著的 PR 應該代表「有人可以對它動手」。"
+                "一份已被判定不足、又沒有人在處理的 PR 留在佇列裡,會讓整個佇列變得不可信 —— "
+                "而不可信的佇列會被整批忽略。\n\n"
+                "PM 的理由:\n" + (feedback or "(未提供)") + "\n\n"
+                "要續作請重開,或以同一 slug 重跑一輪(`%s`)。" % slug)
+        r = subprocess.run(["gh", "pr", "close", url, "--comment", body],
+                           capture_output=True, text=True, timeout=60)
+        return {"disposed": r.returncode == 0, "action": "closed", "verdict": verdict,
+                "pr": url, "error": (r.stderr or "")[-200:] if r.returncode else None}
+
+    # HOLD, or a run that ended without a verdict at all (aborted, escalated, crashed).
+    why = "PM 判定 HOLD — 需要人裁決" if verdict == "HOLD" else \
+          "流程結束時沒有 PM 判定(中止或升級)"
+    body = ("【自動轉為草稿 — %s】\n\n"
+            "這份 PR 在等一個人,而不是在等審查。轉成草稿是為了讓佇列裡「可以動手的」與"
+            "「在等人回答的」分得開 —— 一個沒有人看得見的問題,不是問題。\n\n"
+            "實例:%s\nslug:%s\n\n"
+            "PM 的說明:\n%s\n\n"
+            "裁決後把它轉回 ready 即可繼續。" % (why, iid, slug, feedback or "(未提供)"))
+    subprocess.run(["gh", "pr", "comment", url, "--body", body],
+                   capture_output=True, text=True, timeout=60)
+    r = subprocess.run(["gh", "pr", "ready", url, "--undo"], capture_output=True, text=True, timeout=60)
+    return {"disposed": r.returncode == 0, "action": "converted to draft", "verdict": verdict or "(none)",
+            "pr": url, "error": (r.stderr or "")[-200:] if r.returncode else None}
+
+
 def preflight(payload):
     """Can this pipeline legitimately run against this repo? Answered in seconds, before a
     single AI session is paid for. Returns {"ok": bool, "reason": str, "checks": [...]}.
@@ -3895,7 +3987,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         task = self.path.rsplit("/", 1)[-1]
-        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "uiux-audit", "site", "smoke"):
+        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "uiux-audit", "site", "smoke", "dispose-pr"):
             return self._send(404, {"error": f"unknown task {task}"})
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -3931,6 +4023,8 @@ class Handler(BaseHTTPRequestHandler):
                 # Read-only observation of the RUNNING system, for nodes whose diagnosis needs
                 # more than the repo. Cannot write anything: the DB login holds SELECT only.
                 result = site_flow(payload)
+            elif task == "dispose-pr":
+                result = dispose_pr(payload)
             elif task == "test":
                 result = test_flow(payload)
             elif task == "uiux-audit":
