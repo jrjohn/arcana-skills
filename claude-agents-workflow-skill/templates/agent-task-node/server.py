@@ -1978,6 +1978,17 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
         sid = env.get("session_id")
         if sid:
             so["_sid"] = sid
+    # Fold this node's transcript into the product's own archive, now that it has one.
+    # Here rather than at flow-end because a run that never reaches its end event is
+    # exactly the one whose reasoning is worth keeping — and because the next node in
+    # THIS flow can then recall what this one just decided.
+    #
+    # Best-effort by construction: project_memory_ingest swallows its own failures. A
+    # node must not fail for want of a filing cabinet.
+    try:
+        project_memory_ingest(_project_slug(payload), payload.get("_piid"))
+    except Exception:
+        pass
     return so
 
 
@@ -2030,6 +2041,114 @@ PREFETCH_COOLDOWN = int(os.environ.get("MEMORY_PREFETCH_COOLDOWN", "300"))
 PREFETCH_FAIL_THRESHOLD = int(os.environ.get("MEMORY_PREFETCH_FAIL_THRESHOLD", "3"))
 
 
+
+# --- Per-product conversation memory (sqlite) ----------------------------------
+# A second, separate archive: what THIS pipeline's nodes said while building THIS
+# product. Not the same corpus as the team PG archive, and deliberately not mixed
+# with it — a person's own cross-project history and one product's build log get
+# asked different questions, and each is noise inside the other.
+#
+# The isolation is structural rather than a rule anyone has to follow:
+#   * PROJECT_MEM_CRS is a crs built WITHOUT --features pg-backend. That binary has
+#     no pgsearch/pgsearchd/osearch subcommands compiled in, so it cannot reach the
+#     shared PG whatever it is handed.
+#   * HOME is redirected, because crs scans $HOME/.claude/projects and would
+#     otherwise ingest the operator's own sessions.
+#   * CRS_DB names the product db explicitly; the default is never the target.
+#
+# osearch is unavailable here (its orient layer reads msg_distilled, pg-backend
+# only). vsearch covers the recall leg, which is what a node asking "what happened
+# last round" needs.
+PROJECT_MEM = os.environ.get("PROJECT_MEMORY", "0") == "1"
+PROJECT_MEM_CRS = os.environ.get("PROJECT_MEM_CRS", "/root/bin/crs-sqlite")
+PROJECT_MEM_ROOT = os.environ.get("PROJECT_MEM_ROOT", "/work/_memory")
+PROJECT_MEM_OLLAMA = os.environ.get(
+    "PROJECT_MEM_OLLAMA", "http://host.docker.internal:11434/api/embed")
+
+
+def _project_mem_home(product):
+    """Staging dir + db for one product. Absent product = no memory, not a shared one."""
+    if not product or not re.match(r"^[A-Za-z0-9._-]+$", product):
+        return None
+    return os.path.join(PROJECT_MEM_ROOT, product)
+
+
+def project_memory_recall(product, query, limit=4):
+    """Semantic recall over THIS product's own node conversations. Never raises."""
+    home = _project_mem_home(product)
+    if not (PROJECT_MEM and home and query and os.path.isfile(os.path.join(home, "session.db"))):
+        return ""
+    if not os.path.exists(PROJECT_MEM_CRS):
+        return ""
+    env = dict(os.environ)
+    env.update({"HOME": home,
+                "CRS_DB": os.path.join(home, "session.db"),
+                "CRS_OLLAMA_URL": PROJECT_MEM_OLLAMA})
+    try:
+        p = subprocess.run([PROJECT_MEM_CRS, "vsearch", "--json", "--limit", str(limit), query],
+                           capture_output=True, text=True, timeout=PREFETCH_TIMEOUT, env=env)
+        rows = (json.loads(p.stdout).get("results", [])
+                if p.returncode == 0 and p.stdout.strip() else [])
+    except Exception:
+        return ""
+    lines = []
+    for r in rows:
+        ts = (r.get("ts") or "")[:16]
+        role = (r.get("role") or "")[:12]
+        content = " ".join((r.get("content") or "").split())[:280]
+        if content:
+            lines.append(f"- [{ts}|{role}] {content}")
+    if not lines:
+        return ""
+    # Named as this product's own history so the model can weigh it against the spec
+    # it was handed, rather than treating it as instruction.
+    return ("## What this product's pipeline said before (own build history, semantic "
+            "recall — may be stale, verify before acting)\n" + "\n".join(lines) + "\n")
+
+
+def project_memory_ingest(product, piid):
+    """Fold one finished instance's transcripts into the product db. Best-effort."""
+    home = _project_mem_home(product)
+    if not (PROJECT_MEM and home and piid) or not os.path.exists(PROJECT_MEM_CRS):
+        return
+    src = os.path.join(WORK_ROOT, _safe_seg(piid), ".claude", "projects")
+    if not os.path.isdir(src):
+        return
+    staged = 0
+    for root, _dirs, files in os.walk(src):
+        for fn in files:
+            if not fn.endswith(".jsonl"):
+                continue
+            rel = os.path.relpath(os.path.join(root, fn), src)
+            dst = os.path.join(home, ".claude", "projects", rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            if not os.path.exists(dst):
+                try:
+                    # Hardlink: same bytes, no second copy, and a later build still sees
+                    # anything the node appended after this ran.
+                    os.link(os.path.join(root, fn), dst)
+                    staged += 1
+                except OSError:
+                    try:
+                        shutil.copy2(os.path.join(root, fn), dst)
+                        staged += 1
+                    except OSError:
+                        pass
+    if not staged:
+        return
+    env = dict(os.environ)
+    env.update({"HOME": home,
+                "CRS_DB": os.path.join(home, "session.db"),
+                "CRS_OLLAMA_URL": PROJECT_MEM_OLLAMA})
+    try:
+        subprocess.run([PROJECT_MEM_CRS, "build", "--no-refresh", "--workers", "4"],
+                       capture_output=True, text=True, timeout=900, env=env)
+        print("[agent-task-node] project-memory: staged %d transcript(s) for %s"
+              % (staged, product), flush=True)
+    except Exception as e:
+        print("[agent-task-node] project-memory ingest skipped: %s" % e, flush=True)
+
+
 def fetch_memory(query):
     """Semantic archive recall (Phase 1B). Returns a provenance-tagged context block
     or '' — never raises. Tagged stale-aware so the agent verifies before acting."""
@@ -2070,8 +2189,35 @@ def fetch_memory(query):
 
 
 def _with_memory(prompt, payload):
-    mem = fetch_memory(_mem_query(payload))
-    return (mem + "\n" + prompt) if mem else prompt
+    """Prepend recall from both archives, each labelled for what it is.
+
+    Two sources, kept apart on purpose. The team archive answers "has anyone here
+    hit this before"; the product archive answers "what did THIS pipeline already
+    do on THIS product last round". Merging them into one block would leave the
+    model unable to tell a colleague's unrelated incident from its own last attempt.
+
+    Product memory goes first: when both have something to say, what this build did
+    an hour ago is the more immediate constraint.
+    """
+    parts = []
+    prod = project_memory_recall(_project_slug(payload), _mem_query(payload))
+    if prod:
+        parts.append(prod)
+    team = fetch_memory(_mem_query(payload))
+    if team:
+        parts.append(team)
+    return ("\n".join(parts) + "\n" + prompt) if parts else prompt
+
+
+def _project_slug(payload):
+    """Which product this run belongs to — the registry id when there is one, else the
+    repo name. Never a default: an unidentifiable run gets no memory rather than
+    somebody else's."""
+    p = payload.get("_sdlc_project") or _pv(payload, "projectId")
+    if p:
+        return str(p)
+    repo = _pv(payload, "repo")
+    return repo.split("/")[-1] if repo else ""
 
 
 def run_claude(task, payload):
