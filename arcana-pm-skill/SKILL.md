@@ -4,7 +4,8 @@ description: |
   Product-Manager readiness gate for the Arcana AI-BPM self-development platform.
   Judges whether a delivered feature (a gated PR) satisfies the manager's
   requirement and is ready to ship — across usability, completeness, design
-  conformance, schedule, and goal-fit — and returns GO / NOGO / HOLD with
+  conformance, schedule, goal-fit, cross-feature and IA consistency — and returns
+  GO / NOGO / HOLD with
   actionable rework feedback. Used by the `pm-review` node of sdlc-code-flow.
 ---
 
@@ -22,7 +23,7 @@ Return a structured verdict:
 ```json
 {
   "verdict": "GO | NOGO | HOLD",
-  "dimensions": [ { "name": "...", "pass": true/false, "note": "evidence-based reason" } ],
+  "dimensions": [ { "name": "<one of the seven keys below, verbatim>", "pass": true/false, "note": "evidence-based reason" } ],
   "feedback": "if NOGO: concrete, actionable rework instructions the Implement node can act on. Empty if GO.",
   "backlog": [ { "feature_request": "...", "slug": "kebab-id", "uiFacing": "true|false", "priority": 1 } ],
   "confidence": 0.0-1.0
@@ -30,13 +31,29 @@ Return a structured verdict:
 `backlog` (optional) carries OUT-OF-SCOPE product findings you are filing as improvement
 items — see "Out-of-scope findings" below. Empty/omitted when there are none.
 ```
+
+**`name` is a closed set. Emit one of these seven strings verbatim — no variants, no
+translations, no invented keys:**
+
+`usability` · `completeness` · `design-conformance` · `schedule` · `goal-fit` ·
+`cross-feature` · `ia-consistency`
+
+The pre-gate below is **not** a dimension and must never appear here; a failing quality bar
+is a NOGO whose `feedback` names the bar, not an eighth entry in this list.
+
+Why this is stated rather than left to judgement: these strings are read downstream to
+attribute a rework to a node. When the key is free text, the same judgement arrives as
+`design` one run and `design-conformance` the next, and nothing downstream can tell they
+are the same thing — so a defect that recurs every single round looks like a different
+defect every time, and never accumulates into a signal. One spelling, or no signal.
+
 - **GO** — every dimension passes with evidence → PR is ready (merge-flow ships it on green CI).
 - **NOGO** — a *fixable* gap (missing feature, design deviation, catchable UX violation, goal-fit below bar). Give specific feedback → the pipeline reworks and re-submits to you.
 - **HOLD** — needs a human (manager): a genuinely subjective/brand call, a requirement ambiguity you cannot resolve, or the **same gap has persisted across iterations** (you are stuck — escalate, do not churn).
 
 ## Hard pre-gate (objective — check FIRST)
 
-Before judging the five dimensions, confirm the **objective quality bars** pass.
+Before judging the seven dimensions, confirm the **objective quality bars** pass.
 A green CI check-rollup already implies all three (they are blocking CI stages):
 **arch-qube ≥ 90 + SonarQube quality gate OK + tests green**. If you want the
 underlying numbers, query Sonar directly (token in `$SONARQUBE_TOKEN`):
@@ -83,52 +100,58 @@ decompose 的 prompt 被截斷、`goal` 整段消失,它照樣交出一份 backl
 「這一輪判不了什麼」再判(不要用猜的填補證據);出場=每個維度都有引證來源;
 交接=verdict 之外附 handoff,寫清「這輪確認過什麼、下一輪不必重驗什麼」。
 
-## The five dimensions (the manager's requirement)
+## The seven dimensions (the manager's requirement)
 
 Gather evidence with tools — `gh pr diff <prUrl>` for the actual change, the SRS
 (`data.srs`) and SDD (`data.sdd`) and UI/UX spec (`data.uiuxSpec`) from the flow,
 plus the APIs above. Judge each; a single failed dimension → NOGO (or HOLD if it
 needs a human).
 
-1. **①符合人使用 / Usability** — for user-facing features, audit the built UI in the PR diff against the **以人為本 rubric above**, the **UX AUDIT RUBRIC** below and `data.uiuxSpec`. You *can* catch objective UX violations — do not punt them to a human. Only genuinely subjective/brand/aesthetic calls → HOLD.
+Each heading below ends with the `name` key to emit for it. The heading said "five" for
+months while the list ran to seven, and one entry was numbered `5b.` and sat *above* `5.` —
+which is how `design` and `design-conformance` and a stray `quality-pre-gate` all ended up
+in the same field across different runs.
+
+1. **①符合人使用 / Usability** — `name: usability` — for user-facing features, audit the built UI in the PR diff against the **以人為本 rubric above**, the **UX AUDIT RUBRIC** below and `data.uiuxSpec`. You *can* catch objective UX violations — do not punt them to a human. Only genuinely subjective/brand/aesthetic calls → HOLD.
    **Machine-gate acceptance lines** (read them from `data.testReport` — they are facts, not opinions):
    - `tokenLintRegressions` non-empty → NOGO (new raw hex/px styling outside the design tokens).
    - `i18nLintRegressions` non-empty → NOGO (new hardcoded CJK a translate pipe can never reach).
    - `deadControlRegressions` non-empty → NOGO. A new enabled control whose handler can return silently = "press it, nothing happens" — the class the journey gate cannot see (it passes on "reachable, do NOT press"). Fix = disable on the same state the guard tests, or tell the user why.
-- `scenarioFail` > 0 → **NOGO**. A business chain no longer completes end to end: name the scenario and the first failing step, because the step that fails is rarely the step that broke. `scenarioRan` false means it was SKIPPED (no PR-built backend to mutate safely) — that is not a pass, and a feature touching approvals or permissions should not ship on it.
-- `castProblems` non-empty → the harness could not seat its actors (missing account, no Postgres role). Fix the fixture; do not read the absent scenario result as green.
-- `prBackendTested` **false on a PR that changed the backend** → the gates ran against the DEPLOYED API, so nothing here is evidence about the change under review. Say so in the verdict instead of counting the green: this is the same shape as a stale runner, one layer down. True means the PR's own read-API was built and served every gate.
-- Judging "is it really working" from the diff alone has a blind spot the report cannot fill: the code can be right while the running thing is not. The agent's **`site` verb** answers that, read-only — `{"task":"site","kind":"sql"|"http"|"images"}` for real rows, the artifact users are actually served, and which image is running since when. It can write nothing (the DB login holds SELECT only), so a fix still travels through a gated PR. Reach for it before accepting "works on the branch" as evidence about production.
-- `staleGates` non-empty → **NOGO, and do not read the rest of the report as evidence**. The runner image predates the gates this PR ships, so those checks did not run at all — the green you are looking at covers less than it appears to. Rebuild the runner image and re-run before judging anything else.
-- `rbacUiLeaks` > 0 → **NOGO, no judgement call**. A screen the caller is not permitted to use
-  still rendered for them. The writes may well 403 — reading IS the breach, and it is the half
-  nobody notices, because the page looks like it is working. Name the actor and the route.
-- `rbacUiFail` > 0 with no leaks → still NOGO, but say which direction: a control offered to
-  someone who cannot use it (dead door, bounces with no explanation), or a control withheld
-  from someone who can (they simply cannot find the feature). Both are real; neither is cosmetic.
    - `uiuxFindings` now carry a `bp` tag (375/768/1280) — a fail at ANY breakpoint counts; do not excuse mobile breakage as "desktop looks fine".
    - `journeyFindings` remain the highest-priority NOGO (renders ≠ actionable).
    - `apiChecksFail` > 0 (non-UI features) → that AC is **unproven by execution** → NOGO naming the failed check, unless you can cite concrete evidence the CHECK itself is wrong (hallucinated path) — then record that as a finding instead of excusing the AC.
-2. **②功能是否遺漏 / Completeness** — every SRS acceptance criterion (AC-1..N) must be traceable to code + a test in the PR diff. List any AC with no implementation/test → NOGO with the exact missing ACs.
-3. **③是否符合設計 / Design conformance** — TWO tracks, both required:
+   - `scenarioFail` > 0 → **NOGO**. A business chain no longer completes end to end: name the scenario and the first failing step, because the step that fails is rarely the step that broke. `scenarioRan` false means it was SKIPPED (no PR-built backend to mutate safely) — that is not a pass, and a feature touching approvals or permissions should not ship on it.
+   - `castProblems` non-empty → the harness could not seat its actors (missing account, no Postgres role). Fix the fixture; do not read the absent scenario result as green.
+   - `prBackendTested` **false on a PR that changed the backend** → the gates ran against the DEPLOYED API, so nothing here is evidence about the change under review. Say so in the verdict instead of counting the green: this is the same shape as a stale runner, one layer down. True means the PR's own read-API was built and served every gate.
+   - Judging "is it really working" from the diff alone has a blind spot the report cannot fill: the code can be right while the running thing is not. The agent's **`site` verb** answers that, read-only — `{"task":"site","kind":"sql"|"http"|"images"}` for real rows, the artifact users are actually served, and which image is running since when. It can write nothing (the DB login holds SELECT only), so a fix still travels through a gated PR. Reach for it before accepting "works on the branch" as evidence about production.
+   - `staleGates` non-empty → **NOGO, and do not read the rest of the report as evidence**. The runner image predates the gates this PR ships, so those checks did not run at all — the green you are looking at covers less than it appears to. Rebuild the runner image and re-run before judging anything else.
+   - `rbacUiLeaks` > 0 → **NOGO, no judgement call**. A screen the caller is not permitted to use
+  still rendered for them. The writes may well 403 — reading IS the breach, and it is the half
+  nobody notices, because the page looks like it is working. Name the actor and the route.
+2. **②功能是否遺漏 / Completeness** — `name: completeness` — every SRS acceptance criterion (AC-1..N) must be traceable to code + a test in the PR diff. List any AC with no implementation/test → NOGO with the exact missing ACs.
+3. **③是否符合設計 / Design conformance** — `name: design-conformance` — TWO tracks, both required:
    - **Architecture**: the PR's structure follows the SDD's layers/approach; arch-qube green already enforces this. Flag deviations from the agreed design.
    - **Visual design system**: new UI must compose EXISTING shared components and design tokens (`var(--…)`), not reinvent an inbox/list/panel or hand-roll colors/spacing — `tokenLintTotal` rising or a fresh one-off component where a shared one exists is a conformance finding, exactly like an architecture violation.
-4. **④時程 / Schedule** — sanity-check cycle time / that the flow is not stuck. (If eval APIs are wired: `GET $REST/api/v1/evaluation/summary`, `GET $REST/api/v1/definitions/` for errored/suspended. If not reachable, note "schedule not measured".)
-5b. **經理的現場補充 / In-flight manager notes** — `data.managerNotes` (may be empty) is what a human typed AT this feature WHILE it was being built, newest last. Treat it as AUTHORITATIVE intent, ranked with the original `feature_request`:
-   - a note that ADDS scope is part of the requirement now — judge completeness against SRS **+ notes**, and if the PR does not cover a note, NOGO naming it (do not wave it through as "out of scope");
-   - a note that CONTRADICTS the SRS wins, but say so explicitly in the verdict so the trail shows the spec moved;
-   - a note that asks a question the PR cannot answer → HOLD quoting it.
-   Notes exist so a human can steer a running feature without stopping it — ignoring them is the one way to make that channel useless.
+4. **④時程 / Schedule** — `name: schedule` — sanity-check cycle time / that the flow is not stuck. (If eval APIs are wired: `GET $REST/api/v1/evaluation/summary`, `GET $REST/api/v1/definitions/` for errored/suspended. If not reachable, note "schedule not measured".)
 
-5. **⑤滿足經理要求 / Goal-fit** — does this advance the manager's north-star goal? (If wired: `GET $REST/api/v1/evolution/objective/<processId>` for the weighted objective; compare metrics via `objective_score`. Otherwise judge qualitatively: does the delivered feature actually solve the requirement in `data.srs` / the manager's goal, not a hollow shell?)
-6. **⑥跨功能 / Cross-feature (only when `data.siblings` is non-empty)** — you are one countersigner among many for a shared initiative; **read the other sign-offs**. `data.siblings` lists the other features of this backlog, each with its `verdict`/`state`. Judge:
+5. **⑤滿足經理要求 / Goal-fit** — `name: goal-fit` — does this advance the manager's north-star goal? (If wired: `GET $REST/api/v1/evolution/objective/<processId>` for the weighted objective; compare metrics via `objective_score`. Otherwise judge qualitatively: does the delivered feature actually solve the requirement in `data.srs` / the manager's goal, not a hollow shell?)
+6. **⑥跨功能 / Cross-feature** — `name: cross-feature` — (only when `data.siblings` is non-empty)** — you are one countersigner among many for a shared initiative; **read the other sign-offs**. `data.siblings` lists the other features of this backlog, each with its `verdict`/`state`. Judge:
    - **Overlap** — does this feature duplicate scope a sibling already owns? If so, NOGO (defer to the owner) rather than build it twice.
    - **Consistency** — is naming / UX pattern / API shape consistent with siblings (so the set feels like one product, not N disjoint bolt-ons)?
    - **Dependency satisfaction** — if this feature needs a sibling (e.g. "version-compare" needs "versioning"), that sibling must be `state=COMPLETED` **and** `verdict=GO`. If a needed sibling is not yet GO → **NOGO/HOLD naming which sibling to wait for** (do not build on an unbuilt base).
    - **Goal-level completeness** — do the features TOGETHER cover the manager's goal? Flag missing pieces the backlog didn't cover.
-7. **⑦ IA 一致性 / 全-app 冗餘 (whole-app, not just siblings)** — using the **APP NAVIGATION MAP** in `data` (all EXISTING top-level features + routes, fetched at the base ref), judge this feature against the WHOLE product, not only this initiative's siblings:
+7. **⑦ IA 一致性 / 全-app 冗餘** — `name: ia-consistency` — (whole-app, not just siblings)** — using the **APP NAVIGATION MAP** in `data` (all EXISTING top-level features + routes, fetched at the base ref), judge this feature against the WHOLE product, not only this initiative's siblings:
    - **Redundant re-slice** — does it add a list/view that shows the **same data an existing feature already shows** (e.g. a new 「流程追蹤」 that lists instances a 「流程監控」 menu item already lists)? A redundant nav item, or two menu entries doing the same job, or an IA that leaves users unsure where to go → **NOGO proposing to MERGE into the existing surface** (or a consolidation backlog item), not a parallel duplicate.
    - Distinguish a genuinely-NEW capability (fine to add) from a redundant RE-SLICE of existing data. Only flag REAL overlap — proximity to an existing feature is not itself a problem. This is the cross-feature blind spot the diff/screenshot review misses because it never sees the whole nav.
+
+
+### 經理的現場補充 / In-flight manager notes(不是維度,是 completeness 的輸入)
+
+`data.managerNotes` (may be empty) is what a human typed AT this feature WHILE it was being built, newest last. Treat it as AUTHORITATIVE intent, ranked with the original `feature_request`:
+- a note that ADDS scope is part of the requirement now — judge completeness against SRS **+ notes**, and if the PR does not cover a note, NOGO naming it (do not wave it through as "out of scope");
+- a note that CONTRADICTS the SRS wins, but say so explicitly in the verdict so the trail shows the spec moved;
+- a note that asks a question the PR cannot answer → HOLD quoting it.
+Notes exist so a human can steer a running feature without stopping it — ignoring them is the one way to make that channel useless.
 
 ## UX AUDIT RUBRIC (usability — you judge against this)
 
