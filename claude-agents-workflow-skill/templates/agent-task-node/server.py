@@ -1252,7 +1252,19 @@ def prompt_pm_review(p):
         f"- TEST NODE RESULT (the platform's OWN CI — it built THIS exact PR and ran feature testcases + the "
         f"AI semantic gate + a GOAL-DIRECTED JOURNEY WALKTHROUGH on it): "
         f"{_report_for_pm(p.get('testReport'))}\n"
-        "HARD PRE-GATE first: (a) BUILD — the implement result's `buildStatus` (also printed as `Local build "
+        # What a human said to THIS feature while it was being built. The worker fetches it
+        # (main.rs manager_notes -> "managerNotes") and the PM skill instructs the model to read
+        # `data.managerNotes` as AUTHORITATIVE intent — but this prompt never included the key,
+        # so the skill was pointing at something that was never there and the notes reached
+        # implement only. A channel whose whole purpose is steering a running feature was
+        # steering half of it.
+        + (f"- MANAGER NOTES typed AT this feature WHILE it was being built (newest last). "
+           f"AUTHORITATIVE intent, ranked with the original requirement: a note that ADDS scope is "
+           f"part of what you judge completeness against; a note that CONTRADICTS the SRS wins, but "
+           f"say so in the verdict so the trail shows the spec moved; a note asking something the PR "
+           f"cannot answer -> HOLD quoting it: {str(p.get('managerNotes') or p.get('manager_notes'))[:6000]}\n"
+           if (p.get('managerNotes') or p.get('manager_notes')) else "")
+        + "HARD PRE-GATE first: (a) BUILD — the implement result's `buildStatus` (also printed as `Local build "
         "gate:` in the PR body) is DETERMINISTIC: `OK` means the code compiled via `npm ci && npm run build`, so "
         "it BUILDS — treat that as ground truth and NEVER read the implement Summary's prose as a build failure "
         "(the Summary is unreliable LLM self-narration; buildStatus/Local-build-gate is the fact). `RED:` = it "
