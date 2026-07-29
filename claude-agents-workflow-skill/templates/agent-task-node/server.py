@@ -2883,9 +2883,29 @@ def implement_flow(payload):
                   "commit", "-m", "feat: %s" % slug)
         if cm.returncode != 0:
             if "nothing to commit" in (cm.stdout + cm.stderr):
-                return {"error": "implement produced no changes for %s" % slug,
-                        "summary": summary, "pushed": False}
-            return {"error": "commit failed: %s" % (cm.stderr or cm.stdout)[-500:]}
+                # A clean tree does not mean nothing was written. This finalizer assumes
+                # "the agent edits files, I commit them" — but the agent may have committed
+                # (and pushed, and opened the PR) inside its own session, which leaves
+                # exactly the same clean tree as having done nothing at all.
+                #
+                # A 38-minute implement run ended this way today: 28 files, +4008/-18,
+                # 56 new tests, PR #87 already open — and the node reported "produced no
+                # changes". The flow would then have reworked completed work, or escalated
+                # it as a failure.
+                #
+                # This is the same shape as the "a pull request for branch X already
+                # exists" bug noted below: an outcome the deterministic step did not expect
+                # is not the same as a failed outcome. So ask the branch, which knows.
+                ahead = _git("rev-list", "--count", "%s..HEAD" % base)
+                n_ahead = int((ahead.stdout or "0").strip() or 0) if ahead.returncode == 0 else 0
+                if n_ahead == 0:
+                    return {"error": "implement produced no changes for %s" % slug,
+                            "summary": summary, "pushed": False}
+                print("[agent-task-node] nothing to commit, but %d commit(s) ahead of %s — "
+                      "the agent committed its own work; continuing to push/PR"
+                      % (n_ahead, base), flush=True)
+            else:
+                return {"error": "commit failed: %s" % (cm.stderr or cm.stdout)[-500:]}
         diff = _git("diff", "--name-only", "%s..HEAD" % base)
         files_changed = [l for l in diff.stdout.splitlines() if l.strip()]
         # dry_run: prove the clone + Claude-writes-code phase without opening a PR.
