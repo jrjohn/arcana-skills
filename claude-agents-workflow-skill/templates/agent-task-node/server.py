@@ -1780,6 +1780,38 @@ class RateLimitError(RuntimeError):
 _RATE_RE = re.compile(r"rate.?limit|overloaded|usage limit|too many requests|\b429\b|\b529\b", re.I)
 
 
+
+# Transient trouble reaching the API — not this instance's fault, and not a verdict on the
+# work it was doing.
+#
+# An implement node ran 50 minutes and 134 turns before the CLI returned
+# "API Error: Unable to connect to API (ECONNRESET)". The agent raised a plain
+# RuntimeError, the worker treated it as a failed attempt, burned all three retries against
+# the same flaky network, and aborted the instance. Fifty minutes of work, discarded because
+# a socket closed.
+#
+# Rate limits already get this treatment: a 429 tells the worker to back off WITHOUT
+# spending the instance's retries, because the run did nothing wrong. A connection reset is
+# the same kind of event and deserves the same answer. What distinguishes both from a real
+# failure is that retrying later is likely to work — nothing about the task has been
+# disproved.
+_TRANSIENT_RE = re.compile(
+    r"ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|ENOTFOUND|EAI_AGAIN|socket hang up|"
+    r"unable to connect to api|network error|connection (?:reset|refused|closed|error)|"
+    r"fetch failed|\bETIMEDOUT\b|\b50[234]\b",
+    re.I)
+
+
+def _transient_api(status, text):
+    """True if this looks like the network gave out rather than the work being wrong."""
+    try:
+        if int(status) in (500, 502, 503, 504):
+            return True
+    except (TypeError, ValueError):
+        pass
+    return bool(text and _TRANSIENT_RE.search(str(text)))
+
+
 def _rate_limited(status, text):
     """True if an HTTP status / claude error text signals a rate or usage limit."""
     try:
@@ -1909,6 +1941,10 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
         _amsg = str(env.get("result", ""))[:300]
         if _rate_limited(_aerr, _amsg) or _rate_limited(_aerr, str(_aerr)):
             raise RateLimitError(f"claude api rate-limited: {_aerr or _amsg}")
+        # Same handling, different cause: the network dropped, so the run has not been
+        # judged. Surfacing this as a 429 keeps the instance's retries for real failures.
+        if _transient_api(_aerr, _amsg) or _transient_api(_aerr, str(_aerr)):
+            raise RateLimitError(f"claude api transient network error: {_aerr or _amsg}")
         raise RuntimeError(f"claude api error: {_aerr or _amsg}")
     so = env.get("structured_output")
     if so is None:
