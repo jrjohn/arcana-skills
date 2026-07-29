@@ -4369,6 +4369,26 @@ class Handler(BaseHTTPRequestHandler):
                 result = uiux_audit_flow(payload)
             else:
                 result = run_claude(task, payload)
+            # Flush this product's transcripts before answering.
+            #
+            # _invoke_claude already ingests when a model-invoking verb finishes, which
+            # covers every node except the last one of a run: after it, nothing else in
+            # that instance fires, so whatever the CLI was still flushing had to wait for
+            # the product's NEXT run to be picked up.
+            #
+            # Here it is any verb, including the deterministic ones — dispose-pr ends the
+            # escalate path, and on the GO path startMerge never reaches this process at
+            # all. So the tail is collected by whatever the product does next rather than
+            # by whatever it happens to be doing at the end.
+            #
+            # Cheap to repeat: staging skips files already linked, `crs build` is
+            # incremental on (path, mtime, lines), and the transcripts are hardlinks — so
+            # lines the CLI appended after the earlier ingest are already visible in the
+            # staged copy without restaging anything.
+            try:
+                project_memory_ingest(_project_slug(payload), payload.get("_piid"))
+            except Exception:
+                pass
             self._send(200, result)
         except subprocess.TimeoutExpired:
             self._send(504, {"error": "task timeout"})
