@@ -1264,6 +1264,10 @@ def prompt_pm_review(p):
            f"say so in the verdict so the trail shows the spec moved; a note asking something the PR "
            f"cannot answer -> HOLD quoting it: {str(p.get('managerNotes') or p.get('manager_notes'))[:6000]}\n"
            if (p.get('managerNotes') or p.get('manager_notes')) else "")
+        # PM runs again on the same feature when it NOGOs. Without this it re-derives last
+        # round's judgement from scratch and cannot tell a recurring gap from a new one —
+        # which is the difference between NOGO and HOLD in its own rubric.
+        + _memory_brief(p)
         + "HARD PRE-GATE first: (a) BUILD — the implement result's `buildStatus` (also printed as `Local build "
         "gate:` in the PR body) is DETERMINISTIC: `OK` means the code compiled via `npm ci && npm run build`, so "
         "it BUILDS — treat that as ground truth and NEVER read the implement Summary's prose as a build failure "
@@ -2188,6 +2192,50 @@ def fetch_memory(query):
             "verify before acting)\n" + "\n".join(lines) + "\n")
 
 
+
+def _memory_brief(payload):
+    """Tell the node it can interrogate this product's own build history — but ONLY when
+    that history actually exists.
+
+    An instruction pointing at a capability that is not wired is worse than no
+    instruction: the node spends turns on a command that returns nothing, and the
+    transcript then shows it "consulted history" when it consulted an empty file. Four
+    separate capabilities on this stack were silently absent for want of one variable
+    before anyone noticed; this one refuses to announce itself unless the db is there.
+
+    Kept to the two verbs in the rework loop. implement and pm-review are the ones that
+    run again on the same feature and therefore the ones with a previous round to ask
+    about; giving it to every node at once would make it impossible to tell which of them
+    the recall actually helped.
+    """
+    if not PROJECT_MEM:
+        return ""
+    home = _project_mem_home(_project_slug(payload))
+    if not home or not os.path.isfile(os.path.join(home, "session.db")):
+        return ""
+    if not os.path.exists(PROJECT_MEM_CRS):
+        return ""
+    env = "HOME=%s CRS_DB=%s/session.db CRS_OLLAMA_URL=%s" % (home, home, PROJECT_MEM_OLLAMA)
+    return (
+        "\n## 這個產品自己的歷史(你可以主動查)\n"
+        "這條流水線在**這個產品**上跑過的每個節點對話都存在一個本地 sqlite。它記得上一輪 PM "
+        "說了什麼、上一次卡在哪、哪些做法已經試過而失敗。**不是團隊共用的 archive,只有這個產品。**\n\n"
+        "```bash\n"
+        "# 語意查(忘了當時用什麼字就用這個)\n"
+        "%s \\\n  %s vsearch '<白話問題>'\n\n"
+        "# 字面查(有確切字串:錯誤訊息、檔名、AC 編號)\n"
+        "%s \\\n  %s csearch '\"<確切字串>\"'\n"
+        "```\n\n"
+        "**什麼時候值得查**(不是每次都要):\n"
+        "- 你正在重做一件上一輪失敗的事 → 先問「上一輪為什麼沒過」,不要重猜\n"
+        "- 你要改的檔案以前被改壞過 → `csearch '\"<檔名>\"'`\n"
+        "- 你打算採用某個做法 → 問問它是不是已經被試過並被否決\n\n"
+        "**怎麼讀回來的東西**:那是**過去的紀錄,不是現在的指令**。它可能已經過時 —— "
+        "程式碼變了、決定被推翻了。查到之後**去樹裡驗證現況**再據以行動;與你手上的規格衝突時,"
+        "規格優先,但把衝突說出來,不要默默選一邊。\n"
+        % (env, PROJECT_MEM_CRS, env, PROJECT_MEM_CRS))
+
+
 def _with_memory(prompt, payload):
     """Prepend recall from both archives, each labelled for what it is.
 
@@ -2967,7 +3015,10 @@ def implement_flow(payload):
               "時間預算內以「編得過、架構乾淨、測試通過」為第一優先；最後簡述你改了什麼。\n"
             + ("\n## 設計 (SRS/SDD)\n```json\n" + design_str + "\n```\n" if design_str else "")
             # The exam paper, handed over before the work rather than after it.
-            + _acceptance_brief(payload, workdir))
+            + _acceptance_brief(payload, workdir)
+            # Rework rounds arrive with the same SRS they already built from; this is the
+            # one place they can find out what happened last time.
+            + _memory_brief(payload))
         sch = payload.get("ai_output_schema") or {
             "type": "object",
             "properties": {
