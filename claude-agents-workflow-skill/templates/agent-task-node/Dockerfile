@@ -19,6 +19,15 @@ RUN curl -fsSL https://download.docker.com/linux/static/stable/aarch64/docker-27
 COPY flow-sim /usr/local/bin/flow-sim
 RUN chmod +x /usr/local/bin/flow-sim
 
+# Per-product conversation memory. Built WITHOUT --features pg-backend on purpose:
+# this binary has no pgsearch/pgsearchd/osearch subcommands compiled in, so it cannot
+# reach the shared team PG whatever it is handed. That is the isolation between a
+# product's own build history and a person's cross-project archive — structural,
+# rather than a rule someone has to keep remembering.
+# Rebuild: docker run --rm -v ~/claude-archive/crs:/src -w /src -e CARGO_TARGET_DIR=/t \
+#   rust:1-slim-bookworm cargo build --release   (note: no --features pg-backend)
+COPY bin/crs-sqlite /root/bin/crs-sqlite
+
 COPY server.py /usr/local/bin/agent-task-node.py
 
 ENV PORT=8090 \
