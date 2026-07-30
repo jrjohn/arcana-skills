@@ -2598,6 +2598,17 @@ SPEC_BEARING = (
     "feature_request", "intakeForm", "intakeReview", "srs", "sdd", "uiuxSpec",
     "acceptance", "requiredCells", "rework_feedback", "manager_notes", "ai_input",
     "pm_answers", "out_of_scope", "target_users", "placement",
+    # 2026-07-30: the test report a rework round is being sent back to fix. The worker has
+    # always sent it (`test_feedback`), and it was never on this list — so on exactly the
+    # round where it matters, a payload already carrying srs + sdd + the intake form, it was
+    # in the first group squeezed to 600 characters. A report with ~80 fields loses its
+    # blocking reasons well before that limit, and the node then reworks blind: one observed
+    # round showed `passed 4 / total 4, failures []` with allPass false, the real blockers
+    # (a missing nav.config.ts, an overlap regression) living in fields it never saw.
+    #
+    # `rework_feedback` (the PM's verdict) has been on this list from the start. This is the
+    # same kind of input from the other gate.
+    "test_feedback",
 )
 
 
