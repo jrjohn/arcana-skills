@@ -33,6 +33,8 @@ Full data, including what was ruled out before concluding: [`references/evidence
 ```bash
 scripts/claude-md-lint.sh CLAUDE.md
 scripts/claude-md-lint.sh --in-docker agent-task-node /path/to/CLAUDE.md
+scripts/claude-md-lint.sh --score --suggest CLAUDE.md
+scripts/claude-md-lint.sh --patch CLAUDE.md | git apply
 scripts/claude-md-lint.sh --selftest
 scripts/claude-md-lint.sh --json CLAUDE.md
 scripts/claude-md-lint.sh --update-baseline .lint-baseline CLAUDE.md
@@ -81,19 +83,54 @@ is explicit rather than inferred: guessing the target is how a check starts lyin
 
 ---
 
+## Grading, and why it is not one number
+
+| | |
+|---|---|
+| **violations** | what was found wrong |
+| **structure** | what was found **right**, detected positively (0–3) |
+
+A → no defects and all three structures. B → structure mostly there. **C → nothing wrong
+found and almost no positive evidence; an empty file lands here.** D/E → rules that will be
+skipped or that point at something absent.
+
+Scoring violations alone would give an empty file a perfect mark, which is "nothing found =
+nothing wrong" wearing a different hat. Structure points require positive detection and
+cannot be satisfied vacuously, so deleting content lowers the grade. `--selftest` asserts all
+four bands, including that an empty `CLAUDE.md` grades D.
+
+## Fixing: it proposes, it does not choose
+
+`--suggest` prints the closed set of honest resolutions per finding. `--patch` writes a
+unified diff to stdout and never touches the file.
+
+Only **one** kind has a rewrite that changes wording without changing policy: permission
+grammar. Turning `視情況查` into `一律查` changes what the rule *is* — that belongs to the
+author. So the other kinds get choices and an explicit "no safe automatic rewrite", rather
+than a confident edit.
+
+---
+
 ## Credibility
 
-`--selftest` runs 11 assertions, and every check must prove **both** directions — that it
+`--selftest` runs 24 assertions, and every check must prove **both** directions — that it
 fires on a bad document *and* stays silent on a good one. A check never observed failing is a
 check nobody has reason to trust.
 
-It has already caught its own author twice:
+It has already caught its own author five times:
 
 1. On its first run, 4 of 11 checks could not fire at all (a `set -u` bug killed the pipeline),
    and the 7 "passes" were vacuous — nothing fired, so of course nothing false-fired.
 2. Once fixed, it reported `no-consequence` against the `CLAUDE.md` its author had generated
    that same day. The document never said what ignoring it would cost. **The document was
    changed; the check was not relaxed.**
+3. It reported 12 findings against its own `SKILL.md` and `README` — every one a quotation.
+   Fixed with a use/mention rule.
+4. Run on a real global `CLAUDE.md`, it read `# 例:` inside a ```bash block as a heading:
+   a phantom finding, and silently a truncated top-block window.
+5. The structure signal for "conditions in a table" keyed on the separator row — which the
+   line right above it skipped as "nothing but table scaffolding". It reported *no tables*
+   for a document full of them. The signal and the skip were reading the same line.
 
 ---
 

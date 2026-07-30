@@ -1,7 +1,7 @@
 ---
 name: claude-md-design-skill
-description: Write CLAUDE.md files (and any always-loaded instruction prose) that a model actually acts on, and check them mechanically. Built from a controlled measurement, not from taste: on 2026-07-30 one capability offered to AI pipeline nodes was used 15 times when phrased as an imperative sentence and 0 times when phrased as a 783-character section saying "you may" and "not every time" — same capability, same nodes, delivery verified. Ships `scripts/claude-md-lint.sh`, which flags self-exempting rules ("not every time", "as needed"), triggers only the executor can evaluate ("when relevant"), permission grammar where an instruction belongs, rules pointing at commands or paths that do not exist in the environment where they will run, an opening rule that never states the cost of breaking it, and duplicate sections (two generations of one rule, where the more specific one wins regardless of which is current). Three-valued verdict (pass / findings / notRun — "could not check" is never reported as "checked and fine"), bad-vs-sad severity so cosmetics never block, baseline support so inherited debt stays visible without flooding, `--in-docker` to check paths in the environment the rule will actually run in, and `--selftest` proving every check can both fire and stay silent. Activates when the user is writing, reviewing, or debugging a CLAUDE.md / AGENTS.md / system prompt / skill instruction file, asks why an instruction is being ignored, asks where a rule belongs (prose vs hook vs injected prompt), or wants an instruction file audited.
-version: 1.0.0
+description: Write CLAUDE.md files (and any always-loaded instruction prose) that a model actually acts on, and check them mechanically. Built from a controlled measurement, not from taste: on 2026-07-30 one capability offered to AI pipeline nodes was used 15 times when phrased as an imperative sentence and 0 times when phrased as a 783-character section saying "you may" and "not every time" — same capability, same nodes, delivery verified. Ships `scripts/claude-md-lint.sh`, which flags self-exempting rules ("not every time", "as needed"), triggers only the executor can evaluate ("when relevant"), permission grammar where an instruction belongs, rules pointing at commands or paths that do not exist in the environment where they will run, an opening rule that never states the cost of breaking it, and duplicate sections (two generations of one rule, where the more specific one wins regardless of which is current). Three-valued verdict (pass / findings / notRun — "could not check" is never reported as "checked and fine"), bad-vs-sad severity so cosmetics never block, baseline support so inherited debt stays visible without flooding, `--in-docker` to check paths in the environment the rule will actually run in, a two-axis grade (violations plus positively-detected structure, so an empty file cannot score well), `--suggest` printing the closed set of honest resolutions per finding, `--patch` emitting a reviewable diff for the one rewrite that changes wording without changing policy while never writing a file, and `--selftest` proving every check can both fire and stay silent. Activates when the user is writing, reviewing, or debugging a CLAUDE.md / AGENTS.md / system prompt / skill instruction file, asks why an instruction is being ignored, asks where a rule belongs (prose vs hook vs injected prompt), or wants an instruction file audited.
+version: 1.1.0
 allowed-tools:
   - Read
   - Write
@@ -97,8 +97,10 @@ So: generate the file, gate the section on the capability actually resolving, an
 
 ```bash
 scripts/claude-md-lint.sh CLAUDE.md                        # exit 0 / 1 / 2
+scripts/claude-md-lint.sh --score --suggest CLAUDE.md      # grade + what to do about each finding
+scripts/claude-md-lint.sh --patch CLAUDE.md | git apply    # diff on stdout; never writes
 scripts/claude-md-lint.sh --in-docker agent-task-node CLAUDE.md
-scripts/claude-md-lint.sh --selftest                       # 11 assertions, both directions
+scripts/claude-md-lint.sh --selftest                       # 24 assertions, both directions
 scripts/claude-md-lint.sh --update-baseline .lint-baseline CLAUDE.md
 ```
 
@@ -110,6 +112,41 @@ scripts/claude-md-lint.sh --update-baseline .lint-baseline CLAUDE.md
 
 `bad` blocks, `sad` never does. A gate that fails a hundred times on code nobody touched gets
 switched off — that has happened twice in this codebase, and both times the gate was right.
+
+## 7. The grade
+
+Two questions, never collapsed into one number on its own:
+
+| | |
+|---|---|
+| **violations** | what was found wrong (`bad` / `sad`) |
+| **structure** | what was found **right**, detected positively (0–3) |
+
+| Grade | Meaning |
+|---|---|
+| A | no known defects, and all three structures present |
+| B | no known defects, structure mostly present |
+| C | **nothing found wrong, and almost no positive evidence** — an empty file lands here |
+| D | at least one rule that will be skipped or points at something absent |
+| E | several |
+
+Grading on violations alone would hand a perfect score to an empty file — the same error as
+reading a skipped gate as a passed one, one level up. Structure points require positive
+detection and cannot be satisfied vacuously (a document naming zero paths does not earn
+"all its paths resolve"), so **deleting content lowers the grade instead of raising it**.
+
+The grade says nothing about whether the advice is correct. Nothing here reads content.
+
+## 8. Fixing
+
+`--suggest` prints, per finding, the closed set of honest resolutions. `--patch` emits a
+unified diff on stdout and **never writes a file**.
+
+Exactly one finding kind has a rewrite that changes wording without changing policy:
+permission grammar (`你可以主動查` → `主動查`). Everything else — an exemption, a vague
+trigger, a missing consequence — is a decision about what the rule should *be*, and a tool
+that picks silently is choosing policy while claiming to fix grammar. Those emit choices and
+no diff, and say so out loud.
 
 ## What this skill deliberately does not check
 

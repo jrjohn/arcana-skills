@@ -37,7 +37,7 @@
 #   claude-md-lint.sh --update-baseline <bl> <file>
 set -uo pipefail
 
-JSON=0; BASELINE=""; UPDATE_BL=""; IN_DOCKER=""; AS_RULES=0; FILES=()
+JSON=0; BASELINE=""; UPDATE_BL=""; IN_DOCKER=""; AS_RULES=0; SCORE=0; SUGGEST=0; PATCH=0; FILES=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --selftest) SELFTEST=1; shift ;;
@@ -49,6 +49,13 @@ while [ $# -gt 0 ]; do
     --in-docker) IN_DOCKER="${2:-}"; shift 2 ;;
     # Treat the file as the rules themselves even when it is not called CLAUDE.md.
     --as-rules) AS_RULES=1; shift ;;
+    # A grade, always printed WITH its parts. See grade_of() for why it is never a bare number.
+    --score) SCORE=1; shift ;;
+    # What to do about each finding. Proposes; never edits.
+    --suggest) SUGGEST=1; shift ;;
+    # A unified diff on stdout for the ONE finding kind that has a mechanically safe rewrite.
+    # Apply it yourself with `git apply` after reading it.
+    --patch) PATCH=1; shift ;;
     --baseline) BASELINE="${2:-}"; shift 2 ;;
     --update-baseline) UPDATE_BL="${2:-}"; BASELINE="${2:-}"; shift 2 ;;
     -h|--help) sed -n '2,40p' "$0"; exit 0 ;;
@@ -143,6 +150,10 @@ lint_one() {
       if (is_negative_example(s)) next
       if (s ~ /^[[:space:]]*$/) next
       raw=s
+      # Detected here, ahead of the early return below — the separator row IS "nothing but
+      # table scaffolding", so checking after it silently reported "no tables" for a document
+      # full of them. The signal and the skip were keyed on the same line.
+      if (raw ~ /^[[:space:]]*\|[[:space:]]*:?-{2,}/) has_table=1
       s=strip_citations(s)
       if (s ~ /^[[:space:]|-]*$/) next   # nothing left but table scaffolding
 
@@ -175,6 +186,17 @@ lint_one() {
       if (top_block && (s ~ /違反/ || s ~ /代價/ || s ~ /會擋/ || s ~ /會被 ?reject/ ||
                         s ~ /[Rr]ejected/ || s ~ /[Bb]locked/ || s ~ /[Ww]ill fail/ || s ~ /hook/))
         consequence=1
+
+      # --- structure: an imperative rule in the opening block ------------------------------
+      # A blockquote is where the rule goes (that is the shape the measured-good files use),
+      # and an imperative marker is what separates a rule from a note. Checked on the raw
+      # line, not the citation-stripped one: the imperative is usually inside the bold markup.
+      if (top_block && raw ~ /^[[:space:]]*>/ &&
+          (raw ~ /必須/ || raw ~ /一律/ || raw ~ /不准/ || raw ~ /禁止/ || raw ~ /務必/ ||
+           raw ~ /一定要/ || raw ~ /先查/ || raw ~ /先問/ || raw ~ /MUST/ || raw ~ /NEVER/ ||
+           raw ~ /ALWAYS/ || raw ~ /[Dd]o not/ || raw ~ /之前,先/ || raw ~ /前先/))
+        imperative_rule=1
+
     }
 
     # =======================================================================================
@@ -208,10 +230,22 @@ lint_one() {
         emit("bad", "no-consequence", 1, "the opening rule never says what happens if it is broken — a rule without a cost is a suggestion")
       if (bytes > 40000)
         emit("sad", "size", lines, "‾" int(bytes/1000) " KB reloaded every turn — it competes with the task for attention")
+
+      # ---- structure signals: what is PRESENT, not what is absent -------------------------
+      # Counting only violations would give an empty file a perfect score, which is the same
+      # error as reading a skipped gate as a passed one — one level up. So the grade needs
+      # positive evidence, and positive evidence cannot be satisfied vacuously: S4 is absent
+      # when the document names no paths at all, because "all zero of them resolve" is not a
+      # fact about the document.
+      printf "SIGNAL|imperative-opening-rule|%d\n", (imperative_rule ? 1 : 0)
+      printf "SIGNAL|stated-consequence|%d\n", (consequence ? 1 : 0)
+      printf "SIGNAL|conditions-in-a-table|%d\n", (has_table ? 1 : 0)
       printf "STAT|%d|%d\n", lines, bytes
     }
   ' "$f"
 }
+
+lint_one_paths() { lint_one "$1" 2>/dev/null | grep '^CHECKPATH|' || true; }
 
 # Path existence is resolved in the shell, not awk: awk cannot see the filesystem the rule
 # will actually run against, and a path that exists only on the author's machine is the
@@ -234,6 +268,92 @@ resolve_paths() {
     fi
     echo "bad|$line|absent-capability|the rule points at \`$path\`, which does not exist here — a node told to run it will report having checked, and it will have checked nothing"
   done
+}
+
+# ---------------------------------------------------------------------------------------
+# What to do about a finding.
+#
+# Every kind has a SMALL, CLOSED set of honest resolutions, and "rewrite the sentence" is
+# usually not one of them: 「視情況查」→「一律查」 changes the policy, not the wording, and
+# only the author can make that call. A tool that quietly picks for them is deciding policy
+# while claiming to fix grammar.
+#
+# So this prints choices. It does not choose.
+# ---------------------------------------------------------------------------------------
+resolutions_for() {
+  case "$1" in
+    self-exempting) cat <<'R'
+       (a) 拿掉例外,讓它無條件成立 —— 若這條真的每次都該做
+       (b) 換成機械觸發條件(「規格提到 AC 編號時」),而不是「視情況」
+       (c) 刪掉 —— 若它真的視情況而定,那它不是規則,留著只會稀釋其他規則
+     ⚠ 沒有安全的自動改寫:三者是不同的政策,不是不同的措辭
+R
+;;
+    executor-judged-trigger) cat <<'R'
+       (a) 換成執行者無法誤判的條件(可用檔名 / 編號 / verdict 值判定)
+       (b) 刪掉
+     ⚠ 沒有安全的自動改寫:什麼條件才對,只有作者知道
+R
+;;
+    permission-not-instruction) cat <<'R'
+       (a) 改成命令句(`--patch` 可產出 diff)
+       (b) 移到參考文件 —— 若它本來就不是規則
+R
+;;
+    no-consequence) cat <<'R'
+       (a) 寫出強制機制:誰會擋、怎麼擋
+       (b) 沒有機制就誠實寫「這條靠自律」+ 實際後果
+     一個誠實標示的弱規則,勝過一個假裝是硬規則的規則
+R
+;;
+    absent-capability) cat <<'R'
+       (a) 修正路徑
+       (b) 改成由程式產生 CLAUDE.md,能力不存在時就不寫那一段
+       (c) 若規則是在別的環境跑,用 `--in-docker <container>` 在那裡驗
+R
+;;
+    duplicate-section) cat <<'R'
+       (a) 刪掉舊的那一節 —— 不要標註「已廢除」,更具體的那版會贏
+       (b) 合併成一節
+R
+;;
+    size) cat <<'R'
+       (a) 把只在排查時才需要的參考資料移進 skill,規則留下
+       (b) 保留,但在檔案裡寫明為什麼值得這個每 turn 成本
+R
+;;
+    *) echo "       (無既定處置)" ;;
+  esac
+}
+
+# The grade. Printed only alongside its components — a bare number hides what it is made of,
+# and this one is made of two different questions:
+#
+#   violations   what was found wrong
+#   structure    what was found RIGHT, detected positively
+#
+# Grading on violations alone would hand a perfect score to an empty file. Structure points
+# require positive detection and cannot be satisfied vacuously, so deleting content lowers
+# the grade instead of raising it — the property that makes the number safe to track.
+#
+# What the grade does NOT mean: that the advice is correct. Nothing here reads the content.
+grade_of() { # grade_of <bad> <sad> <structure 0-3>
+  local b="$1" sd="$2" st="$3"
+  if   [ "$b" -ge 3 ]; then echo "E"
+  elif [ "$b" -ge 1 ]; then echo "D"
+  elif [ "$st" -lt 2 ]; then echo "C"
+  elif [ "$st" -lt 3 ] || [ "$sd" -gt 2 ]; then echo "B"
+  else echo "A"; fi
+}
+
+grade_meaning() {
+  case "$1" in
+    A) echo "沒有已知缺陷,且量得好的三個結構都在" ;;
+    B) echo "沒有已知缺陷,結構大致齊全" ;;
+    C) echo "沒查到缺陷,但也幾乎沒有正面證據 —— 一份空檔案會落在這裡,不是好成績" ;;
+    D) echo "有會被跳過或指向不存在之物的規則" ;;
+    E) echo "多處規則不會被執行" ;;
+  esac
 }
 
 # ---------------------------------------------------------------------------------------
@@ -352,6 +472,28 @@ EOF
   expect "但同樣的字未加引號當指令用,仍要紅"              "$tmp/uses.md"     self-exempting          1
   expect "fence 內的 # 註解不是標題(不報重複節)"          "$tmp/fence/CLAUDE.md" duplicate-section   0
   expect "fence 內的 # 註解不提前關掉 top block"           "$tmp/fence/CLAUDE.md" no-consequence      0
+
+  # ---- 評分:不能靠「什麼都沒寫」拿高分 ----------------------------------------------
+  # 只算違規的分數,會把滿分發給空檔案 —— 那就是「沒查到 = 沒問題」換了一層皮。
+  grade_is() { # grade_is <label> <file> <expected-grade>
+    local got; got=$(SCORE=1 SUGGEST=0 PATCH=0; bash "$0" --score "$2" 2>/dev/null | awk "/評分/{print \$2; exit}")
+    if [ "$got" = "$3" ]; then printf "  ✅ %s (=%s)\n" "$1" "$got"
+    else printf "  ❌ %s (got=%s want=%s)\n" "$1" "$got" "$3"; fail=1; fi
+  }
+  mkdir -p "$tmp/empty" "$tmp/minimal"
+  : > "$tmp/empty/CLAUDE.md"
+  printf '# 規則\n> 必須先查。違反 = 被擋。\n' > "$tmp/minimal/CLAUDE.md"
+  grade_is "空檔案不是好成績"                    "$tmp/empty/CLAUDE.md"   D
+  grade_is "只有規則+代價、沒有表 → B 不是 A"    "$tmp/minimal/CLAUDE.md" B
+  grade_is "三個結構都在且無違規 → A"            "$tmp/ok/CLAUDE.md"      A
+  grade_is "有會被跳過的規則 → D"                "$tmp/nc/CLAUDE.md"      D
+
+  # ---- --patch 永不改檔 ----------------------------------------------------------------
+  before=$(shasum "$tmp/minimal/CLAUDE.md" | cut -d" " -f1)
+  bash "$0" --patch "$tmp/minimal/CLAUDE.md" >/dev/null 2>&1
+  after=$(shasum "$tmp/minimal/CLAUDE.md" | cut -d" " -f1)
+  if [ "$before" = "$after" ]; then echo "  ✅ --patch 沒有改動原檔"
+  else echo "  ❌ --patch 改了原檔"; fail=1; fi
   echo
   if [ "$fail" = "0" ]; then echo "selftest: PASS"; exit 0; else echo "selftest: FAIL"; exit 1; fi
 fi
@@ -359,12 +501,78 @@ fi
 [ ${#FILES[@]} -gt 0 ] || { echo "usage: $0 <CLAUDE.md> [...] | --selftest" >&2; exit 2; }
 
 # ---------------------------------------------------------------------------------------
+# --patch: a unified diff on stdout. Never writes.
+#
+# Exactly ONE finding kind has a rewrite that changes wording without changing policy:
+# permission grammar. `你可以主動查` → `主動查` says the same thing as an instruction.
+# Everything else — an exemption, a vague trigger, a missing consequence — is a decision
+# about what the rule should BE, and a tool that picks silently is choosing policy while
+# claiming to fix grammar. So those emit guidance and no diff, and say so.
+#
+# Read it, then `git apply`. The author stays in the loop by construction, not by convention.
+# ---------------------------------------------------------------------------------------
+if [ "$PATCH" = "1" ]; then
+  any=0
+  for f in "${FILES[@]}"; do
+    [ -f "$f" ] || { echo "claude-md-lint: cannot read $f" >&2; exit 2; }
+    tmp=$(mktemp)
+    awk '''
+      BEGIN { infence=0 }
+      /^[[:space:]]*```/ { infence = !infence; print; next }
+      infence { print; next }
+      /❌|不要寫成|反例/ { print; next }
+      {
+        line=$0
+        gsub(/你可以主動/, "主動", line)
+        gsub(/你可以/, "", line)
+        gsub(/建議你/, "", line)
+        gsub(/不妨/, "", line)
+        gsub(/[Yy]ou can /, "", line)
+        gsub(/[Yy]ou may /, "", line)
+        gsub(/[Ff]eel free to /, "", line)
+        print line
+      }
+    ''' "$f" > "$tmp"
+    if ! diff -q "$f" "$tmp" >/dev/null 2>&1; then
+      any=1
+      diff -u --label "a/$f" --label "b/$f" "$f" "$tmp" || true
+    fi
+    rm -f "$tmp"
+  done
+  if [ "$any" = "0" ]; then
+    echo "# 沒有可機械改寫的地方。" >&2
+    echo "# 其餘 finding 都是政策決定(規則該不該有例外、觸發條件是什麼、代價是什麼)," >&2
+    echo "# 那是作者的判斷,不是措辭問題 —— 用 --suggest 看每一種的處置選項。" >&2
+  fi
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------------------
 declare -a ALL_BAD=() ALL_SAD=()
 NOTRUN=0
+SIG_S1=0; SIG_S2=0; SIG_S3=0; SIG_S4=0
 for f in "${FILES[@]}"; do
   out=$(lint_one "$f" | resolve_paths) || true
   stat_line=$(printf '%s\n' "$out" | grep '^STAT|' | head -1)
-  body=$(printf '%s\n' "$out" | grep -v '^STAT|' || true)
+  sig_lines=$(printf '%s\n' "$out" | grep '^SIGNAL|' || true)
+  body=$(printf '%s\n' "$out" | grep -vE '^(STAT|SIGNAL)\|' || true)
+
+  # S4 — every absolute path named in the file resolves. Absent when the file names none:
+  # "all zero of them resolve" is not a fact about the document, and letting a vacuous truth
+  # earn a structure point is how a score starts rewarding emptiness.
+  named=$(lint_one_paths "$f"); npaths=$(printf '%s' "$named" | grep -c . || true)
+  nbadpath=$(printf '%s\n' "$body" | grep -c '|absent-capability|' || true)
+  if [ "${npaths:-0}" -gt 0 ] && [ "${nbadpath:-0}" -eq 0 ]; then S4=1; else S4=0; fi
+  [ "$S4" = "1" ] && SIG_S4=1
+  printf '%s\n' "$sig_lines" | while IFS='|' read -r _ n v; do :; done
+  while IFS='|' read -r _ n v; do
+    [ -n "${n:-}" ] || continue
+    case "$n" in
+      imperative-opening-rule) [ "$v" = "1" ] && SIG_S1=1 ;;
+      stated-consequence)      [ "$v" = "1" ] && SIG_S2=1 ;;
+      conditions-in-a-table)   [ "$v" = "1" ] && SIG_S3=1 ;;
+    esac
+  done <<< "$sig_lines"
 
   if printf '%s\n' "$body" | grep -q '^notRun|'; then
     NOTRUN=1
@@ -382,7 +590,13 @@ for f in "${FILES[@]}"; do
       bad) ALL_BAD+=("$f:$line|$kind|$msg") ;;
       sad) ALL_SAD+=("$f:$line|$kind|$msg") ;;
     esac
-    [ "$JSON" = "1" ] || printf '  %-4s %s:%s  %s\n       %s\n' "[$sev]" "$f" "$line" "$kind" "$msg"
+    if [ "$JSON" != "1" ]; then
+      printf '  %-4s %s:%s  %s\n       %s\n' "[$sev]" "$f" "$line" "$kind" "$msg"
+      if [ "$SUGGEST" = "1" ]; then
+        echo "     怎麼處置:"
+        resolutions_for "$kind"
+      fi
+    fi
   done <<< "$body"
 done
 
@@ -418,6 +632,20 @@ else
   echo
   echo "verdict=$verdict  bad=$nbad (baseline $BL_BAD)  sad=$nsad"
   [ "$verdict" = "notRun" ] && echo "  notRun is NOT a pass — nothing was checked."
+  if [ "$SCORE" = "1" ]; then
+    st=$(( SIG_S1 + SIG_S2 + SIG_S3 ))
+    g=$(grade_of "$nbad" "$nsad" "$st")
+    echo
+    echo "  評分 $g — $(grade_meaning "$g")"
+    echo "  ├ 違規       bad=$nbad  sad=$nsad"
+    echo "  └ 結構 $st/3   $([ $SIG_S1 = 1 ] && echo ✅ || echo ⬜) 開頭有命令句規則" \
+         "  $([ $SIG_S2 = 1 ] && echo ✅ || echo ⬜) 寫了代價" \
+         "  $([ $SIG_S3 = 1 ] && echo ✅ || echo ⬜) 條件寫成表"
+    [ "$SIG_S4" = "1" ] && echo "               ✅ 具名路徑全部存在(參考,不計分:沒有路徑時無法成立)"
+    echo
+    echo "  這個分數不代表建議內容是對的 —— 沒有任何檢查讀得懂內容。"
+    echo "  結構分只算「偵測到」,所以刪掉規則會讓分數變低,不會變高。"
+  fi
 fi
 
 case "$verdict" in
