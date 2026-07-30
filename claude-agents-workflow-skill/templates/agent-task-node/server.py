@@ -1006,6 +1006,26 @@ def dispose_pr(payload):
                 pass
         elif raw.startswith("http"):
             url = raw.strip()
+    if not url:
+        # Scan the whole blob rather than a known path. The `pr` variable is not reliably
+        # shaped: when implement reports a non-zero exit it wraps its own output, so the
+        # URL arrives as {"ran": false, "error": "...", "response": "{\"prUrl\": \"...\"}"}
+        # — a JSON string inside a JSON object, one level below where the reader looked.
+        #
+        # Observed on e9c6b692: PM said HOLD, this node wanted to draft the PR, and
+        # reported "no PR for this instance" while PR #95 sat open. The report was honest
+        # about what it could see; what it could see was wrong.
+        #
+        # The worker's do_start_merge already scans for the literal on exactly this
+        # variable, and this is the same scan. Two readers of one value should not disagree
+        # about whether it contains a URL.
+        # Match the URL itself rather than the key that precedes it. Escaping depth is not
+        # predictable here — this arrived as \\" (a JSON string inside a JSON object), and a
+        # pattern written for one level silently finds nothing at two.
+        blob = str(_pv(payload, "pr") or "") + str(payload.get("prUrl") or "")
+        m = re.search(r"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+", blob)
+        if m:
+            url = m.group(0)
     slug = str(_pv(payload, "slug")).strip()
     if not url:
         return {"disposed": False, "reason": "no PR for this instance", "verdict": verdict}
