@@ -4508,7 +4508,42 @@ class Handler(BaseHTTPRequestHandler):
         print("[agent-task-node] " + (fmt % args), flush=True)
 
 
+def _announce_optional_capabilities():
+    """Say out loud which optional capabilities are off.
+
+    Every one of these degrades to silence when its variable is missing: the node still runs,
+    still succeeds, and the report looks the same. Five of them were dark for want of one
+    variable each before anyone noticed — RBAC_SVC_USER (manager notes returned an empty
+    list), ARCHIVE_PG (transcripts never reached the archive), RBACUI_ACTORS (the gate
+    skipped while still contributing a zero to the pass count), and PROJECT_MEMORY, which was
+    lost by a `--force-recreate` after being passed inline on the command line and cost a
+    measurement round: _memory_brief() just returned "" and no node was told the history
+    existed.
+
+    So the log states the state of each one at startup. A capability that is off is a
+    decision; a capability that is off and unmentioned is a bug waiting to be misread as a
+    result.
+    """
+    for name, on, note in (
+        ("project-memory", PROJECT_MEM,
+         "per-product recall — set PROJECT_MEMORY=1 in .env, NOT on the compose command line"),
+        ("console-archive", bool(os.environ.get("ARCHIVE_PG")),
+         "AI transcripts into the team archive (ARCHIVE_PG)"),
+        ("manager-notes", bool(os.environ.get("RBAC_SVC_USER")),
+         "mid-run notes from the manager (RBAC_SVC_USER/RBAC_SVC_PASS)"),
+    ):
+        print("[agent-task-node] %-16s %s  (%s)" % (name, "ON " if on else "off", note), flush=True)
+    if PROJECT_MEM:
+        # An instruction pointing at an empty db is worse than no instruction, so name the
+        # root the brief will actually look under.
+        print("[agent-task-node] %-16s root=%s crs=%s%s" % (
+            "project-memory", PROJECT_MEM_ROOT, PROJECT_MEM_CRS,
+            "" if os.path.exists(PROJECT_MEM_CRS) else "  ← MISSING, brief will stay silent"),
+            flush=True)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8090"))
     print(f"[agent-task-node] listening on :{port} (claude={CLAUDE})", flush=True)
+    _announce_optional_capabilities()
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
