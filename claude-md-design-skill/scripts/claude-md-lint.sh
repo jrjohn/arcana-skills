@@ -118,7 +118,15 @@ lint_one() {
     }
 
     # ---- headings: the top block is everything before the second heading -----------------
-    /^#/ {
+    # `!infence` is load-bearing. Without it a shell comment inside a ```bash block ("# 例:")
+    # counts as a markdown heading: it produced a phantom duplicate-section finding against a
+    # real file and, worse, closed the top block early — so the window in which a stated
+    # consequence counts would end at the first code comment, and a document that DOES state
+    # its cost after an example would be told it does not.
+    #
+    # Found by running this tool on a real global CLAUDE.md. A checker that has only been run
+    # against its own fixtures has not been tested, it has been rehearsed.
+    !infence && /^#/ {
       heading_count++
       if (heading_count >= 2) top_block=0
       h=$0; sub(/^#+[[:space:]]*/, "", h)
@@ -293,6 +301,23 @@ EOF
 這個查詢視情況做即可。
 EOF
 
+  # A shell comment inside a fenced block is not a markdown heading. Two of them are not a
+  # duplicate section, and neither of them closes the top block.
+  mkdir -p "$tmp/fence"
+  cat > "$tmp/fence/CLAUDE.md" <<'EOF'
+# 🚨 規則
+> **先查它。**
+```bash
+# 例:
+osearch 'a'
+```
+```bash
+# 例:
+osearch 'b'
+```
+違反這條 = 第一個 tool call 被 hook reject。
+EOF
+
   cat > "$tmp/absent.md" <<'EOF'
 # 規則
 > 先查。違反 = 被擋。
@@ -325,6 +350,8 @@ EOF
   expect "引用不觸發:frontmatter 描述"                    "$tmp/mentions.md" permission-not-instruction 0
   expect "引用不觸發:/path/to/ 佔位符"                    "$tmp/mentions.md" absent-capability       0
   expect "但同樣的字未加引號當指令用,仍要紅"              "$tmp/uses.md"     self-exempting          1
+  expect "fence 內的 # 註解不是標題(不報重複節)"          "$tmp/fence/CLAUDE.md" duplicate-section   0
+  expect "fence 內的 # 註解不提前關掉 top block"           "$tmp/fence/CLAUDE.md" no-consequence      0
   echo
   if [ "$fail" = "0" ]; then echo "selftest: PASS"; exit 0; else echo "selftest: FAIL"; exit 1; fi
 fi
