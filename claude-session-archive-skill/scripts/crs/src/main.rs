@@ -3529,6 +3529,10 @@ fn handle_client(
     let rows = match mode {
         "vec" => pg_vec(&mut *conn, &http, query, project, limit, include_img, None, None)?,
         "hybrid" => pg_hybrid(&mut *conn, &http, query, project, limit, include_img)?,
+        // osearch's orient leg. Added 2026-07-30 so all three legs share the pool:
+        // without it the orient leg had no daemon path and opened a direct TLS
+        // connection every time (connect 613ms direct against 2ms via the socket).
+        "orient" => pg_distill_orient(&mut *conn, &http, query, project, limit)?,
         _ => pg_fts(&mut *conn, query, project, limit, include_img, None, None)?,
     };
     let query_ms = t0.elapsed().as_millis();
@@ -4060,15 +4064,54 @@ fn osearch_ranked(pg: &mut postgres::Client, http: &reqwest::blocking::Client,
                   since: Option<chrono::DateTime<Utc>>, until: Option<chrono::DateTime<Utc>>) -> OsearchResult {
     // Over-fetch per leg so RRF has cross-leg material to fuse, then trim to limit.
     let pool = (limit * 3).max(20);
-    let pin = pg_fts(pg, query, project, pool, include_img, since, until).unwrap_or_default();
-    let recall = pg_vec(pg, http, query, project, pool, include_img, since, until).unwrap_or_default();
-    // orient: v1 project-only, NO ts — msg_distilled has no ts column; a post-KNN
-    // join-filter on msg.ts would collapse (iterative_scan can't help). ADD-only;
-    // union's pin+recall carry date-scoped queries.
-    let orient = match pg_distill_orient(pg, http, query, project, pool) {
-        Ok(v) => v,
-        Err(e) => { eprintln!("  (orient skipped: {e})"); Vec::new() }
-    };
+    // The three legs run CONCURRENTLY and preferably through pgsearchd (2026-07-30).
+    //
+    // They used to run one after another on the single `pg` connection passed in, so a
+    // search paid the WAN round trip three times plus a TLS handshake that `pgsearch`
+    // avoids entirely. Measured 4.5s warm and up to 20s cold, against SEARCH_TIMEOUT=12
+    // in auto-osearch-on-prompt.sh — so the automatic lookup timed out on cold prompts,
+    // tripped its circuit breaker and skipped the next 180 seconds.
+    //
+    // Nothing underneath was slow, which took four measurements to establish: pgsearchd
+    // up (connect 2ms), EXPLAIN ANALYZE on the vector query 234ms with the HNSW index
+    // used, embeddings at 99.8% coverage, Ollama at 84-131ms. The cost was paying one
+    // round trip three times in a row.
+    //
+    // Each leg issues its own daemon request, so each gets its own pooled connection
+    // (r2d2 max_size 4 >= 3 legs). A leg whose daemon call fails opens its own direct
+    // connection instead of failing the search — the daemon is an optimisation, never a
+    // dependency. The `pg` argument is left for that fallback path and for callers that
+    // have no daemon at all.
+    //
+    // Measured after restarting the daemon on the new binary: warm 4482ms -> 1615ms
+    // (~2.7x). Cold did not improve (4340 -> 5885 on one sample) — three handshakes now
+    // contend for the same uplink. Warm is what the hook actually hits.
+    let (pin, recall, orient) = std::thread::scope(|sc| {
+        let h_pin = sc.spawn(|| {
+            if let Some((rows, _)) = try_daemon("fts", query, project, pool, include_img) { return rows; }
+            let Ok(mut c) = pg_connect() else { return Vec::new() };
+            pg_fts(&mut c, query, project, pool, include_img, since, until).unwrap_or_default()
+        });
+        let h_recall = sc.spawn(|| {
+            if let Some((rows, _)) = try_daemon("vec", query, project, pool, include_img) { return rows; }
+            let (Ok(mut c), Ok(h)) = (pg_connect(), http_client()) else { return Vec::new() };
+            pg_vec(&mut c, &h, query, project, pool, include_img, since, until).unwrap_or_default()
+        });
+        // orient: v1 project-only, NO ts — msg_distilled has no ts column; a post-KNN
+        // join-filter on msg.ts would collapse (iterative_scan can't help). ADD-only;
+        // union's pin+recall carry date-scoped queries.
+        let h_orient = sc.spawn(|| {
+            if let Some((rows, _)) = try_daemon("orient", query, project, pool, include_img) { return rows; }
+            let (Ok(mut c), Ok(h)) = (pg_connect(), http_client()) else { return Vec::new() };
+            match pg_distill_orient(&mut c, &h, query, project, pool) {
+                Ok(v) => v,
+                Err(e) => { eprintln!("  (orient skipped: {e})"); Vec::new() }
+            }
+        });
+        (h_pin.join().unwrap_or_default(),
+         h_recall.join().unwrap_or_default(),
+         h_orient.join().unwrap_or_default())
+    });
 
     // Adaptive weighted RRF — cheap query routing without a classifier:
     //   • Natural-language query (has ? / ？, or long) → recall (semantic) 2× weight.
