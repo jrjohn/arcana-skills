@@ -905,6 +905,17 @@ def prompt_intake(p):
         "一段編造的專案現況與真的無法區分,而它會讓後面每個節點更確信一件可能錯的事。\n"
         "- 若某個問題不被回答就**無法**負責任地繼續,把它放進 `blocking: true`。\n"
         "- 重述必須可被對照:引用你依據的是哪一條擷取到的事實。\n"
+        # Earned it. Told only that a history db existed and nothing about how to reach it,
+        # this node went and found it — probing `which vsearch csearch`, locating
+        # /work/_memory/<product>, and composing the invocation itself. What it could not
+        # guess was CRS_OLLAMA_URL, so vsearch failed and it reported "ollama not started":
+        # the right inference from the wrong evidence. The brief carries that variable.
+        #
+        # It also matters here more than the earlier reasoning allowed. `continuation`
+        # already asks this node to decide new-vs-continue against a feature list; the
+        # conversations of those earlier rounds are the same question with more of the
+        # answer in them.
+        + _memory_brief(p)
     )
 
 
