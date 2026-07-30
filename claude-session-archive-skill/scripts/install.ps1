@@ -278,7 +278,7 @@ if ($alreadyRegistered) {
 } else {
     $newUps = [PSCustomObject]@{
         hooks = @(
-            [PSCustomObject]@{ type = 'command'; command = $autoVsearchCmd; timeout = 5 }
+            [PSCustomObject]@{ type = 'command'; command = $autoVsearchCmd; timeout = 15 }
         )
     }
     $obj.hooks.UserPromptSubmit = @($obj.hooks.UserPromptSubmit) + $newUps
