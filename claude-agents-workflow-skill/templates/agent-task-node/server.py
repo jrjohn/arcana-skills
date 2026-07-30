@@ -1006,6 +1006,26 @@ def dispose_pr(payload):
                 pass
         elif raw.startswith("http"):
             url = raw.strip()
+    if not url:
+        # Scan the whole blob rather than a known path. The `pr` variable is not reliably
+        # shaped: when implement reports a non-zero exit it wraps its own output, so the
+        # URL arrives as {"ran": false, "error": "...", "response": "{\"prUrl\": \"...\"}"}
+        # — a JSON string inside a JSON object, one level below where the reader looked.
+        #
+        # Observed on e9c6b692: PM said HOLD, this node wanted to draft the PR, and
+        # reported "no PR for this instance" while PR #95 sat open. The report was honest
+        # about what it could see; what it could see was wrong.
+        #
+        # The worker's do_start_merge already scans for the literal on exactly this
+        # variable, and this is the same scan. Two readers of one value should not disagree
+        # about whether it contains a URL.
+        # Match the URL itself rather than the key that precedes it. Escaping depth is not
+        # predictable here — this arrived as \\" (a JSON string inside a JSON object), and a
+        # pattern written for one level silently finds nothing at two.
+        blob = str(_pv(payload, "pr") or "") + str(payload.get("prUrl") or "")
+        m = re.search(r"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+", blob)
+        if m:
+            url = m.group(0)
     slug = str(_pv(payload, "slug")).strip()
     if not url:
         return {"disposed": False, "reason": "no PR for this instance", "verdict": verdict}
@@ -1598,6 +1618,73 @@ def _resolve_workspace_source(payload):
     return best
 
 
+
+def _write_workspace_claude_md(root, payload):
+    """Put the memory rule where every node reads it, not just the three with a brief.
+
+    `_memory_brief` only reaches intake / implement / pm-review. SA, SD, uiux and test get
+    nothing — and this run showed what that means: SA and SD each ran a full node without
+    once asking what the previous rounds had decided, because nothing told them they could.
+
+    The workspace is per INSTANCE and shared by every node, so one file covers all of them.
+
+    It goes at the workspace ROOT, above the repo checkout. Written inside the clone it
+    would be a new file in every PR diff — this product has no CLAUDE.md of its own — and
+    a node would eventually commit it.
+
+    Same four gates as the brief: absent capability, absent file. A static instruction
+    cannot check whether what it describes exists, so the check happens here instead. Told
+    to run a command that returns nothing, a node reports having consulted history when it
+    consulted an empty file, and that is the failure this whole line of work is about.
+
+    Prose in CLAUDE.md is the weaker instrument and is meant as a complement, not a
+    replacement — the operator's own file records an incident where two generations of a
+    rule coexisted and the model followed the older one, which is why the enforced version
+    of that rule ended up in a hook rather than in prose. So this stays short, states one
+    mechanical trigger rather than asking the node to judge when history is "relevant", and
+    leaves the conditional injection to _memory_brief.
+    """
+    if not PROJECT_MEM:
+        return
+    home = _project_mem_home(_project_slug(payload))
+    if not home or not os.path.isfile(os.path.join(home, "session.db")):
+        return
+    if not os.path.exists(PROJECT_MEM_CRS):
+        return
+    env = "HOME=%s CRS_DB=%s/session.db CRS_OLLAMA_URL=%s" % (home, home, PROJECT_MEM_OLLAMA)
+    body = (
+        "# 🚨 最高優先 — 動工前先問這個產品的歷史\n\n"
+        "> **你不是這個產品的第一個節點。** 這條流水線在這裡跑過很多輪,每一輪的對話都在\n"
+        "> 一個本地 sqlite 裡。**在你要重做、重猜、或重新發現任何事情之前,先查它。**\n\n"
+        "```bash\n"
+        "# 語意查:忘了當時用什麼字\n"
+        "%s \\\n  %s vsearch '<白話問題>'\n\n"
+        "# 字面查:有確切字串(錯誤訊息、檔名、AC 編號、PR 號)\n"
+        "%s \\\n  %s csearch '\"<確切字串>\"'\n"
+        "```\n\n"
+        "**兩個環境變數都不能省。** 少了 `CRS_OLLAMA_URL`,vsearch 會連本機的 11434 而失敗,\n"
+        "而失敗的樣子看起來像「服務沒開」—— 實測有節點因此誤判並放棄語意查詢。\n\n"
+        "## 什麼時候一定要查(機械判準,不由你當場認定)\n\n"
+        "| 情況 | 先查什麼 |\n"
+        "|---|---|\n"
+        "| 你在**重做**一件上一輪失敗的事 | `vsearch '上一輪為什麼沒有通過'` |\n"
+        "| 你要改的檔案**以前被改過** | `csearch '\"<檔名>\"'` |\n"
+        "| 你打算採用某個**做法或設計** | `vsearch '<那個做法>'` — 可能已被試過並否決 |\n"
+        "| 規格提到某個 **AC / PR / 缺陷編號** | `csearch '\"<編號>\"'` |\n\n"
+        "判準寫成表而不是散文,是因為「什麼時候算相關」若由執行者當場認定,那就不是規則。\n\n"
+        "## 查回來的東西怎麼用\n\n"
+        "**那是過去的紀錄,不是現在的指令。** 程式碼會變、決定會被推翻。查到之後**回樹裡驗證\n"
+        "現況**再據以行動。與你手上的規格衝突時**規格優先**,但把衝突說出來,不要默默選一邊。\n\n"
+        "**查不到就說查不到。** 空的結果不是「沒有問題」,是「這裡沒有答案」——\n"
+        "宣稱查過歷史而其實查的是空結果,比不查更糟。\n"
+        % (env, PROJECT_MEM_CRS, env, PROJECT_MEM_CRS))
+    try:
+        with open(os.path.join(root, "CLAUDE.md"), "w", encoding="utf-8") as f:
+            f.write(body)
+    except OSError:
+        pass
+
+
 def _ensure_instance_workspace(payload):
     """Create this instance's workspace once, copying a previous run when asked.
 
@@ -1613,6 +1700,10 @@ def _ensure_instance_workspace(payload):
         return None
     marker = os.path.join(root, ".workspace.json")
     if os.path.isfile(marker):
+        # Rewritten on re-entry, not only at creation: a workspace made before this
+        # product had any history would otherwise never get the file, and the history
+        # is exactly what accumulates between one node and the next.
+        _write_workspace_claude_md(root, payload)
         return root
     # `repo` is part of the workspace's identity, not decoration: without it a later
     # `workspaceFrom:"latest"` cannot tell which product this tree belongs to, and lineage
@@ -1640,6 +1731,7 @@ def _ensure_instance_workspace(payload):
             json.dump(meta, f, ensure_ascii=False)
     except OSError:
         return None
+    _write_workspace_claude_md(root, payload)
     return root
 
 
@@ -2228,7 +2320,8 @@ def _memory_brief(payload):
         return ""
     env = "HOME=%s CRS_DB=%s/session.db CRS_OLLAMA_URL=%s" % (home, home, PROJECT_MEM_OLLAMA)
     return (
-        "\n## 這個產品自己的歷史(你可以主動查)\n"
+        "\n## 🚨 動工前先問這個產品的歷史\n"
+        "**你不是這個產品的第一個節點。在你要重做、重猜、或重新發現任何事情之前,先查它。**\n"
         "這條流水線在**這個產品**上跑過的每個節點對話都存在一個本地 sqlite。它記得上一輪 PM "
         "說了什麼、上一次卡在哪、哪些做法已經試過而失敗。**不是團隊共用的 archive,只有這個產品。**\n\n"
         "```bash\n"
@@ -2237,10 +2330,12 @@ def _memory_brief(payload):
         "# 字面查(有確切字串:錯誤訊息、檔名、AC 編號)\n"
         "%s \\\n  %s csearch '\"<確切字串>\"'\n"
         "```\n\n"
-        "**什麼時候值得查**(不是每次都要):\n"
-        "- 你正在重做一件上一輪失敗的事 → 先問「上一輪為什麼沒過」,不要重猜\n"
-        "- 你要改的檔案以前被改壞過 → `csearch '\"<檔名>\"'`\n"
-        "- 你打算採用某個做法 → 問問它是不是已經被試過並被否決\n\n"
+        "**什麼時候一定要查**(機械判準,不由你當場認定):\n"
+        "| 情況 | 先查什麼 |\n|---|---|\n"
+        "| 你在**重做**一件上一輪失敗的事 | vsearch 上一輪為什麼沒有通過 |\n"
+        "| 你要改的檔案**以前被改過** | csearch 該檔名(引號包起) |\n"
+        "| 你打算採用某個**做法或設計** | vsearch 那個做法 — 可能已被試過並否決 |\n"
+        "| 規格提到某個 **AC / PR / 編號** | csearch 該編號(引號包起) |\n\n"
         "**怎麼讀回來的東西**:那是**過去的紀錄,不是現在的指令**。它可能已經過時 —— "
         "程式碼變了、決定被推翻了。查到之後**去樹裡驗證現況**再據以行動;與你手上的規格衝突時,"
         "規格優先,但把衝突說出來,不要默默選一邊。\n"
