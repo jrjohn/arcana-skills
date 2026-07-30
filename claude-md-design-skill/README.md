@@ -117,7 +117,7 @@ than a confident edit.
 fires on a bad document *and* stays silent on a good one. A check never observed failing is a
 check nobody has reason to trust.
 
-It has already caught its own author five times:
+It has already caught its own author seven times:
 
 1. On its first run, 4 of 11 checks could not fire at all (a `set -u` bug killed the pipeline),
    and the 7 "passes" were vacuous — nothing fired, so of course nothing false-fired.
@@ -131,6 +131,15 @@ It has already caught its own author five times:
 5. The structure signal for "conditions in a table" keyed on the separator row — which the
    line right above it skipped as "nothing but table scaffolding". It reported *no tables*
    for a document full of them. The signal and the skip were reading the same line.
+6. Applying the skill to a real `CLAUDE.md`, the author wrote a hook rule that matched any
+   command containing `vsearch` — including a *different* database queried by a *different*
+   binary in a container where the mandated alternative does not exist as a subcommand at
+   all. A gate that cannot be satisfied. Same error as the false reds it catalogues: asking
+   "is the string present" instead of "is this the thing the rule is about".
+7. That same rule was written stricter than the contract the shipped skill documented,
+   forking the deployed behaviour from the repository. The fix was to adopt the shipped
+   version, not to keep the local variant — **a fix that exists only in one copy is the
+   failure mode, not the remedy**.
 
 ---
 

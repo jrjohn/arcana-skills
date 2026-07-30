@@ -85,6 +85,15 @@ osearch_marker="/tmp/claude-archive-osearch-${session_id}"
 # Sentinel TTL: 30 minutes. See header for rationale (compact gap).
 SENTINEL_TTL_SEC=1800
 
+# v1.29 (2026-07-30): the opening now expires too. Without a TTL one osearch covered a session
+# of any length, and the two things that age underneath it are exactly the ones that matter —
+# ingest adds rows every 15 minutes, and a compact drops the procedural memory of having
+# looked. Separate constant from the sentinel on purpose: the sentinel answers "has this
+# session touched the archive recently" and vsearch/csearch refresh it, so it can stay warm
+# indefinitely while osearch never runs again. This one answers "has the front door been used
+# lately", and nothing but osearch refreshes it.
+OPEN_TTL_SEC=1800
+
 # Memory-dir regex: ~/.claude/projects/<project-slug>/memory/<file>.md
 mem_dir_re='\.claude/projects/[^/]+/memory/[^/]+\.md'
 
@@ -102,19 +111,41 @@ EOF
 }
 
 # Check sentinel exists AND is fresh (within TTL). Expired = likely compact gap.
-sentinel_valid() {
-    [ -e "$sentinel" ] || return 1
-    local mtime now age
+fresh_within() {
+    local f="$1" ttl="$2" mtime now age
+    [ -e "$f" ] || return 1
     # macOS stat -f, Linux stat -c
-    mtime=$(stat -f %m "$sentinel" 2>/dev/null || stat -c %Y "$sentinel" 2>/dev/null || echo 0)
+    mtime=$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)
     now=$(date +%s)
     age=$(( now - mtime ))
-    if [ "$age" -gt "$SENTINEL_TTL_SEC" ]; then
-        rm -f "$sentinel"
+    if [ "$age" -gt "$ttl" ]; then
+        rm -f "$f"
         return 1
     fi
     return 0
 }
+
+sentinel_valid() { fresh_within "$sentinel" "$SENTINEL_TTL_SEC"; }
+
+# 0. Not the personal archive at all -> none of this applies (v1.29, 2026-07-30).
+#
+# This is a rule about ~/claude-archive: PG + pgvector + the distilled orient layer. It is NOT
+# a rule about every database queried with the same two verb names. sdlc-code-flow gives each
+# product its own sqlite conversation memory, queried by a crs built WITHOUT
+# --features pg-backend — and that binary has no `osearch` subcommand at all
+# ("error: unrecognized subcommand"), because the orient leg reads msg_distilled, which is
+# pg-only. Distillation there is a deliberate later step, run when knowledge is extracted,
+# not a per-write cost.
+#
+# Inside a product workspace vsearch and csearch are therefore not a shortcut around osearch —
+# they are the complete toolset, and their sentinel semantics belong to a different archive.
+#
+# Two independent, direct signals that a different database is the target, either sufficient:
+#   * CRS_DB= set explicitly — personal-archive calls never set it, they take the default
+#   * the crs-sqlite binary — a different build, identifiable by name
+if [ -n "$command" ] && printf '%s' "$command" | grep -qE '(CRS_DB=|crs-sqlite)'; then
+    exit 0
+fi
 
 # 1. Archive search invocation -> unlock / refresh sentinel.
 #    osearch is THE default front door (orient→recall→pin: unions the vsearch and
@@ -131,8 +162,8 @@ if [ -n "$command" ] && printf '%s' "$command" | grep -qE '(^|[^A-Za-z0-9_])osea
     exit 0
 fi
 if [ -n "$command" ] && printf '%s' "$command" | grep -qE '(^|[^A-Za-z0-9_])(vsearch|csearch)([^A-Za-z0-9_]|$)'; then
-    # Counts as preflight only after osearch has opened this session.
-    [ -e "$osearch_marker" ] && : > "$sentinel"
+    # Counts as preflight only while an osearch opening is still fresh (v1.29).
+    fresh_within "$osearch_marker" "$OPEN_TTL_SEC" && : > "$sentinel"
     exit 0
 fi
 
