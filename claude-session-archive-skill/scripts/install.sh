@@ -383,7 +383,7 @@ if command -v jq >/dev/null 2>&1; then
     # Register PreToolUse hook for both Bash AND Read matchers (idempotent)
     for matcher in Bash Read; do
         if jq -e --arg m "$matcher" --arg c "$PREFLIGHT_CMD" \
-            '(.hooks.PreToolUse // []) | map(select(.matcher == $m)) | map(.hooks // []) | flatten | map(.command? // "") | any(. == $c)' \
+            '(.hooks.PreToolUse // []) | map(select(.matcher == $m)) | map(.hooks // []) | flatten | map(.command? // "") | any(. == $c or test("archive-preflight"))' \
             "$SETTINGS" >/dev/null 2>&1 ; then
             echo "    PreToolUse $matcher hook already registered (skip)"
         else
@@ -434,7 +434,7 @@ if command -v jq >/dev/null 2>&1; then
         echo "==> registering UserPromptSubmit auto-vsearch hook"
         jq --arg c "$UPS_CMD" \
             '.hooks.UserPromptSubmit = ((.hooks.UserPromptSubmit // []) +
-                [{"hooks":[{"type":"command","command":$c,"timeout":5}]}])' \
+                [{"hooks":[{"type":"command","command":$c,"timeout":15}]}])' \
             "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
     fi
 else

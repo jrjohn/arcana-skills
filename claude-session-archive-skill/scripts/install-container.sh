@@ -76,7 +76,7 @@ register_hooks_in_settings() {
         {matcher: "Bash", hooks: [{type: "command", command: $pre, timeout: 5}]},
         {matcher: "Read", hooks: [{type: "command", command: $pre, timeout: 5}]}
       ]
-    | .hooks.UserPromptSubmit = [{hooks: [{type: "command", command: $auto, timeout: 5}]}]
+    | .hooks.UserPromptSubmit = [{hooks: [{type: "command", command: $auto, timeout: 15}]}]
   ' "$settings" > "$settings.tmp"
   mv "$settings.tmp" "$settings"
   log "Registered hooks in $settings (backup at $settings.bak-pre-install)"

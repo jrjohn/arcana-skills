@@ -21,6 +21,25 @@ Real incidents that prompted this layer:
 - **2026-05-11** — Post-compact, Claude went straight to `sqlite3 ... sessions.db WHERE content LIKE '%X%'` for a credential lookup instead of csearch. The CLAUDE.md prose said "vsearch first" but the credential section's example *literally* used raw `sqlite3 LIKE` — that pattern survived compact as muscle memory. **Also**: the sentinel from pre-compact vsearch was still valid, so the hook allowed the sqlite3 call. → v1.11 hard-bans `sqlite3 SEARCH` (LIKE/MATCH/msg_fts/GLOB) on sessions.db regardless of sentinel, and adds 30-min sentinel TTL to force re-search after compact gaps.
 - **2026-07-20** — Claude opened the session with `csearch` / `vsearch` (never osearch), so on a disk-full alert it got only noise, misidentified the SAN vendor, and nearly acted on a false reading. CLAUDE.md said "the first archive query MUST be osearch", but the hook unlocked the sentinel for **any** of `osearch|vsearch|csearch` — so the default had *zero* enforcement and was being silently bypassed. Re-running the same query as `osearch` immediately surfaced the decisive context. → **v1.28: only `osearch` opens a session.** The preflight sets a separate `osearch_marker` on osearch; `vsearch`/`csearch` refresh the sentinel only *after* that marker exists. "osearch first" becomes mechanical rather than advisory.
 
+## Timeout invariant: inner < outer (v1.29)
+
+Two budgets bound the automatic opening, and the relationship between them is load-bearing:
+
+| Budget | Where | v1.29 |
+|---|---|---|
+| outer | the `timeout` on the `UserPromptSubmit` hook registration | **15s** |
+| inner | `SEARCH_TIMEOUT` in `auto-osearch-on-prompt.sh` (perl `alarm`) | **12s** |
+
+**The inner one must be strictly smaller.** If the outer fires first the script is killed before
+it can set its own cooldown, so the circuit breaker never trips and *every* prompt pays the
+full budget — worse than a short timeout, because a short timeout at least fails fast and then
+skips for 180s.
+
+Raising `SEARCH_TIMEOUT` alone reproduces this exactly: measured, osearch takes 6.4s cold and
+3.1s warm, so a 12s inner budget under a 5s outer meant the hook was killed on every prompt,
+its output discarded, and no opening marker written — while the model still needed the archive
+and reached for the two commands that did clear the gate.
+
 ## Scope — what this rule is NOT about (v1.29)
 
 The rule is about `~/claude-archive`: PG + pgvector + the distilled orient layer. It is **not**
