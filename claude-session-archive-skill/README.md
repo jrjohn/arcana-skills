@@ -26,7 +26,7 @@ Unions three legs over the same archive, fused by **weighted Reciprocal Rank Fus
 - **recall** — semantic KNN over raw `msg.embedding` (= `vsearch`)
 - **pin** — FTS5/GIN lexical over raw `msg` + `msg_jieba` (= `csearch`)
 
-Adaptive weighting: NL queries (have `?`/`？` or ≥12 chars) weight the semantic leg 2× so lexical stopword noise can't bury the answer; short exact-token/IP/hostname queries use equal weights so pin+recall agreement wins. **A blended front door, not a `csearch` superset** — for pure exact-lexical lookups use `csearch`. The orient layer is populated by a Mac-GPU distillation backfill (`crs distill-missing`, `qwen2.5:7b`); until coverage builds, osearch ≈ vsearch (RRF guarantees osearch ≥ vsearch regardless). sqlite-only backend: osearch unavailable, use `vsearch`.
+Adaptive weighting: NL queries (have `?`/`？` or ≥12 chars) weight the semantic leg 2× so lexical stopword noise can't bury the answer; short exact-token/IP/hostname queries use equal weights so pin+recall agreement wins. **A blended front door, not a `csearch` superset** — for pure exact-lexical lookups use `csearch`. The orient layer is populated by a Mac-GPU distillation backfill (`crs distill-missing`, `qwen2.5:7b`); until coverage builds, osearch ≈ vsearch (RRF guarantees osearch ≥ vsearch regardless). sqlite-only backend: osearch does not exist as a subcommand at all (the orient leg reads `msg_distilled`, pg-only) — `vsearch` + `csearch` are the complete toolset there, not a shortcut around anything. The preflight hook scopes itself away from those databases (v1.29).
 
 ### `csearch` — FTS5 lexical (always available)
 ```bash

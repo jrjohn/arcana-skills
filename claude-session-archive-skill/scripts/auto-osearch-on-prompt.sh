@@ -80,7 +80,10 @@ fi
 #   (b) circuit breaker — after a timeout, skip the search for COOLDOWN_SECS so a
 #       degraded backend doesn't make every prompt wait. Auto-recovers when healthy.
 COOLDOWN="/tmp/claude-osearch-cooldown"
-SEARCH_TIMEOUT=4
+# v1.29 (2026-07-30) 量測:osearch 冷 6.4s / 熱 3.1s(三腿 union + Ollama embed + WAN RTT)。
+# 4 秒讓冷呼叫必定逾時 → circuit breaker 打開、開場證明沒被寫出,而模型仍需要查 archive,
+# 於是改用當時唯一放行的 vsearch/csearch。這條規則不是被忽略,是被逾時擠掉的。
+SEARCH_TIMEOUT=12
 COOLDOWN_SECS=180
 
 if [ -f "$COOLDOWN" ]; then

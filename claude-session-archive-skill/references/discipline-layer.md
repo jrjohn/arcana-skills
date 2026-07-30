@@ -21,6 +21,39 @@ Real incidents that prompted this layer:
 - **2026-05-11** — Post-compact, Claude went straight to `sqlite3 ... sessions.db WHERE content LIKE '%X%'` for a credential lookup instead of csearch. The CLAUDE.md prose said "vsearch first" but the credential section's example *literally* used raw `sqlite3 LIKE` — that pattern survived compact as muscle memory. **Also**: the sentinel from pre-compact vsearch was still valid, so the hook allowed the sqlite3 call. → v1.11 hard-bans `sqlite3 SEARCH` (LIKE/MATCH/msg_fts/GLOB) on sessions.db regardless of sentinel, and adds 30-min sentinel TTL to force re-search after compact gaps.
 - **2026-07-20** — Claude opened the session with `csearch` / `vsearch` (never osearch), so on a disk-full alert it got only noise, misidentified the SAN vendor, and nearly acted on a false reading. CLAUDE.md said "the first archive query MUST be osearch", but the hook unlocked the sentinel for **any** of `osearch|vsearch|csearch` — so the default had *zero* enforcement and was being silently bypassed. Re-running the same query as `osearch` immediately surfaced the decisive context. → **v1.28: only `osearch` opens a session.** The preflight sets a separate `osearch_marker` on osearch; `vsearch`/`csearch` refresh the sentinel only *after* that marker exists. "osearch first" becomes mechanical rather than advisory.
 
+## Scope — what this rule is NOT about (v1.29)
+
+The rule is about `~/claude-archive`: PG + pgvector + the distilled orient layer. It is **not**
+a rule about every database queried with the same two verb names.
+
+`sdlc-code-flow` gives each product its own sqlite conversation memory, queried by a `crs`
+built **without** `--features pg-backend` — and that binary has **no `osearch` subcommand at
+all**:
+
+```
+$ crs-sqlite osearch 'x'
+error: unrecognized subcommand 'osearch'
+  tip: some similar subcommands exist: 'vsearch-since', 'csearch', 'vsearch'
+```
+
+The orient leg reads `msg_distilled`, which is pg-only, and distillation there is a deliberate
+later step run when knowledge is extracted — not a per-write cost. So inside a product
+workspace `vsearch` and `csearch` are not a shortcut around `osearch`: **they are the complete
+toolset**, and their sentinel semantics belong to a different archive entirely.
+
+The preflight exits early on two independent, direct signals that a different database is the
+target — either alone is sufficient:
+
+| Signal | Why it is reliable |
+|---|---|
+| `CRS_DB=` set explicitly | personal-archive calls never set it, they take the default |
+| the `crs-sqlite` binary | a different build, identifiable by name |
+
+Getting this wrong produces the worst kind of gate: one that **cannot be satisfied**. It denies
+the only two tools that exist in that environment and demands a third that does not.
+
+- **2026-07-30** — The v1.28 fix above had been written, committed and shipped **in this skill** for ten days, and was never installed to `~/.claude/hooks/`. The deployed preflight still refreshed the sentinel for any of `osearch|vsearch|csearch`, so `osearch` — the one command the rule mandates — **did not open a session at all**, while the two it steers away from did. The incentive was inverted, and all seven deny messages the model actually reads told it to run `vsearch`. Compounding it, `auto-osearch-on-prompt.sh` **had** been updated (it wrote the marker), so the producing half was live and the consuming half was not. Separately, `SEARCH_TIMEOUT=4` against a measured 6.4s cold / 3.1s warm meant the automatic opening usually timed out and wrote nothing. → v1.29 installs the shipped hook, adds `OPEN_TTL_SEC`, raises the timeout to 12s, and scopes the rule away from per-product sqlite memories. **The lesson is not about the rule. A fix that exists only in the repository is not deployed, and nothing in the system said so.**
+
 ## The two hooks
 
 ### 1. `archive-preflight.sh` — PreToolUse (reactive)
@@ -73,7 +106,7 @@ False positives are inevitable (the regex is permissive). The cost of a false po
 /tmp/claude-archive-preflight-<session_id>     # sentinel, TTL: 30 minutes (since v1.11)
 ```
 
-- **Opened by (osearch_marker + sentinel)**: an `osearch` invocation (preflight hook), or an `auto-osearch-on-prompt` archive-trigger match whose osearch actually ran. The marker is not TTL'd — once a session has gone through the front door, it stays "opened"; the sentinel below is what carries the freshness clock.
+- **Opened by (osearch_marker + sentinel)**: an `osearch` invocation (preflight hook), or an `auto-osearch-on-prompt` archive-trigger match whose osearch actually ran. **Since v1.29 the marker carries its own TTL (`OPEN_TTL_SEC`, 30 min)**, separate from the sentinel. Without it one osearch covered a session of any length — and the two things that age underneath an opening are exactly the ones that matter: ingest adds rows every 15 minutes, and a compact drops the procedural memory of having looked. The constants are separate on purpose: the sentinel answers *"has this session touched the archive recently"* and `vsearch`/`csearch` refresh it, so it can stay warm indefinitely while osearch never runs again; the marker answers *"has the front door been used lately"*, and **nothing but osearch refreshes it**.
 - **Refreshed by (sentinel only)**: `vsearch` / `csearch` invocation, but **only if the osearch_marker already exists**. Each qualifying invocation touches the sentinel, resetting its mtime → resetting the TTL clock.
 - **Checked by**: preflight hook on every Tier-B Bash / Read call via `sentinel_valid()`:
   ```sh
