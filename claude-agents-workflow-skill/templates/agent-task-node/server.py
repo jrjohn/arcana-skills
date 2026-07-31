@@ -33,6 +33,7 @@ import re
 import time
 import hashlib
 import tempfile
+import threading
 import uuid
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -2292,6 +2293,52 @@ def project_memory_ingest(product, piid):
               % (staged, product), flush=True)
     except Exception as e:
         print("[agent-task-node] project-memory ingest skipped: %s" % e, flush=True)
+    _embed_backlog_async(env, product)
+
+
+# One embed pass at a time, process-wide. Concurrency here is not a throughput knob: every
+# worker calls the same local Ollama, and a previous round of this exact pattern pinned the
+# machine's CPU until the job was disabled outright. Newest-first means a skipped pass loses
+# nothing — the next one picks up the rows this one would have done, in the same order.
+_EMBED_LOCK = threading.Lock()
+_EMBED_BATCH = int(os.environ.get("PROJECT_MEM_EMBED_BATCH", "600") or 600)
+
+
+def _embed_backlog_async(env, product):
+    """Embed what `build` just indexed. Text-only memory is half a memory.
+
+    `crs build --no-refresh` writes rows and their FTS index and stops there; embeddings are a
+    separate pass that nothing ever invoked. Measured 2026-07-31 on arcana-ai-bpm:
+    14,657 msg rows, 4,069 embedded — a backlog of 10,588, i.e. 72% of this product's memory
+    was unreachable by meaning. Every node is told to `vsearch` (17 places in this file), and
+    for months that search has been answering from the 28% that happened to be embedded,
+    skewed to the oldest rows. It never errored; it just returned less, which is the failure
+    mode this codebase keeps finding.
+
+    Bounded and detached: a node has already paid for its model call and must not also wait on
+    an embedding backlog, and `--limit` keeps one pass finite so a cold database drains over
+    several runs instead of blocking the first one for half an hour.
+    """
+    if not PROJECT_MEM_CRS or not os.path.exists(PROJECT_MEM_CRS):
+        return
+
+    def run():
+        if not _EMBED_LOCK.acquire(blocking=False):
+            return                      # another pass is already draining the same queue
+        try:
+            r = subprocess.run(
+                [PROJECT_MEM_CRS, "embed-missing", "--workers", "2",
+                 "--limit", str(_EMBED_BATCH)],
+                capture_output=True, text=True, timeout=1800, env=env)
+            tail = (r.stdout or r.stderr or "").strip().splitlines()
+            print("[agent-task-node] project-memory: embed pass for %s — %s"
+                  % (product, tail[-1] if tail else "no output"), flush=True)
+        except Exception as e:                                  # noqa: BLE001
+            print("[agent-task-node] project-memory: embed pass failed: %s" % e, flush=True)
+        finally:
+            _EMBED_LOCK.release()
+
+    threading.Thread(target=run, daemon=True, name="embed-backlog").start()
 
 
 def fetch_memory(query):
