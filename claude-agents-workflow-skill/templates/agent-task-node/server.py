@@ -1265,6 +1265,14 @@ def _report_for_pm(report):
 
 
 def prompt_pm_review(p):
+    # What this ROLE told the builder while the work was in flight.
+    #
+    # A node may consult `pm` mid-run (see run_consult). The session that answered is never
+    # the session judging here — that separation is the whole reason consulting the judge's
+    # role is safe. But a judge that cannot SEE the advice is grading an answer with the
+    # question torn off, and "the PM said it was fine" becomes unfalsifiable in both
+    # directions: the builder cannot cite it and the judge cannot weigh it.
+    consults = consultations_of(p.get("_piid"))
     return (
         "You are the PM readiness gate (your PM skill carries the full rubric). A gated PR was "
         "produced by the SA -> SD -> (UI/UX) -> Implement pipeline. Decide whether it satisfies the "
@@ -1295,6 +1303,13 @@ def prompt_pm_review(p):
            f"say so in the verdict so the trail shows the spec moved; a note asking something the PR "
            f"cannot answer -> HOLD quoting it: {str(p.get('managerNotes') or p.get('manager_notes'))[:6000]}\n"
            if (p.get('managerNotes') or p.get('manager_notes')) else "")
+          + (f"- CONSULTATIONS raised DURING the build — questions nodes asked mid-run and the "
+             f"answers they were given (the advising sessions were independent of you and are NOT "
+             f"binding). Read them as CONTEXT FOR THE VERDICT, not as approval: where the PR did "
+             f"something because it was told to, a resulting gap is a defect in the ADVICE rather "
+             f"than in the builder's diligence, and your feedback should say which. Where the PR "
+             f"IGNORED an answer it asked for, that is a finding: "
+             f"{json.dumps(consults, ensure_ascii=False)[:5000]}\n" if consults else "")
         # PM runs again on the same feature when it NOGOs. Without this it re-derives last
         # round's judgement from scratch and cannot tell a recurring gap from a new one —
         # which is the difference between NOGO and HOLD in its own rubric.
@@ -2696,6 +2711,7 @@ def run_claude_generic(payload):
         brief = project_brief(payload, _ensure_checkout(payload))
         if brief:
             prompt = prompt + "\n" + brief
+        prompt = prompt + consult_brief(payload)
     schema = json.dumps(_generic_schema(payload))
     return _invoke_claude(prompt, schema, payload, 1800)
 
@@ -4481,6 +4497,192 @@ def uiux_audit_flow(payload):
             "started": started, "skipped": skipped, "triggered": triggered, "cap": cap}
 
 
+# ── consult: ask a peer role a question WITHOUT waiting for the next loop ─────────────
+#
+# The flow is sequential — SA -> SD -> uiux -> implement -> test -> PM — and only `implement`
+# has an inbound edge from the retry gateways. So a design node that is unsure of something
+# has, until now, three options: guess, refuse its whole turn, or write the guess into the
+# spec and let implement build it. Measured cost of the third: PM verdict arrives one full
+# round later (implement up to 55 min + test + PM), and the loop returns to `implement` —
+# never to the node whose assumption was wrong. 153 implement runs produced 3 GO.
+#
+# This is the fourth option: a question answered inside the asking node's own execution.
+#
+# THREE PROPERTIES THAT ARE NOT NEGOTIABLE, each for a reason that already bit us:
+#
+#  1. ALWAYS A FRESH SESSION. `sid` is stripped, never resumed. An adviser that accumulates
+#     the asker's framing across a run is just the asker's session wearing another name —
+#     the thing `do_pm_review`'s "no with_sid" and `do_audit`'s "clean-slate" already refuse.
+#  2. EVERY EXCHANGE IS RECORDED, and the record reaches the later PM review. A judge that
+#     cannot see what its own role told the builder mid-flight is being asked to grade an
+#     answer without the question. This is what makes consulting `pm` safe: the SESSION that
+#     advised is not the SESSION that judges, and the judge is handed the transcript.
+#  3. BOUNDED. Each consult is a real model call. A per-instance cap, enforced by counting
+#     what has already been recorded, so a loop between two roles cannot bill forever.
+_CONSULT_ROLES = {
+    "pm":   "arcana-pm-skill",             # scope / priority / "is this what was asked for"
+    "spec": "app-requirements-skill",      # SA + SD: requirements and design decisions
+    "uiux": "app-uiux-designer.skill",     # interaction and layout intent
+}
+_CONSULT_CAP = int(os.environ.get("CONSULT_CAP", "8") or 8)
+
+
+def consult_brief(payload):
+    """The instruction that tells a design node this channel exists.
+
+    Grammar matters more than content here, and that is measured rather than assumed: the same
+    capability offered as 「你可以主動查」 was used 0 times across four nodes; rewritten as a
+    command it was used 15. An optional capability loses to whatever concrete task the model
+    already has, and it always has one. So — imperative, with the trigger stated as something
+    a script could evaluate, and with the cost of skipping it named.
+    """
+    piid = payload.get("_piid") or ""
+    node = payload.get("_node") or ""
+    if not piid:
+        # No instance id means nothing could be recorded, and an unrecorded consult is the one
+        # shape this must not take. Say nothing rather than invite an untraceable question.
+        return ""
+    return (
+        "\n\n## 有疑問就當場問,不要寫成假設\n"
+        "你只會執行**一次**。BPMN 裡沒有任何邊回到你 —— PM 退件退的是 implement,不是你。\n"
+        "所以你寫進產出的每一個假設,下游都會當成需求蓋出來,而且錯了也不會回到你手上重寫。\n\n"
+        "**規則(可機械判定):你正要寫下一個舉不出依據的斷言時,先問。**\n"
+        "「舉不出依據」= 你指不出 SRS / SDD / 需求原文 / 經理留言 / 這個產品的歷史對話裡的某一句。\n\n"
+        "```bash\n"
+        "curl -s -X POST http://localhost:8090/task/consult -H 'Content-Type: application/json' \\\n"
+        "  -d '{\"role\":\"pm\",\"question\":\"你的問題\",\"_piid\":\"%s\",\"_node\":\"%s\"}'\n"
+        "```\n"
+        "`role` 只有三個:`pm`(範圍/優先序/這是不是人要的)、`spec`(需求與設計決定)、"
+        "`uiux`(互動與版面意圖)。\n\n"
+        "回答你的是一個**全新、獨立**的 session,不是後來替你評分的那一個 —— 它不能核准你的產出,\n"
+        "只能回答問題。每一次問答都會被記錄並交給後來的 PM 判定,所以**照著答案做是安全的,\n"
+        "而假裝沒問過不是**。每個實例上限 %d 次。\n"
+    ) % (piid, node, _CONSULT_CAP)
+
+
+def _consult_log_path(piid):
+    """Where one instance's consultations are recorded. None when there is nowhere to put it."""
+    d = os.environ.get("CONSOLE_DIR", "")
+    if not (d and piid):
+        return None
+    keep = "".join(c for c in str(piid) if c.isalnum() or c in "-_")
+    return os.path.join(d, keep + "__consultations.jsonl")
+
+
+def consultations_of(piid):
+    """Every question asked during this instance, oldest first. [] when none or unreadable."""
+    p = _consult_log_path(piid)
+    if not (p and os.path.isfile(p)):
+        return []
+    out = []
+    try:
+        with open(p, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    out.append(json.loads(line))
+                except ValueError:
+                    # A malformed line is evidence of a truncated write, not a reason to
+                    # report "no questions were asked".
+                    out.append({"role": "?", "question": "(unparseable record)", "raw": line[:200]})
+    except OSError:
+        return []
+    return out
+
+
+def run_consult(payload):
+    role = str(payload.get("role") or "").strip().lower()
+    question = str(payload.get("question") or "").strip()
+    piid = payload.get("_piid") or payload.get("piid") or ""
+    asker = str(payload.get("_node") or payload.get("node") or "?")
+
+    if role not in _CONSULT_ROLES:
+        return {"answered": False,
+                "error": "unknown role %r — choose one of: %s"
+                         % (role, ", ".join(sorted(_CONSULT_ROLES)))}
+    if not question:
+        return {"answered": False, "error": "`question` is required"}
+
+    prior = consultations_of(piid)
+    if len(prior) >= _CONSULT_CAP:
+        return {"answered": False, "capped": True,
+                "error": "this instance has already asked %d questions (cap %d). Decide with "
+                         "what you have and record the assumption in your output."
+                         % (len(prior), _CONSULT_CAP)}
+
+    prompt = (
+        "你正在被流程中的另一個節點即時諮詢。你**不是**在評分任何東西,也不會看到成品。\n\n"
+        "## 提問者\n節點:`%s`\n\n"
+        "## 問題\n%s\n\n"
+        "## 怎麼回答\n"
+        "- 直接回答,不要重述問題。**這個回答會被寫進規格並照著實作。**\n"
+        "- 你若沒有足夠資訊回答,就說你缺什麼 —— 猜一個聽起來合理的答案,"
+        "比說「我不知道」貴得多,因為下游會把它當成需求蓋出來。\n"
+        "- 這個產品自己的歷史對話可以查(vsearch / csearch),先查再答。\n"
+    ) % (asker, question)
+
+    # A clean payload: the adviser inherits the instance's identity (so it can read the repo
+    # and this product's memory) but NOT the asker's session, and it writes under its own node
+    # name so it cannot land in the asker's workspace or clobber its Claude config dir.
+    sub = {k: v for k, v in payload.items()
+           if k in ("repo", "base", "slug", "backlogId", "workspaceFrom", "srs", "sdd",
+                    "uiuxSpec", "feature_request", "manager_notes", "managerNotes")}
+    sub["ai_skill"] = _CONSULT_ROLES[role]
+    sub["_piid"] = piid
+    sub["_node"] = "consult-%s" % role
+    sub["skip_permissions"] = True          # it needs Bash for vsearch / gh, nothing more
+    sub.pop("sid", None)                    # property 1, enforced rather than assumed
+
+    schema = json.dumps({
+        "type": "object",
+        "properties": {
+            "answer": {"type": "string"},
+            "confident": {"type": "boolean"},
+            "missing": {"type": "string"},
+        },
+        "required": ["answer"],
+    })
+    try:
+        res = _invoke_claude(prompt, schema, sub, int(payload.get("wall") or 420))
+    except Exception as e:                                     # noqa: BLE001
+        return {"answered": False, "error": "consult failed: %s" % e}
+
+    answer = (res or {}).get("answer") if isinstance(res, dict) else str(res)
+    record = {
+        "role": role,
+        "askedBy": asker,
+        "question": question[:2000],
+        "answer": str(answer or "")[:4000],
+        "confident": (res or {}).get("confident") if isinstance(res, dict) else None,
+        "missing": (res or {}).get("missing") if isinstance(res, dict) else None,
+    }
+    p = _consult_log_path(piid)
+    if p:
+        try:
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except OSError as e:
+            # Answer anyway, but say the record failed. An unrecorded consult is the one shape
+            # this feature must never take silently: advice with no trail is how "PM said it
+            # was fine" becomes unfalsifiable.
+            record["recorded"] = False
+            record["recordError"] = str(e)
+            print("[agent-task-node] consult NOT recorded (%s): %s" % (p, e), flush=True)
+            return dict(record, answered=True)
+    else:
+        record["recorded"] = False
+        record["recordError"] = "CONSOLE_DIR unset — nothing to write to"
+        print("[agent-task-node] consult NOT recorded: CONSOLE_DIR unset", flush=True)
+        return dict(record, answered=True)
+
+    print("[agent-task-node] consult %s -> %s (%d/%d this instance)"
+          % (asker, role, len(prior) + 1, _CONSULT_CAP), flush=True)
+    return dict(record, answered=True, recorded=True, asked=len(prior) + 1, cap=_CONSULT_CAP)
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, obj):
         body = json.dumps(obj).encode()
@@ -4509,7 +4711,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         task = self.path.rsplit("/", 1)[-1]
-        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "uiux-audit", "site", "smoke", "dispose-pr"):
+        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "uiux-audit", "site", "smoke", "dispose-pr", "consult"):
             return self._send(404, {"error": f"unknown task {task}"})
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -4547,6 +4749,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = site_flow(payload)
             elif task == "dispose-pr":
                 result = dispose_pr(payload)
+            elif task == "consult":
+                # A node asking a peer role a question, inside its own execution. Never
+                # resumes a session, always recorded, capped per instance — see run_consult.
+                result = run_consult(payload)
             elif task == "test":
                 result = test_flow(payload)
             elif task == "uiux-audit":
