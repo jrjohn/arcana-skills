@@ -3133,10 +3133,19 @@ def implement_flow(payload):
             instruction
             + "\n\n## 目標\n在目前工作目錄（已 clone 的 repo）實作此功能，嚴格遵守 repo 既有架構慣例"
               "（你載入的 developer skill 已含 Clean Arch / MVVM / arch-qube 規範），並**寫對應單元測試**。\n"
-              "## 交付前自我驗證（重要）\n開 PR 前**必須**讓受影響的子專案在本地編譯通過：進到該子專案（例如 `dashboard/`）跑 "
+              "## 交付前自我驗證（重要）\n交付前**必須**讓受影響的子專案在本地編譯通過：進到該子專案（例如 `dashboard/`）跑 "
               "`npm ci && npm run build`，有編譯錯就修到綠；並為新功能寫**會通過的單元測試**。**不要交出沒編譯過的碼**"
               "——下游 CI（build + ng test + arch-qube + Sonar）會擋，交紅碼只會被 PM NOGO 退回重做、白費一輪。"
               "時間預算內以「編得過、架構乾淨、測試通過」為第一優先；最後簡述你改了什麼。\n"
+              # This section exists because the sentence above used to read 「開 PR 前必須…」,
+              # which told the agent that opening the PR was its job. It did: on 2026-07-31 it
+              # created its own branch and ran `gh pr create` 96 seconds before Phase C ran,
+              # producing two byte-identical PRs for one round. Only the flow's own PR is
+              # tracked, so the agent's became an orphan nothing would ever close.
+              "## 不要自己開 PR、不要自己建分支\n**寫完就停，把改動留在工作目錄。** 分支、commit、push、"
+              "開 PR 全部由流程在你之後確定性地執行——它要把 PR 編號寫回流程變數，CI 與後續的 rework "
+              "回合都綁在那個編號上。你自己開的 PR 流程看不見：沒有 CI 綁定、沒有 merge-flow、"
+              "沒有任何節點會來結掉它，只會變成沒人處理的孤兒 PR。\n"
             + ("\n## 設計 (SRS/SDD)\n```json\n" + design_str + "\n```\n" if design_str else "")
             # The exam paper, handed over before the work rather than after it.
             + _acceptance_brief(payload, workdir)
@@ -3264,14 +3273,63 @@ def implement_flow(payload):
         # Reported as an error, "a pull request for branch X already exists" landed in the
         # `pr` process variable and the PM node read it as a failed delivery: the loop was
         # working exactly as designed and the flow said it had broken.
-        existing = subprocess.run(
-            ["gh", "pr", "list", "-R", repo, "--head", branch, "--state", "open",
-             "--json", "url", "--jq", ".[0].url"],
-            capture_output=True, text=True, timeout=120, env=env).stdout.strip()
+        #
+        # But `--head <branch>` asks "is there a PR for this BRANCH", and that is the wrong
+        # question. Measured on 2026-07-31: the implement agent opened its own PR from its own
+        # branch name (`feat/blocking-reasons-invariant`) 96 seconds before this code ran, so
+        # the branch listing came back empty and a second, byte-identical PR was opened for the
+        # same commit (#107 / #108, `gh pr diff` sha 80c11052f312ac75, one implement run).
+        # The flow only ever knew about the second: `pr.prUrl` pointed at #108, and #107 became
+        # an orphan — no CI binding, no merge-flow, and nothing in any flow that would ever
+        # close it. That is a mechanism for accumulating PRs, not a one-off.
+        #
+        # So ask the question that matters: is there already an open PR AT THIS COMMIT?
+        # Branch names are ours to choose; the commit is the work.
+        head_sha = _git("rev-parse", "HEAD").stdout.strip()
+        existing, superseded = "", []
+        if head_sha:
+            same_commit = subprocess.run(
+                ["gh", "pr", "list", "-R", repo, "--state", "open", "--limit", "100",
+                 "--json", "url,headRefName,headRefOid",
+                 "--jq", '.[] | select(.headRefOid == "%s") | .url + " " + .headRefName'
+                 % head_sha],
+                capture_output=True, text=True, timeout=120, env=env).stdout
+            for line in same_commit.splitlines():
+                url, _, ref = line.strip().partition(" ")
+                if not url:
+                    continue
+                if ref == branch:
+                    existing = existing or url
+                    continue
+                # Same commit, different branch: a duplicate of this exact work that this flow
+                # does not track. Retire it and say why. `branch` is derived from the slug and
+                # is where every later rework round force-pushes, so the orphan's branch would
+                # go stale the moment this feature iterates — adopting it instead would point
+                # the PR at a commit that stops moving.
+                subprocess.run(
+                    ["gh", "pr", "close", url, "-R", repo, "--comment",
+                     "Superseded: same commit `%s` is already delivered by this feature's "
+                     "tracked branch `%s`. This PR was opened outside the flow, so nothing in "
+                     "sdlc-code-flow references it — no CI binding, no merge-flow, no node that "
+                     "would ever close it. Closing so the duplicate does not accumulate; the "
+                     "work itself is not lost." % (head_sha[:12], branch)],
+                    capture_output=True, text=True, timeout=120, env=env)
+                superseded.append(url)
+                print("[agent-task-node] closed duplicate PR at the same commit: %s "
+                      "(branch %s, ours is %s)" % (url, ref or "?", branch), flush=True)
+        if not existing:
+            # Fall back to the branch listing: a PR can be open for this branch at an OLDER
+            # commit (a rework round that has just pushed new commits), which the sha match
+            # above cannot see.
+            existing = subprocess.run(
+                ["gh", "pr", "list", "-R", repo, "--head", branch, "--state", "open",
+                 "--json", "url", "--jq", ".[0].url"],
+                capture_output=True, text=True, timeout=120, env=env).stdout.strip()
         if existing:
             return {"prUrl": existing, "branch": branch, "summary": summary,
                     "filesChanged": files_changed, "pushed": True,
-                    "buildStatus": build_status, "prReused": True}
+                    "buildStatus": build_status, "prReused": True,
+                    "supersededPrs": superseded}
         pr = subprocess.run(
             ["gh", "pr", "create", "-R", repo, "--base", base, "--head", branch,
              "--title", "feat: %s" % slug, "--body", body],
@@ -3286,12 +3344,14 @@ def implement_flow(payload):
             if recovered:
                 return {"prUrl": recovered, "branch": branch, "summary": summary,
                         "filesChanged": files_changed, "pushed": True,
-                        "buildStatus": build_status, "prReused": True}
+                        "buildStatus": build_status, "prReused": True,
+                        "supersededPrs": superseded}
             return {"error": "pr create failed: %s" % (pr.stderr or pr.stdout)[-500:],
                     "branch": branch, "filesChanged": files_changed}
         pr_url = pr.stdout.strip().splitlines()[-1] if pr.stdout.strip() else ""
         return {"prUrl": pr_url, "branch": branch, "summary": summary,
-                "filesChanged": files_changed, "pushed": True, "buildStatus": build_status}
+                "filesChanged": files_changed, "pushed": True, "buildStatus": build_status,
+                "supersededPrs": superseded}
     except subprocess.TimeoutExpired:
         return {"error": "implement timed out"}
     except RateLimitError:
