@@ -33,6 +33,7 @@ import re
 import time
 import hashlib
 import tempfile
+import uuid
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -1378,7 +1379,22 @@ def _resume(payload):
     session.
     """
     sid = payload.get("sid") or payload.get("_sid")
-    return ["--resume", str(sid)] if sid else []
+    if not sid:
+        return []
+    # Two ways to name a session, and they are not interchangeable.
+    #
+    # `--resume <id>` continues an id the CLI already owns; it fails if that session does not
+    # exist yet. `--session-id <uuid>` CREATES a session under an id WE chose. The second is
+    # what lets a caller derive an id (uuid5 over something stable) instead of discovering it
+    # — no id to persist, no lookup table, and the same inputs always name the same thread on
+    # any machine, because sessions live under ~/.claude/projects/.
+    #
+    # Verified on CLI 2.1.185 in this image:
+    #   claude -p --session-id <uuid> 'reply OK1'          -> OK1
+    #   claude -p --resume     <uuid> 'what did you reply' -> "OK1"
+    if str(payload.get("sid_mode") or "").lower() == "new":
+        return ["--session-id", str(sid)]
+    return ["--resume", str(sid)]
 
 
 def _skill_flags(payload):
@@ -4510,9 +4526,14 @@ def uiux_audit_flow(payload):
 #
 # THREE PROPERTIES THAT ARE NOT NEGOTIABLE, each for a reason that already bit us:
 #
-#  1. ALWAYS A FRESH SESSION. `sid` is stripped, never resumed. An adviser that accumulates
-#     the asker's framing across a run is just the asker's session wearing another name —
-#     the thing `do_pm_review`'s "no with_sid" and `do_audit`'s "clean-slate" already refuse.
+#  1. A THREAD OF ITS OWN — never the asker's, never the judge's. The asker's `sid` is
+#     dropped; the adviser runs under an id derived from (instance, role) via uuid5, created
+#     with `--session-id` and continued with `--resume`. It therefore remembers what it told
+#     THIS instance (an adviser that starts cold every time re-reads the repo per question and
+#     can contradict itself an hour later, with both answers already in the spec) while
+#     sharing nothing with the session that produced the work or the one that will judge it —
+#     `do_pm_review` discards its own sid, so there is nothing there to resume even by
+#     accident.
 #  2. EVERY EXCHANGE IS RECORDED, and the record reaches the later PM review. A judge that
 #     cannot see what its own role told the builder mid-flight is being asked to grade an
 #     answer without the question. This is what makes consulting `pm` safe: the SESSION that
@@ -4633,7 +4654,27 @@ def run_consult(payload):
     sub["_piid"] = piid
     sub["_node"] = "consult-%s" % role
     sub["skip_permissions"] = True          # it needs Bash for vsearch / gh, nothing more
-    sub.pop("sid", None)                    # property 1, enforced rather than assumed
+
+    # The adviser gets a thread of its own: one per (instance, role), derived rather than
+    # stored. `--session-id <uuid5>` names it on first use, `--resume` continues it after.
+    #
+    # This is NOT the asker's session (that one is never threaded in — `sid` from the payload
+    # is dropped below) and NOT the judge's (do_pm_review discards its own sid entirely, so
+    # there is nothing there to resume). It is a third thread, and the distinction is the
+    # whole design: an adviser that starts cold on every question re-reads the repo each time
+    # and can contradict what it said an hour earlier in the same run, which is worse than
+    # useless when both answers end up in the spec.
+    #
+    # Derived, not persisted: uuid5 over (piid, role) means the same instance always reaches
+    # the same thread from any process, with no id to store and nothing to go stale. Sessions
+    # live under ~/.claude/projects/, so this survives a container restart.
+    #
+    # The cost of continuity is that an adviser can, in principle, be walked toward agreement
+    # over many turns. Three things bound it: the per-instance cap, the fact that every turn
+    # is recorded and handed to the judge, and that its answers were never binding.
+    sub.pop("sid", None)                    # the ASKER's session, explicitly dropped
+    sub["sid"] = str(uuid.uuid5(uuid.NAMESPACE_URL, "consult:%s:%s" % (piid, role)))
+    sub["sid_mode"] = "resume" if any(c.get("role") == role for c in prior) else "new"
 
     schema = json.dumps({
         "type": "object",
@@ -4813,8 +4854,23 @@ def _announce_optional_capabilities():
          "per-product recall — set PROJECT_MEMORY=1 in .env, NOT on the compose command line"),
         ("console-archive", bool(os.environ.get("ARCHIVE_PG")),
          "AI transcripts into the team archive (ARCHIVE_PG)"),
-        ("manager-notes", bool(os.environ.get("RBAC_SVC_USER")),
-         "mid-run notes from the manager (RBAC_SVC_USER/RBAC_SVC_PASS)"),
+        # manager-notes is NOT listed, and the omission is the fix.
+        #
+        # This line used to read `bool(os.environ.get("RBAC_SVC_USER"))`, and it was wrong in
+        # the way this whole function exists to prevent: it announced the state of a capability
+        # this process does not own. `manager_notes()` lives in the WORKER (main.rs), which
+        # holds the service identity; `RBAC_SVC_USER` is declared on the `task-worker` compose
+        # service and was never meant to be in this container's environment at all. So the
+        # answer here was always "off", regardless of the truth.
+        #
+        # Measured 2026-07-31: it printed `manager-notes off` while the worker was authenticating
+        # as `svc-test-agent` and `GET /designer/chat/history` returned HTTP 200. A false red on
+        # a startup banner is cheap; a false red that sends someone provisioning credentials that
+        # already work is not — and that is exactly what it cost.
+        #
+        # A checker that reports on a neighbour's state is guessing. This container consumes
+        # `manager_notes` from the payload it is handed; whether that payload was populated is
+        # the worker's fact to state, in the worker's log.
     ):
         print("[agent-task-node] %-16s %s  (%s)" % (name, "ON " if on else "off", note), flush=True)
     if PROJECT_MEM:
