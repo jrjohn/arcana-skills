@@ -3127,6 +3127,47 @@ def _ensure_claude_config():
         pass
 
 
+def write_specs(workdir, slug, payload):
+    """把這一輪的 SRS / SDD / UI-UX 規格寫進 repo,跟著同一個 gated PR 進版控。
+
+    在此之前,SA 與 SD 節點產出的規格只活在流程變數裡 —— 流程一結束就沒了。後果是
+    2026-08-02 使用者問「用 SDD 確認每個 function 的情境覆蓋」時,**沒有 SDD 可查**:
+    docs/ 底下只有一份靠 CDP 走查「實際找得到哪些路由」倒推的功能清單,也就是說
+    **規格漏掉的功能,那份清單同樣看不到**。
+
+    寫在 implement 這一步,理由是它是唯一同時握有三份規格、又即將 commit 的節點
+    (SA/SD 各自在別的工作區跑,產出經流程變數傳到這裡)。規格與實作因此永遠在同一個
+    commit —— 不會有「程式碼進了 main 而規格留在某個流程實例裡」這種事。
+
+    回傳實際寫出的相對路徑。沒有內容的規格**不寫空檔**:一份空的 SDD 比沒有 SDD 更糟,
+    它讓覆蓋率的分母看起來有東西。
+    """
+    written = []
+    if not slug:
+        return written
+    base = os.path.join("docs", "specs", str(slug))
+    node_of = {"srs": "SA", "sdd": "SD", "uiuxSpec": "UI/UX"}
+    for name, key in (("SRS.md", "srs"), ("SDD.md", "sdd"), ("UIUX.md", "uiuxSpec")):
+        body = payload.get(key)
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body, ensure_ascii=False, indent=2)
+        body = (body or "").strip()
+        if not body:
+            continue
+        rel = os.path.join(base, name)
+        dst = os.path.join(workdir, rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        header = (
+            "<!-- \u7531 sdlc-code-flow \u7684 %s \u7bc0\u9ede\u7522\u51fa\uff0c\u96a8 feature `%s` \u7684 gated PR \u9032\u7248\u63a7\u3002\n"
+            "     \u624b\u6539\u9019\u88e1\u4e0d\u6703\u56de\u5230\u6d41\u7a0b \u2014\u2014 \u8981\u6539\u898f\u683c\u8acb\u8d70\u6d41\u7a0b\u3002 -->\n\n"
+            % (node_of[key], slug)
+        )
+        with open(dst, "w") as f:
+            f.write(header + body + "\n")
+        written.append(rel)
+    return written
+
+
 def implement_flow(payload):
     """AI code-implementation → GATED PR.
 
@@ -3299,6 +3340,9 @@ def implement_flow(payload):
         if gate is not None and not build_status.startswith("fix-invoke"):
             build_status = "RED: %s build failing after %d fix attempt(s)" % (gate[0], _gate_tries)
 
+        spec_files = write_specs(workdir, slug, payload)
+        if spec_files:
+            log("specs -> version control: %s" % ", ".join(spec_files))
         _git("add", "-A")
         cm = _git("-c", "user.email=agent@arcana.boo", "-c", "user.name=AI-BPM Implementer",
                   "commit", "-m", "feat: %s" % slug)
