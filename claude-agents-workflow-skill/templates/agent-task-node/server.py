@@ -2807,6 +2807,53 @@ def run_claude_generic(payload):
     return _invoke_claude(prompt, schema, payload, 1800)
 
 
+def run_smoke(payload):
+    """合併之後,main 還活著嗎 —— 純機械,不叫模型判斷。
+
+    2026-08-03 之前這個節點沒有自己的 verb,worker 端的名字掉進 fallback 而被送去
+    `decide`(ci-flow 的收尾決策)。`decide` 問的是「修復迴圈的最終結果如何」,而
+    merge-flow 是綠色 PR 觸發的、根本沒有修復紀錄,所以它每次都看到空白、每次都正確地
+    回答 escalate —— 而那個 escalate 走進一條沒有閘道的直線,無人接收。
+
+    三值,對應 BPMN 的 smokeGate:
+      ok       合併後 main 的最新 commit,狀態是 success
+      broken   狀態是 failure / error
+      unknown  查不到、或還在跑。**不是 ok** —— 一個沒人能確認的合併後狀態,
+               不該長得像通過。閘道把 unknown 和 broken 一起送去升級。
+    """
+    pr = payload.get("prUrl") or ""
+    m = re.search(r"github\.com[:/]+([^/]+)/([^/]+?)(?:\.git)?(?:/|$)", pr)
+    if not m:
+        return {"verdict": "unknown", "reason": "cannot parse repo from prUrl: %r" % pr}
+    repo_url = "%s/%s" % (m.group(1), m.group(2))
+
+    r = subprocess.run(["gh", "api", "repos/%s/commits/main/status" % repo_url],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return {"verdict": "unknown",
+                "reason": "gh api failed for %s: %s" % (repo_url, (r.stderr or "").strip()[:200])}
+    try:
+        d = json.loads(r.stdout)
+    except Exception as e:
+        return {"verdict": "unknown", "reason": "unparseable status payload: %s" % e}
+
+    state = d.get("state") or ""
+    ctx = [(c.get("context"), c.get("state")) for c in (d.get("statuses") or [])]
+    # 一個沒有任何檢查的 commit,state 也會是 "pending" 或 "success"(GitHub 對空清單
+    # 回 pending)。空清單不是綠 —— 這正是這一整輪反覆學到的那一條。
+    if not ctx:
+        return {"verdict": "unknown",
+                "reason": "main@%s 沒有任何 status —— 空的檢查清單不是綠燈" % repo_url}
+    if state == "success":
+        return {"verdict": "ok", "reason": "main 全綠:%s" % ", ".join("%s=%s" % c for c in ctx)}
+    if state in ("failure", "error"):
+        bad = [c for c in ctx if c[1] in ("failure", "error")]
+        return {"verdict": "broken",
+                "reason": "合併後 main 是紅的:%s" % ", ".join("%s=%s" % c for c in bad)}
+    return {"verdict": "unknown",
+            "reason": "main 狀態是 %r(通常是建置還在跑):%s" % (state, ", ".join("%s=%s" % c for c in ctx))}
+
+
 def run_release(payload):
     """Deterministic release automation (no AI): run release-please for the
     repo of the just-merged PR. github-release cuts a tag+Release+changelog if
@@ -4893,6 +4940,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if task == "release":
                 result = run_release(payload)
+            elif task == "smoke":
+                result = run_smoke(payload)
             elif task == "execute":
                 result = run_claude_generic(payload)
             elif task == "publish-flow":
