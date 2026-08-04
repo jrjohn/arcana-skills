@@ -354,10 +354,38 @@ def prompt_merge(p):
         f"PR {p.get('prUrl')} reported a green verifying build. "
         "Autonomous-merge policy (ALL verified-green PRs, any type — feature, hardening, dep): "
         "verify with `gh pr view` and `gh pr checks` that the PR is OPEN, not a draft, has no "
-        "merge conflicts, and EVERY status check listed by `gh pr checks` is green/passing (treat ALL checks as required, not just one). For repos that run multiple pipelines each posting their own context (e.g. arcana-ai-bpm posts `ci/rust` AND `ci/angular`), require every per-pipeline context green; never treat the shared `continuous-integration/jenkins/pr-merge` as authoritative, since whichever pipeline finishes last overwrites it. If so, squash-merge "
-        "it: `gh pr merge <url> --squash --delete-branch`. Do NOT merge if ANY check is "
-        "pending/failing, the PR is draft/closed/already-merged, or there are conflicts — in those "
-        "cases take no action. Return whether you merged and why/why not."
+        "merge conflicts, and EVERY status check listed by `gh pr checks` is green/passing "
+        "(treat ALL checks as required, not just one). For repos with no checks configured, "
+        "an empty check list is not 'all green' — say so and take no action.\n\n"
+        "PENDING IS NOT A REFUSAL — FIRST ASK WHETHER A BUILD IS ACTUALLY RUNNING.\n"
+        "A pending check means the answer is not known yet, not that the answer is no. This "
+        "distinction cost a full 20-minute build cycle on 2026-08-03: build #2 went green and "
+        "handed the PR over, a redundant branch-indexing build started 7 seconds later and reset "
+        "every status to pending, and this step — told only 'do not merge if any check is "
+        "pending' — walked away. Nothing was wrong; the handover was simply thrown away.\n"
+        "But blind waiting is the wrong fix, because a pending status with nothing running is a "
+        "DIFFERENT situation from one with a build in flight, and only the second one resolves "
+        "itself. So decide which you are in, mechanically:\n"
+        "  1. `gh pr checks <url> --json name,state,link` — take the `link` of each pending "
+        "     check. It is the Jenkins build URL that owns that status.\n"
+        "  2. `curl -s -u admin:admin \"<link>/api/json\"` and read `building`.\n"
+        "     The link says `localhost:8079` because Jenkins wrote it from the host's point of "
+        "     view. From inside this container localhost is this container — swap the host part "
+        "     for `host.docker.internal:8079` (verified reachable 2026-08-03; "
+        "     `aibpm-jenkins:8080` also works). Leaving it as localhost gives a connection "
+        "     error that looks exactly like 'no build running', which would turn a waiting "
+        "     situation into a false orphan report.\n"
+        "  3. `building: true`  -> a build IS in flight. Wait for it: re-check every ~60s, up "
+        "     to 20 minutes. Merge as soon as every check is green.\n"
+        "  4. `building: false` (or the URL is unreachable) while the status is still pending "
+        "     -> the status is ORPHANED: no build will ever clear it. Do NOT wait out the 20 "
+        "     minutes. Report it as orphaned, name the check, and take no action — a status "
+        "     nobody is going to update is a real finding, and sitting on it hides it.\n"
+        "Give up early and report if any check turns FAILING, the PR closes, or the wait "
+        "expires ('still pending after 20 min' is a real answer, not a failure).\n\n"
+        "Merge with: `gh pr merge <url> --squash --delete-branch`. Do NOT merge if any check is "
+        "FAILING, the PR is draft/closed/already-merged, or there are conflicts. "
+        "Return whether you merged and why/why not — and if you waited, say how long."
     )
 
 def prompt_sweep(p):
@@ -529,6 +557,15 @@ _PROFILE_DEFAULTS = {
             "routesPath": "dashboard/src/app/app.routes.ts"},
     "personas": ["簽核者", "申請人", "管理員"],
     "qualityBar": {"coverage": 80, "archQube": 90},
+    # 受架構稽核的目錄。`qualityBar.archQube` 從一開始就宣告了 90 這個門檻,而在
+    # 2026-08-03 之前**沒有任何程式讀過它** —— PM 的審查提示裡寫著「arch-qube>=90」,
+    # 但沒有東西去算那個數字。這裡是它的輸入。
+    #
+    # 這份預設是 aaf 的。別的產品沒宣告 archQube 時,下面這兩個目錄在它的樹裡不存在,
+    # 結論會是 notApplicable(可見、不擋);宣告了卻找不到才是 notRun(擋)。差別在
+    # 「誰說了這裡有東西」——沿用預設不算誰說過。
+    "archQube": {"targets": [{"dir": "dashboard", "framework": "angular"},
+                             {"dir": "arcana-cloud-rust", "framework": "rust"}]},
 }
 
 
@@ -1200,6 +1237,9 @@ def _load_profile(payload):
                     continue
                 loaded = json.loads(base64.b64decode(raw).decode("utf-8", "replace"))
                 _deep_merge(prof, loaded)
+                # 哪些頂層鍵是這個 repo **自己說的**。合併後的 prof 無法回答這件事,
+                # 而「宣告了卻對不上」與「沿用了預設而已」該有不同結論(見 archQube)。
+                prof["_declared"] = sorted(loaded.keys())
                 prof["_ref"] = ref
                 break
             except Exception:
@@ -2777,6 +2817,53 @@ def run_claude_generic(payload):
         prompt = prompt + consult_brief(payload)
     schema = json.dumps(_generic_schema(payload))
     return _invoke_claude(prompt, schema, payload, 1800)
+
+
+def run_smoke(payload):
+    """合併之後,main 還活著嗎 —— 純機械,不叫模型判斷。
+
+    2026-08-03 之前這個節點沒有自己的 verb,worker 端的名字掉進 fallback 而被送去
+    `decide`(ci-flow 的收尾決策)。`decide` 問的是「修復迴圈的最終結果如何」,而
+    merge-flow 是綠色 PR 觸發的、根本沒有修復紀錄,所以它每次都看到空白、每次都正確地
+    回答 escalate —— 而那個 escalate 走進一條沒有閘道的直線,無人接收。
+
+    三值,對應 BPMN 的 smokeGate:
+      ok       合併後 main 的最新 commit,狀態是 success
+      broken   狀態是 failure / error
+      unknown  查不到、或還在跑。**不是 ok** —— 一個沒人能確認的合併後狀態,
+               不該長得像通過。閘道把 unknown 和 broken 一起送去升級。
+    """
+    pr = payload.get("prUrl") or ""
+    m = re.search(r"github\.com[:/]+([^/]+)/([^/]+?)(?:\.git)?(?:/|$)", pr)
+    if not m:
+        return {"verdict": "unknown", "reason": "cannot parse repo from prUrl: %r" % pr}
+    repo_url = "%s/%s" % (m.group(1), m.group(2))
+
+    r = subprocess.run(["gh", "api", "repos/%s/commits/main/status" % repo_url],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return {"verdict": "unknown",
+                "reason": "gh api failed for %s: %s" % (repo_url, (r.stderr or "").strip()[:200])}
+    try:
+        d = json.loads(r.stdout)
+    except Exception as e:
+        return {"verdict": "unknown", "reason": "unparseable status payload: %s" % e}
+
+    state = d.get("state") or ""
+    ctx = [(c.get("context"), c.get("state")) for c in (d.get("statuses") or [])]
+    # 一個沒有任何檢查的 commit,state 也會是 "pending" 或 "success"(GitHub 對空清單
+    # 回 pending)。空清單不是綠 —— 這正是這一整輪反覆學到的那一條。
+    if not ctx:
+        return {"verdict": "unknown",
+                "reason": "main@%s 沒有任何 status —— 空的檢查清單不是綠燈" % repo_url}
+    if state == "success":
+        return {"verdict": "ok", "reason": "main 全綠:%s" % ", ".join("%s=%s" % c for c in ctx)}
+    if state in ("failure", "error"):
+        bad = [c for c in ctx if c[1] in ("failure", "error")]
+        return {"verdict": "broken",
+                "reason": "合併後 main 是紅的:%s" % ", ".join("%s=%s" % c for c in bad)}
+    return {"verdict": "unknown",
+            "reason": "main 狀態是 %r(通常是建置還在跑):%s" % (state, ", ".join("%s=%s" % c for c in ctx))}
 
 
 def run_release(payload):
@@ -4360,6 +4447,138 @@ def smoke_flow(payload):
     return out
 
 
+_ARCH_QUBE_IMAGE = os.environ.get("ARCH_QUBE_IMAGE", "arcana.boo/arcana/arch-qube:latest")
+
+
+def _arch_qube(payload):
+    """架構稽核,在 test 節點自己跑一次。
+
+    為什麼要在這裡跑,而不是「反正 CI 會擋」:CI **確實**會擋(Jenkinsfile 的兩個
+    Architecture Qube stage 是 `exit $AQ_RC`,threshold 90,實測 main #52 兩邊都是
+    100.0/100)。所以這不是補一個破洞,是把回饋提前 —— 今天 AI 在 test 節點自驗時
+    看不到自己有沒有違反架構,要等 PR 進 CI 才知道,然後整輪 rework。
+
+    三個判定分開回答,不混成一個布林(與這個檔案其他閘同一套):
+
+      applicable  這個產品有沒有宣告受稽核的目錄
+      ran         宣告的目錄存在、映像跑得起來、而且**真的掃到檔案**
+      score       真正的判定
+
+    「真的掃到檔案」不是多餘的:2026-08-03 實測 arch-qube 對空的 /src **零輸出、
+    exit 0**。所以 `docker cp` 哪天靜默寫不進去,這道閘就會變成永遠通過,而且看起來
+    和真的通過一模一樣。files==0 一律當 notRun。
+
+    容器用 `docker create` + `tar | docker cp` + `docker start`,不是 `-v`:這個
+    agent 跑在容器裡,`-v` 的來源路徑會被 docker HOST 解析,靜默掛上空目錄
+    (同 `_start_pr_backend` 的理由)。
+    """
+    prof = _load_profile(payload)
+    declared = "archQube" in (prof.get("_declared") or [])
+    targets = (prof.get("archQube") or {}).get("targets") or []
+    threshold = int((prof.get("qualityBar") or {}).get("archQube", 90))
+    out = {"applicable": bool(targets), "ran": False, "threshold": threshold,
+           "declared": declared, "targets": []}
+    if not targets:
+        out["reason"] = "no archQube.targets declared"
+        return out
+    try:
+        wd = _ensure_checkout(payload)
+    except Exception as e:
+        out["reason"] = "checkout unavailable: %s" % e
+        return out
+    if not wd or not os.path.isdir(wd):
+        out["reason"] = "checkout unavailable"
+        return out
+
+    keep = lambda v: "".join(c for c in str(v) if c.isalnum() or c in "-_") or "adhoc"
+    piid = keep(payload.get("_piid") or payload.get("slug") or "adhoc")
+    ran_any = False
+    for i, tgt in enumerate(targets):
+        d = os.path.join(wd, str(tgt.get("dir", "")))
+        fw = str(tgt.get("framework", ""))
+        rec = {"dir": tgt.get("dir"), "framework": fw, "ran": False, "score": None, "files": None}
+        if not os.path.isdir(d):
+            # 宣告過就是有人主張這裡有東西 —— 對不上要擋。沿用 aaf 預設不算主張。
+            rec["verdict"] = "notRun" if declared else "notApplicable"
+            rec["reason"] = "declared dir not in checkout" if declared else "aaf default dir absent"
+            out["targets"].append(rec)
+            continue
+        cname = "arch-qube-%s-%d" % (piid, i)
+        subprocess.run(["docker", "rm", "-f", cname], capture_output=True, timeout=120)
+        try:
+            c = subprocess.run(
+                ["docker", "create", "--name", cname, "-v", "/src", "-v", "/output",
+                 _ARCH_QUBE_IMAGE, "scan", "/src", "--framework", fw, "--no-ai", "--ci",
+                 "--format", "json", "-o", "/output", "--threshold", str(threshold)],
+                capture_output=True, text=True, timeout=300)
+            if c.returncode != 0:
+                rec["verdict"] = "notRun"
+                rec["reason"] = "container create failed: " + (c.stderr or "")[-200:]
+                out["targets"].append(rec)
+                continue
+            tar = subprocess.Popen(
+                ["tar", "--exclude=./.git", "--exclude=./node_modules", "--exclude=./dist",
+                 "--exclude=./target", "--exclude=./.angular", "--exclude=./coverage",
+                 "--exclude=./arch-qube-reports", "-C", d, "-cf", "-", "."],
+                stdout=subprocess.PIPE)
+            cp = subprocess.run(["docker", "cp", "-", cname + ":/src"],
+                                stdin=tar.stdout, capture_output=True, text=True, timeout=600)
+            tar.stdout.close(); tar.wait(timeout=60)
+            if cp.returncode != 0:
+                rec["verdict"] = "notRun"
+                rec["reason"] = "docker cp failed: " + (cp.stderr or "")[-200:]
+                out["targets"].append(rec)
+                continue
+            run = subprocess.run(["docker", "start", "-a", cname],
+                                 capture_output=True, text=True, timeout=1200)
+            rec["exitCode"] = run.returncode
+            rep = subprocess.run(["docker", "exec", cname, "cat", "/output/arch-qube.json"],
+                                 capture_output=True, text=True, timeout=120)
+            raw = rep.stdout
+            if not raw.strip():
+                # 容器已結束時 exec 不可用 —— 改用 cp 到 stdout 取不到,所以走 create 的
+                # 第二次讀:把檔案 cp 出來再讀。
+                tmp = os.path.join("/tmp", cname + ".json")
+                subprocess.run(["docker", "cp", cname + ":/output/arch-qube.json", tmp],
+                               capture_output=True, timeout=120)
+                if os.path.isfile(tmp):
+                    raw = open(tmp, encoding="utf-8", errors="replace").read()
+                    try:
+                        os.remove(tmp)
+                    except Exception:
+                        pass
+            try:
+                j = json.loads(raw)
+            except Exception:
+                j = {}
+            rec["score"] = j.get("score", j.get("overallScore"))
+            rec["files"] = j.get("files", j.get("fileCount"))
+            if not j:
+                rec["verdict"] = "notRun"
+                rec["reason"] = "no arch-qube.json produced (exit %s)" % run.returncode
+            elif not rec["files"]:
+                # 空掃描:實測 exit 0 且零輸出。通過一個沒看過任何檔案的稽核毫無意義。
+                rec["verdict"] = "notRun"
+                rec["reason"] = "scanned 0 files"
+            else:
+                rec["ran"] = True
+                ran_any = True
+                rec["verdict"] = "pass" if float(rec["score"] or 0) >= threshold else "gap"
+        except Exception as e:
+            rec["verdict"] = "notRun"
+            rec["reason"] = "arch-qube error: %s" % e
+        finally:
+            subprocess.run(["docker", "rm", "-f", cname], capture_output=True, timeout=120)
+        out["targets"].append(rec)
+
+    out["ran"] = ran_any
+    out["fail"] = sum(1 for r in out["targets"] if r.get("verdict") == "gap")
+    out["notRun"] = sum(1 for r in out["targets"] if r.get("verdict") == "notRun")
+    out["minScore"] = min([float(r["score"]) for r in out["targets"]
+                           if r.get("score") is not None] or [0]) if ran_any else None
+    return out
+
+
 def test_flow(payload):
     """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted docker.sock.
     T4: when a PR branch is known, the runner clones + builds it and serves a preview so e2e run
@@ -4479,6 +4698,19 @@ def test_flow(payload):
     apc = _gen_api_checks(payload)  # AC→API acceptance (non-UI features)
     if apc:
         cmd += ["-e", "API_CHECKS_B64=" + base64.b64encode(apc.encode()).decode()]
+    # 架構稽核:在 agent 端跑(它已經在 docker run,runner 不必新增 socket),結果交給
+    # runner 折進 allPass —— 判定要與其他閘出自同一個物件,否則兩邊會各說各話。
+    try:
+        aq = _arch_qube(payload)
+    except Exception as _aqe:                                    # noqa: BLE001
+        # 例外不能靜默成「沒有這個閘」。notRun 會在 runner 端擋下來。
+        aq = {"applicable": True, "ran": False, "reason": "agent-side error: %s" % _aqe,
+              "targets": [], "fail": 0, "notRun": 1}
+    print("[agent-task-node] arch-qube: applicable=%s ran=%s minScore=%s fail=%s notRun=%s"
+          % (aq.get("applicable"), aq.get("ran"), aq.get("minScore"),
+             aq.get("fail"), aq.get("notRun")), flush=True)
+    cmd += ["-e", "ARCH_QUBE_B64=" + base64.b64encode(
+        json.dumps(aq, ensure_ascii=False).encode()).decode()]
     cmd.append(os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local"))
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=2400)
@@ -4865,6 +5097,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if task == "release":
                 result = run_release(payload)
+            elif task == "smoke":
+                result = run_smoke(payload)
             elif task == "execute":
                 result = run_claude_generic(payload)
             elif task == "publish-flow":
