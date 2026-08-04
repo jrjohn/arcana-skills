@@ -4447,7 +4447,179 @@ def smoke_flow(payload):
     return out
 
 
+_SONAR_SCANNER_IMAGE = os.environ.get("SONAR_SCANNER_IMAGE", "sonarsource/sonar-scanner-cli:latest")
+
+
+def _sonar_coverage(workdir, app):
+    """跑一個 app 的覆蓋率,回傳 (報告在容器內的絕對路徑, 說明)。
+
+    test 節點的 runner 不跑單元測試 —— 它建 PR、開 preview、跑 e2e。所以覆蓋率這件事
+    如果不在這裡自己算,Sonar 那條 80% 在 test 節點就永遠是 notApplicable,而一個宣告
+    了卻永遠不評的條件,正是這個節點今天一路在清的東西。
+
+    兩邊都跑(John 2026-08-04 決定):只跑被碰到的那一側比較省,但「這個 PR 沒碰
+    Rust」這個判斷本身會出錯,而出錯的方向是**少評一個條件**。
+    """
+    if app == "angular":
+        compose, svc, inside = "dashboard/docker-compose.test.yml", "test", "/app/coverage/lcov.info"
+    else:
+        compose, svc, inside = ("arcana-cloud-rust/docker-compose.coverage.yml",
+                                "coverage", "/app/coverage/lcov.info")
+    proj = "sonarcov-%s-%s" % (app, os.getpid())
+    cname = "%s-run" % proj
+    out = os.path.join(workdir, "%s-lcov.info" % app)
+    try:
+        subprocess.run(["docker", "rm", "-f", cname], capture_output=True, timeout=120)
+        b = subprocess.run(["docker", "compose", "-p", proj, "-f", compose, "build", svc],
+                           cwd=workdir, capture_output=True, text=True, timeout=2400)
+        if b.returncode != 0:
+            return None, "%s: coverage image build failed: %s" % (app, (b.stderr or "")[-200:])
+        r = subprocess.run(["docker", "compose", "-p", proj, "-f", compose, "run",
+                            "--name", cname, svc],
+                           cwd=workdir, capture_output=True, text=True, timeout=3600)
+        # 具名容器 + docker cp,不用 -v:這個 agent 在容器裡,bind mount 的來源路徑會被
+        # docker HOST 解析並靜默掛上空目錄 —— 那正是 Rust 覆蓋率從來沒產出過的原因。
+        cp = subprocess.run(["docker", "cp", "%s:%s" % (cname, inside), out],
+                            capture_output=True, text=True, timeout=300)
+        if cp.returncode != 0 or not os.path.isfile(out) or os.path.getsize(out) == 0:
+            return None, ("%s: no coverage report (run rc=%s): %s"
+                          % (app, r.returncode, (cp.stderr or r.stderr or "")[-200:]))
+        return out, None
+    except Exception as e:                                       # noqa: BLE001
+        return None, "%s: coverage error: %s" % (app, e)
+    finally:
+        subprocess.run(["docker", "rm", "-f", cname], capture_output=True, timeout=120)
+        subprocess.run(["docker", "compose", "-p", proj, "-f", compose,
+                        "down", "-v", "--remove-orphans"],
+                       cwd=workdir, capture_output=True, timeout=600)
+
+
 _ARCH_QUBE_IMAGE = os.environ.get("ARCH_QUBE_IMAGE", "arcana.boo/arcana/arch-qube:latest")
+
+
+def _sonar(payload):
+    """SonarQube,在 test 節點自己跑一次。
+
+    **不問品質閘,讀絕對量測值。** 每個 PR 用自己的 project key,而全新的 key 沒有
+    new-code 基線,Sonar 回 `{"status":"OK","conditions":[]}` —— 2026-08-04 實測:
+    `rust-app` 評 3 條、`rust-app-PR-155` 評 **0 條**,兩者都印 OK。拿那個當閘等於
+    問了一個永遠回答「好」的問題。
+
+    所以這裡改問 coverage / bugs / vulnerabilities / duplicated_lines_density 這些
+    **絕對值**,門檻取自 profile 的 `qualityBar`。它們與 new-code 期無關,新 key 照樣有值。
+
+    覆蓋率兩邊都跑(見 `_sonar_coverage`):只跑被碰到的那一側比較省,但判斷「有沒有
+    碰到」本身會出錯,而出錯的方向是少評一個條件。
+
+    三態與 arch-qube 同一套:沒設定 = notApplicable(可見、不擋);設定了卻拿不到數字
+    = notRun(擋);超出門檻 = 擋。
+    """
+    prof = _load_profile(payload)
+    bar = prof.get("qualityBar") or {}
+    host = os.environ.get("SONAR_HOST_URL", "").rstrip("/")
+    token = os.environ.get("SONARQUBE_TOKEN", "")
+    out = {"applicable": bool(host and token), "ran": False, "bar": bar, "metrics": {}}
+    if not out["applicable"]:
+        # 沒有憑證不是「查過了沒問題」。說出缺哪一個,否則下一個人只會看到一格空白。
+        out["reason"] = ("SONAR_HOST_URL/SONARQUBE_TOKEN not set on the agent — "
+                         "no Sonar measurement was taken")
+        return out
+    try:
+        wd = _ensure_checkout(payload)
+    except Exception as e:                                       # noqa: BLE001
+        out["reason"] = "checkout unavailable: %s" % e
+        return out
+
+    reports, notes = [], []
+    for app in ("angular", "rust"):
+        path, why = _sonar_coverage(wd, app)
+        (reports.append(path) if path else notes.append(why))
+    if not reports:
+        # 一份報告都沒有 → 覆蓋率無從評起。這是 notRun,不是「覆蓋率剛好沒問題」。
+        out["reason"] = "no coverage report produced: " + "; ".join(n for n in notes if n)
+        return out
+
+    _, branch = _pr_url_and_branch(payload)
+    key = "test-node-" + "".join(c if c.isalnum() or c in "-_" else "-"
+                                 for c in (branch or "adhoc"))[:60]
+    cname = "sonar-scan-%s" % os.getpid()
+    try:
+        subprocess.run(["docker", "rm", "-f", cname], capture_output=True, timeout=120)
+        lcov = ",".join("/src/" + os.path.basename(p) for p in reports)
+        create = subprocess.run(
+            ["docker", "create", "--name", cname, "--network", "host",
+             "-e", "SONAR_HOST_URL=" + host, "-e", "SONAR_TOKEN=" + token,
+             _SONAR_SCANNER_IMAGE,
+             "-Dsonar.projectKey=" + key, "-Dsonar.projectBaseDir=/src",
+             "-Dsonar.sources=dashboard/src,arcana-cloud-rust/crates",
+             "-Dsonar.exclusions=**/node_modules/**,**/target/**,**/*.spec.ts",
+             "-Dsonar.scm.disabled=true",
+             "-Dsonar.javascript.lcov.reportPaths=" + lcov,
+             "-Dsonar.rust.lcov.reportPaths=" + lcov],
+            capture_output=True, text=True, timeout=300)
+        if create.returncode != 0:
+            out["reason"] = "scanner container create failed: " + (create.stderr or "")[-200:]
+            return out
+        tar = subprocess.Popen(
+            ["tar", "--exclude=./.git", "--exclude=./node_modules", "--exclude=./target",
+             "--exclude=./dist", "-C", wd, "-cf", "-", "."], stdout=subprocess.PIPE)
+        subprocess.run(["docker", "cp", "-", cname + ":/src"], stdin=tar.stdout,
+                       capture_output=True, timeout=900)
+        tar.stdout.close(); tar.wait(timeout=60)
+        for p in reports:
+            subprocess.run(["docker", "cp", p, "%s:/src/%s" % (cname, os.path.basename(p))],
+                           capture_output=True, timeout=300)
+        run = subprocess.run(["docker", "start", "-a", cname],
+                             capture_output=True, text=True, timeout=3600)
+        out["scannerExit"] = run.returncode
+        if run.returncode != 0:
+            out["reason"] = "scanner failed: " + (run.stdout or run.stderr or "")[-300:]
+            return out
+    except Exception as e:                                       # noqa: BLE001
+        out["reason"] = "sonar scan error: %s" % e
+        return out
+    finally:
+        subprocess.run(["docker", "rm", "-f", cname], capture_output=True, timeout=120)
+
+    keys = "coverage,bugs,vulnerabilities,duplicated_lines_density,security_rating"
+    try:
+        import urllib.request, base64 as _b64
+        req = urllib.request.Request(
+            "%s/api/measures/component?component=%s&metricKeys=%s" % (host, key, keys))
+        req.add_header("Authorization",
+                       "Basic " + _b64.b64encode((token + ":").encode()).decode())
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = json.loads(r.read().decode("utf-8", "replace"))
+        for m in data.get("component", {}).get("measures", []):
+            out["metrics"][m["metric"]] = m.get("value")
+    except Exception as e:                                       # noqa: BLE001
+        out["reason"] = "measures unreadable: %s" % e
+        return out
+    if not out["metrics"]:
+        out["reason"] = "scan finished but returned no measures"
+        return out
+
+    def num(k, d=0.0):
+        try:
+            return float(out["metrics"].get(k, d))
+        except (TypeError, ValueError):
+            return d
+
+    fails = []
+    want_cov = float(bar.get("coverage", 80))
+    if "coverage" in out["metrics"] and num("coverage") < want_cov:
+        fails.append("coverage %.1f < %.0f" % (num("coverage"), want_cov))
+    if num("bugs") > 0:
+        fails.append("bugs=%d" % int(num("bugs")))
+    if num("vulnerabilities") > 0:
+        fails.append("vulnerabilities=%d" % int(num("vulnerabilities")))
+    want_dup = float(bar.get("duplication", 3))
+    if num("duplicated_lines_density") > want_dup:
+        fails.append("duplication %.2f%% > %.0f%%"
+                     % (num("duplicated_lines_density"), want_dup))
+    out.update({"ran": True, "fail": len(fails), "failures": fails,
+                "coverageNotes": [n for n in notes if n], "projectKey": key})
+    return out
 
 
 def _arch_qube(payload):
@@ -4711,6 +4883,18 @@ def test_flow(payload):
              aq.get("fail"), aq.get("notRun")), flush=True)
     cmd += ["-e", "ARCH_QUBE_B64=" + base64.b64encode(
         json.dumps(aq, ensure_ascii=False).encode()).decode()]
+    # SonarQube:同樣在 agent 端跑(runner 沒有 docker socket,也不該有),判定交給
+    # runner 折進 allPass。讀的是絕對量測值而不是 PR 的品質閘 —— 那個閘對新 key 評 0 條。
+    try:
+        sq = _sonar(payload)
+    except Exception as _sqe:                                    # noqa: BLE001
+        sq = {"applicable": True, "ran": False, "fail": 0,
+              "reason": "agent-side error: %s" % _sqe}
+    print("[agent-task-node] sonar: applicable=%s ran=%s fail=%s metrics=%s"
+          % (sq.get("applicable"), sq.get("ran"), sq.get("fail"),
+             json.dumps(sq.get("metrics") or {}, ensure_ascii=False)), flush=True)
+    cmd += ["-e", "SONAR_B64=" + base64.b64encode(
+        json.dumps(sq, ensure_ascii=False).encode()).decode()]
     cmd.append(os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local"))
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=2400)
