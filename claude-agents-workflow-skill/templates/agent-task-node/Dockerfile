@@ -31,7 +31,14 @@ COPY bin/crs-sqlite /root/bin/crs-sqlite
 COPY server.py /usr/local/bin/agent-task-node.py
 
 ENV PORT=8090 \
-    AGENT_TASK_TIMEOUT=900
+    AGENT_TASK_TIMEOUT=900 \
+    # S3b 情境自補。2026-08-04 之前它只存在於**執行中的容器**,repo 裡沒有任何地方
+    # 設定它 —— 也就是說重建映像會靜默把它關掉,而症狀是「情境缺格突然開始退回
+    # implement」,看起來像流程變笨,不像設定掉了。寫在這裡它才跟著映像走。
+    #
+    # 開著是安全的:自補的情境必須先被證明會分歧(對著拋棄式引擎跑),證不出來就
+    # escalate,而靜態閘照樣擋 —— 它從來不會靜靜放行一個缺口。
+    SCENARIO_AUTOFILL=1
 EXPOSE 8090
 
 # Run as the same non-root agent user the base image uses for tool caches.

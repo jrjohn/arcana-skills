@@ -3653,7 +3653,15 @@ def _scenario_autofill(payload):
     # carried a claim about WHICH simulator — the same gap the stale-image gate closed for
     # services. Demand a schema it understands; an unreadable answer means an old copy, and
     # an old copy is notRun, not a pass.
-    _need_schema = int(os.environ.get("FLOW_SIM_MIN_SCHEMA", "1"))
+    # 2(2026-08-04):情境新增 `groups`(這條情境以哪些關卡群組行動)。
+    #
+    # 預設從 1 提到 2,因為舊 binary 拿到宣告 groups 的情境**不會報錯** —— serde 的
+    # default 把它填成 ["human"],於是平台流程的 ai / jenkins 關卡一個都看不到,模擬器
+    # 接著回報「沒有人工關卡」:一個完全正常的、錯的結果。
+    #
+    # binary 是 gitignored 產物、手動 COPY 進映像、沒有任何新鮮度檢查(見 Dockerfile),
+    # 所以這個數字是唯一能讓「映像裡那份太舊」變成一句話而不是一個錯結論的東西。
+    _need_schema = int(os.environ.get("FLOW_SIM_MIN_SCHEMA", "2"))
     try:
         _v = json.loads(subprocess.run([flow_sim, "--version"], capture_output=True, text=True,
                                        timeout=30).stdout or "{}")
