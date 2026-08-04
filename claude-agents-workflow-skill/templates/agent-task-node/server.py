@@ -4455,6 +4455,74 @@ def smoke_flow(payload):
     return out
 
 
+def _strip_rust_tests(src):
+    """把 `#[cfg(test)]` 之後的那個 mod 整塊拿掉,回傳剩下的產品碼。
+
+    Rust 的單元測試就寫在產品檔裡,所以「diff 只能碰測試檔」對它**根本不成立**。
+    能檢查的是另一件事:剝掉測試模組之後,前後必須逐字相同 —— 也就是「產品碼那一半
+    沒有被動過」。
+
+    這條約束是覆蓋率節點存在的前提。沒有它,提高覆蓋率最省力的做法是**刪掉沒被覆蓋
+    的產品程式碼** —— 分母變小,數字立刻好看,而且沒有任何測試會紅。那是這整套閘裡
+    最容易發生、也最難發現的作弊。
+
+    括號配對用計數而非正規表示式:字串或註解裡的括號會讓計數失準,但失準的方向是
+    **少剝**(把產品碼也算進測試模組要靠括號提早收斂,而多出來的括號只會讓它晚收斂),
+    於是結果是「看起來動了產品碼」——擋下來,而不是放行。
+    """
+    out, i, n = [], 0, len(src)
+    while True:
+        j = src.find("#[cfg(test)]", i)
+        if j < 0:
+            out.append(src[i:])
+            return "".join(out)
+        out.append(src[i:j])
+        k = src.find("{", j)
+        if k < 0:                      # 沒有大括號 —— 不是模組,原樣保留
+            out.append(src[j:j + 12])
+            i = j + 12
+            continue
+        depth, p = 0, k
+        while p < n:
+            if src[p] == "{":
+                depth += 1
+            elif src[p] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            p += 1
+        i = p + 1
+
+
+_TEST_ONLY_SUFFIXES = (".spec.ts", ".spec.js", ".test.ts", ".test.js")
+
+
+def test_only_diff(before, after):
+    """`before`/`after` 是 {路徑: 內容}。回傳違規清單(空 = 只動了測試)。
+
+    三種路徑分開判:
+      *.spec.ts 之類          —— 整個檔案都是測試,隨便改
+      *.rs                    —— 剝掉 #[cfg(test)] 後必須逐字相同
+      其他                    —— 一律違規,包括新增檔案
+
+    「其他一律違規」是刻意的:一個看起來無害的 config 或 fixture 改動,足以讓覆蓋率
+    數字動起來而沒有任何測試被寫出來。允許的清單要短到可以一眼讀完。
+    """
+    bad = []
+    for path in sorted(set(before) | set(after)):
+        b, a = before.get(path), after.get(path)
+        if b == a:
+            continue
+        if path.endswith(_TEST_ONLY_SUFFIXES):
+            continue
+        if path.endswith(".rs"):
+            if _strip_rust_tests(b or "") != _strip_rust_tests(a or ""):
+                bad.append("%s: 產品碼被動到(剝掉 #[cfg(test)] 後仍有差異)" % path)
+            continue
+        bad.append("%s: 不是測試檔(覆蓋率節點只能寫測試)" % path)
+    return bad
+
+
 _SONAR_SCANNER_IMAGE = os.environ.get("SONAR_SCANNER_IMAGE", "sonarsource/sonar-scanner-cli:latest")
 
 
@@ -4503,6 +4571,65 @@ def _sonar_coverage(workdir, app):
 
 
 _ARCH_QUBE_IMAGE = os.environ.get("ARCH_QUBE_IMAGE", "arcana.boo/arcana/arch-qube:latest")
+
+
+def coverage_flow(payload):
+    """覆蓋率節點:只補測試,把 Sonar 的 coverage 拉到門檻。
+
+    為什麼獨立成一個節點,而不是丟回 implement:補測試是**範圍窄得多**的工作,
+    而窄的工作可以帶硬約束。implement 節點必須能改產品碼,所以它身上放不了
+    「不准改產品碼」這條 —— 而沒有那條,提高覆蓋率最省力的做法就是刪掉沒被覆蓋的
+    程式碼。分母變小,數字立刻好看,沒有任何測試會紅。
+
+    為什麼不讓 test 節點自己補:判定的人不該是修的人,除非那個修法可以被機器證明。
+    情境自補做得到(S3b 必須證明那對情境會分歧);「這些測試有沒有意義」證明不了,
+    所以這裡改成證明另一件事 —— **產品碼一個字都沒動**。那條是機械可驗的。
+    """
+    wd = _ensure_checkout(payload)
+    repo = _pv(payload, "repo") or ""
+    _, branch = _pr_url_and_branch(payload)
+    if not (repo and branch):
+        return {"ran": False, "reason": "no repo/branch"}
+
+    def snapshot():
+        out = {}
+        r = subprocess.run(["git", "ls-files"], cwd=wd, capture_output=True, text=True, timeout=120)
+        for p in (r.stdout or "").splitlines():
+            fp = os.path.join(wd, p)
+            try:
+                with open(fp, encoding="utf-8", errors="replace") as f:
+                    out[p] = f.read()
+            except (OSError, IsADirectoryError):
+                continue
+        return out
+
+    before = snapshot()
+    sq = payload.get("sonarReport") or {}
+    低 = sq.get("failures") or []
+    prompt = (
+        "只補測試,把覆蓋率拉到門檻。以下是 Sonar 回報的未達標項目:\n"
+        + "\n".join("  - " + str(f) for f in 低)
+        + "\n\n硬約束(會被機器檢查,違反即整批退回):\n"
+        "  1. 只能新增/修改測試 —— Angular 的 *.spec.ts,Rust 的 #[cfg(test)] mod 內部。\n"
+        "  2. 產品程式碼一個字都不能動。剝掉 #[cfg(test)] 之後的內容必須逐字相同。\n"
+        "  3. 不能改設定檔(angular.json、Cargo.toml、sonar 設定…)。\n\n"
+        "特別注意:**不要靠刪掉沒被覆蓋的程式碼來提高數字**。那會讓分母變小、"
+        "數字變好看、而且沒有任何測試會紅 —— 檢查器就是為了擋這件事而存在的。\n"
+        "測試要斷言行為,不是為了執行到那一行而呼叫它。"
+    )
+    res = run_claude("implement", dict(payload, feature_request=prompt, _no_push=True))
+    after = snapshot()
+    violations = test_only_diff(before, after)
+    if violations:
+        # 退回而不是「只保留合規的部分」:一份夾帶產品碼改動的補丁,把它拆開等於
+        # 由這裡替它決定哪些改動是有意的,而那個判斷不屬於覆蓋率節點。
+        subprocess.run(["git", "checkout", "--", "."], cwd=wd, capture_output=True, timeout=120)
+        return {"ran": True, "pushed": False, "violations": violations,
+                "reason": "diff 碰到了測試以外的東西,整批退回"}
+    changed = [p for p in after if before.get(p) != after.get(p)]
+    if not changed:
+        return {"ran": True, "pushed": False, "reason": "沒有產出任何測試"}
+    return {"ran": True, "pushed": True, "changed": changed, "claude": res}
 
 
 def _sonar(payload):
@@ -5267,7 +5394,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         task = self.path.rsplit("/", 1)[-1]
-        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "uiux-audit", "site", "smoke", "dispose-pr", "consult"):
+        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "coverage", "uiux-audit", "site", "smoke", "dispose-pr", "consult"):
             return self._send(404, {"error": f"unknown task {task}"})
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -5313,6 +5440,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = run_consult(payload)
             elif task == "test":
                 result = test_flow(payload)
+            elif task == "coverage":
+                # 只補測試的窄節點。它身上帶著 implement 放不下的那條硬約束:
+                # 產品碼一個字都不能動(見 coverage_flow 的說明)。
+                result = coverage_flow(payload)
             elif task == "uiux-audit":
                 result = uiux_audit_flow(payload)
             else:
