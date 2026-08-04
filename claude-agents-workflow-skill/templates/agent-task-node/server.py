@@ -1406,6 +1406,36 @@ def prompt_pm_review(p):
 
 PROMPTS = {"intake": prompt_intake, "diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "scan-stale": prompt_scan_stale, "rebase": prompt_rebase, "audit": prompt_audit, "pm-review": prompt_pm_review}
 
+# run_claude(verb) 讀 PROMPTS[verb] 與 SCHEMAS[verb]。三件事必須同時對齊,而它們分屬
+# 三處:兩份登記表,加上散在各處的呼叫點。對不上時 KeyError 只在**流程真的跑到那一格**
+# 時才炸 —— 也就是在燒掉它前面所有節點之後。
+#
+# 2026-08-04 實測:coverage_flow 呼叫 run_claude("implement"),而 "implement" 兩份登記表
+# **都沒有**(它走 implement_flow)。那個節點從被寫下的第一天起就不可能執行成功,而沒有
+# 任何東西會提早說出來。所以這裡不只比對兩份表,還把本檔所有 run_claude("字面量") 的
+# 呼叫點掃出來一起驗 —— 真正壞掉的是呼叫點,不是表之間的差異。
+def _verb_registry_check():
+    import ast as _ast
+    po, so = sorted(set(PROMPTS) - set(SCHEMAS)), sorted(set(SCHEMAS) - set(PROMPTS))
+    assert not po, "PROMPTS 有而 SCHEMAS 沒有的動詞: %s" % po
+    assert not so, "SCHEMAS 有而 PROMPTS 沒有的動詞: %s" % so
+    try:
+        with open(os.path.abspath(__file__), encoding="utf-8") as fh:
+            tree = _ast.parse(fh.read())
+    except (OSError, SyntaxError):
+        return                              # 讀不到自己就不假裝檢查過
+    called = set()
+    for n in _ast.walk(tree):
+        if (isinstance(n, _ast.Call) and getattr(n.func, "id", None) == "run_claude"
+                and n.args and isinstance(n.args[0], _ast.Constant)
+                and isinstance(n.args[0].value, str)):
+            called.add(n.args[0].value)
+    missing = sorted(called - set(PROMPTS))
+    assert not missing, "run_claude() 被呼叫的動詞不在 PROMPTS 裡: %s" % missing
+
+
+_verb_registry_check()
+
 
 def _resume(payload):
     """Resume an existing Claude session if the worker threaded a `sid` back in.
@@ -4584,52 +4614,103 @@ def coverage_flow(payload):
     為什麼不讓 test 節點自己補:判定的人不該是修的人,除非那個修法可以被機器證明。
     情境自補做得到(S3b 必須證明那對情境會分歧);「這些測試有沒有意義」證明不了,
     所以這裡改成證明另一件事 —— **產品碼一個字都沒動**。那條是機械可驗的。
+
+    與 implement 的關鍵差異:這裡在**既有的 PR 分支**上工作,不開新分支。補的測試
+    必須落在下游 test 節點會重新量的那個 ref 上,否則整輪只是燒掉一次重試額度。
     """
-    wd = _ensure_checkout(payload)
-    repo = _pv(payload, "repo") or ""
+    repo = str(_pv(payload, "repo") or "").strip()
     _, branch = _pr_url_and_branch(payload)
     if not (repo and branch):
         return {"ran": False, "reason": "no repo/branch"}
+    wd = _ensure_checkout(payload)
+    if not wd:
+        return {"ran": False, "reason": "no workspace checkout"}
+
+    token = os.environ.get("GH_TOKEN", "")
+    clone_url = "https://x-access-token:%s@github.com/%s" % (token, repo)
+
+    def _git(*args):
+        return subprocess.run(["git", "-C", wd, *args],
+                              capture_output=True, text=True, timeout=300)
+
+    # 把工作目錄對準 PR 分支的遠端狀態。繼承來的 checkout 可能停在任何 ref、還帶著
+    # 上一輪的未提交改動 —— 那些改動會被 before/after 快照當成「這一輪補的測試」,
+    # 而它們其實是別人的。
+    if not os.path.isdir(os.path.join(wd, ".git")):
+        return {"ran": False, "reason": "workspace has no .git"}
+    _git("remote", "set-url", "origin", clone_url)
+    f = _git("fetch", "--depth", "1", "origin", branch)
+    if f.returncode != 0:
+        return {"ran": False, "reason": "fetch %s failed: %s" % (branch, (f.stderr or f.stdout)[-300:])}
+    _git("checkout", "-B", branch, "FETCH_HEAD")
+    _git("reset", "--hard", "FETCH_HEAD")
+    _git("clean", "-fd")
 
     def snapshot():
         out = {}
-        r = subprocess.run(["git", "ls-files"], cwd=wd, capture_output=True, text=True, timeout=120)
-        for p in (r.stdout or "").splitlines():
-            fp = os.path.join(wd, p)
+        r = _git("ls-files")
+        for rel in (r.stdout or "").splitlines():
             try:
-                with open(fp, encoding="utf-8", errors="replace") as f:
-                    out[p] = f.read()
+                with open(os.path.join(wd, rel), encoding="utf-8", errors="replace") as fh:
+                    out[rel] = fh.read()
             except (OSError, IsADirectoryError):
                 continue
         return out
 
     before = snapshot()
     sq = payload.get("sonarReport") or {}
-    低 = sq.get("failures") or []
+    failures = sq.get("failures") or []
     prompt = (
         "只補測試,把覆蓋率拉到門檻。以下是 Sonar 回報的未達標項目:\n"
-        + "\n".join("  - " + str(f) for f in 低)
+        + "\n".join("  - " + str(x) for x in failures)
         + "\n\n硬約束(會被機器檢查,違反即整批退回):\n"
         "  1. 只能新增/修改測試 —— Angular 的 *.spec.ts,Rust 的 #[cfg(test)] mod 內部。\n"
         "  2. 產品程式碼一個字都不能動。剝掉 #[cfg(test)] 之後的內容必須逐字相同。\n"
         "  3. 不能改設定檔(angular.json、Cargo.toml、sonar 設定…)。\n\n"
         "特別注意:**不要靠刪掉沒被覆蓋的程式碼來提高數字**。那會讓分母變小、"
         "數字變好看、而且沒有任何測試會紅 —— 檢查器就是為了擋這件事而存在的。\n"
-        "測試要斷言行為,不是為了執行到那一行而呼叫它。"
+        "測試要斷言行為,不是為了執行到那一行而呼叫它。\n\n"
+        "**不要自己 commit、不要自己 push、不要開 PR。** 寫完就停,改動留在工作目錄;"
+        "提交與推送由流程在你之後確定性地做,而且會先檢查你有沒有碰到測試以外的東西。"
     )
-    res = run_claude("implement", dict(payload, feature_request=prompt, _no_push=True))
+    schema = json.dumps({
+        "type": "object",
+        "properties": {"summary": {"type": "string"},
+                       "filesChanged": {"type": "array", "items": {"type": "string"}}},
+        "required": ["summary"]})
+    _ensure_claude_config()
+    cp = dict(payload)
+    cp["skip_permissions"] = True
+    cp["add_dirs"] = [wd]
+    res = _invoke_claude(prompt, schema, cp, int(payload.get("wall") or 2400), cwd=wd)
+
     after = snapshot()
     violations = test_only_diff(before, after)
     if violations:
         # 退回而不是「只保留合規的部分」:一份夾帶產品碼改動的補丁,把它拆開等於
         # 由這裡替它決定哪些改動是有意的,而那個判斷不屬於覆蓋率節點。
-        subprocess.run(["git", "checkout", "--", "."], cwd=wd, capture_output=True, timeout=120)
+        _git("checkout", "--", ".")
+        _git("clean", "-fd")
         return {"ran": True, "pushed": False, "violations": violations,
                 "reason": "diff 碰到了測試以外的東西,整批退回"}
-    changed = [p for p in after if before.get(p) != after.get(p)]
+    changed = sorted(p for p in set(before) | set(after) if before.get(p) != after.get(p))
     if not changed:
         return {"ran": True, "pushed": False, "reason": "沒有產出任何測試"}
-    return {"ran": True, "pushed": True, "changed": changed, "claude": res}
+
+    # 推。沒有這一步的話,下游 test 節點量的還是同一個 commit —— 覆蓋率不會動,
+    # 迴圈會用完重試額度然後把「補過測試了」當成事實交給 PM。
+    _git("add", "-A")
+    cm = _git("-c", "user.email=agent@arcana.boo", "-c", "user.name=AI-BPM Coverage",
+              "commit", "-m", "test: 補測試以達覆蓋率門檻")
+    if cm.returncode != 0 and "nothing to commit" not in (cm.stdout + cm.stderr):
+        return {"ran": True, "pushed": False, "changed": changed,
+                "reason": "commit failed: %s" % (cm.stderr or cm.stdout)[-300:]}
+    ps = _git("push", "origin", "HEAD:%s" % branch)
+    if ps.returncode != 0:
+        return {"ran": True, "pushed": False, "changed": changed,
+                "reason": "push failed: %s" % (ps.stderr or ps.stdout)[-300:]}
+    return {"ran": True, "pushed": True, "branch": branch, "changed": changed,
+            "claude": res if isinstance(res, dict) else {"summary": str(res)}}
 
 
 def _sonar(payload):
