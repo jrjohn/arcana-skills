@@ -636,9 +636,12 @@ def _required_cells(payload, workdir):
     env = dict(os.environ)
     env["SM_CODE_ROOT"] = workdir
     env["SCENARIO_JSON"] = "1"
+    # 不再傳 SCENARIO_PROFILE:那是**單選**,而單選表達不了「哪條流程用哪本規則書」。
+    # 傳了反而更糟 —— scenario-matrix 看到它就切進單一規則書的直呼模式,整個 per-project
+    # 解析(認領、排除、無人認領即 notRun)被繞過,而報告看起來一模一樣。
+    # 規則書清單由 /work/repo/.arcana/project.json 的 flow.profiles 決定,工具自己讀。
     for k, v in (("SM_FLOW_DIR", prof.get("flowDir")),
-                 ("SM_SIM_DIR", prof.get("scenarioDir")),
-                 ("SCENARIO_PROFILE", prof.get("scenarioProfile"))):
+                 ("SM_SIM_DIR", prof.get("scenarioDir"))):
         if v:
             env[k] = str(v)
     try:
@@ -716,9 +719,12 @@ def _flow_inventory(payload, workdir):
     try:
         env = dict(os.environ)
         env.update({"SM_CODE_ROOT": workdir, "SCENARIO_JSON": "1"})
+        # 不再傳 SCENARIO_PROFILE:那是**單選**,而單選表達不了「哪條流程用哪本規則書」。
+        # 傳了反而更糟 —— scenario-matrix 看到它就切進單一規則書的直呼模式,整個 per-project
+        # 解析(認領、排除、無人認領即 notRun)被繞過,而報告看起來一模一樣。
+        # 規則書清單由 /work/repo/.arcana/project.json 的 flow.profiles 決定,工具自己讀。
         for k, v in (("SM_FLOW_DIR", prof.get("flowDir")),
-                     ("SM_SIM_DIR", prof.get("scenarioDir")),
-                     ("SCENARIO_PROFILE", prof.get("scenarioProfile"))):
+                     ("SM_SIM_DIR", prof.get("scenarioDir"))):
             if v:
                 env[k] = str(v)
         r = subprocess.run(["python3", script], capture_output=True, text=True,
@@ -5069,7 +5075,6 @@ def test_flow(payload):
             # the tree's own .arcana/project.json.
             "-e", "SM_FLOW_DIR=" + str(_pf.get("flow", {}).get("flowDir", "")),
             "-e", "SM_SIM_DIR=" + str(_pf.get("flow", {}).get("scenarioDir", "")),
-            "-e", "SCENARIO_PROFILE=" + str(_pf.get("flow", {}).get("scenarioProfile", "")),
             "-e", "RBACUI_NAV_CONFIG=/work/repo/" + str(_pf["nav"].get(
                 "navPath", "dashboard/src/app/core/navigation/nav.config.ts"))]
     if repo and branch:  # T4-1: build the PR branch and test its real code
