@@ -57,7 +57,7 @@
 | Vue (Vite) | 3 |
 | Android SDK | API 36, AGP 8.13.1 |
 | HarmonyOS SDK | 6.0.0.858 |
-| ESP-IDF | v5.5.2 |
+| ESP-IDF | v6.0.2 |
 | Xcode | 26.2 |
 | nginx | 1.27-alpine |
 

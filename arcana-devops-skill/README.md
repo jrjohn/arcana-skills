@@ -70,7 +70,7 @@ User: 建立 Jenkins Pipeline
 | Angular | CLI 20 | npm | node:22 → nginx:1.27-alpine |
 | Android | SDK 36 | Gradle (gradlew) | eclipse-temurin:21 + Android SDK 36 |
 | HarmonyOS | SDK 6.0.0.858 | hvigorw | ubuntu:22.04 + JDK 17 + OHOS SDK |
-| ESP32 | IDF v5.5.2 | idf.py (CMake) | espressif/idf:v5.5.2 |
+| ESP32 | IDF v6.0.2 | idf.py (CMake) | espressif/idf:v6.0.2 |
 | STM32 | arm-gcc | CMake + Make | ubuntu:24.04 + arm-none-eabi-gcc |
 | iOS | Xcode 26.2 | xcodebuild | macOS native (Mac Mini agent) |
 | Windows/.NET | .NET 10 | dotnet | Windows native (Windows agent) |
@@ -154,7 +154,7 @@ User: 建立 Jenkins Pipeline
 | `Dockerfile.dotnet` | dotnet/sdk:10.0 | CI build |
 | `Dockerfile.android` | eclipse-temurin:21 + SDK 36 | APK |
 | `Dockerfile.harmonyos` | ubuntu:22.04 + OHOS SDK | HAP |
-| `Dockerfile.esp32` | espressif/idf:v5.5.2 | .bin/.elf |
+| `Dockerfile.esp32` | espressif/idf:v6.0.2 | .bin/.elf |
 | `Dockerfile.stm32` | ubuntu:24.04 + arm-gcc | .bin/.hex/.elf |
 | `Dockerfile.nginx` | nginx:1.27-alpine | Reverse proxy |
 

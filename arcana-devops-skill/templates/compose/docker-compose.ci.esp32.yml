@@ -1,4 +1,5 @@
 # TESTED: 2026-02-23 | Rocky VM (ARM64) | 370s | espressif/idf:v5.5.2
+# 版本於 2026-08-05 更新為 v6.0.2,**尚未在 v6 上重測**(見 Dockerfile.esp32 同一段說明)。
 # ============================================
 # ESP32 CI Build Compose Template
 # ============================================
@@ -6,7 +7,7 @@
 # Image is ~11GB on ARM64 — pre-pull to avoid timeout in CI.
 #
 # Prerequisites:
-#   docker pull espressif/idf:v5.5.2
+#   docker pull espressif/idf:v6.0.2
 #
 # Usage:
 #   docker compose -f docker-compose.ci.esp32.yml run --rm esp32-build
@@ -19,7 +20,7 @@
 
 services:
   esp32-build:
-    image: espressif/idf:v5.5.2
+    image: espressif/idf:v6.0.2
     working_dir: /project
     environment:
       - HOME=/tmp
