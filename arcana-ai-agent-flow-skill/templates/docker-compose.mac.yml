@@ -3,7 +3,7 @@
 #            + Kafka (KRaft) + Kogito Data Index (queryable layer + GraphQL).
 services:
   kogito-pg:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     container_name: aaf-kogito-pg
     environment:
       POSTGRES_USER: kogito

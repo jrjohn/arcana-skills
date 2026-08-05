@@ -49,7 +49,7 @@ services:
 
   # === Database ===
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: {{PROJECT_NAME}}-db-prod
     restart: always
     volumes:
