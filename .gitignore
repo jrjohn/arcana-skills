@@ -23,3 +23,16 @@ npm-debug.log*
 # Build outputs
 dist/
 build/
+
+# Python 執行期產物。
+#
+# 2026-08-05 移除兩個誤入版控的檔,而根目錄的 .gitignore 從頭就沒有 Python 規則 ——
+# `agent-task-node/.gitignore` 只擋了 flow-sim 那個 binary。
+# server.py 每跑一次就重新產生 .pyc,於是每次跑完 agent 都會多出一筆假的 git 髒污,
+# 而那種噪音會讓人習慣性忽略 `git status`。
+__pycache__/
+*.py[cod]
+
+# 打包快照。原始碼在同名目錄裡,zip 只是某次的中途版本 ——
+# 兩份會漂,而漂掉的那份沒有人會發現(它不會被任何東西讀)。
+*.zip
