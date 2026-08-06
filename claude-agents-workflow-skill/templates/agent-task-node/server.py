@@ -2056,7 +2056,7 @@ def _rate_limited(status, text):
     return bool(text and _RATE_RE.search(str(text)))
 
 
-def _invoke_claude(prompt, schema, payload, wall, cwd=None):
+def _invoke_claude_once(prompt, schema, payload, wall, cwd=None):
     """Core Claude invocation shared by the static-verb path (run_claude) and the
     control-inverted generic executor (run_claude_generic). `prompt` + `schema`
     (a JSON string) are already resolved; `wall` is the wall-clock kill in seconds.
@@ -2228,6 +2228,184 @@ PREFETCH_LIMIT = int(os.environ.get("MEMORY_PREFETCH_LIMIT", "4"))
 # queries are ~0.8-2.8s. A single cold start must not knock out memory recall.
 PREFETCH_TIMEOUT = int(os.environ.get("MEMORY_PREFETCH_TIMEOUT", "15"))
 _PROJ_PREFIX = "-Users-jrjohn-Documents-projects-"
+
+
+# --- S8: confidence threshold + reflection -----------------------------------
+# Every agent task carries a model. Industry agentic-BPMN practice carries three things:
+# model, confidence threshold, reflection mode. We had the first, plus bounded retries
+# (`testAttempts < 2`, `pmAttempts < 3`) as a coarse stand-in — a retry counter answers
+# "how many times did this fail a later gate", never "does this node believe its own output".
+#
+# The threshold lives HERE rather than in a per-verb table because both verb families
+# (static PROMPTS/SCHEMAS and the control-inverted generic executor) funnel through
+# `_invoke_claude`. One choke point, so a new verb cannot silently arrive ungated.
+#
+# ## The rule that keeps this from becoming decoration
+#
+# A self-reported confidence number cannot be checked. Letting one BLOCK a flow would
+# be dressing an unverifiable claim as a gate — the same mistake as a scenario whose
+# `coveredBy` cites a field the product fills in itself. So:
+#
+#   source=self_report  → may trigger `reflect`. May NOT `escalate`. Reported second-class.
+#   source=judge        → a separate evaluation produced it, so it may escalate.
+#
+# `_check_confidence_policies()` enforces that at import, next to the PROMPTS/SCHEMAS
+# alignment assert, because a policy that violates it is a config error, not a runtime one.
+
+CONFIDENCE_POLICY = {
+    # Keyed by BPMN node (`_node`), falling back to the verb. Nodes absent from this map
+    # are NOT gated — and say so in the result (`policy: "none"`), because silence would
+    # read the same as "gated and fine".
+    #
+    # intakeReview first, deliberately: it is the earliest node whose output every later
+    # node treats as settled, so a shaky reading of the request propagates furthest, and
+    # re-reading a request is the cheapest reflection this pipeline can buy.
+    "intakeReview": {"min": 0.7, "source": "self_report", "onBelow": "reflect", "maxRounds": 1},
+}
+
+_CONF_SOURCES = ("self_report", "judge")
+_CONF_ON_BELOW = ("reflect", "escalate")
+
+
+def _check_confidence_policies():
+    """A malformed policy is a startup error, not a surprise at 3am mid-flow.
+
+    Mirrors `_verb_registry_check()`: the failure it prevents is silent (a typo'd
+    `onBelow` would simply never fire), so it has to be checked where it cannot be
+    skipped — at import.
+    """
+    for node, pol in CONFIDENCE_POLICY.items():
+        assert isinstance(pol, dict), "CONFIDENCE_POLICY[%r] 不是 dict" % node
+        mn = pol.get("min")
+        assert isinstance(mn, (int, float)) and 0.0 <= float(mn) <= 1.0, \
+            "CONFIDENCE_POLICY[%r].min 必須是 0..1 的數字" % node
+        assert pol.get("source") in _CONF_SOURCES, \
+            "CONFIDENCE_POLICY[%r].source 必須是 %s" % (node, list(_CONF_SOURCES))
+        assert pol.get("onBelow") in _CONF_ON_BELOW, \
+            "CONFIDENCE_POLICY[%r].onBelow 必須是 %s" % (node, list(_CONF_ON_BELOW))
+        rounds = pol.get("maxRounds", 1)
+        assert isinstance(rounds, int) and rounds >= 0, \
+            "CONFIDENCE_POLICY[%r].maxRounds 必須是 >= 0 的整數" % node
+        # The rule above, made mechanical.
+        assert not (pol.get("source") == "self_report" and pol.get("onBelow") == "escalate"), \
+            ("CONFIDENCE_POLICY[%r]:self_report 的信心值不可用來 escalate —— 那是把一個"
+             "無法被檢查的自評當成閘。要擋流程請改用 source=judge" % node)
+
+
+_check_confidence_policies()
+
+
+def _confidence_policy(payload):
+    """The policy for this call, or None. `_node` wins over the verb: the same verb can be
+    wired into two nodes whose downstream cost differs."""
+    for key in (payload.get("_node"), payload.get("_task"), payload.get("task")):
+        if key and key in CONFIDENCE_POLICY:
+            return dict(CONFIDENCE_POLICY[key], _key=key)
+    return None
+
+
+def _schema_with_confidence(schema):
+    """Add `confidence` + `confidenceRationale` as REQUIRED output fields.
+
+    Required, not optional: `--json-schema` validation is what forces the model to answer.
+    An optional field would be omitted exactly when the model is least sure, which is the
+    one case this exists for. Returns the schema unchanged if it already declares them.
+    """
+    try:
+        doc = json.loads(schema) if isinstance(schema, str) else dict(schema or {})
+    except ValueError:
+        return schema
+    if not isinstance(doc, dict) or doc.get("type") != "object":
+        return schema
+    props = doc.setdefault("properties", {})
+    if "confidence" not in props:
+        props["confidence"] = {
+            "type": "number", "minimum": 0, "maximum": 1,
+            "description": ("你對這份輸出的信心(0..1)。這不是禮貌用語:低於門檻會觸發重做。"
+                            "不確定就給低分,寫高分不會讓輸出變好,只會讓下游更確信一件"
+                            "沒有人檢查過的事。"),
+        }
+    if "confidenceRationale" not in props:
+        props["confidenceRationale"] = {
+            "type": "string",
+            "description": "一句話說明信心來自哪裡,以及最不確定的是什麼。",
+        }
+    req = doc.setdefault("required", [])
+    for k in ("confidence", "confidenceRationale"):
+        if k not in req:
+            req.append(k)
+    return json.dumps(doc)
+
+
+def _reflection_prompt(prev, pol):
+    """The reflection round. Names the model's OWN stated doubt back at it — a generic
+    "try harder" produces a rewrite of the same answer with more adjectives."""
+    return (
+        "\n\n---\n\n【反思重做】你上一輪自評信心 %.2f,低於門檻 %.2f,你自己指出的不確定處是:\n"
+        "%s\n\n"
+        "現在只做一件事:針對那個不確定處,去查證據再重答。可查的地方包含這個 repo 的實際"
+        "檔案、既有實作、與歷史記錄。如果查完仍然不確定,**就維持低信心並在 "
+        "confidenceRationale 說明查了什麼、為什麼仍不確定** —— 把分數調高而不去查,是這一"
+        "輪唯一不被接受的結果。"
+        % (float(prev.get("confidence") or 0.0), float(pol["min"]),
+           str(prev.get("confidenceRationale") or "(未說明)")[:800])
+    )
+
+
+def _confidence_verdict(value, pol):
+    """pass | below | missing —— 三態,因為「沒給分數」與「分數低」的處置不同。純函式。"""
+    if pol is None:
+        return "notApplicable"
+    if not isinstance(value, (int, float)):
+        return "missing"
+    return "pass" if float(value) >= float(pol["min"]) else "below"
+
+
+def _invoke_claude(prompt, schema, payload, wall, cwd=None):
+    """`_invoke_claude_once` plus the confidence/reflection loop.
+
+    Kept as a wrapper so both call sites (run_claude / run_claude_generic) are gated
+    without either knowing about it — a node cannot opt out by forgetting to ask.
+    """
+    pol = _confidence_policy(payload)
+    if pol is None:
+        out = _invoke_claude_once(prompt, schema, payload, wall, cwd)
+        if isinstance(out, dict):
+            out["_confidence"] = {"policy": "none", "verdict": "notApplicable"}
+        return out
+
+    schema = _schema_with_confidence(schema)
+    out = _invoke_claude_once(prompt, schema, payload, wall, cwd)
+    rounds = 0
+    verdict = _confidence_verdict((out or {}).get("confidence"), pol)
+
+    while (verdict in ("below", "missing") and pol["onBelow"] == "reflect"
+           and rounds < int(pol.get("maxRounds", 1))):
+        rounds += 1
+        print("[agent-task-node] confidence %s (%s < %s) — 反思重做第 %d 輪"
+              % (verdict, (out or {}).get("confidence"), pol["min"], rounds), flush=True)
+        out = _invoke_claude_once(prompt + _reflection_prompt(out or {}, pol),
+                                  schema, payload, wall, cwd)
+        verdict = _confidence_verdict((out or {}).get("confidence"), pol)
+
+    if isinstance(out, dict):
+        meta = {"policy": pol["_key"], "min": pol["min"], "source": pol["source"],
+                "onBelow": pol["onBelow"], "rounds": rounds, "verdict": verdict,
+                "value": out.get("confidence")}
+        # The plan's discipline, carried into the payload rather than left in prose: a
+        # self-reported number is evidence about the model's state, not about the work.
+        if pol["source"] == "self_report":
+            meta["tier"] = "second-class"
+            meta["note"] = "自評信心,無法被檢查 —— 可觸發反思,不得用來擋流程"
+        else:
+            meta["tier"] = "gating"
+        out["_confidence"] = meta
+        # Only a judged score may stop the line. Reuses the `disposition` channel the
+        # sdlc-code-flow gateways already read, rather than adding a variable they would
+        # have to be taught about.
+        if verdict in ("below", "missing") and pol["onBelow"] == "escalate":
+            out.setdefault("disposition", "escalate")
+    return out
 
 
 def _crs_pg_env():
