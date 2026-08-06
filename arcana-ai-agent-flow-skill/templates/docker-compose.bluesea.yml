@@ -18,14 +18,17 @@
 
 services:
   kogito-pg:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     container_name: aaf-kogito-pg
     environment:
       POSTGRES_USER: kogito
       POSTGRES_PASSWORD: ${PG_PASSWORD:-kogito}
       POSTGRES_DB: workflow
     volumes:
-      - kogito-pgdata:/var/lib/postgresql/data
+      # postgres:18 起 PGDATA 是 /var/lib/postgresql/18/docker,VOLUME 是
+      # /var/lib/postgresql。掛在舊的 .../data 上會被 entrypoint 拒絕啟動(exit 1)。
+      # 這是給全新部署用的模板;既有的 16/17 叢集不能只改這兩行,需要 pg_dumpall 遷移。
+      - kogito-pgdata:/var/lib/postgresql
       - ./kogito-pg-init:/docker-entrypoint-initdb.d:ro   # creates dataindex + arcana on first init
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U kogito -d workflow"]

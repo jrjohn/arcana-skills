@@ -64,11 +64,14 @@ services:
       - devops-net
 
   sonarqube-db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: sonarqube-db
     restart: unless-stopped
     volumes:
-      - sonarqube_db_data:/var/lib/postgresql/data
+      # postgres:18 起 PGDATA 是 /var/lib/postgresql/18/docker,VOLUME 是
+      # /var/lib/postgresql。掛在舊的 .../data 上會被 entrypoint 拒絕啟動(exit 1)。
+      # 這是給全新部署用的模板;既有的 16/17 叢集不能只改這兩行,需要 pg_dumpall 遷移。
+      - sonarqube_db_data:/var/lib/postgresql
     environment:
       - POSTGRES_USER=${SONAR_DB_USER:-sonarqube}
       - POSTGRES_PASSWORD=${SONAR_DB_PASSWORD:-sonarqube}
