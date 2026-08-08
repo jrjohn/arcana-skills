@@ -18,7 +18,7 @@ Embedded firmware CI/CD differs fundamentally from server/web application pipeli
 
 | Aspect | Detail |
 |--------|--------|
-| Docker Image | `espressif/idf:v5.5.2` (~3GB, cached after first pull; reference project now on IDF v6.x — prefer matching the project's idf version) |
+| Docker Image | `espressif/idf:v6.0.2` (~3GB, cached after first pull; reference project now on IDF v6.x — prefer matching the project's idf version) |
 | Build System | CMake (via `idf.py`) |
 | Toolchain | xtensa-esp32-elf-gcc (bundled) |
 | Output | `.bin` (app + bootloader + partition table) |
@@ -26,14 +26,14 @@ Embedded firmware CI/CD differs fundamentally from server/web application pipeli
 
 ```bash
 # Recommended: docker pull + docker compose (CI pipeline)
-# (reference project now on IDF v6.x — prefer matching the project's idf version)
-docker pull espressif/idf:v5.5.2
+#
+docker pull espressif/idf:v6.0.2
 docker compose run --rm esp32-build
 
 # docker-compose.yml:
 # services:
 #   esp32-build:
-#     image: espressif/idf:v5.5.2
+#     image: espressif/idf:v6.0.2
 #     working_dir: /project
 #     environment:
 #       - HOME=/tmp

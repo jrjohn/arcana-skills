@@ -24,7 +24,7 @@ Generate multi-stage, optimized Dockerfiles for each language/framework in the p
 | Rust | `Dockerfile.rust` | rust:1.83-slim → debian:bookworm-slim | Cargo dependency cache trick + release build |
 | Go | `Dockerfile.go` | golang:1.23-alpine → alpine:3.20 | CGO_ENABLED=0 static build, distroless alternative |
 | .NET (API) | `Dockerfile.dotnet` | dotnet/sdk:9.0 → dotnet/aspnet:9.0-alpine | dotnet restore cache + publish |
-| ESP32 | `Dockerfile.esp32` | espressif/idf:v5.5.2 | **Build env only** — idf.py build → extract .bin |
+| ESP32 | `Dockerfile.esp32` | espressif/idf:v6.0.2 | **Build env only** — idf.py build → extract .bin |
 | STM32 | `Dockerfile.stm32` | ubuntu:24.04 + arm-none-eabi-gcc | **Build env only** — cmake + make → extract .bin/.hex |
 | Multi-env (unified) | `Dockerfile.unified` | Parameterized via `ARG` | Single Dockerfile for all environments |
 

@@ -1,4 +1,4 @@
-// TESTED: esp32-app-pipeline — 370s build time (docker pull + compose run, espressif/idf:v5.5.2)
+// TESTED: esp32-app-pipeline — 370s build time (docker pull + compose run, espressif/idf:v6.0.2)
 // TESTED: stm32-app-pipeline — 471s build time (docker compose build, ARM toolchain)
 // ============================================
 // Embedded Firmware Jenkins Pipeline (ESP32 / STM32)
@@ -9,14 +9,14 @@
 // are stored in Jenkins or deployed via OTA.
 //
 // ESP32: docker pull + docker compose run (image ~3GB+, cached)
-//   - espressif/idf:v5.5.2 (~11GB on ARM64 with QEMU)
+//   - espressif/idf:v6.0.2 (~11GB on ARM64 with QEMU)
 // STM32: docker compose build (ARM toolchain image)
 //
 // Requires docker-compose.ci.yml in project root:
 //   ESP32:
 //     services:
 //       esp32-build:
-//         image: espressif/idf:v5.5.2
+//         image: espressif/idf:v6.0.2
 //         working_dir: /project
 //         environment: [HOME=/tmp]
 //         volumes: [.:/project]
@@ -69,7 +69,7 @@ pipeline {
                 expression { params.PLATFORM == 'esp32' }
             }
             steps {
-                sh 'docker pull espressif/idf:v5.5.2'
+                sh 'docker pull espressif/idf:v6.0.2'
             }
         }
 
@@ -149,7 +149,7 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/app \
                                 -w /app \
-                                espressif/idf:v5.5.2 \
+                                espressif/idf:v6.0.2 \
                                 bash -c '. /opt/esp/idf/export.sh && cd test && idf.py build && ./run_tests.sh'
                         """
                     } else {
