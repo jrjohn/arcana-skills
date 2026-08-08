@@ -284,3 +284,46 @@ logging:
     max-size: "10m"
     max-file: "3"
 ```
+
+## CI Network Address-Pool Exhaustion (a build that "cannot be built")
+
+**Symptom**: `docker compose build` (or any stage that creates a network) fails
+with — and the build is marked failed even though code + deps are fine:
+```
+failed to create network <name>: all predefined address pools have been fully subnetted
+```
+
+**Cause**: Docker's default pool is only `172.17.0.0/16`–`172.31.0.0/16` (~15
+networks) and **each Docker network grabs a full /16**. Multibranch/compose CI
+creates a per-branch network per build; idle ones that leak on aborted runs
+accumulate until the ~15-slot pool is exhausted, then any new network fails.
+
+**Diagnose**:
+```bash
+# how many /16 in 172.x are taken (~15 = full)
+docker network ls -q | xargs -I{} docker network inspect {} \
+  -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' | grep -c '172\.'
+# the idle (0-container) leaked ones:
+docker network ls --format '{{.Name}}' | while read n; do
+  [ "$(docker network inspect "$n" -f '{{len .Containers}}')" = 0 ] && echo "$n"; done
+```
+
+**Fix — reap AGE-BASED, never blanket-prune**:
+- ❌ `docker network prune -f` (blanket) **races in-flight compose builds**: a net
+  created moments before its containers attach has 0 containers and gets pruned →
+  breaks the build. A periodic blanket prune killed a build mid-run in production.
+- ✅ Reap only CI-named nets with **0 attached containers AND >2h old** (an active
+  build's net is minutes old and has containers). Fold it into the disk-GC cron,
+  modelled on the stale-container reaper.
+
+**Robust alternative** (needs a disruptive `dockerd` restart): give Docker a
+bigger pool with **smaller subnets** so each net takes a /24 (256 per /16):
+```json
+// /etc/docker/daemon.json
+{ "default-address-pools": [ { "base": "172.17.0.0/16", "size": 24 },
+                             { "base": "10.100.0.0/16",  "size": 24 } ] }
+```
+
+> The common belief "idle Docker networks are metadata-only / harmless" is
+> **wrong** — each idle net costs a /16 of *address-pool* space (not disk), and on
+> a busy CI host the pool is the scarce resource.

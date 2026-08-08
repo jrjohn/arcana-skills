@@ -2,7 +2,7 @@
 name: arcana-devops-skill
 description: Unified CI/CD infrastructure skill — Jenkins multibranch pipeline templates for 15 languages (Java/Node/Python/Rust/Go/.NET/mobile/HarmonyOS/ESP32/STM32 and more) with JCasC, private Docker registry (arcana.boo), SonarQube + Architecture Qube quality gates, Nexus, and Prometheus/Grafana/Loki monitoring. Covers Docker-first builds, multi-environment deploy (Compose + SSH / K8s), Fastlane store submission, DR backup, and IEC 62304 compliance automation.
 skill_name: arcana-devops-skill
-skill_version: 1.1.0
+skill_version: 1.2.0
 created_date: 2026-02-11
 skill_type: complex
 protocols:
@@ -275,7 +275,7 @@ See: `templates/jenkins/Jenkinsfile.cloud`, `templates/scripts/deploy.sh`
   "completed_nodes": [],
   "node_outputs": {},
   "metadata": {
-    "skill_version": "1.1.0",
+    "skill_version": "1.2.0",
     "protocol": "COR-AFP-NTP"
   }
 }
@@ -360,6 +360,7 @@ bash ~/.claude/skills/arcana-devops-skill/process/00-init/exit-validation.sh {pr
 | `references/jenkins-patterns.md` | Jenkins Pipeline patterns |
 | `references/kubernetes-patterns.md` | K8s deployment strategies |
 | `references/cicd-patterns.md` | CI/CD flow patterns |
+| `references/release-automation.md` | release-please + Renovate automerge + auto-publish — the "automation opens PRs but never merges them" traps (platformAutomerge silent-fail, GITHUB_TOKEN no-trigger/PAT, release-type on Cargo workspaces) |
 | `references/migration-patterns.md` | Freestyle → Pipeline migration & real-world CI/CD improvements |
 | `references/mobile-release.md` | App Store/Play Store submission |
 | `references/embedded-patterns.md` | Embedded firmware CI/CD (ESP32 + STM32 build/test/deploy/security) |
