@@ -150,10 +150,23 @@ def handshake():
     global bad
     binary = os.environ.get('FLOW_SIM_BIN_FOR_TEST') or _find_flow_sim()
     if not binary:
-        # **不是通過。** 沒有 binary 就是沒有量到。
-        print('  notRun —— 找不到 flow-sim。用 FLOW_SIM_BIN_FOR_TEST 指定,'
-              '或先在 arcana-ai-bpm 跑 cargo build -p flow-sim --bin flow-sim。')
-        return 2
+        # notRun 與 notApplicable 的差別在於**由誰說**,而處置不同:
+        #
+        #   這個 repo 沒有 Rust、也不該有 flow-sim → notApplicable(可見,不擋)
+        #   aaf 的 pipeline 建完卻找不到           → notRun(該跑卻沒跑成,要擋)
+        #
+        # 所以由呼叫端宣告:`FLOW_SIM_REQUIRED=1` 時,缺 binary 是 notRun 而且擋。
+        # 一律不擋,會讓「這裡本來就沒有」與「說好要驗卻沒驗到」變成同一件事,
+        # 而後者正是這一整輪在拆的那個病。
+        if os.environ.get('FLOW_SIM_REQUIRED') == '1':
+            global bad
+            bad += 1
+            print('  ✗ notRun —— 說好要驗握手卻找不到 flow-sim。'
+                  '先跑 cargo build -p flow-sim --bin flow-sim。')
+            return 2
+        print('  notApplicable —— 這個環境沒有 flow-sim(可見,不擋)。'
+              '握手在 aaf 的 pipeline 裡驗,那邊 binary 是建出來的。')
+        return 3
 
     # 版本閘的上游要求「這次 PR 有動到流程」。那一步要讀 PR 的改動檔案(gh),
     # 與握手無關 —— stub 掉,讓每一格的結論只可能來自握手本身。
@@ -179,6 +192,12 @@ def handshake():
 
 
 def _find_flow_sim():
+    # 測試接縫:`FLOW_SIM_NO_SEARCH=1` 讓搜尋一定落空。
+    # 沒有它就問不出「說好要驗卻找不到 binary」那一格 —— 這台機器的 fallback
+    # 路徑剛好找得到,於是那個前提根本不成立,而我差點把「測試設定錯」讀成
+    # 「程式碼不會擋」。
+    if os.environ.get('FLOW_SIM_NO_SEARCH') == '1':
+        return ''
     for c in ('/usr/local/bin/flow-sim',
               os.path.expanduser('~/Documents/projects/aaf-designer-catalog/'
                                  'arcana-cloud-rust/target/debug/flow-sim')):
@@ -218,8 +237,9 @@ else:
 print()
 if bad == 0:
     print('  pass —— 該擋的擋了,該放行的放行了,品質線放寬不了,過舊的 binary 進不來')
-    if _hs_rc == 2:
-        print('  (握手那一段是 notRun —— 見上面)')
+    if _hs_rc == 3:
+        print('  (握手那一段是 notApplicable —— 這個環境沒有 flow-sim;'
+              '要它成為硬閘就設 FLOW_SIM_REQUIRED=1)')
 else:
     print('  gap —— %d 格不符' % bad)
 sys.exit(1 if bad else 0)
