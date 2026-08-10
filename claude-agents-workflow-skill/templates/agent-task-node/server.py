@@ -183,10 +183,26 @@ SCHEMAS = {
             # answer from an unchecked one.
             "continuation": {"type": "object", "properties": {
                 "kind": {"type": "string", "enum": ["new", "continue"]},
+                # `slug` 從 optional 改為必填。它不是描述用的標籤 —— 下游的 implement
+                # 以它命名分支,拿到空字串就直接拒絕動工(`invalid slug ''`)。
+                # 2026-08-10 實測:這個節點算出了 slug,值躺在自己的輸出裡沒有人接,
+                # 而流程一路綠到 implement 才停。optional 讓「沒給」看起來像一種選擇。
                 "slug": {"type": "string"},
                 "verified": {"type": "boolean"},
                 "why": {"type": "string"}},
-                "required": ["kind", "verified"]},
+                "required": ["kind", "verified", "slug"]},
+            # 這件事會不會動到使用者看得到的東西。
+            #
+            # 流程用它決定要不要跑 uiux 節點,而那個分岔的預設是「當成後端案子」——
+            # 所以沒有人回答時,一個純 UI 的需求會靜默跳過 UI/UX 規格。2026-08-10 實測
+            # 到這個情況:那一輪要做的整個就是一個畫面上的選單,uiuxSpec 是空的。
+            #
+            # 由這個節點判斷,是因為它是第一個讀完需求全文的節點。`why` 是必填的,
+            # 理由與 continuation 一樣:一個沒有依據的判斷,和猜的分不出來。
+            "userFacing": {"type": "object", "properties": {
+                "value": {"type": "boolean"},
+                "why": {"type": "string"}},
+                "required": ["value", "why"]},
         },
         "required": ["sufficient", "understanding", "openQuestions"],
     },
@@ -1009,7 +1025,15 @@ def prompt_intake(p):
         "不要靜默改判成新案。\n"
         "  · 填答說「新案」但清單裡有名稱或描述高度相近的 → 也要問,"
         "因為本產品已經有兩個 feature 被起過兩次,而每次都沒有人被問過。\n"
-        "  · 清單本身取不到 → `verified:false` 並說明無法查證,不得假裝查過。\n\n"
+        "  · 清單本身取不到 → `verified:false` 並說明無法查證,不得假裝查過。\n"
+        "  · `slug` 是**必填**:下游用它命名分支,空的會讓 implement 直接拒絕動工。\n\n"
+        "6. `userFacing`:`{\"value\": true|false, \"why\": \"…\"}` —— 這件事會不會動到"
+        "使用者看得到的東西(畫面、文案、互動、可存取性)。流程用它決定要不要跑 UI/UX 節點。\n"
+        "  · **不確定時填 `true`**。兩個方向的錯不對稱:多跑一次 UI/UX 節點的代價是一次 AI 呼叫;"
+        "漏掉的代價是一個純畫面的需求沒有任何 UI 規格,而且沒有人會發現 —— 那個分岔的預設"
+        "正好是「當成後端案子」。\n"
+        "  · 判準是**這一輪的改動**會不會被使用者看到,不是這個產品有沒有畫面。"
+        "改一支 CLI 的輸出格式算;加一個沒有人會開的內部端點不算。\n\n"
         "## 紀律\n"
         "- 上面標為「取不到」的資訊,就是**未知**。不得用聽起來合理的敘述補位:"
         "一段編造的專案現況與真的無法區分,而它會讓後面每個節點更確信一件可能錯的事。\n"
