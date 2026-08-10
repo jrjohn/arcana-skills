@@ -616,6 +616,40 @@ def _registry_project(repo, branch):
     return {"asked": True, "project": match}
 
 
+def _clamp_quality_floor(floor, bar):
+    """註冊表的下限與 repo 自己宣告的門檻,取「比較嚴」的那一個。
+
+    回傳 (生效的門檻, 被打回的項目清單)。純函式。
+
+    **一個 repo 可以把自己held 到更高的標準,不可以把自己從被要求的標準裡放出來** ——
+    否則被量的東西自己決定及格線。回傳被打回的清單而不是靜靜忽略,是因為
+    「試圖放寬」本身就是要被看見的事。
+
+    這份語意與 Rust 側的 `effective_quality_floor()` 相同(arcana-cloud-rust 的
+    clients/sdlc_project.rs),那邊有雙向單元測試 —— 但**那個函式從來沒有被生產路徑
+    呼叫過**,而這一側讀的是 `prof.get("qualityBar")`,直接就是 repo 自己寫的值。
+    實測:註冊表宣告 coverage=80,repo 在 .arcana/project.json 宣告 10,
+    preflight 放行,而真正被拿去判的門檻就是 10。
+
+    註冊表沒有約束的維度,是這個 repo 自己的事(想加 mutationScore 就加)。
+    """
+    eff = dict(floor or {})
+    relaxed = []
+    for k, v in (bar or {}).items():
+        want = v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+        base = eff.get(k)
+        base = base if isinstance(base, (int, float)) and not isinstance(base, bool) else None
+        if want is None or base is None:
+            if k not in eff:
+                eff[k] = v          # 註冊表沒約束這一項 → repo 自己的事
+            continue
+        if want >= base:
+            eff[k] = want           # 更嚴,照做
+        else:
+            relaxed.append("%s: repo 要 %s,下限是 %s" % (k, want, base))
+    return eff, relaxed
+
+
 def _required_cells(payload, workdir):
     """The verification dimensions each of this product's flows MUST have covered.
 
@@ -1199,6 +1233,20 @@ def preflight(payload):
     declared = prof.get("_ref")
     checks.append("profile: %s" % ("read from " + declared if declared else
                                    "absent — running on defaults"))
+
+    # 品質線只能更嚴。**在這裡夾,而不是在每個用到門檻的地方夾** —— 下游
+    # (`_sonar_quality_absolute` 的 bar、arch-qube 的 threshold)讀的都是這一份
+    # profile,夾一次全部繼承;夾在使用處就是同一條規則的第 N 份拷貝。
+    _proj = payload.get("_sdlc_project") or {}
+    _floor = _proj.get("qualityFloor") or {}
+    if _floor:
+        _eff, _relaxed = _clamp_quality_floor(_floor, prof.get("qualityBar") or {})
+        prof["qualityBar"] = _eff
+        if _relaxed:
+            # 記一筆,不是靜靜打回。試圖放寬本身就是要被看見的事。
+            checks.append("qualityBar: 打回註冊表下限 —— " + "; ".join(_relaxed))
+        else:
+            checks.append("qualityBar: %s(不低於註冊表下限)" % json.dumps(_eff, ensure_ascii=False))
 
     # Identity. A profile that names a different repo is a copy, and the copy's paths describe
     # a tree that is not this one.
