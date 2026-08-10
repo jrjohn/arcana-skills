@@ -25,6 +25,7 @@ Design notes:
   same as the existing daily-ci-agent image this is built FROM.
 """
 import base64
+import datetime
 import json
 import os
 import shutil
@@ -1848,6 +1849,73 @@ def _write_workspace_claude_md(root, payload):
         pass
 
 
+def _project_of(payload):
+    """這次 run 屬於哪個專案 —— 回 (projectId, displayName, 怎麼知道的)。
+
+    優先序,而且**兩層都可能答不出來**:
+
+      1. payload 明說 `projectId`         —— 最可靠,worker 傳下來的
+      2. 用 `(repo, base)` 反查註冊表      —— 不必動 worker,但有一個真的死角
+
+    死角是這樣:註冊表的自然鍵是 `(repo, integration_branch)`,所以**同一個 repo 的
+    兩條整合分支是兩個專案**。反查如果命中多筆,正確的答案是「不知道」,
+    不是挑第一個 —— 挑錯的代價是這次 run 的稽核與成本全部記到別的專案頭上,
+    而且沒有人會發現。
+
+    註冊表打不通也是「不知道」,不是「沒有這個專案」。兩者的處置不同:
+    前者要重試或修連線,後者要去登記。
+    """
+    pid = str(_pv(payload, "projectId") or "").strip()
+    if pid:
+        reg = _registry_project_by_id(pid)
+        return pid, (reg or {}).get("displayName", ""), "payload"
+
+    repo = str(_pv(payload, "repo") or "").strip().lower()
+    base = str(_pv(payload, "base", "main") or "main").strip()
+    if not repo:
+        return None, "", "no repo"
+    url = (os.environ.get("SDLC_REGISTRY_URL") or "").rstrip("/")
+    if not url:
+        return None, "", "registry not configured"
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url if url.startswith("http") else "http://" + url,
+                                    timeout=15) as r:
+            body = json.load(r)
+    except Exception as e:                                       # noqa: BLE001
+        return None, "", "registry unreachable (%s)" % e
+    hits = [p for p in (body.get("projects") or [])
+            if (p.get("repo") or "").lower() == repo]
+    exact = [p for p in hits if (p.get("integrationBranch") or "") == base]
+    if len(exact) == 1:
+        return exact[0].get("projectId"), exact[0].get("displayName", ""), "registry (repo+branch)"
+    if len(exact) > 1:
+        return None, "", "ambiguous: %d projects claim %s@%s" % (len(exact), repo, base)
+    if len(hits) == 1:
+        # 分支對不上但 repo 只有一個專案 —— 可以說,但要說出是怎麼來的。
+        return hits[0].get("projectId"), hits[0].get("displayName", ""), "registry (repo only)"
+    if len(hits) > 1:
+        return None, "", "ambiguous: %d projects share repo %s" % (len(hits), repo)
+    return None, "", "no registered project for %s@%s" % (repo, base)
+
+
+def _registry_project_by_id(pid):
+    url = (os.environ.get("SDLC_REGISTRY_URL") or "").rstrip("/")
+    if not url:
+        return None
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url if url.startswith("http") else "http://" + url,
+                                    timeout=15) as r:
+            body = json.load(r)
+    except Exception:                                            # noqa: BLE001
+        return None
+    for p in body.get("projects") or []:
+        if p.get("projectId") == pid:
+            return p
+    return None
+
+
 def _ensure_instance_workspace(payload):
     """Create this instance's workspace once, copying a previous run when asked.
 
@@ -1871,8 +1939,18 @@ def _ensure_instance_workspace(payload):
     # `repo` is part of the workspace's identity, not decoration: without it a later
     # `workspaceFrom:"latest"` cannot tell which product this tree belongs to, and lineage
     # you cannot key on is lineage you cannot trust.
+    # 1377 個舊工作區裡只有 24 個說得出自己屬於哪個 repo，一個都說不出 projectId。
+    # 註冊表已經有兩個專案，「這次 run 屬於哪一個」對舊資料是答不出來的問題 ——
+    # 而稽核與成本要 roll up 的單位正是專案。所以現在無條件記，答不出來也記下為什麼。
+    _pid, _pname, _how = _project_of(payload)
     meta = {"instance": piid, "slug": _pv(payload, "slug"), "repo": str(_pv(payload, "repo")).strip(),
+            "projectId": _pid, "projectName": _pname, "projectSource": _how,
+            "createdAt": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             "from": None, "frozen": False}
+    if not _pid:
+        # **不是靜靜跳過。** 一個說不出自己屬於哪個專案的工作區，日後的稽核與成本
+        # 分析就少了一列，而少的那一列不會有人察覺。
+        print("[agent-task-node] workspace %s 無法歸屬專案：%s" % (piid, _how), flush=True)
     src = _resolve_workspace_source(payload)
     if src:
         ok, how = _copy_tree(src, root)
