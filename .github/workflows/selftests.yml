@@ -1,0 +1,53 @@
+# 這個 repo 先前**完全沒有 CI**(沒有 .github/workflows,合併的 PR 都是 0 個檢查)。
+#
+# 那不是「檢查掛了」而是「沒有檢查」—— 兩者差很多:前者不能當綠燈,後者才輪得到
+# 本機證據說話。但既然自檢已經寫了三支,讓它們每次 PR 都跑,比每次都靠人記得跑好。
+#
+# 這裡只跑**離線**的那些:假註冊表用本機 HTTP 起,不打 GitHub、不需要 docker。
+# 需要外部相依的(flow-sim binary、arcana-ai-bpm 的 workspace-git.sh)會回 notRun,
+# 而 notRun **是擋的** —— 所以那兩支不在這裡跑,它們在 aaf 的 pipeline 裡跑,
+# 那邊兩份實作都在。硬要在這裡跑只會得到一條永遠紅的線,而永遠紅的線會被關掉。
+name: selftests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  agent-node:
+    name: agent-task-node 的自檢
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: claude-agents-workflow-skill/templates/agent-task-node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # preflight:註冊表未登記 / onboarding / 連不上 / 身分不符 → 擋;
+      # 一切正常 → 放行;品質線只能更嚴。九格,全離線。
+      - name: preflight.selftest.py
+        run: python3 preflight.selftest.py
+
+      # 「這次 run 屬於哪個專案」答得出來嗎,答不出來時會說嗎。
+      # 最要緊的是模稜兩可那兩格:反查命中多筆時要說「不知道」,不是挑第一個。
+      - name: project-resolve.selftest.py
+        run: python3 project-resolve.selftest.py
+
+      # 佈局契約需要 arcana-ai-bpm 的 workspace-git.sh 才跑得起來 ——
+      # 它在那邊的 pipeline 裡跑(兩份實作都在)。這裡只確認它**會誠實地說自己沒跑**,
+      # 而不是靜靜地通過:少一份實作等於契約只驗了一半。
+      - name: workspace-contract 缺另一半時要回 notRun(不是通過)
+        run: |
+          set +e
+          WS_SHELL=/nonexistent python3 workspace-contract.selftest.py
+          rc=$?
+          set -e
+          echo "rc=$rc (2=notRun,正確)"
+          if [ "$rc" != "2" ]; then
+            echo "缺另一份實作時應該回 notRun(2),得到 $rc —— 那會讓半個契約看起來像整個" >&2
+            exit 1
+          fi
