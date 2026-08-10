@@ -880,16 +880,47 @@ def _intake_form_section(p):
     """
     raw = p.get("intakeForm")
     rnd = p.get("intakeRound") or 0
-    if not raw:
-        return "\n## 表單狀態\n第 1 輪,尚無填答內容。\n"
+    # `intakeForm` 綁的是 userTask 的 `out`,而 out 是決議字串("approve" / "request-changes")。
+    # 一份表單必定是 JSON 物件,所以解析不出物件的東西就**不是**表單。
+    #
+    # 這裡原本的 except 分支會把解析失敗的內容包成 {"(unparsed)": ...} —— 於是決議字串
+    # 會以「填答內容」的姿態出現在提示詞裡。那比沒有更糟:節點看到一段像是填答的東西,
+    # 就不會說「尚無填答」,而它實際上什麼都沒讀到。
     try:
         form = json.loads(raw) if isinstance(raw, str) else raw
     except Exception:
-        form = {"(unparsed)": str(raw)[:2000]}
+        form = None
+    if not isinstance(form, dict):
+        form = {}
+
+    # 表單欄位也可能以**頂層 payload 鍵**送達 —— 這不是備援,是這個檔案自己的另一個預期:
+    # `SPEC_BEARING` 就明列了 pm_answers / out_of_scope / target_users / placement,
+    # 那份清單存在的意義正是「這些鍵是頂層的,而且不准被截斷」。
+    #
+    # 2026-08-10 實測:BPMN 的 intakeForm 只有一個 dataOutput(`out`),所以整份表單從來
+    # 沒有被寫進 `intakeForm` 這個變數 —— 它是 None。補上逐欄位的 dataOutputAssociation 之後,
+    # 欄位確實進了流程(pm_answers 1883 字),但這個函式只看 `intakeForm`,於是仍然讀不到:
+    # 第二輪的兩個 blocking 追問,問的正是使用者上一輪已經逐條回答過的事。
+    #
+    # 這是同一件事的兩種表達方式並存 —— 一份 blob,或一組具名欄位。兩種都讀,才不會因為
+    # 上游選了另一種而靜默失去整份填答。
+    for k in ("feature_request", "work_kind", "target_users", "placement", "acceptance",
+              "out_of_scope", "pm_answers", "pm_questions", "pm_assumptions",
+              "continues_slug"):
+        # `_pv` 而非 `p.get` —— dispatcher 把變數放頂層或放 `data` 底下都有,
+        # 只讀頂層會在 do_intake 帶 data 之後又靜默失效一次。
+        v = _pv(p, k)
+        if v not in (None, "", [], {}) and form.get(k) in (None, "", [], {}):
+            form[k] = v
+
+    if not form:
+        return "\n## 表單狀態\n第 1 輪,尚無填答內容。\n"
     label = {"feature_request": "需求描述", "target_users": "服務對象", "placement": "放在哪裡",
              "acceptance": "怎麼算做完", "out_of_scope": "這次不做什麼",
              "pm_answers": "對上輪追問的回覆", "pm_questions": "上輪的追問",
-             "pm_assumptions": "上輪採取的假設"}
+             "pm_assumptions": "上輪採取的假設",
+             "work_kind": "新案還是延續(填答者的勾選 —— 要查證,不是照抄)",
+             "continues_slug": "填答者說要延續的 slug"}
     parts = ["\n## 使用者填答(第 %s 輪)\n" % (int(rnd) + 1)]
     for k, v in (form or {}).items():
         if v not in (None, "", [], {}):
@@ -1823,7 +1854,11 @@ def _ensure_instance_workspace(payload):
     # `repo` is part of the workspace's identity, not decoration: without it a later
     # `workspaceFrom:"latest"` cannot tell which product this tree belongs to, and lineage
     # you cannot key on is lineage you cannot trust.
-    meta = {"instance": piid, "slug": _pv(payload, "slug"), "repo": str(_pv(payload, "repo")).strip(),
+    # `projectId` 與 `repo` 是兩件事,兩個都要記。repo 說「動哪棵樹」,projectId 說
+    # 「這一輪算在誰頭上」—— 稽核與成本歸屬要的是後者,而且同一個 repo 可以對應多個
+    # 專案代號、repo 本身也會改名。只記 repo 的話,一次改名就會讓歷史對不起來。
+    meta = {"instance": piid, "projectId": str(_pv(payload, "projectId")).strip(),
+            "slug": _pv(payload, "slug"), "repo": str(_pv(payload, "repo")).strip(),
             "from": None, "frozen": False}
     src = _resolve_workspace_source(payload)
     if src:
