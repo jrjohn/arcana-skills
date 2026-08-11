@@ -4015,6 +4015,35 @@ def _pr_url_and_branch(payload):
 
 
 
+def _sdd_declared_files(payload):
+    """SD 這一輪宣告要動的檔案 —— task-boundary 用來畫界線的那條線。
+
+    `sdd` 是結構化的(`{approach, files, steps}`),`files` 本來就在裡面 ——
+    2026-07-30 實例 e7dfd560 的那份就有三個路徑。所以這不是新增產出,是把
+    **已經產生卻沒有人讀**的東西接到消費端;宣告與消費不成對,正是這條管線
+    反覆出的那種病。
+
+    拿不到就回空 list,runner 端會把它讀成 `notRun` —— 不是「沒有超界」。
+    這裡刻意不從 `steps` 的散文裡撈路徑補齊:撈不全的清單會讓沒撈到的檔案
+    變成「超界」,那是假紅,而假紅正好是這一整套要防的另一半。
+    """
+    v = _pv(payload, "sdd")
+    if isinstance(v, str):
+        t = v.strip()
+        if t.startswith("```"):
+            t = re.sub(r"^```[a-zA-Z]*\n|\n```$", "", t).strip()
+        try:
+            v = json.loads(t)
+        except Exception:
+            return []
+    if not isinstance(v, dict):
+        return []
+    files = v.get("files")
+    if not isinstance(files, list):
+        return []
+    return [str(f).strip() for f in files if str(f).strip()]
+
+
 def _touched_flows(payload):
     """The business flows this PR changed — the process ids of any .bpmn2 in its file list.
 
@@ -5455,6 +5484,14 @@ def test_flow(payload):
             # failure, not a silent skip — the same rule scenario-walk already lives by.
             "-e", "SCENARIO_TOUCHED_PATHS=" + ",".join(payload.get("_touched_flow_paths") or []),
             "-e", "SCENARIO_GATE_EXPECTED=" + ("1" if _touched_flows(payload) else "0"),
+            # task-boundary:這一輪的 diff 有沒有超出 SD 宣告的範圍。SDD 的 `files`
+            # 一直都在,只是沒有人讀 —— 而「順手多改一些」是 AI 實作者的典型失敗,
+            # 每一處單看都合理,合起來的 diff 沒有人審得動。清單為空就傳空字串,
+            # runner 會判 notRun 並擋下:沒有宣告範圍,與有宣告且沒超出,不是同一件事。
+            "-e", "SDD_FILES_B64=" + (base64.b64encode(
+                json.dumps(_sdd_declared_files(payload)).encode("utf-8")).decode("ascii")
+                if _sdd_declared_files(payload) else ""),
+            "-e", "BOUNDARY_BASE=origin/" + base,
             # Where THIS product keeps its flows, its scenario library, and which cell
             # rulebook applies. Everything else about the gate had been generalised while
             # the one thing deciding which files it reads stayed hardcoded to aaf's layout,
