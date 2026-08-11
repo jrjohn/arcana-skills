@@ -206,6 +206,25 @@ SCHEMAS = {
         },
         "required": ["sufficient", "understanding", "openQuestions"],
     },
+    # 盲審:只看 AC 與 diff,逐條回答「這份改動有沒有做到」。
+    #
+    # 與 pm-review 分開是刻意的 —— 它的價值全在**輸入被切掉**這件事上,而不在它更聰明。
+    # 合併成一個 schema 會誘使同一次呼叫兩者都答,那就沒有盲可言了。
+    "pm-blind": {
+        "type": "object",
+        "properties": {
+            "checks": {"type": "array", "items": {"type": "object", "properties": {
+                "ac": {"type": "string"},
+                "done": {"type": "boolean"},
+                # file:line 是這個 schema 唯一的硬約束。一句「有做到」沒有位置,
+                # 與「我覺得應該有做」分不出來 —— 而分不出來正是這一刀要切開的東西。
+                "evidence": {"type": "string"},
+                "why": {"type": "string"}},
+                "required": ["ac", "done", "evidence"]}},
+            "notAssessable": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["checks"],
+    },
     "pm-review": {
         "type": "object",
         "properties": {
@@ -1415,6 +1434,42 @@ def _report_for_pm(report):
             "未讀到的部分不得視為「沒有問題」,若判斷需要它請以 HOLD 要求完整報告 !!]")
 
 
+def prompt_pm_blind(p):
+    """盲審:只給 AC 與 diff。不給摘要、不給 SRS 散文、不給歷史、不給 PM 的七個維度。
+
+    ## 為什麼要切掉那些輸入
+
+    PM 節點今天拿到的第一樣東西是 `pr` 變數 —— 4000 字,由 **implement 自己寫的摘要**。
+    然後才是 SRS / SDD / uiuxSpec / siblings / 前幾輪的對話。
+
+    而 AI 實作者的失敗模式恰好是:**產出一份很有說服力的摘要,而摘要與 diff 不符。**
+    2026-08-11 實測:implement 的摘要寫「Implemented … end-to-end (Rust backend +
+    Angular frontend), per SRS/SDD, with unit tests」,而 Test 節點跑出來是
+    **4 個測試案例 0 個通過**。摘要在前,證據在後。
+
+    這一問的價值不在它更聰明,在它**沒有被敘述先入為主**。所以輸入要少,不要多:
+    只有可驗收的條目,與那份 diff。
+
+    借自 cc-sdd 的 per-task 獨立 reviewer(reviewer 不看實作者的推理過程,只看產出)。
+    """
+    acs = str(p.get('acceptance') or p.get('srs') or '')[:6000]
+    pr = p.get('prUrl') or ''
+    return (
+        "你是獨立驗收者。你**只**會拿到兩樣東西:一份可驗收條目,與一份 diff。\n"
+        "你不會拿到實作者的摘要、設計文件的散文、或前幾輪發生過什麼 —— 那是刻意的。\n\n"
+        f"取得改動:`gh pr diff {pr}`。必要時 `gh pr view {pr} --json files`。\n\n"
+        "## 你要回答的唯一問題\n"
+        "**逐條**:這份 diff 有沒有做到這一條?\n\n"
+        "- `done: true` 必須附 `evidence`,格式是 **file:line**(或 file:符號名)。"
+        "指不出位置的,一律 `done: false` —— 一句「有做到」沒有位置,與「我覺得應該有做」"
+        "分不出來,而分不出來正是這一問存在的理由。\n"
+        "- 條目本身無法從 diff 判斷的(例如「上線後回應時間 < 200ms」),放進 "
+        "`notAssessable`,**不要猜**。放進去不算沒做到,只是這一問答不了。\n"
+        "- 不要評論程式碼好不好、要不要重構、命名妥不妥 —— 那不是這一問。\n\n"
+        "## 可驗收條目\n" + acs + "\n"
+    )
+
+
 def prompt_pm_review(p):
     # What this ROLE told the builder while the work was in flight.
     #
@@ -1431,7 +1486,15 @@ def prompt_pm_review(p):
         f"PR: {p.get('prUrl')}  (subject: {p.get('job') or p.get('subject')})\n"
         f"Inspect the ACTUAL change first: `gh pr diff {p.get('prUrl') or ''}` and `gh pr view "
         f"{p.get('prUrl') or ''}`. Judge against the evidence, do not trust summaries.\n"
-        f"- SRS (acceptance criteria to trace): {str(p.get('srs'))[:4000]}\n"
+        # 盲審的結果。它只看了 AC 與 diff —— 沒有摘要、沒有 SRS 散文、沒有歷史。
+        # 兩者**分歧本身就是訊號**:盲審說沒做到而摘要說做了,那是這條流水線最想抓的失敗。
+        + (f"- 獨立驗收者(只看 AC + diff,未看任何摘要或歷史)的逐條結果:"
+           f"{json.dumps(p.get('_blind'), ensure_ascii=False)[:3500]}\n"
+           f"  **它與摘要不一致的地方,以它為準,並在 feedback 裡點名那個落差。**"
+           f"它指得出 file:line,摘要指不出。\n" if p.get('_blind') else
+           "- 獨立驗收者:這一輪沒有跑成(見 `_blindNotRun`)。**不得把它讀成「都做到了」** —— "
+           "沒有那份逐條結果時,AC 的達成與否只有實作者的說法,而那正是不該單獨採信的。\n")
+        + f"- SRS (acceptance criteria to trace): {str(p.get('srs'))[:4000]}\n"
         f"- SDD (design to conform to): {str(p.get('sdd'))[:3000]}\n"
         f"- UI/UX spec (usability target, if user-facing): {str(p.get('uiuxSpec'))[:3000]}\n"
         f"- SIBLING features in this SAME initiative (each with its verdict/state — cross-check against "
@@ -1513,7 +1576,10 @@ def prompt_pm_review(p):
     )
 
 
-PROMPTS = {"intake": prompt_intake, "diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "scan-stale": prompt_scan_stale, "rebase": prompt_rebase, "audit": prompt_audit, "pm-review": prompt_pm_review}
+PROMPTS = {"intake": prompt_intake, "diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "scan-stale": prompt_scan_stale, "rebase": prompt_rebase, "audit": prompt_audit, "pm-review": prompt_pm_review,
+           # 盲審也註冊進來 —— server.py 自己有一道「SCHEMAS 有而 PROMPTS 沒有」的守衛,
+           # 而那正是這套規則的實例(宣告與消費要配對)。順帶讓它可以被單獨呼叫。
+           "pm-blind": prompt_pm_blind}
 
 # run_claude(verb) 讀 PROMPTS[verb] 與 SCHEMAS[verb]。三件事必須同時對齊,而它們分屬
 # 三處:兩份登記表,加上散在各處的呼叫點。對不上時 KeyError 只在**流程真的跑到那一格**
@@ -2820,11 +2886,48 @@ def _project_slug(payload):
     return repo.split("/")[-1] if repo else ""
 
 
+def _blind_check(payload):
+    """先跑一次盲審:只給 AC 與 diff,回逐條 done + file:line。
+
+    同一個節點裡的第二次呼叫,不是第二個節點 —— 加節點要付一次完整的排程與工作區成本,
+    而這裡要的只是「換一組輸入再問一次」。
+
+    失敗一律回 None 並記錄理由。**不得回一個空的 checks** —— 那會讓「沒跑成」與
+    「每一條都沒做到」長得一樣,而那正是這整套要防的病(見 ai-bpm-absence-skill)。
+    """
+    if not (payload.get("acceptance") or payload.get("srs")):
+        return None, "沒有可驗收條目 —— AC 與 SRS 都是空的"
+    if not payload.get("prUrl"):
+        return None, "沒有 PR 可看"
+    try:
+        out = _invoke_claude(prompt_pm_blind(payload), json.dumps(SCHEMAS["pm-blind"]),
+                             payload, 900)
+    except Exception as e:
+        return None, "盲審呼叫失敗:%s" % str(e)[:160]
+    data = out if isinstance(out, dict) else None
+    if data is None or not isinstance(data.get("checks"), list):
+        return None, "盲審沒有回出 checks 陣列"
+    return data, ""
+
+
 def run_claude(task, payload):
     """Static-verb path: prompt + schema come from the in-code PROMPTS/SCHEMAS
     registries keyed by the CI verb (diagnose/fix/merge/...)."""
     if STUB:
         return STUB_RESPONSES[task]
+    # PM 之前先跑獨立驗收(借自 cc-sdd 的 per-task reviewer:reviewer 不看實作者的
+    # 推理過程,只看產出)。它的價值全在**輸入被切掉**——所以必須在 PM 的提示詞
+    # 組出來之前跑完,結果以 `_blind` 傳進去。
+    if task == "pm-review" and not payload.get("_blind"):
+        blind, why = _blind_check(payload)
+        if blind:
+            payload["_blind"] = blind
+            done = sum(1 for c in blind.get("checks") or [] if c.get("done"))
+            tot = len(blind.get("checks") or [])
+            print("[agent-task-node] 盲審:%d/%d 條可指出 file:line" % (done, tot), flush=True)
+        else:
+            payload["_blindNotRun"] = why
+            print("[agent-task-node] 盲審沒跑成:%s" % why, flush=True)
     schema = json.dumps(SCHEMAS[task])
     prompt = _with_memory(PROMPTS[task](payload), payload)
     wall = 1800 if task in ("fix", "pm-review") else TIMEOUT
