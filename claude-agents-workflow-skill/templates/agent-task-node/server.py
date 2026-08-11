@@ -238,6 +238,32 @@ SCHEMAS = {
         },
         "required": ["verdict", "dimensions"],
     },
+    # 重試耗盡後換角色查根因。借自 cc-sdd 的 Debugger:實作者卡住或審查連退兩輪時,
+    # 換一個**乾淨脈絡**的角色查根因、產出修復計畫,再交給下一個實作者。
+    #
+    # `usable` 是這個 schema 的重點,而且它必須是節點**自己宣告**的:rcGate 讀它決定
+    # 要不要再實作一輪。由閘去推論「這份計畫看起來夠不夠具體」會讓兩個讀者對同一份
+    # 產出各說各話,而那是這條管線反覆出的那種病。
+    #
+    # `layer` 逼它先回答一個更基本的問題:錯在哪一層。連續兩輪零執行證據時,要改的
+    # 往往不是程式碼(2026-08-11 的 HOLD 正是這個形狀:PM 說「不要重做程式碼」)。
+    # 沒有這一欄,答案會預設落在 code —— 那是實作者已經試過兩次的地方。
+    "root-cause": {
+        "type": "object",
+        "properties": {
+            "usable": {"type": "boolean"},
+            "layer": {"type": "string",
+                      "enum": ["requirement", "design", "code", "test", "environment", "unknown"]},
+            "rootCause": {"type": "string"},
+            # 證據要指得出位置(file:line / 報告欄位 / 指令輸出),否則與「我覺得」
+            # 分不出來 —— 同 pm-blind 的那條硬約束,理由一樣。
+            "evidence": {"type": "array", "items": {"type": "string"}},
+            "steps": {"type": "array", "items": {"type": "string"}},
+            "notTheProblem": {"type": "array", "items": {"type": "string"}},
+            "confidence": {"type": "number"},
+        },
+        "required": ["usable", "layer", "rootCause", "evidence"],
+    },
     "escalate": {
         "type": "object",
         "properties": {
@@ -1470,6 +1496,62 @@ def prompt_pm_blind(p):
     )
 
 
+def prompt_root_cause(p):
+    """重試耗盡後換角色查根因。輸入是證據,不是敘述。
+
+    ## 為什麼這一格與「再重試一次」不同
+
+    同一個實作者重試兩次,第二次帶著第一次的推理一起進來。如果第一次錯在**理解錯了**,
+    那份推理正是要被丟掉的東西 —— 而重試把它保留了下來。
+
+    2026-08-11 實測的 HOLD 判定就是這個形狀:PM 說「連續兩輪產出零執行證據」、
+    「不要重做程式碼」。它診斷出的是跑法錯了不是程式錯了,而流程當時能做的只有升級給人。
+    這一格就是把那個判斷提前一步,交給一個沒有被前兩輪敘述先入為主的角色。
+
+    借自 cc-sdd 的 Debugger role:實作者 BLOCKED、或審查連退兩輪時觸發,在乾淨脈絡裡
+    查根因、產出修復計畫,交給**新的**實作者。
+    """
+    pr = p.get("prUrl") or ""
+    rep = p.get("testReport")
+    if not isinstance(rep, str):
+        rep = json.dumps(rep, ensure_ascii=False) if rep else ""
+    n = p.get("testAttempts")
+    return (
+        "同一份需求已經實作並測試了 %s 輪,每一輪都沒有通過。你是**換上來的**角色:\n"
+        "你的工作不是再修一次,是回答「為什麼一直修不好」。\n\n"
+        % (n if n not in (None, "") else "兩")
+        + "你拿到的是證據,不是敘述 —— 你**不會**拿到實作者的摘要、前幾輪的 PM 判定、"
+        "或設計文件的散文。那是刻意的:AI 實作者的典型失敗是產出一份很有說服力的摘要,"
+        "而摘要與 diff 不符。要判斷為什麼修不好,那份摘要正是要被排除的輸入。\n\n"
+        f"改動:`gh pr diff {pr}`;檔案清單:`gh pr view {pr} --json files`。\n"
+        "需要看跑出來的東西時可以讀 CI 日誌與測試報告的欄位,但**不要**去讀前幾輪的對話。\n"
+        # 這一段不是客套。`_with_memory` 會在這份提示詞前面接上產品記憶,而產品記憶
+        # 裡就有前幾輪實作者說過的話 —— 那把刀切不到它。與其假裝切乾淨了,不如明說
+        # 那些東西該被當成什麼:試過的路(→ notTheProblem),不是現成的診斷。
+        "若上面接了產品記憶,那是**前幾輪試過什麼**的紀錄,不是診斷。把它當成 "
+        "`notTheProblem` 的候選,不要直接採用裡面任何一句結論 —— 那些結論來自"
+        "剛剛失敗兩次的那條路。\n\n"
+        "## 先回答:錯在哪一層\n"
+        "`layer` 六選一 —— requirement / design / code / test / environment / unknown。\n"
+        "**不要預設是 code。** 實作者已經在 code 這一層試過兩次了;如果問題真的在那裡,"
+        "它比較可能已經被修掉。連續兩輪零執行證據通常意味著測試根本沒跑到該跑的東西,"
+        "或環境沒起來 —— 那是 test / environment,而在那兩層改產品碼只會讓 diff 變大。\n\n"
+        "## 再回答:修復計畫\n"
+        "- `rootCause`:一句話,說出**那一個**原因。列三個可能原因等於沒有診斷。\n"
+        "- `evidence`:每一條都要指得出位置 —— file:line、測試報告的欄位、指令與它的輸出。"
+        "指不出位置的推測不要放進來。\n"
+        "- `steps`:下一個實作者照著做就能執行的步驟。\n"
+        "- `notTheProblem`:你**排除**掉的東西。這一欄跟 steps 一樣重要 —— 它讓下一個"
+        "實作者不會再去試前兩輪已經試過的路。\n\n"
+        "## usable\n"
+        "只有在你真的找到一個具體、可執行的根因時才填 `true`。\n"
+        "查不出來就填 **false** 並在 `rootCause` 說明你查了什麼、卡在哪 —— 這不是失敗,"
+        "是誠實的結果,流程會交給人裁決。**猜一個聽起來合理的原因填 true 才是失敗**:"
+        "那會讓流程再燒掉一整輪實作去追一個編出來的方向。\n\n"
+        "## 測試報告(機器產出的判定,不是誰的說法)\n" + rep[:12000] + "\n"
+    )
+
+
 def prompt_pm_review(p):
     # What this ROLE told the builder while the work was in flight.
     #
@@ -1579,7 +1661,9 @@ def prompt_pm_review(p):
 PROMPTS = {"intake": prompt_intake, "diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "scan-stale": prompt_scan_stale, "rebase": prompt_rebase, "audit": prompt_audit, "pm-review": prompt_pm_review,
            # 盲審也註冊進來 —— server.py 自己有一道「SCHEMAS 有而 PROMPTS 沒有」的守衛,
            # 而那正是這套規則的實例(宣告與消費要配對)。順帶讓它可以被單獨呼叫。
-           "pm-blind": prompt_pm_blind}
+           "pm-blind": prompt_pm_blind,
+           # 重試耗盡後換角色查根因(rootCause 節點)。
+           "root-cause": prompt_root_cause}
 
 # run_claude(verb) 讀 PROMPTS[verb] 與 SCHEMAS[verb]。三件事必須同時對齊,而它們分屬
 # 三處:兩份登記表,加上散在各處的呼叫點。對不上時 KeyError 只在**流程真的跑到那一格**
@@ -3778,6 +3862,20 @@ def implement_flow(payload):
               "回合都綁在那個編號上。你自己開的 PR 流程看不見：沒有 CI 綁定、沒有 merge-flow、"
               "沒有任何節點會來結掉它，只會變成沒人處理的孤兒 PR。\n"
             + ("\n## 設計 (SRS/SDD)\n```json\n" + design_str + "\n```\n" if design_str else "")
+            # 換角色查出來的根因。它只在重試耗盡之後才存在,而它存在時就是這一輪最該讀的
+            # 一段:前兩輪失敗的是「照 SRS 再做一次」,而這一段說的是為什麼那樣做不會成功。
+            # 這裡點名它,而不是讓它安靜地躺在 design JSON 的某個鍵裡 —— 一份沒有人被告知
+            # 要讀的輸入,與沒有那份輸入,產生的行為一樣。
+            + ("\n## 為什麼前幾輪修不好(換角色查出來的根因)\n"
+               "**先讀這一段再動手。** 它由一個沒有參與前幾輪的角色查出來:\n"
+               "- `rootCause` / `layer`:錯在哪一層。若 layer 不是 `code`,改產品碼多半"
+               "只會讓 diff 變大而問題還在。\n"
+               "- `steps`:照著做。\n"
+               "- `notTheProblem`:**已經排除掉的方向,不要再試一次。**\n"
+               "如果你認為這份診斷是錯的,在你的摘要裡說出哪一條證據不成立 —— "
+               "不要安靜地繞過它照原樣再做一次,那正是前兩輪做過的事。\n```json\n"
+               + json.dumps((design or {}).get("fixPlan"), ensure_ascii=False) + "\n```\n"
+               if isinstance(design, dict) and design.get("fixPlan") else "")
             # The exam paper, handed over before the work rather than after it.
             + _acceptance_brief(payload, workdir)
             # Rework rounds arrive with the same SRS they already built from; this is the
