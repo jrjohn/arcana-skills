@@ -356,7 +356,19 @@ def prompt_merge(p):
         "verify with `gh pr view` and `gh pr checks` that the PR is OPEN, not a draft, has no "
         "merge conflicts, and EVERY status check listed by `gh pr checks` is green/passing "
         "(treat ALL checks as required, not just one). For repos with no checks configured, "
-        "an empty check list is not 'all green' — say so and take no action.\n\n"
+        "an empty check list is not 'all green' — say so and take no action.\n"
+        "A CHECK THAT IS ABSENT IS NOT A CHECK THAT PASSED. `gh pr checks` lists what REPORTED; "
+        "a pipeline that never woke up contributes no row at all, so 'every row is green' can be "
+        "true of a PR that nothing built. Observed 2026-08-13 on arcana-ai-bpm #207: only "
+        "`mvn package (BPMN codegen)` reported, all three Jenkins contexts were missing entirely, "
+        "and GitHub still said mergeStateStatus=CLEAN — because GitHub only weighs checks that "
+        "reported. The empty-list rule above does not cover this: a PARTIAL list is not empty. "
+        "So name the contexts you EXPECT for this repo first, then confirm each one is PRESENT "
+        "and green. For arcana-ai-bpm expect `ci/rust` and `ci/angular` on every PR "
+        "(`mvn package (BPMN codegen)` only fires when `kogito-bpmn/**` changed — absent there is "
+        "correct, and that difference is exactly why you must reason about each context rather "
+        "than count rows). Missing an expected context -> treat as PENDING and say which is "
+        "missing; never as green.\n\n"
         "PENDING IS NOT A REFUSAL — FIRST ASK WHETHER A BUILD IS ACTUALLY RUNNING.\n"
         "A pending check means the answer is not known yet, not that the answer is no. This "
         "distinction cost a full 20-minute build cycle on 2026-08-03: build #2 went green and "
@@ -525,10 +537,20 @@ def prompt_audit(p):
         "executor's word means nothing.\n"
         f"CHECK 1 — `gh pr view {pr} --json state,isDraft,mergeable,mergeStateStatus`: must be OPEN, "
         "not draft, mergeable=MERGEABLE, mergeStateStatus CLEAN or UNSTABLE (not DIRTY/BEHIND/BLOCKED).\n"
-        f"CHECK 2 — `gh pr checks {pr}`: EVERY per-pipeline status context must be green. For "
-        "arcana-ai-bpm that means BOTH `ci/rust` AND `ci/angular`. Do NOT rely on the shared "
-        "`continuous-integration/jenkins/pr-merge` (whichever pipeline finishes last overwrites it). "
-        "If any required check is still pending -> PENDING. If any is genuinely failing -> REJECTED.\n"
+        f"CHECK 2 — `gh pr checks {pr}`: every expected per-pipeline status context must be BOTH "
+        "PRESENT AND green. For arcana-ai-bpm that means `ci/rust` AND `ci/angular`. Do NOT rely on "
+        "the shared `continuous-integration/jenkins/pr-merge` (whichever pipeline finishes last "
+        "overwrites it).\n"
+        "  · ABSENT IS NOT GREEN. `gh pr checks` lists what REPORTED — a pipeline that never woke "
+        "up contributes no row, so 'every row is green' is trivially true of a PR nothing built, "
+        "and GitHub's mergeStateStatus says CLEAN because it too only weighs what reported. "
+        "Observed on #207 (2026-08-13): one row present, three Jenkins contexts missing, CLEAN. "
+        "Check PRESENCE of each expected context by name before you look at its state.\n"
+        "  · Do not infer the expected set by counting rows — it varies by what the PR touched. "
+        "`mvn package (BPMN codegen)` fires only for `kogito-bpmn/**`; its absence on a Rust-only "
+        "PR is correct, while a missing `ci/rust` on that same PR is not.\n"
+        "  · Expected-but-missing -> PENDING, naming which. Still running -> PENDING. "
+        "Genuinely failing -> REJECTED. Never APPROVED on a context you never saw.\n"
         f"CHECK 3 — rebase cleanliness: `gh pr diff {pr}` must contain ONLY the PR's intended logical "
         "change, nothing extra dragged in by the rebase. If the diff grew unexpected content -> REJECTED.\n"
         "Return decision = APPROVED (all three pass) | PENDING (checks still running) | REJECTED (any "
@@ -3731,12 +3753,38 @@ def implement_flow(payload):
         ps = _git("push", "-u", "origin", branch, "--force")
         if ps.returncode != 0:
             return {"error": "push failed: %s" % (ps.stderr or ps.stdout)[-500:]}
+        # 這個 PR 帶了幾個 commit? 本輪只做一個 —— 多出來的是**別人尚未合併的工作**。
+        #
+        # 2026-08-13 實測(arcana-ai-bpm #206):SDD 的第 0 步要求以另一條分支為 base
+        # (那五條修復還沒進 main,不接上去新寫的 e2e 會永遠紅),實作節點照做了。
+        # 然後這裡照常把 HEAD 推成 `feat/<slug>`、對 main 開 PR —— 於是那個 PR 夾帶了
+        # 兩個不屬於本輪的 commit,與另一個既存的 PR(#204)整份重疊。
+        # 兩個 PR 對同一份工作,而流程只認得後開的那個。
+        #
+        # 不改推送模型(每一輪 rework 都 force-push 到 `feat/<slug>`,PR 編號要綁得住);
+        # 改的是**它不再默默發生**:數得出來就寫進 PR 內文與回傳值,讓人與 PM 節點都看得到。
+        stacked = []
+        lg = _git("log", "--oneline", "--no-decorate", "origin/%s..HEAD" % base)
+        if lg.returncode == 0:
+            stacked = [ln.strip() for ln in lg.stdout.splitlines() if ln.strip()]
+        # 本輪自己那一個不算 —— 它就是這個 PR 的內容。
+        inherited = stacked[1:] if len(stacked) > 1 else []
+        stack_note = ""
+        if inherited:
+            stack_note = (
+                "\n> ⚠️ **這個 PR 疊在尚未合併的工作之上。** 除了本輪的改動,它還帶了 "
+                "%d 個不在 `%s` 上的 commit:\n>\n%s\n>\n"
+                "> 這通常是 SDD 指定了另一條 base 分支(例如「接到某個既存 PR 上,否則新測試會永遠紅」)。\n"
+                "> 合併前請確認:那些 commit 是不是也打算跟著這個 PR 進去?若它們另有 PR,兩者會重疊。\n\n"
+                % (len(inherited), base, "\n".join("> - `%s`" % c for c in inherited)))
+
         body = ("AI-implemented feature `%s`.\n\n"
                 "This is a **GATED** PR — written by the AI-BPM Implement node, NOT a "
                 "self-deploy. Quality gates (CI build + tests + arch-qube) + merge-flow "
-                "gate the actual merge/deploy. Do not auto-merge without the green gate.\n\n"
+                "gate the actual merge/deploy. Do not auto-merge without the green gate.\n"
+                "%s\n"
                 "Local build gate: %s\n\n"
-                "Summary: %s\n" % (slug, build_status, summary or "(none)"))
+                "Summary: %s\n" % (slug, stack_note, build_status, summary or "(none)"))
         env = dict(os.environ)
         if token:
             env["GH_TOKEN"] = token
@@ -3798,7 +3846,7 @@ def implement_flow(payload):
                  "--json", "url", "--jq", ".[0].url"],
                 capture_output=True, text=True, timeout=120, env=env).stdout.strip()
         if existing:
-            return {"prUrl": existing, "branch": branch, "summary": summary,
+            return {"prUrl": existing, "branch": branch, "summary": summary, "stackedOn": inherited,
                     "filesChanged": files_changed, "pushed": True,
                     "buildStatus": build_status, "prReused": True,
                     "supersededPrs": superseded}
@@ -3814,14 +3862,14 @@ def implement_flow(payload):
                  "--json", "url", "--jq", ".[0].url"],
                 capture_output=True, text=True, timeout=120, env=env).stdout.strip()
             if recovered:
-                return {"prUrl": recovered, "branch": branch, "summary": summary,
+                return {"prUrl": recovered, "branch": branch, "summary": summary, "stackedOn": inherited,
                         "filesChanged": files_changed, "pushed": True,
                         "buildStatus": build_status, "prReused": True,
                         "supersededPrs": superseded}
             return {"error": "pr create failed: %s" % (pr.stderr or pr.stdout)[-500:],
                     "branch": branch, "filesChanged": files_changed}
         pr_url = pr.stdout.strip().splitlines()[-1] if pr.stdout.strip() else ""
-        return {"prUrl": pr_url, "branch": branch, "summary": summary,
+        return {"prUrl": pr_url, "branch": branch, "summary": summary, "stackedOn": inherited,
                 "filesChanged": files_changed, "pushed": True, "buildStatus": build_status,
                 "supersededPrs": superseded}
     except subprocess.TimeoutExpired:
