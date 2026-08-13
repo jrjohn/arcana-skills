@@ -120,5 +120,28 @@ check("舊政策文字只擋空清單,擋不住部分清單",
 check("舊文字點名了 context 卻沒要求它們必須出現 —— 這正是空真的來源",
       "ci/rust" in OLD_VERDICT and "PRESENT" not in OLD_VERDICT)
 
+
+
+# ── ① 疊在尚未合併的工作之上,不得靜默 ──────────────────────────
+print("\n【publish:PR 夾帶不屬於本輪的 commit 時要說出來】")
+src = open(os.path.join(D, "server.py"), encoding="utf-8").read()
+
+check("publish 會去數 base..HEAD 的 commit",
+      'origin/%s..HEAD' in src and '"log", "--oneline"' in src)
+check("本輪自己那一個不算進『夾帶』", "stacked[1:]" in src)
+check("夾帶時 PR 內文要出現警告", "疊在尚未合併的工作之上" in src)
+check("警告要列出是哪幾個 commit", 'inherited' in src and '"\\n".join' in src)
+check("回傳值帶 stackedOn(PM 節點與流程變數看得到)", src.count('"stackedOn": inherited') == 3)
+check("沒有夾帶時不加任何噪音(stack_note 預設空字串)", 'stack_note = ""' in src)
+
+# 對照組:把判準拿掉,必須讀不出這件事
+OLD_PUBLISH = (
+    'body = ("AI-implemented feature `%s`.\\n\\n"\n'
+    '        "This is a **GATED** PR ..."\n'
+    '        "Local build gate: %s\\n\\nSummary: %s\\n")'
+)
+check("對照組:舊的 body 組法讀不出『夾帶』的概念",
+      "疊在尚未合併的工作之上" not in OLD_PUBLISH and "stackedOn" not in OLD_PUBLISH)
+
 print(f"\n{ok} 通過, {fail} 失敗")
 sys.exit(1 if fail else 0)

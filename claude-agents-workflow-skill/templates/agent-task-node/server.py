@@ -3753,12 +3753,38 @@ def implement_flow(payload):
         ps = _git("push", "-u", "origin", branch, "--force")
         if ps.returncode != 0:
             return {"error": "push failed: %s" % (ps.stderr or ps.stdout)[-500:]}
+        # 這個 PR 帶了幾個 commit? 本輪只做一個 —— 多出來的是**別人尚未合併的工作**。
+        #
+        # 2026-08-13 實測(arcana-ai-bpm #206):SDD 的第 0 步要求以另一條分支為 base
+        # (那五條修復還沒進 main,不接上去新寫的 e2e 會永遠紅),實作節點照做了。
+        # 然後這裡照常把 HEAD 推成 `feat/<slug>`、對 main 開 PR —— 於是那個 PR 夾帶了
+        # 兩個不屬於本輪的 commit,與另一個既存的 PR(#204)整份重疊。
+        # 兩個 PR 對同一份工作,而流程只認得後開的那個。
+        #
+        # 不改推送模型(每一輪 rework 都 force-push 到 `feat/<slug>`,PR 編號要綁得住);
+        # 改的是**它不再默默發生**:數得出來就寫進 PR 內文與回傳值,讓人與 PM 節點都看得到。
+        stacked = []
+        lg = _git("log", "--oneline", "--no-decorate", "origin/%s..HEAD" % base)
+        if lg.returncode == 0:
+            stacked = [ln.strip() for ln in lg.stdout.splitlines() if ln.strip()]
+        # 本輪自己那一個不算 —— 它就是這個 PR 的內容。
+        inherited = stacked[1:] if len(stacked) > 1 else []
+        stack_note = ""
+        if inherited:
+            stack_note = (
+                "\n> ⚠️ **這個 PR 疊在尚未合併的工作之上。** 除了本輪的改動,它還帶了 "
+                "%d 個不在 `%s` 上的 commit:\n>\n%s\n>\n"
+                "> 這通常是 SDD 指定了另一條 base 分支(例如「接到某個既存 PR 上,否則新測試會永遠紅」)。\n"
+                "> 合併前請確認:那些 commit 是不是也打算跟著這個 PR 進去?若它們另有 PR,兩者會重疊。\n\n"
+                % (len(inherited), base, "\n".join("> - `%s`" % c for c in inherited)))
+
         body = ("AI-implemented feature `%s`.\n\n"
                 "This is a **GATED** PR — written by the AI-BPM Implement node, NOT a "
                 "self-deploy. Quality gates (CI build + tests + arch-qube) + merge-flow "
-                "gate the actual merge/deploy. Do not auto-merge without the green gate.\n\n"
+                "gate the actual merge/deploy. Do not auto-merge without the green gate.\n"
+                "%s\n"
                 "Local build gate: %s\n\n"
-                "Summary: %s\n" % (slug, build_status, summary or "(none)"))
+                "Summary: %s\n" % (slug, stack_note, build_status, summary or "(none)"))
         env = dict(os.environ)
         if token:
             env["GH_TOKEN"] = token
@@ -3820,7 +3846,7 @@ def implement_flow(payload):
                  "--json", "url", "--jq", ".[0].url"],
                 capture_output=True, text=True, timeout=120, env=env).stdout.strip()
         if existing:
-            return {"prUrl": existing, "branch": branch, "summary": summary,
+            return {"prUrl": existing, "branch": branch, "summary": summary, "stackedOn": inherited,
                     "filesChanged": files_changed, "pushed": True,
                     "buildStatus": build_status, "prReused": True,
                     "supersededPrs": superseded}
@@ -3836,14 +3862,14 @@ def implement_flow(payload):
                  "--json", "url", "--jq", ".[0].url"],
                 capture_output=True, text=True, timeout=120, env=env).stdout.strip()
             if recovered:
-                return {"prUrl": recovered, "branch": branch, "summary": summary,
+                return {"prUrl": recovered, "branch": branch, "summary": summary, "stackedOn": inherited,
                         "filesChanged": files_changed, "pushed": True,
                         "buildStatus": build_status, "prReused": True,
                         "supersededPrs": superseded}
             return {"error": "pr create failed: %s" % (pr.stderr or pr.stdout)[-500:],
                     "branch": branch, "filesChanged": files_changed}
         pr_url = pr.stdout.strip().splitlines()[-1] if pr.stdout.strip() else ""
-        return {"prUrl": pr_url, "branch": branch, "summary": summary,
+        return {"prUrl": pr_url, "branch": branch, "summary": summary, "stackedOn": inherited,
                 "filesChanged": files_changed, "pushed": True, "buildStatus": build_status,
                 "supersededPrs": superseded}
     except subprocess.TimeoutExpired:
