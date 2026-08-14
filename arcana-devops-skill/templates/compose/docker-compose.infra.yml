@@ -83,7 +83,7 @@ services:
 
   # === Docker Registry ===
   registry:
-    image: registry:2
+    image: registry:3
     container_name: registry
     restart: unless-stopped
     ports:
