@@ -1443,8 +1443,13 @@ def prompt_pm_review(p):
         "journey means a real user CANNOT COMPLETE the core task — the feature RENDERS but the action is "
         "unreachable (rendered != actionable, e.g. 'as 簽核者 cannot reach 核准 — the row opened a read-only "
         "view'); this is the class the diff/screenshot review misses, NOGO naming the blocked journey + reason "
-        "so Implement wires the missing path. A separate green CI check-rollup / SonarQube is CONFIRMATORY but NOT required — do NOT "
-        "HOLD merely because SONARQUBE_TOKEN / CI env is unset when the testReport is present. arch-qube>=90 "
+        "so Implement wires the missing path. **`testReport.prCi` is the PR's OWN build and is NOT optional**: "
+        "`verdict=red` -> NOGO(quality) quoting `prCi.summary` so Implement fixes the named check — this is a "
+        "defect in the branch and it is fixable; `verdict=notRun` -> HOLD, NOT NOGO, because nothing was built "
+        "and there is nothing in the code for Implement to fix (sending it to 'fix' an unbuilt PR burns a round); "
+        "`notApplicable` = this repo has no CI, carry on. Absent is not green — that distinction is the whole "
+        "reason the field has four values. SonarQube remains CONFIRMATORY: do NOT HOLD merely because "
+        "SONARQUBE_TOKEN is unset when the testReport is present. arch-qube>=90 "
         "still applies where it is checkable. Bars unmet -> NOGO(quality).\n"
         "Then the FIVE dimensions: (1) usability - audit the built UI in the diff against the UX rubric; you "
         "CAN catch objective violations (equal-weight N-quadrant dumps, non-collapsible toolbars, no "
@@ -4566,6 +4571,13 @@ def _post_commit_status(repo, branch, rep):
             caveats.append("no scenario walk")
         if not rep.get("featureTests"):
             caveats.append("regression only")
+        # The PR's own build, in the line a human reads first. "notRun" is named rather than
+        # omitted: an omitted caveat reads as a caveat that does not apply.
+        _civ = (rep.get("prCi") or {}).get("verdict")
+        if _civ == "red":
+            caveats.append("PR build RED")
+        elif _civ == "notRun":
+            caveats.append("PR build not reported")
         desc = "%s/%s testcases" % (rep.get("passed", 0), rep.get("total", 0))
         if caveats:
             desc += " — unverified: " + ", ".join(caveats)
@@ -5247,6 +5259,180 @@ def _arch_qube(payload):
     return out
 
 
+# ── The PR's OWN build verdict ──────────────────────────────────────────────────────────
+#
+# The test node runs ~20 gates of its own and returns ~100 fields, and not one of them said
+# whether the PR's build passed. 2026-08-14, arcana-ai-bpm #212: Jenkins failed the branch
+# twice — `designers.spec.ts` "form designer mounts the form-js editor", a test that passes
+# on main in all three browsers, stopped mounting; 6 failures, then 9 after the next rework.
+# The flow never mentioned it. `pmReview` contained the words Jenkins / CI / build zero
+# times, so Implement reworked twice without being told the build was red, and the second
+# rework made it worse.
+#
+# Implement can fix a broken build. Nobody was telling it there was one. That is the whole
+# defect: one side produced complete, correct failure evidence, the other side read
+# somewhere else, found nothing, and reported nothing.
+#
+# The report goes to Implement as `test_feedback` (it is in SPEC_BEARING, so it is not
+# squeezed), which is why folding the verdict in HERE reaches the node that can act on it.
+
+_CI_SELF_CONTEXT = "arcana/sdlc-test"  # our own status — reading it would be grading our own homework
+
+
+def _ci_verdict(checks, base_has_ci):
+    """(verdict, reds) from the checks on a commit. Four states, and `absent` is the point.
+
+    Two states would have been the bug. On a fresh push the Jenkins contexts DISAPPEAR from
+    the list for a while — not pending, absent — so anything that counts only failures reads
+    "no red" and calls it green. That is the same mistake the merge gate already had to be
+    taught (`merge_gate_selftest.py`): the question is not "is everything listed green" but
+    "did everything that should have come, come — and is it green".
+
+    Whether absence is expected is MEASURED, not assumed: `base_has_ci` says whether the base
+    branch's head carries checks. If it does, this repo has CI and a PR head with none has
+    simply not been built yet. If it does not, there is no CI to wait for and blocking on its
+    silence would stall every product that does not use one.
+    """
+    reds = [c for c in checks if c.get("state") == "red"]
+    if reds:
+        return "red", reds
+    if not checks:
+        return ("notRun" if base_has_ci else "notApplicable"), []
+    if any(c.get("state") == "pending" for c in checks):
+        return "notRun", []
+    return "green", []
+
+
+def _fold_ci(rep, ci):
+    """Fold the build verdict into the same object every other gate lands in.
+
+    Same reason arch-qube and sonar are folded by the runner rather than reported beside it:
+    a verdict that lives next to `allPass` instead of inside it lets two answers disagree,
+    and the reader believes whichever one they happened to open.
+
+    `red` and `notRun` both block, and the note says WHICH — because they call for different
+    actions and the PM has to be able to tell them apart. Red is a code defect and belongs in
+    a NOGO. Not-run is the platform's problem, not the branch's, and is what HOLD is for;
+    sending Implement to "fix" an unbuilt PR burns a round on nothing.
+    """
+    rep["prCi"] = ci
+    v = (ci or {}).get("verdict")
+    if v in ("red", "notRun"):
+        rep["allPass"] = False
+        rep.setdefault("blockingReasons", []).append({
+            "gate": "prCi",
+            "field": "prCi.verdict",
+            "value": v,
+            "note": (("這個 PR 的建置是紅的 —— 這是分支裡的程式缺陷,修得動:"
+                      if v == "red" else
+                      "這個 PR 的建置還沒有結果 —— 缺席不等於通過。這不是分支的缺陷,"
+                      "不要為它改程式;要的是等它落地或修建置環境:")
+                     + " " + str((ci or {}).get("summary") or "")),
+        })
+    return rep
+
+
+def _ci_checks_for(repo, sha):
+    """Both GitHub surfaces at once: legacy commit statuses (Jenkins) + check runs (Actions).
+
+    Reading only one of them is how a red build stays invisible — this repo posts Jenkins
+    through statuses and its GitHub Actions through check runs, and #212 had failures on
+    both surfaces in the same run.
+    """
+    out = []
+    try:
+        st = _gh_json(["api", "repos/%s/commits/%s/status" % (repo, sha)]) or {}
+    except Exception:                                            # noqa: BLE001
+        st = {}
+    for s in st.get("statuses") or []:
+        if s.get("context") == _CI_SELF_CONTEXT:
+            continue
+        out.append({"name": s.get("context") or "?",
+                    "state": {"success": "green", "failure": "red", "error": "red"}.get(
+                        s.get("state"), "pending"),
+                    "detail": (s.get("description") or "")[:200],
+                    "url": s.get("target_url") or ""})
+    try:
+        cr = _gh_json(["api", "repos/%s/commits/%s/check-runs" % (repo, sha)]) or {}
+    except Exception:                                            # noqa: BLE001
+        cr = {}
+    for c in cr.get("check_runs") or []:
+        if c.get("name") == _CI_SELF_CONTEXT:
+            continue
+        if c.get("status") != "completed":
+            state = "pending"
+        else:
+            state = "green" if c.get("conclusion") in ("success", "neutral", "skipped") else "red"
+        o = c.get("output") or {}
+        out.append({"name": c.get("name") or "?", "state": state,
+                    "detail": ((o.get("title") or "") + " " + (o.get("summary") or "")).strip()[:400],
+                    "url": c.get("html_url") or ""})
+    return out
+
+
+def _gh_json(args, timeout=90):
+    r = subprocess.run(["gh"] + args, capture_output=True, text=True, timeout=timeout)
+    if r.returncode != 0:
+        raise RuntimeError((r.stderr or "").strip()[:200])
+    return json.loads(r.stdout or "null")
+
+
+def _pr_ci(repo, branch, base="main"):
+    """Read this PR's build verdict, waiting a bounded time for it to land.
+
+    The wait exists because of the ordering: Implement pushes, CI starts, this node starts
+    its own ~25-minute runner, and only then asks. On #212 the Jenkins run finished about 18
+    minutes after the runner would have, so asking once and giving up would have produced
+    `notRun` on a build that was about to go red — the exact silence being fixed.
+    """
+    ci = {"applicable": False, "verdict": "notApplicable", "checks": [], "red": [],
+          "summary": "", "sha": "", "waitedSecs": 0}
+    if not repo or not branch:
+        ci["summary"] = "沒有 PR 分支,沒有建置可讀"
+        return ci
+    if os.environ.get("PR_CI_GATE", "1") == "0":
+        ci["summary"] = "已由 PR_CI_GATE=0 關閉"
+        return ci
+    try:
+        wait_s = int(os.environ.get("PR_CI_WAIT_SECS", "1800"))
+        ci["sha"] = (_gh_json(["api", "repos/%s/commits/%s" % (repo, branch)]) or {}).get("sha") or ""
+        if not ci["sha"]:
+            ci["summary"] = "查不到 %s 的 head commit" % branch
+            return ci
+        base_sha = (_gh_json(["api", "repos/%s/commits/%s" % (repo, base)]) or {}).get("sha") or ""
+        base_checks = _ci_checks_for(repo, base_sha) if base_sha else []
+        ci["applicable"] = bool(base_checks)
+        started = time.time()
+        while True:
+            checks = _ci_checks_for(repo, ci["sha"])
+            settled = bool(checks) and not any(c["state"] == "pending" for c in checks)
+            ci["waitedSecs"] = int(time.time() - started)
+            if settled or ci["waitedSecs"] >= wait_s or not ci["applicable"]:
+                break
+            time.sleep(30)
+        ci["checks"] = checks
+        ci["verdict"], ci["red"] = _ci_verdict(checks, ci["applicable"])
+        if ci["verdict"] == "red":
+            ci["summary"] = "; ".join(
+                "%s — %s" % (c["name"], c["detail"] or c["url"]) for c in ci["red"])[:1500]
+        elif ci["verdict"] == "notRun":
+            ci["summary"] = (
+                "該 commit 上%s(base 分支 %s 有 %d 項檢查,代表這個 repo 確實有 CI);"
+                "等了 %d 秒仍未落地。"
+                % ("沒有任何檢查回報" if not checks else "仍有未完成的檢查",
+                   base, len(base_checks), ci["waitedSecs"]))
+        else:
+            ci["summary"] = "%d 項檢查全綠" % len(checks)
+        print("[agent-task-node] pr-ci: verdict=%s checks=%d red=%d waited=%ss"
+              % (ci["verdict"], len(checks), len(ci["red"]), ci["waitedSecs"]), flush=True)
+    except Exception as e:                                       # noqa: BLE001
+        # An unreadable CI is not a passing CI. Say so, and let it block like any other
+        # gate that could not run.
+        ci["verdict"] = "notRun" if ci["applicable"] else "notApplicable"
+        ci["summary"] = "讀取 CI 失敗:%s" % e
+    return ci
+
+
 def test_flow(payload):
     """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted docker.sock.
     T4: when a PR branch is known, the runner clones + builds it and serves a preview so e2e run
@@ -5407,6 +5593,9 @@ def test_flow(payload):
             # means a touched flow's cell could not be filled falsifiably — the scenario gate in
             # the runner then blocks it, so this is legible rather than a silent skip.
             rep["scenarioAutofill"] = autofill
+            # The PR's own build. Folded BEFORE the commit status is posted so the one-line
+            # summary we publish cannot say "green" about a branch whose build is red.
+            _fold_ci(rep, _pr_ci(repo, branch, base))
             _post_commit_status(repo, branch, rep)
             return rep
         tail = ((r.stderr or "") + (r.stdout or ""))[-400:]
