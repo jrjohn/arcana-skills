@@ -43,4 +43,10 @@ EXPOSE 8090
 
 # Run as the same non-root agent user the base image uses for tool caches.
 # (claude-home is bind-mounted at /root/.claude by compose; HOME stays /root.)
-ENTRYPOINT ["python3", "/usr/local/bin/agent-task-node.py"]
+# claude CLI 跟得上 —— 版本原本被基底映像釘死(2026-08-20 實測落後 52 個版本,
+# 而且沒有任何地方會說)。entrypoint 在啟動時升級一次:失敗不擋啟動、版本一定印
+# 出來、`CLAUDE_CLI_PIN=1` 可以完全關掉。詳見 entrypoint.sh 檔頭。
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
