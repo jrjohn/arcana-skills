@@ -132,9 +132,54 @@ floor_case('想更嚴 → 照做', {'coverage': 95}, 95, False)
 floor_case('沒宣告 → 用下限', {}, 80, False)
 floor_case('註冊表沒約束的維度', {'mutationScore': 60}, 80, False)
 
+# ── 「問不到」與「答案是沒有」要分得開 ────────────────────────────────────────
+#
+# 2026-08-20:容器裡的 GH_TOKEN 過期,每一發 `gh api` 回 401、退出碼 1。preflight
+# 原本只看退出碼,於是把它讀成「declared path(s) do not exist at main」——
+# 一輪 sdlc-code-flow 的 SA / SD / uiux / implement 四個節點全部空轉,而唯一的線索
+# 指向產品的樹不對,實際上是這個節點的憑證壞了。兩者要做的事完全不同。
+#
+# 兩種都要擋(缺席不等於通過),但說出來的必須是真的那一種。
+
+class _GhResult:
+    def __init__(self, rc, stderr=''):
+        self.returncode, self.stderr, self.stdout = rc, stderr, ''
+
+
+def with_gh(rc, stderr=''):
+    """把 preflight 會呼叫的 `gh` 換成假的,其餘 subprocess 照舊。"""
+    real = mod.subprocess.run
+
+    def fake(cmd, *a, **k):
+        if isinstance(cmd, (list, tuple)) and cmd and cmd[0] == 'gh':
+            return _GhResult(rc, stderr)
+        return real(cmd, *a, **k)
+    return fake
+
+
+WITH_PATH = profile(app={'appDir': 'dashboard'})
+
+
+def gh_case(name, rc, stderr, want_ok, want_in):
+    real = mod.subprocess.run
+    mod.subprocess.run = with_gh(rc, stderr)
+    try:
+        case(name, lambda: run([ACTIVE], prof=WITH_PATH), want_ok, want_in)
+    finally:
+        mod.subprocess.run = real
+
+
+print()
+print('  ── 問不到 vs 答案是沒有 ──')
+gh_case('gh 回 404 → 真的不存在', 1, 'gh: Not Found (HTTP 404)', False, 'do not exist')
+gh_case('gh 回 401 → 是問不到', 1, 'gh: Bad credentials (HTTP 401)', False, '無法確認')
+gh_case('gh 回 403 → 是問不到', 1, 'gh: Forbidden (HTTP 403)', False, '無法確認')
+gh_case('gh 炸了沒有 HTTP 碼', 1, 'fork/exec: no such file', False, '無法確認')
+gh_case('gh 回 0 → 路徑在,放行', 0, '', True, '')
+
 print()
 if bad == 0:
-    print('  pass —— 四種該擋的都擋了,該放行的放行了,而品質線放寬不了')
+    print('  pass —— 該擋的擋了、該放行的放行了、品質線放寬不了,而且「問不到」不會被說成「不存在」')
 else:
     print('  gap —— %d 格不符' % bad)
 sys.exit(1 if bad else 0)

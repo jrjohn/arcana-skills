@@ -1258,16 +1258,49 @@ def preflight(payload):
         prof.get("flow", {}).get("flowDir"),
         prof.get("flow", {}).get("scenarioDir"),
     ] if p]
-    missing = []
+    # 「問不到」與「答案是沒有」是兩件事。
+    #
+    # 2026-08-20 實測:容器裡的 GH_TOKEN 過期,每一發 `gh api` 都回
+    # `gh: Bad credentials (HTTP 401)`、退出碼 1。而這裡原本只看退出碼,於是把 401
+    # 讀成「路徑不存在」—— 一輪 sdlc-code-flow 的 SA / SD / uiux / implement 四個
+    # 節點全部空轉,而留下的唯一線索是
+    #
+    #   declared path(s) do not exist at main: dashboard, ...
+    #
+    # 那句話把人指向完全錯誤的方向:它說產品的樹不對,實際上是這個節點的憑證壞了。
+    # 兩者要做的事完全不同(改 profile vs 換 token),而訊息只給了前者。
+    #
+    # 兩種都擋(缺席不等於通過),但**說出來的必須是真的那一種**。
+    missing, unreadable = [], []
     for p in paths:
         # Existence only — no --jq. The contents API answers with an object for a file and an
         # ARRAY for a directory, so any jq path expression fails on one of the two, and the
         # failure looks exactly like "the path is missing". `appDir` is a directory; that is
         # how this first reported aaf's own tree as absent.
-        r = subprocess.run(["gh", "api", f"repos/{repo}/contents/{p}?ref={ref}"],
-                           capture_output=True, text=True, timeout=25)
-        if r.returncode != 0:
-            missing.append(p)
+        try:
+            r = subprocess.run(["gh", "api", f"repos/{repo}/contents/{p}?ref={ref}"],
+                               capture_output=True, text=True, timeout=25)
+        except subprocess.TimeoutExpired:
+            unreadable.append((p, "gh api 逾時(25s)"))
+            continue
+        if r.returncode == 0:
+            continue
+        err = (r.stderr or "").strip()
+        m = re.search(r"\(HTTP (\d{3})\)", err)
+        code = m.group(1) if m else ""
+        if code == "404":
+            missing.append(p)          # 真的不在這棵樹上
+        else:
+            # 401/403(憑證)、5xx(GitHub 掛了)、沒有 HTTP 碼(gh 本身炸了/沒網路)。
+            first = err.splitlines()[0][:120] if err else "gh 回非零但沒有訊息"
+            unreadable.append((p, first))
+
+    if unreadable:
+        # 先報這一種:問不到的時候,關於「其他路徑在不在」的任何說法都沒有根據。
+        return fail("無法確認宣告的路徑是否存在(這不是「不存在」)—— %s。"
+                    "先修這個節點問 GitHub 的能力(多半是 GH_TOKEN 過期),不要改 profile:"
+                    "在問得到之前,沒有任何關於這棵樹的結論是有根據的。"
+                    % "; ".join("%s → %s" % (p, why) for p, why in unreadable))
     if missing:
         return fail("declared path(s) do not exist at %s: %s — the gates would later read these "
                     "and report nothing found" % (ref, ", ".join(missing)))
