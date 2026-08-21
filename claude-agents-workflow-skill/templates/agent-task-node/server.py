@@ -1164,22 +1164,53 @@ def dispose_pr(payload):
             "pr": url, "error": (r.stderr or "")[-200:] if r.returncode else None}
 
 
-def _iso_epoch(s):
-    """RFC3339 / ISO8601 → epoch 秒。看不懂就回 None(呼叫端據此判「沒有判定」)。
+def _image_blobs(img, path_in_img="/e2e"):
+    """映像裡那個目錄的 {相對路徑: git blob sha}。
 
-    小數位只截、不碰時區尾巴 —— 先前在別處手切字串,把時區的 0 也當成小數挑走,
-    組出沒有時區的字串,於是 UTC 08:13 被當成本地 08:13,差 8 小時。時間戳只要跨了
-    兩個來源,就沒有「看起來一樣就能比」這回事。
+    用 `git hash-object` 而不是 md5,是為了**和 GitHub 的 tree API 直接可比** ——
+    兩邊都是 sha1("blob <len>\\0" + content)。映像裡本來就裝了 git(Dockerfile 的
+    apt-get 那一行),所以不必多帶工具。
+
+    讀不到回 None(不是空 dict)—— 「查不到」和「一個檔都沒有」必須分得出來,
+    否則呼叫端會把前者當成後者、把整個映像判成空的。
     """
-    import datetime as _dt
-    s = (s or "").strip().replace("Z", "+00:00")
-    if not s:
-        return None
-    s = re.sub(r"\.(\d{6})\d*", r".\1", s)
+    script = (
+        'cd ' + path_in_img + ' 2>/dev/null || exit 9; '
+        "find . -type f -not -path './node_modules/*' | sed 's|^\\./||' | "
+        'while IFS= read -r f; do echo "$(git hash-object "$f") $f"; done'
+    )
     try:
-        return int(_dt.datetime.fromisoformat(s).timestamp())
+        r = subprocess.run(["docker", "run", "--rm", "--entrypoint", "sh", img, "-c", script],
+                           capture_output=True, text=True, timeout=180)
     except Exception:
         return None
+    if r.returncode != 0:
+        return None
+    out = {}
+    for line in (r.stdout or "").splitlines():
+        parts = line.strip().split(" ", 1)
+        if len(parts) == 2 and len(parts[0]) == 40:
+            out[parts[1]] = parts[0]
+    return out or None
+
+
+def _repo_blobs(repo, ref, path):
+    """repo 上某個目錄的 {相對路徑: git blob sha}。讀不到回 None。"""
+    try:
+        r = subprocess.run(
+            ["gh", "api", "repos/%s/git/trees/%s:%s?recursive=1" % (repo, ref, path),
+             "--jq", r'.tree[] | select(.type=="blob") | "\(.sha) \(.path)"'],
+            capture_output=True, text=True, timeout=60)
+    except Exception:
+        return None
+    if r.returncode != 0:
+        return None
+    out = {}
+    for line in (r.stdout or "").splitlines():
+        parts = line.strip().split(" ", 1)
+        if len(parts) == 2 and len(parts[0]) == 40:
+            out[parts[1]] = parts[0]
+    return out or None
 
 
 def preflight(payload):
@@ -1343,31 +1374,42 @@ def preflight(payload):
         ("aaf-test-runner:local", "dashboard/e2e",
          "docker build -f dashboard/e2e/test-runner.Dockerfile -t aaf-test-runner:local dashboard/e2e"),
     ):
-        try:
-            r = subprocess.run(["docker", "image", "inspect", img, "--format", "{{.Created}}"],
-                               capture_output=True, text=True, timeout=20)
-        except Exception:
-            r = None
-        if r is None or r.returncode != 0 or not (r.stdout or "").strip():
-            # 沒有 docker socket / 映像不存在。**不擋** —— 這個節點在別的部署裡可能
-            # 根本不跑 test,拿環境差異去擋流程會製造假紅,而假紅會讓人把整格關掉。
-            # 但也不說它通過:記一筆,讓報告上看得見。
+        # 比**內容**,不比時間。
+        #
+        # 這個檢查的第一版比的是 `docker .Created` 與該路徑最後一次 commit 的時間,
+        # 而那兩個數字在兩種日常情況下就會脫鉤:
+        #
+        #   (a) squash-merge 會改寫 committer date。內容在合併前就存在於映像裡,
+        #       合併後它在 main 上的時間往前跳 —— 映像瞬間「變舊」,內容一個位元沒動。
+        #   (b) 快取命中的重建不會更新 `.Created`。使用者照著錯誤訊息重建了,
+        #       Docker 回同一個映像 ID、同一個時間,紅字還在。
+        #
+        # 2026-08-21 兩種都撞到了,而且第二次不只是雜訊:preflight 擋下了 SA、SD、
+        # implement 三個節點,把它們變成同一句錯誤字串,流程照樣走到 Test —— 一個
+        # 「到 Test 了」的假象,底下什麼都沒做。**一支對正確狀態喊狼來了的檢查,
+        # 比沒有檢查更糟**,因為它會被關掉,而它原本要防的事會再發生。
+        #
+        # git blob sha 是內容定址的:兩邊都是 sha1("blob <len>\0" + content)。
+        # 映像裡跑 `git hash-object`,repo 側讀 GitHub 的 tree API,直接可比,
+        # 與任何時間戳無關。而且它能說出**是哪幾個檔不一樣**,那比「舊」有用得多。
+        img_blobs = _image_blobs(img)
+        if img_blobs is None:
+            # 沒有 docker socket / 映像不存在 / 目錄不在。**不擋** —— 這個節點在別的
+            # 部署裡可能根本不跑 test,拿環境差異去擋流程會製造假紅。但也不說它通過。
             checks.append("image %s: 查不到(沒有 docker socket 或映像不存在)—— 沒有判定" % img)
             continue
-        built = _iso_epoch((r.stdout or "").strip())
-        c = subprocess.run(["gh", "api",
-                            "repos/%s/commits?path=%s&sha=%s&per_page=1" % (repo, src, base),
-                            "--jq", ".[0].commit.committer.date"],
-                           capture_output=True, text=True, timeout=25)
-        src_ts = _iso_epoch((c.stdout or "").strip()) if c.returncode == 0 else None
-        if built is None or src_ts is None:
-            checks.append("image %s: 時間戳讀不到 —— 沒有判定" % img)
+        repo_blobs = _repo_blobs(repo, base, src)
+        if repo_blobs is None:
+            checks.append("image %s: 讀不到 %s 上的 %s —— 沒有判定" % (img, base, src))
             continue
-        if built < src_ts:
-            return fail("映像 %s 比 %s 上的 %s 舊(映像 %s / 原始碼 %s)—— 它烤進去的腳本"
-                        "不是現在 repo 裡的那一份。先重建再跑,否則這一輪的閘讀的是舊的東西:\n  %s"
-                        % (img, base, src, r.stdout.strip()[:19], c.stdout.strip()[:19], how))
-        checks.append("image %s: 不比 %s 上的 %s 舊" % (img, base, src))
+        drift = [p for p, sha in sorted(repo_blobs.items())
+                 if img_blobs.get(p) != sha]
+        if drift:
+            shown = ", ".join(drift[:6]) + ("…(共 %d 個)" % len(drift) if len(drift) > 6 else "")
+            return fail("映像 %s 裡的 %s 與 %s 上的不一致 —— 它烤進去的腳本不是現在 repo 裡的"
+                        "那一份,這一輪的閘會讀到舊的東西。不一致的檔:%s\n  先重建再跑:%s"
+                        % (img, src, base, shown, how))
+        checks.append("image %s: %d 個檔與 %s 上的 %s 逐檔相同" % (img, len(repo_blobs), base, src))
 
     return {"ok": True, "reason": "", "checks": checks, "repo": repo, "ref": ref,
             "profileRef": declared}
