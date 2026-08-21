@@ -177,9 +177,72 @@ gh_case('gh 回 403 → 是問不到', 1, 'gh: Forbidden (HTTP 403)', False, '�
 gh_case('gh 炸了沒有 HTTP 碼', 1, 'fork/exec: no such file', False, '無法確認')
 gh_case('gh 回 0 → 路徑在,放行', 0, '', True, '')
 
+# ── 映像是不是 repo 裡的那一份 ───────────────────────────────────────────────
+#
+# 2026-08-20:aaf-test-runner 停在 8/11,烤進去的 run-test.sh 少了
+# `${JOURNEYS_B64:-}` 防護,`set -u` 下直接崩。main 上九天前就修好了,沒人重建。
+# Test 連跑兩輪都回「runner emitted no TESTREPORT」—— 那句話對真因隻字不提,
+# 而每一輪都付了一次完整的 implement session。
+#
+# 這一族的判準要同時擋兩個方向:舊映像要紅,而**環境差異不可以紅**
+# (沒有 docker socket 的部署根本不跑 test,拿那個擋流程是假紅)。
+
+class _R2:
+    def __init__(self, rc=0, out='', err=''):
+        self.returncode, self.stdout, self.stderr = rc, out, err
+
+
+def with_env(*, docker=('ok', '2026-08-20T12:00:00.000000000Z'), src_date='2026-08-11T00:00:00Z'):
+    """假造 preflight 會呼叫的兩種外部指令。
+
+    docker=('ok', <時間>) / ('missing', None) —— 後者模擬沒有 docker socket。
+    src_date —— `gh api commits` 回的原始碼最後變動時間。
+    路徑存在性那幾發 gh 一律回 0(它們不是這幾格要驗的東西)。
+    """
+    real = mod.subprocess.run
+
+    def fake(cmd, *a, **k):
+        if isinstance(cmd, (list, tuple)) and cmd:
+            if cmd[0] == 'docker':
+                if docker[0] == 'missing':
+                    return _R2(rc=1, out='')
+                return _R2(rc=0, out=docker[1] + '\n')
+            if cmd[0] == 'gh':
+                joined = ' '.join(cmd)
+                if 'commits?' in joined:
+                    return _R2(rc=0, out=(src_date or '') + '\n')
+                return _R2(rc=0, out='{}')
+        return real(cmd, *a, **k)
+    return fake
+
+
+IMG_PROF = profile(app={'appDir': 'dashboard'})
+
+
+def img_case(name, want_ok, want_in, **kw):
+    real = mod.subprocess.run
+    mod.subprocess.run = with_env(**kw)
+    try:
+        case(name, lambda: run([ACTIVE], prof=IMG_PROF), want_ok, want_in)
+    finally:
+        mod.subprocess.run = real
+
+
+print()
+print('  ── 映像是不是 repo 裡的那一份 ──')
+# 映像 8/20 建、原始碼 8/11 動過 → 不舊,放行
+img_case('映像比原始碼新 → 放行', True, '')
+# 映像 8/11 建、原始碼 8/20 動過 → 舊,擋
+img_case('映像比原始碼舊 → 擋', False, '舊',
+         docker=('ok', '2026-08-11T00:00:00.000000000Z'), src_date='2026-08-20T12:00:00Z')
+# 沒有 docker socket → **不擋**(環境差異不是缺陷),但也不說它通過
+img_case('沒有 docker → 不擋', True, '', docker=('missing', None))
+# 時間讀不到 → 同上,不擋不通過
+img_case('原始碼時間讀不到 → 不擋', True, '', src_date='')
+
 print()
 if bad == 0:
-    print('  pass —— 該擋的擋了、該放行的放行了、品質線放寬不了,而且「問不到」不會被說成「不存在」')
+    print('  pass —— 該擋的擋了、該放行的放行了、「問不到」不會被說成「不存在」,而舊映像擋得住、環境差異不誤擋')
 else:
     print('  gap —— %d 格不符' % bad)
 sys.exit(1 if bad else 0)

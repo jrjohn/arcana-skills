@@ -1164,6 +1164,24 @@ def dispose_pr(payload):
             "pr": url, "error": (r.stderr or "")[-200:] if r.returncode else None}
 
 
+def _iso_epoch(s):
+    """RFC3339 / ISO8601 → epoch 秒。看不懂就回 None(呼叫端據此判「沒有判定」)。
+
+    小數位只截、不碰時區尾巴 —— 先前在別處手切字串,把時區的 0 也當成小數挑走,
+    組出沒有時區的字串,於是 UTC 08:13 被當成本地 08:13,差 8 小時。時間戳只要跨了
+    兩個來源,就沒有「看起來一樣就能比」這回事。
+    """
+    import datetime as _dt
+    s = (s or "").strip().replace("Z", "+00:00")
+    if not s:
+        return None
+    s = re.sub(r"\.(\d{6})\d*", r".\1", s)
+    try:
+        return int(_dt.datetime.fromisoformat(s).timestamp())
+    except Exception:
+        return None
+
+
 def preflight(payload):
     """Can this pipeline legitimately run against this repo? Answered in seconds, before a
     single AI session is paid for. Returns {"ok": bool, "reason": str, "checks": [...]}.
@@ -1305,6 +1323,51 @@ def preflight(payload):
         return fail("declared path(s) do not exist at %s: %s — the gates would later read these "
                     "and report nothing found" % (ref, ", ".join(missing)))
     checks.append("paths: %d declared, all present at %s" % (len(paths), ref))
+
+    # ── 跑的東西是不是 repo 裡的那一份 ──────────────────────────────────────
+    #
+    # 這個函式開頭那段話,對映像同樣成立:allowlist 原本只在第四個節點查,於是一個
+    # 不該碰的 repo 花掉三整個 session 才有人說不。**映像過舊是同一件事的另一面**。
+    #
+    # 2026-08-20 實測:`aaf-test-runner:local` 停在 8/11,而它烤進去的 run-test.sh
+    # 少了 `${JOURNEYS_B64:-}` 的防護 —— `set -u` 之下直接崩。main 上九天前就修好了,
+    # 沒人重建。症狀是 Test 連跑兩輪都回「runner emitted no TESTREPORT (exit 1)」,
+    # 那句話對真因隻字不提,而每一輪都付了一次完整的 implement session。
+    #
+    # **比對對象是 `base`(main),不是這條 PR 的 head。** 這條 PR 自己改了
+    # dashboard/e2e/* 的話,映像必然比 head 舊 —— 那樣每條動到 e2e 的 PR 都會被擋,
+    # 是假紅。用 base 比,抓的是「main 上修好了但沒人重建」,那才是這裡要防的。
+    #
+    # (映像沒過期、但裡面某幾支腳本內容與 PR 不同,是更細一層的問題,不在這裡解。)
+    for img, src, how in (
+        ("aaf-test-runner:local", "dashboard/e2e",
+         "docker build -f dashboard/e2e/test-runner.Dockerfile -t aaf-test-runner:local dashboard/e2e"),
+    ):
+        try:
+            r = subprocess.run(["docker", "image", "inspect", img, "--format", "{{.Created}}"],
+                               capture_output=True, text=True, timeout=20)
+        except Exception:
+            r = None
+        if r is None or r.returncode != 0 or not (r.stdout or "").strip():
+            # 沒有 docker socket / 映像不存在。**不擋** —— 這個節點在別的部署裡可能
+            # 根本不跑 test,拿環境差異去擋流程會製造假紅,而假紅會讓人把整格關掉。
+            # 但也不說它通過:記一筆,讓報告上看得見。
+            checks.append("image %s: 查不到(沒有 docker socket 或映像不存在)—— 沒有判定" % img)
+            continue
+        built = _iso_epoch((r.stdout or "").strip())
+        c = subprocess.run(["gh", "api",
+                            "repos/%s/commits?path=%s&sha=%s&per_page=1" % (repo, src, base),
+                            "--jq", ".[0].commit.committer.date"],
+                           capture_output=True, text=True, timeout=25)
+        src_ts = _iso_epoch((c.stdout or "").strip()) if c.returncode == 0 else None
+        if built is None or src_ts is None:
+            checks.append("image %s: 時間戳讀不到 —— 沒有判定" % img)
+            continue
+        if built < src_ts:
+            return fail("映像 %s 比 %s 上的 %s 舊(映像 %s / 原始碼 %s)—— 它烤進去的腳本"
+                        "不是現在 repo 裡的那一份。先重建再跑,否則這一輪的閘讀的是舊的東西:\n  %s"
+                        % (img, base, src, r.stdout.strip()[:19], c.stdout.strip()[:19], how))
+        checks.append("image %s: 不比 %s 上的 %s 舊" % (img, base, src))
 
     return {"ok": True, "reason": "", "checks": checks, "repo": repo, "ref": ref,
             "profileRef": declared}
