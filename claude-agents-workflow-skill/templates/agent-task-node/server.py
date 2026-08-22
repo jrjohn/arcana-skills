@@ -937,7 +937,27 @@ def _intake_form_section(p):
     raw = p.get("intakeForm")
     rnd = p.get("intakeRound") or 0
     if not raw:
-        return "\n## 表單狀態\n第 1 輪,尚無填答內容。\n"
+        # `intakeForm` 是這個節點宣告的 dataOutput,但**送答的路徑不一定會填它**。
+        #
+        # 2026-08-21 實測:透過 read-API 的 `/tasks/.../complete` 送出表單,`fields`
+        # 被 Kogito 依同名 dataOutputAssociation 映射成各自獨立的流程變數
+        # (`pm_answers` 2521 字元確實寫進去了,任務參數裡也帶著),而 `intakeForm`
+        # 是 null —— 於是這裡回「第 1 輪,尚無填答內容」,模型把同樣的 7 題再問一次,
+        # 連那句「答案在環境裡,不在規格裡」都重複。人回答了,而讀的人收不到。
+        #
+        # 這個函式的 docstring 早就寫出後果:「A round that cannot see the previous
+        # one just asks the same questions again … which is how a human-in-the-loop
+        # step gets removed for being annoying rather than for being wrong.」
+        #
+        # 所以改成:**讀得到什麼就讀什麼**。答案裝在哪個容器裡是上游的實作細節,
+        # 不該讓「有沒有人回答過」這件事取決於它。兩邊都空才是真的沒填。
+        loose = {k: p.get(k) for k in (
+            "feature_request", "target_users", "placement", "acceptance",
+            "out_of_scope", "pm_answers", "pm_questions", "pm_assumptions")
+            if p.get(k) not in (None, "", [], {})}
+        if not loose:
+            return "\n## 表單狀態\n第 1 輪,尚無填答內容。\n"
+        raw = loose
     try:
         form = json.loads(raw) if isinstance(raw, str) else raw
     except Exception:
@@ -2918,12 +2938,31 @@ def _with_memory(prompt, payload):
 def _project_slug(payload):
     """Which product this run belongs to — the registry id when there is one, else the
     repo name. Never a default: an unidentifiable run gets no memory rather than
-    somebody else's."""
+    somebody else's.
+
+    退回 repo 名時**要出聲**。這個 docstring 的意圖是「寧可沒記憶,也不要拿到別人的」,
+    但 fallback 的實際行為不是「沒記憶」—— 它是**開了第二份平行記憶**,會讀、會寫、
+    會回答,看起來完全正常。
+
+    2026-08-21 實測:一整天 26 個節點 session、2,171 筆逐字稿全部寫進
+    `_memory/arcana-ai-bpm/`,而產品的權威記憶 `_memory/aaf/` 當天是 0 筆。
+    兩邊各自長了十天(186 vs 195 個 session,只重疊 125),**兩邊都是殘的**,
+    而沒有任何一層說過一句話。
+
+    「名單縮小可以是刻意的,不可以是無聲的」—— 這個 repo 對流程 id 的對帳
+    (reconcile_targets)已經是這個慣例,記憶這一格照抄。
+    """
     p = payload.get("_sdlc_project") or _pv(payload, "projectId")
     if p:
         return str(p)
     repo = _pv(payload, "repo")
-    return repo.split("/")[-1] if repo else ""
+    slug = repo.split("/")[-1] if repo else ""
+    if slug:
+        print("[agent-task-node] ⚠ project-memory: payload 沒有 projectId,退回 repo 名 "
+              "`%s` 當產品鍵。若這個產品在註冊表裡另有 id,這一輪的逐字稿會寫進**另一份**"
+              "記憶,而讀的那一輪看不到。起流程時帶 projectId 可以避免。" % slug,
+              flush=True)
+    return slug
 
 
 def run_claude(task, payload):
@@ -4534,6 +4573,24 @@ def _pg_exec(sql, db="postgres"):
         capture_output=True, text=True, timeout=180)
 
 
+def _pr_backend_fail_reason(built):
+    """把 `_start_pr_backend` 的失敗代號翻成一句**說得出根據**的話。
+
+    原本這裡是一個寫死的常數「PR backend build FAILED (unbuildable backend code)」——
+    它斷言了失敗的原因,而程式碼從來沒有檢查過那件事。2026-08-21 那次的真因是
+    記憶體,不是程式碼;流程據此退回 implement 重做了一輪,而重做修不好記憶體。
+    """
+    parts = (built or "").split(":", 2)
+    kind = parts[1] if len(parts) > 2 else "unclassified"
+    tail = parts[2] if len(parts) > 2 else ""
+    if kind == "compile":
+        return ("PR backend build FAILED — 編譯錯誤(輸出含 error[E…] / could not compile)。"
+                "這是程式碼的問題,rework 修得動。尾段:" + tail[-400:])
+    return ("PR backend build FAILED — **原因未分類**:輸出裡沒有 cargo 的編譯錯誤標記,"
+            "所以這不一定是程式碼的問題(記憶體不足、磁碟滿、網路都長這樣)。"
+            "先看尾段再決定要不要 rework —— 重做修不好資源問題。尾段:" + tail[-400:])
+
+
 def _start_pr_backend(repo, branch, base, piid, net):
     """Build the PR's read-API + give it a throwaway copy of the dev DB. Returns
     `(api_target, teardown)`; `(None, teardown)` when it does not apply or could not be built.
@@ -4573,12 +4630,35 @@ def _start_pr_backend(repo, branch, base, piid, net):
             return None, teardown
 
         print("[agent-task-node] " + "pr-backend: building the PR's read-API (this is the point — its own code, not the deployed one)", flush=True)
+        # 逾時 1800 而不是 3000。
+        #
+        # 這一步不是獨立計時的:外層 worker 給 /task/test 的是 3300s,而內層還有
+        # runner 自己的 2400s。3000 + 2400 = 5400 > 3300 —— **只要後端真的需要重建,
+        # 那個外層逾時就不可能被滿足**,而外層先斷時我們只拿得到一句連線錯誤,
+        # 內層先斷才拿得到原因。2026-08-21 實測建置 780s(冷快取),1800 已經很寬。
         b = subprocess.run(
             ["docker", "build", "-f", "Dockerfile.flow", "-t", image, "."],
-            cwd=os.path.join(src, "arcana-cloud-rust"), capture_output=True, text=True, timeout=3000)
+            cwd=os.path.join(src, "arcana-cloud-rust"), capture_output=True, text=True, timeout=1800)
         if b.returncode != 0:
-            print("[agent-task-node] " + "pr-backend: BUILD FAILED — " + (b.stderr or "")[-400:], flush=True)
-            return "BUILD_FAILED", teardown
+            tail = (b.stderr or b.stdout or "")[-1200:]
+            print("[agent-task-node] " + "pr-backend: BUILD FAILED — " + tail[-400:], flush=True)
+            # **分類,不要斷言。**
+            #
+            # 原本這裡只回一個不帶資訊的 "BUILD_FAILED",而下游把它寫成
+            # 「unbuildable backend code」—— 一個從來沒有被檢查過的原因。
+            # 2026-08-21 實測:那次失敗是記憶體(agent 容器 OOMKilled=true,
+            # VM 15.6 GiB 已被佔掉約 12 GiB),而同一個 commit 在主機上
+            # `cargo check` 零錯誤、Jenkins 的 ci/rust 也是 pass。
+            #
+            # 兩者的處置完全相反:「編不過」要改程式(流程據此退回 implement
+            # 重做了一輪),「資源不足」一個字都不用改。判錯方向 = 整輪白做。
+            #
+            # cargo 的編譯錯誤會在輸出留下 `error[E1234]` 或 `error: could not compile`。
+            # 有那個字串才叫編不過;沒有就說「未分類」,並把尾巴帶上 ——
+            # 三態,和這個 repo 其他閘一樣。
+            if re.search(r"error\[E\d+\]|error: could not compile", tail):
+                return "BUILD_FAILED:compile:" + tail[-600:], teardown
+            return "BUILD_FAILED:unclassified:" + tail[-600:], teardown
         state["image"] = image
 
         # Throwaway copy of the dev DB: real data, and migrations in the PR stay contained.
@@ -5601,13 +5681,13 @@ def test_flow(payload):
             return {"testReport": json.dumps({
                 "allPass": False, "total": 0, "passed": 0,
                 "reason": "PR backend built but would not start: " + built[len("UNHEALTHY:"):][-300:]})}
-        if built == "BUILD_FAILED":
+        if isinstance(built, str) and built.startswith("BUILD_FAILED"):
             # Unbuildable backend is a failing test, not a fallback: shipping it would break
             # the deployed API, and testing the OLD one would report green for exactly that.
             pr_teardown()
             return {"testReport": json.dumps({
                 "allPass": False, "total": 0, "passed": 0,
-                "reason": "PR backend build FAILED (unbuildable backend code)"})}
+                "reason": _pr_backend_fail_reason(built)})}
         if built:
             api_target, pr_backend_used = built, True
             pr_backend_applicable = True
@@ -5697,6 +5777,18 @@ def test_flow(payload):
         # 例外不能靜默成「沒有這個閘」。notRun 會在 runner 端擋下來。
         aq = {"applicable": True, "ran": False, "reason": "agent-side error: %s" % _aqe,
               "targets": [], "fail": 0, "notRun": 1}
+    # 每個 target 的 reason 一起印。
+    #
+    # 這一行原本只有數字:applicable=True ran=False notRun=2 —— 說得出「沒跑成」,
+    # 說不出**為什麼**。而 reason 只存在於 testReport.archQube.targets[].reason,
+    # 要從 Data Index 讀,而那裡的變數快照會落後(2026-08-21 實測讀到的是上一輪的
+    # 舊值,差點讓我把根因報錯)。
+    #
+    # 能說出真因的那個字串,不該是唯一沒被印出來的那個。
+    for _r in (aq.get("targets") or []):
+        if _r.get("reason"):
+            print("[agent-task-node] arch-qube: %s → %s(%s)"
+                  % (_r.get("dir"), _r.get("verdict") or "?", _r["reason"][:160]), flush=True)
     print("[agent-task-node] arch-qube: applicable=%s ran=%s minScore=%s fail=%s notRun=%s"
           % (aq.get("applicable"), aq.get("ran"), aq.get("minScore"),
              aq.get("fail"), aq.get("notRun")), flush=True)
