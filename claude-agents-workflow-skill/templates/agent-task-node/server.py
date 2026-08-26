@@ -5840,6 +5840,34 @@ def test_flow(payload):
         pr_teardown()
 
 
+# ── UI/UX 稽核的去重識別碼 ──────────────────────────────────────────────
+#
+# 為什麼不用 `slug`:流程會改寫它(SA 節點換成人看得懂的名字),而去重是在**開單前**
+# 拿舊值比對的 —— 比對一個會被改掉的欄位,等於沒有去重。這在 2026-08-26 之前一直
+# 是真的:同一個發現重複開了 8 張單,而程式碼裡明明寫著 dedup。
+#
+# 識別碼夾在 feature_request 的尾巴,是因為那段文字是**開單的輸入**,流程沒有理由
+# 改寫它。人若在需求單裡手動改掉它,那是刻意的動作,去重跟著失效是可以接受的。
+_AUDIT_MARK_RE = re.compile(r"〔稽核識別:([a-z0-9-]{1,60})〕")
+
+
+def _audit_marker(slug):
+    """要附在 feature_request 尾巴的識別碼。空 slug 回空字串(不留下半個標記)。"""
+    slug = (slug or "").strip()
+    return ("\n\n〔稽核識別:%s〕" % slug) if slug else ""
+
+
+def _audit_markers_in(text):
+    """從一段需求文字裡讀回識別碼。讀不到就回空集合 —— 呼叫端據此判「不是稽核開的單」。
+
+    收成 set 而不是回第一個:一張單可能是別張的延續,文字裡帶著兩個識別碼,
+    兩個都該擋。**少擋一個的代價是多跑一整條 SDLC 流程,多擋一個只是晚一輪。**
+    """
+    if not isinstance(text, str):
+        return set()
+    return set(_AUDIT_MARK_RE.findall(text))
+
+
 def uiux_audit_flow(payload):
     """Deterministic UI/UX self-audit -> auto-open GATED PRs (the detection->action wiring).
     Runs the AI semantic gate (uiux-ai-review) against the DEPLOYED dashboard via the test-runner,
@@ -5887,7 +5915,22 @@ def uiux_audit_flow(payload):
                 "tail": (r.stdout or r.stderr or "")[-300:]}
     fails = [f for f in data.get("findings", []) if f.get("severity") == "fail"]
 
-    # 2. dedup: slugs of currently-active sdlc-flows (don't re-open what's in flight)
+    # 2. dedup: 哪些發現已經在跑了 —— 別重開在飛的。
+    #
+    # 這裡原本只讀 `slug`,而**流程自己會把 slug 改掉**:SA 節點會換成人看得懂的名字。
+    # 2026-08-26 實測兩條在跑的實例:
+    #
+    #     開單時送的 slug          現在引擎裡的 slug
+    #     uiux-workflow-…          workflow-page-i18n-zhtw
+    #     uiux-workflow-…          workflow-failure-reason-panel
+    #
+    # 於是拿 `uiux-…` 去比對一個已經被改名的欄位,**永遠比不中** —— 去重形同不存在。
+    # 後果:同一個「Unstick Scan 詳情面板空白」被重複開了 8 張單,每一張都是一整條
+    # SDLC 流程的成本。去重寫著、跑著、從來沒攔下過任何一張。
+    #
+    # 改成把稽核識別碼**寫進 feature_request**(見 _audit_marker),因為那段文字是
+    # 開單的輸入,流程沒有理由改寫它 —— 實測兩條實例的稽核原文都完整保留。
+    # `slug` 仍然一起收:剛開還沒被改名的那幾分鐘,它是對的,少收一個沒有好處。
     active_slugs = set()
     q = {"query": "{ ProcessInstances(where:{processId:{equal:\"sdlc-code-flow\"},"
                   "state:{equal:ACTIVE}}){ variables } }"}
@@ -5896,6 +5939,7 @@ def uiux_audit_flow(payload):
         v = json.loads(v) if isinstance(v, str) else (v or {})
         if v.get("slug"):
             active_slugs.add(v["slug"])
+        active_slugs |= _audit_markers_in(v.get("feature_request"))
 
     def _slug(route, kind):
         s = ("uiux-" + (route or "").strip("/").replace("/", "-") + "-" + (kind or "issue")).lower()
@@ -5921,7 +5965,8 @@ def uiux_audit_flow(payload):
         except Exception:
             pass
         fr = ("[UI/UX 自動稽核] %s — %s。請依 app-uiux-designer rubric 修正此問題(純前端 dashboard,"
-              "不動後端 API);修好後同一畫面應通過 AI 語意 gate。" % (f.get("route", ""), f.get("detail", "")))
+              "不動後端 API);修好後同一畫面應通過 AI 語意 gate。%s"
+              % (f.get("route", ""), f.get("detail", ""), _audit_marker(slug)))
         sr = _curl_json("POST", engine + "/sdlc-code-flow",
                         {"feature_request": fr, "repo": repo, "base": target_base,
                          "slug": slug, "uiFacing": "true"}, 60)
