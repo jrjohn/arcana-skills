@@ -3721,6 +3721,32 @@ def write_specs(workdir, slug, payload):
     return written
 
 
+def _selftest_gaps(workdir):
+    """跑 scripts/run-selftests.sh,回傳「哪幾支是 gap」的集合。
+
+    回 None 代表**問不到**(沒有那支腳本 / 跑不起來 / 逾時)—— 呼叫端必須把 None 與
+    `set()` 分開處理。兩者都「沒有列出任何 gap」,但一個是「沒有回歸」,另一個是
+    「我不知道有沒有回歸」。把後者當成前者,就是這條流水線反覆出現的那個病:
+    缺席被讀成通過。
+    """
+    sh = os.path.join(workdir, "scripts", "run-selftests.sh")
+    if not os.path.isfile(sh):
+        return None
+    try:
+        r = subprocess.run(["bash", "scripts/run-selftests.sh"],
+                           capture_output=True, text=True, timeout=900, cwd=workdir)
+    except Exception:
+        return None
+    out = (r.stdout or "") + (r.stderr or "")
+    # runner 逐支點名:`  gap —— <檔名>`。抓檔名而不是抓數量 ——
+    # 「gap 從 1 變 1」可能是舊的好了、新的壞了,數量看不出來。
+    gaps = set(re.findall(r'gap\s+——\s+(\S+\.(?:sh|mjs|py))', out))
+    # 一支都沒點名卻 rc!=0 → 格式變了,不能當成「沒有 gap」。
+    if not gaps and r.returncode not in (0,):
+        return None
+    return gaps
+
+
 def implement_flow(payload):
     """AI code-implementation → GATED PR.
 
@@ -3788,6 +3814,21 @@ def implement_flow(payload):
                            capture_output=True, text=True, timeout=120)
             subprocess.run(["git", "-C", workdir, "clean", "-fd"],
                            capture_output=True, text=True, timeout=120)
+
+        # --- Phase A.9: 自檢的**基準** —— 在 Claude 動手之前先量一次 ------------
+        #
+        # 為什麼要基準,而不是「有 gap 就擋」:2026-08-26 實測,**一行都沒改的 main**
+        # 在這個容器裡跑 run-selftests.sh 就是 rc=1(`workspace-git.selftest.sh` gap ——
+        # 它在 Jenkins 是 notApplicable「這個環境沒有註冊表」,在這裡卻跑得起來而且不成立)。
+        # 照「有 gap 就擋」寫,**每一輪 implement 都會被自己的環境擋死** —— 一個永遠紅的
+        # 閘和沒有閘一樣糟,而且更浪費:它會讓每一輪都多跑兩次修復。
+        #
+        # 所以判準是**回歸**,不是絕對值:只有「動手前沒有、動手後有」的 gap 才擋。
+        # 這與 repo 既有的 i18nLintRegressions / tokenLintRegressions 同一條紀律。
+        #
+        # 8 秒(實測,熱的 checkout)。對照要付的代價:這一輪(#281)為了一段 17 行的註解,
+        # 燒掉 implement 31 分 + Test 25 分 + 一次 PM 審。
+        selftest_baseline = _selftest_gaps(workdir)
 
         # --- Phase B: Claude writes code in the workdir (bound to the dev skill) ---
         design = payload.get("design")
@@ -3893,6 +3934,65 @@ def implement_flow(payload):
         if gate is not None and not build_status.startswith("fix-invoke"):
             build_status = "RED: %s build failing after %d fix attempt(s)" % (gate[0], _gate_tries)
 
+        # --- Phase B.6: 自檢回歸閘 —— 開 PR 前先自己跑一遍那些閘 ----------------
+        #
+        # 這一步存在的理由,是 2026-08-26 的 PR #281:它新加了一支 e2e 走查,裡面硬編了
+        # 兩個 BPMN 節點名卻沒寫 PROVENANCE 宣告。後果不是「CI 紅了一格」——
+        # 而是 Jenkins 的「閘的自我檢查」先倒,**Angular 與 Rust 兩半整個 skipped**,
+        # 那一輪的 4 條功能測試一條都沒跑到。代價:implement 31 分 + Test 25 分 + 一次
+        # PM 審,全部為了一段 17 行的註解。
+        #
+        # 這些閘在本地跑一遍只要 8 秒。它們本來就在 repo 裡,只是沒有人在 implement
+        # 這一步問過它們。
+        #
+        # 判準是**回歸**不是絕對值(見 Phase A.9 的說明):基準有的 gap 不擋。
+        #
+        # 殘留風險,寫出來而不是假裝沒有:那支環境相關的自檢**本身不穩定**。
+        # 2026-08-26 同一個容器裡,它在 main 那次 gap、在 #281 那次沒有 —— 它會去打
+        # http://localhost:8086 的註冊表,打得到與打不到給的答案不同。所以
+        # 「基準沒有、事後有」也可能是它自己飄的,不一定是這一輪帶進來的。
+        # 代價是有機會多叫 Claude 修一次(它會發現沒東西可修);換到的是不會有
+        # 永遠紅的閘。兩種錯裡選了比較便宜的那一種,不是沒有錯。
+        selftest_status = "OK"
+        if selftest_baseline is None:
+            # 基準問不到 → 這一輪不做回歸判定,而且**明說**。不能因為比不了就當作沒問題。
+            selftest_status = "notRun: 動手前那次自檢問不到結果,無法判定回歸"
+        else:
+            _st_tries = 0
+            _new = None
+            while _st_tries < 2:
+                after = _selftest_gaps(workdir)
+                if after is None:
+                    selftest_status = "notRun: 自檢跑不起來,無法判定回歸"
+                    break
+                _new = sorted(after - selftest_baseline)
+                if not _new:
+                    _fixed = sorted(selftest_baseline - after)
+                    selftest_status = "OK" + (" (順帶修好: %s)" % ", ".join(_fixed) if _fixed else "")
+                    break
+                _st_tries += 1
+                fix_prompt = (
+                    "你剛在此工作目錄實作的功能，讓 repo 既有的**閘的自我檢查**出現了新的 gap。\n\n"
+                    "這些自檢在你動手前是過的，動手後才不成立 —— 也就是說是這一輪帶進來的：\n\n"
+                    "%s\n\n"
+                    "請跑 `bash scripts/run-selftests.sh` 看完整輸出，只改必要的檔把新出現的 gap 修掉。\n"
+                    "**不要放寬任何判準、不要把自檢改成不會紅** —— 那會讓閘失去意義；"
+                    "要修的是你新加的東西為什麼過不了。\n"
+                    "（若那是刻意的耦合，正確做法通常是照該閘的說明補上宣告，並寫出**失效方向**："
+                    "改壞了會被誰看見。）\n"
+                    % "\n".join("  · " + g for g in _new))
+                try:
+                    _r = _invoke_claude(fix_prompt, schema, cp,
+                                        int(payload.get("wall") or 1800), cwd=workdir)
+                    if isinstance(_r, dict) and _r.get("summary"):
+                        summary = _r.get("summary")
+                except Exception as e:
+                    selftest_status = "fix-invoke-error: %s" % e
+                    break
+            else:
+                selftest_status = "RED: 修了 %d 次仍有新 gap: %s" % (_st_tries, ", ".join(_new or []))
+        log("selftest-gate: %s" % selftest_status)
+
         spec_files = write_specs(workdir, slug, payload)
         if spec_files:
             log("specs -> version control: %s" % ", ".join(spec_files))
@@ -3965,8 +4065,12 @@ def implement_flow(payload):
                 "self-deploy. Quality gates (CI build + tests + arch-qube) + merge-flow "
                 "gate the actual merge/deploy. Do not auto-merge without the green gate.\n"
                 "%s\n"
-                "Local build gate: %s\n\n"
-                "Summary: %s\n" % (slug, stack_note, build_status, summary or "(none)"))
+                "Local build gate: %s\n"
+                # 修不掉也要寫出來。閘的價值有一半在「它說了什麼」,
+                # 而一個沒被寫進 PR 的紅燈,對讀 PR 的人等於不存在。
+                "Local selftest gate: %s\n\n"
+                "Summary: %s\n" % (slug, stack_note, build_status, selftest_status,
+                                    summary or "(none)"))
         env = dict(os.environ)
         if token:
             env["GH_TOKEN"] = token
@@ -4030,7 +4134,7 @@ def implement_flow(payload):
         if existing:
             return {"prUrl": existing, "branch": branch, "summary": summary, "stackedOn": inherited,
                     "filesChanged": files_changed, "pushed": True,
-                    "buildStatus": build_status, "prReused": True,
+                    "buildStatus": build_status, "selftestStatus": selftest_status, "prReused": True,
                     "supersededPrs": superseded}
         pr = subprocess.run(
             ["gh", "pr", "create", "-R", repo, "--base", base, "--head", branch,
@@ -4046,13 +4150,13 @@ def implement_flow(payload):
             if recovered:
                 return {"prUrl": recovered, "branch": branch, "summary": summary, "stackedOn": inherited,
                         "filesChanged": files_changed, "pushed": True,
-                        "buildStatus": build_status, "prReused": True,
+                        "buildStatus": build_status, "selftestStatus": selftest_status, "prReused": True,
                         "supersededPrs": superseded}
             return {"error": "pr create failed: %s" % (pr.stderr or pr.stdout)[-500:],
                     "branch": branch, "filesChanged": files_changed}
         pr_url = pr.stdout.strip().splitlines()[-1] if pr.stdout.strip() else ""
         return {"prUrl": pr_url, "branch": branch, "summary": summary, "stackedOn": inherited,
-                "filesChanged": files_changed, "pushed": True, "buildStatus": build_status,
+                "filesChanged": files_changed, "pushed": True, "buildStatus": build_status, "selftestStatus": selftest_status,
                 "supersededPrs": superseded}
     except subprocess.TimeoutExpired:
         return {"error": "implement timed out"}
