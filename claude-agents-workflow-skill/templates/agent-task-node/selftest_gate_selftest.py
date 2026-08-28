@@ -103,6 +103,61 @@ check("基準有、事後沒有 → 算「順帶修好」而不是新 gap",
       fixed == {"workspace-git.selftest.sh"} and
       (m._selftest_gaps(fake_repo(GREEN)) - base) == set())
 
+print("\n════ E. 這支模組裡沒有叫不出來的名字 ════")
+# 為什麼要有這一組:2026-08-28 的事故是 `log(...)` —— 一個**全檔都沒有定義**的名字。
+# A~D 四組把 `_selftest_gaps` 測得很仔細,卻一次都沒有執行到「呼叫它的那一行」。
+# 純函式測得再好,也證明不了 caller 跑不跑得起來。
+#
+# 判準要能分辨「函式內部自己定義的區域名」與「真的不存在」——
+# 第一版沒分,於是 `_git` / `_build_gate` 這些巢狀 def 全被誤報成缺失(15 個)。
+# 一個天天喊狼的檢查,下一個人會直接把它關掉。
+import ast as _ast, builtins as _bi
+_src = open(os.path.join(D, "server.py"), encoding="utf-8").read()
+_tree = _ast.parse(_src)
+_global = set(dir(_bi)) | set(vars(m).keys())
+
+def _names_bound_in(fn):
+    """這個函式(含巢狀)自己綁定的名字:參數、賦值、巢狀 def/class、import、for、with、except。"""
+    out = set(a.arg for a in list(fn.args.args) + list(fn.args.kwonlyargs) + list(fn.args.posonlyargs))
+    if fn.args.vararg: out.add(fn.args.vararg.arg)
+    if fn.args.kwarg: out.add(fn.args.kwarg.arg)
+    for n in _ast.walk(fn):
+        if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef, _ast.ClassDef)):
+            out.add(n.name)
+            if n is not fn:
+                out |= set(a.arg for a in n.args.args)
+        elif isinstance(n, _ast.Name) and isinstance(n.ctx, _ast.Store):
+            out.add(n.id)
+        elif isinstance(n, (_ast.Import, _ast.ImportFrom)):
+            out |= {(a.asname or a.name).split(".")[0] for a in n.names}
+        elif isinstance(n, _ast.ExceptHandler) and n.name:
+            out.add(n.name)
+    return out
+
+# 只看「同一個函式內」還不夠:巢狀函式看得到**外層**的名字(閉包)。
+# 第二版因此把 `_git` / `_changed_subapps` 誤報成缺失 —— 它們定義在外層、
+# 被內層的 `_build_gate` 用到。所以要沿著巢狀鏈把每一層的綁定都收進來。
+_missing = {}
+def _scan(fn, inherited):
+    scope = inherited | _names_bound_in(fn)
+    for n in _ast.iter_child_nodes(fn):
+        _walk_calls(n, scope)
+def _walk_calls(node, scope):
+    if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+        _scan(node, scope)
+        return
+    if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name):
+        k = node.func.id
+        if k not in _global and k not in scope:
+            _missing.setdefault(k, node.lineno)
+    for c in _ast.iter_child_nodes(node):
+        _walk_calls(c, scope)
+for _fn in [x for x in _ast.iter_child_nodes(_tree)
+            if isinstance(x, (_ast.FunctionDef, _ast.AsyncFunctionDef))]:
+    _scan(_fn, set())
+check("沒有呼叫不存在的名字(%s)" % (", ".join("%s:%d" % (k, v) for k, v in sorted(_missing.items())) or "無"),
+      not _missing)
+
 print("\n" + "═" * 46)
 print("  通過 %d,失敗 %d" % (ok, fail))
 sys.exit(1 if fail else 0)

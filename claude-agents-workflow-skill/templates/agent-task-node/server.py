@@ -3991,11 +3991,17 @@ def implement_flow(payload):
                     break
             else:
                 selftest_status = "RED: 修了 %d 次仍有新 gap: %s" % (_st_tries, ", ".join(_new or []))
-        log("selftest-gate: %s" % selftest_status)
+        # `log` 這個名字**全檔都沒有定義** —— 用它會 NameError,而 implement_flow
+        # 沒有接住它,整個 verb 直接掛掉、回 {"error": "implement failed: name 'log'
+        # is not defined"}。2026-08-28 實測後果:一整輪 sdlc(SA→SD→implement)白跑,
+        # 沒有 PR、Test 的 4 條功能斷言全部沒東西可測,PM 只能判 HOLD。
+        print("[agent-task-node] selftest-gate: %s" % selftest_status)
 
         spec_files = write_specs(workdir, slug, payload)
         if spec_files:
-            log("specs -> version control: %s" % ", ".join(spec_files))
+            # 同一個名字,同一個錯。這行比上面那行更早存在,只是排在後面 ——
+            # 前面先炸,它就永遠沒機會執行,於是這顆地雷躺著沒被踩到。
+            print("[agent-task-node] specs -> version control: %s" % ", ".join(spec_files))
         _git("add", "-A")
         cm = _git("-c", "user.email=agent@arcana.boo", "-c", "user.name=AI-BPM Implementer",
                   "commit", "-m", "feat: %s" % slug)
