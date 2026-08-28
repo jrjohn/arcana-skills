@@ -1886,12 +1886,28 @@ def _pv(payload, key, default=""):
     nodes: the repo checkout was never created and the grounding block never reached a prompt,
     while both looked wired. Nothing errored, so the failure presented as "the model still
     guesses paths" rather than "the fix never ran".
+
+    **第三個位置:`design`。** 2026-08-28 實測(流程實例 c2a019d0):把 `write_specs` 從
+    `payload.get` 改成 `_pv` 之後,`docs/specs/<slug>/` 仍然一個檔都沒有 —— 因為 worker 的
+    `do_implement` 既不放頂層也不放 `data`,它把 `srs` / `sdd` / `uiuxSpec` 包進
+    `build_implement_design()` 組出來的 `design` 物件裡。兩處都翻不到,於是照樣拿 None。
+
+    這是同一個病的第四次發作,而前三次的修法(逐處改成 `_pv`)這次**沒有**救到 —— 因為
+    問題從來不是「讀錯了哪一層」,是「擺放位置有三種而讀取只認兩種」。所以修在這裡,
+    不是修在呼叫端:`_pv` 就是那個唯一的咽喉點,新增一種擺法只該改一個地方。
+
+    順序是頂層 → `data` → `design`,先找到先贏;`design` 排最後,因為它是 implement
+    這條路特有的包裝,不該蓋掉流程直接帶進來的同名變數。
     """
     v = payload.get(key)
     if v in (None, ""):
         d = payload.get("data")
         if isinstance(d, dict):
             v = d.get(key)
+    if v in (None, ""):
+        g = payload.get("design")
+        if isinstance(g, dict):
+            v = g.get(key)
     return v if v not in (None, "") else default
 
 

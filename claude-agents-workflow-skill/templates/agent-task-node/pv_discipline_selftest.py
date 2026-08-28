@@ -144,6 +144,30 @@ for label, marker, needles in named:
     seg = src[i:i + 2500] if i >= 0 else ""
     check(label, i >= 0 and all(x in seg for x in needles))
 
+print("\n════ D. 第三種擺法:worker 把規格包進 design ════")
+# 為什麼有這一組:C 組全綠、A 組全綠,而 docs/specs/ 依然是空的(實例 c2a019d0)。
+# 「都改成 _pv 了」不等於「讀得到」—— worker 的 do_implement 把 srs/sdd/uiuxSpec
+# 放進 build_implement_design() 組出的 `design` 物件,那是頂層與 data 之外的第三個位置。
+check("design 底下讀得到", m._pv({"design": {"srs": "IN-DESIGN"}}, "srs") == "IN-DESIGN")
+check("頂層優先於 design", m._pv({"srs": "T", "design": {"srs": "D"}}, "srs") == "T")
+check("data 優先於 design", m._pv({"data": {"srs": "N"}, "design": {"srs": "D"}}, "srs") == "N")
+check("design 不是 dict 時不炸", m._pv({"design": "字串"}, "srs", "DEF") == "DEF")
+check("三處皆無仍回 default", m._pv({"design": {}}, "srs", "DEF") == "DEF")
+
+# 端到端:用 worker 真正送出的 payload 形狀跑 write_specs。
+# 這一組才是驗收 —— 前面那些證明 _pv 會找,這一組證明規格真的落地。
+import tempfile
+worker_shaped = {
+    "repo": "jrjohn/arcana-ai-bpm", "base": "main", "slug": "specs-land-in-repo",
+    "prompt": "...",
+    "design": {"srs": {"problem": "P"}, "sdd": {"files": ["a"]}, "uiuxSpec": None},
+}
+got = m.write_specs(tempfile.mkdtemp(), "specs-land-in-repo", worker_shaped)
+check("worker 形狀 → SRS.md 與 SDD.md 都寫出來(%s)" % (got or "無"),
+      any(x.endswith("SRS.md") for x in got) and any(x.endswith("SDD.md") for x in got))
+check("uiuxSpec 是 None 時不寫空的 UIUX.md",
+      not any(x.endswith("UIUX.md") for x in got))
+
 print("\n" + "═" * 46)
 print("  通過 %d,失敗 %d" % (ok, fail))
 sys.exit(1 if fail else 0)
