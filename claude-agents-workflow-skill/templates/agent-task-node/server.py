@@ -25,6 +25,7 @@ Design notes:
   same as the existing daily-ci-agent image this is built FROM.
 """
 import base64
+import datetime
 import json
 import os
 import shutil
@@ -3778,6 +3779,117 @@ def _ensure_claude_config():
         pass
 
 
+SPEC_SECTIONS = {
+    # 欄位名 → 章節標題。**這份表是排序與命名,不是過濾器** —— 不在表裡的欄位
+    # 照樣會被印出來(見 _spec_markdown 的第二段迴圈)。把未知欄位默默丟掉,
+    # 就是這條流水線反覆出現的那個病:某一層的覆蓋範圍靜默地小於它看起來的樣子。
+    "problem":      "問題陳述",
+    "requirements": "需求項目",
+    "acceptance":   "驗收條件",
+    "edgeCases":    "邊界情況",
+    "approach":     "設計取向",
+    "files":        "影響的檔案",
+    "steps":        "實作步驟",
+}
+
+SPEC_TITLE = {"srs": "SRS 軟體需求規格書", "sdd": "SDD 軟體設計規格書",
+              "uiuxSpec": "UI/UX 設計規格書"}
+
+
+def _spec_md_block(value, level=3):
+    """把一個欄位的值轉成 Markdown 段落。
+
+    只認得三種形狀,因為 SA / SD 的真實產出就是這三種(2026-08-28 量過:
+    `problem`/`approach` 是 str,`requirements`/`acceptance`/`edgeCases`/`files`/`steps`
+    是 list[str])。其餘形狀退回 JSON 圍欄 —— **退回,不是丟掉**。
+    """
+    if value is None or value == "":
+        return "_(無)_"
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        out = []
+        for item in value:
+            if isinstance(item, str):
+                # 條目本身可能是多行的;縮排續行,才不會把後面幾行踢出清單。
+                lines = item.strip().split("\n")
+                out.append("- " + lines[0])
+                out.extend("  " + l for l in lines[1:])
+            else:
+                out.append("- ```json\n  %s\n  ```"
+                           % json.dumps(item, ensure_ascii=False))
+        return "\n".join(out)
+    if isinstance(value, dict):
+        out = []
+        for k, v in value.items():
+            out.append("%s %s" % ("#" * level, k))
+            out.append("")
+            out.append(_spec_md_block(v, level + 1))
+            out.append("")
+        return "\n".join(out).strip()
+    return "```json\n%s\n```" % json.dumps(value, ensure_ascii=False, indent=2)
+
+
+def _spec_markdown(kind, slug, value):
+    """把 SA / SD 的結構化產出渲染成**真的 Markdown**。
+
+    在此之前這裡是 `json.dumps(value, indent=2)` —— 副檔名是 `.md`,內容是一整包 JSON。
+    2026-08-28 量到的後果(PR #290):寫出去的 `SRS.md` 19787 位元組、**0 個 Markdown 標題**、
+    沒有 `## 文件資訊`。而 `## 文件資訊` 正是 md-to-docx 的 `parseDocumentStructure`
+    用來離開 cover 段的訊號 —— 缺了它,轉出來的 .docx 是只有封面與目錄的空殼,
+    **而且它仍然回報 `Created (14 KB)`**。
+
+    也就是說:規格「進了版控」與規格「拿得出來當文件」是兩件事,而前者過了會讓後者
+    看起來也過了。這個函式補的是後者。
+
+    `value` 已經是字串時原樣採用(SA 若哪天直接吐 Markdown 就不該被二次包裝),
+    只補上缺的 `## 文件資訊`。
+    """
+    title = SPEC_TITLE.get(kind, kind)
+    info = [
+        "# %s —— %s" % (title, slug),
+        "",
+        "## 文件資訊",
+        "",
+        "| 項目 | 內容 |",
+        "|---|---|",
+        "| 功能代號 | `%s` |" % slug,
+        "| 文件類型 | %s |" % title,
+        "| 產出節點 | sdlc-code-flow / %s |" % {"srs": "SA", "sdd": "SD",
+                                                 "uiuxSpec": "uiux"}.get(kind, kind),
+        "| 產出時間 | %s |" % datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "",
+        "---",
+        "",
+    ]
+    if isinstance(value, str):
+        body = value.strip()
+        if "## 文件資訊" in body:
+            return body + "\n"
+        return "\n".join(info) + body + "\n"
+
+    if not isinstance(value, dict):
+        return "\n".join(info) + _spec_md_block(value) + "\n"
+
+    out = list(info)
+    seen = set()
+    n = 0
+    for key, heading in SPEC_SECTIONS.items():
+        if key not in value:
+            continue
+        seen.add(key)
+        n += 1
+        out += ["## %d. %s" % (n, heading), "", _spec_md_block(value[key]), ""]
+    # 表裡沒有的欄位 —— 用原本的鍵名當標題印出來。少印一個欄位,下游就少看見一段需求,
+    # 而且沒有人會發現:文件看起來是完整的。
+    for key in value:
+        if key in seen:
+            continue
+        n += 1
+        out += ["## %d. %s" % (n, key), "", _spec_md_block(value[key]), ""]
+    return "\n".join(out).rstrip() + "\n"
+
+
 def write_specs(workdir, slug, payload):
     """把這一輪的 SRS / SDD / UI-UX 規格寫進 repo,跟著同一個 gated PR 進版控。
 
@@ -3808,10 +3920,12 @@ def write_specs(workdir, slug, payload):
         #
         # 這是同一天內第三次踩到同一個坑(_intake_form_section 兩處、這裡一處)。
         # `_pv` 的 docstring 早就寫出這個差異,而全檔 29 處用了它,唯獨這裡沒有。
-        body = _pv(payload, key, None)
-        if isinstance(body, (dict, list)):
-            body = json.dumps(body, ensure_ascii=False, indent=2)
-        body = (body or "").strip()
+        raw = _pv(payload, key, None)
+        # 空值判斷要在渲染**之前** —— 渲染器對 None 也會產出一份有標題的空殼,
+        # 而一份空的 SDD 比沒有 SDD 更糟:它讓覆蓋率的分母看起來有東西。
+        if raw in (None, "", {}, []):
+            continue
+        body = _spec_markdown(key, str(slug), raw).strip()
         if not body:
             continue
         rel = os.path.join(base, name)
