@@ -3864,8 +3864,28 @@ def _spec_markdown(kind, slug, value):
     ]
     if isinstance(value, str):
         body = value.strip()
-        if "## 文件資訊" in body:
-            return body + "\n"
+        # **先試著把它當 JSON 解開。** BPMN 把 srs / sdd / uiuxSpec 宣告成
+        # `_strItem`(structureRef="String"),所以引擎存的是 JSON **字串**,
+        # agent 收到的也是字串 —— Data Index 的 `variables` 會幫你解析成物件,
+        # 那是**顯示層的樣子,不是節點拿到的樣子**。
+        #
+        # 2026-08-28 我照 Data Index 的樣子設計並寫了自驗,結果自驗全綠而真跑
+        # 依然吐 JSON(實例 7d88a7f0 / PR #292):渲染器從來沒收過 dict。
+        try:
+            parsed = json.loads(body)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, (dict, list)):
+            return _spec_markdown(kind, slug, parsed)
+        if parsed is None and body.lower() in ("null", "none"):
+            return ""
+        # 只有**行首**的 Markdown 標題才算「本來就是 Markdown」。
+        # 原本的判準是「內文含 `## 文件資訊`」—— 而一份討論 `## 文件資訊` 的規格
+        # 會讓它成立,於是整包 JSON 被原封不動當成文件送出去。判準要問形狀,不是問字眼。
+        if re.search(r"^#{1,6} ", body, re.M):
+            if "## 文件資訊" in body:
+                return body + "\n"
+            return "\n".join(info) + body + "\n"
         return "\n".join(info) + body + "\n"
 
     if not isinstance(value, dict):

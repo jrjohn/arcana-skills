@@ -97,6 +97,31 @@ for empty in (None, "", {}, []):
     if got: break
 check("srs 是空的(None/空字串/空 dict/空 list)時完全不寫檔", not got)
 
+print("\n════ F2. 節點拿到的是 JSON **字串**,不是 dict ════")
+# 這一組的存在理由,是這支自驗第一版全綠而真跑失敗(實例 7d88a7f0 / PR #292)。
+# BPMN 把 srs/sdd/uiuxSpec 宣告成 `_strItem`(structureRef="String"),引擎存的是
+# JSON 字串;Data Index 的 `variables` 會幫忙解析成物件 —— 我照那個樣子設計並測試,
+# 於是渲染器從來沒收過 dict,而自驗一路綠燈。
+#
+# 教訓寫成判準:**測試資料要取自節點真正收到的那一端**,不是取自顯示層。
+as_string = json.dumps(SRS, ensure_ascii=False)
+md_s = m._spec_markdown("srs", "x", as_string)
+check("JSON 字串會被解開後渲染(行首標題 %d 個)"
+      % sum(1 for l in md_s.split("\n") if l.startswith("#")),
+      sum(1 for l in md_s.split("\n") if l.startswith("#")) >= 4)
+check("字串輸入與物件輸入產出相同", md_s == m._spec_markdown("srs", "x", SRS))
+check("解不開的字串不會被丟掉", "只是一段白話" in m._spec_markdown("srs", "x", "只是一段白話"))
+check("字串 \"null\" 視同沒有", m._spec_markdown("srs", "x", "null") == "")
+
+# 直通條件必須問**形狀**,不是問字眼。
+# 這正是 PR #292 的失效點:那份 SRS 在**討論** `## 文件資訊` 這個字串,
+# 於是「內文含 ## 文件資訊」成立,整包 JSON 被原封不動當成文件送出去。
+talks_about = json.dumps(
+    {"problem": "驗收要看有沒有 `## 文件資訊`,不能只看檔案大小。"}, ensure_ascii=False)
+md_t = m._spec_markdown("srs", "x", talks_about)
+check("只是「提到」## 文件資訊 的 JSON 不會被當成 Markdown 直通",
+      md_t.lstrip().startswith("# ") and not md_t.lstrip().startswith("{"))
+
 print("\n════ F. 已經是 Markdown 的字串原樣採用 ════")
 already = "# 我自己寫的\n\n## 文件資訊\n\n| a | b |\n\n## 1. 內容\n\n正文。\n"
 out = m._spec_markdown("srs", "x", already)
