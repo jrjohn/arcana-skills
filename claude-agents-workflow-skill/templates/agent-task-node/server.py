@@ -733,7 +733,9 @@ def _acceptance_brief(payload, workdir):
       a check and a reminder that looks like one.
     """
     parts = []
-    srs = payload.get("srs") or (payload.get("design") or {}).get("srs")
+    # `_pv`:SA/SD/uiux 走 do_execute,變數在 `data` 底下。讀不到 SRS 的後果不是報錯,
+    # 是這份「考卷」變成空的 —— 而收到空考卷的節點看起來仍然一切正常。
+    srs = _pv(payload, "srs", None) or (_pv(payload, "design", None) or {}).get("srs")
     if srs:
         txt = json.dumps(srs, ensure_ascii=False) if isinstance(srs, (dict, list)) else str(srs)
         parts.append(
@@ -897,7 +899,61 @@ def project_context(payload, workdir=None):
     else:
         missing.append("flow inventory / verification coverage")
 
+    specs = _existing_specs(workdir)
+    if specs is None:
+        missing.append("既有規格清單 (docs/specs/ —— 沒有工作目錄可讀)")
+    elif specs:
+        out["existingSpecs"] = specs
+    # 空 list 不記 missing:那是「這個 repo 目前沒有既有規格」,是一個事實,
+    # 不是「查不到」。把兩者混為一談,下游會把「還沒有」當成「我沒看到」。
+
     return {"context": out, "unavailable": missing}
+
+
+def _existing_specs(workdir):
+    """`docs/specs/<slug>/` 底下每一份規格的**摘要**:誰、哪一份、開頭幾行。
+
+    為什麼要有這個:`_memory_brief` 只到 intake / implement / pm-review ——
+    **SA、SD、uiux、test 什麼都拿不到**(見 `_write_workspace_claude_md` 的說明)。
+    後果是 SA 和 SD 各自跑完一整個節點,一次都沒問過前幾輪決定了什麼,
+    於是產出的 SRS 讀起來像一個獨立工具的規格,而不是這個產品的第 N 個功能。
+
+    給**摘要**不給全文,是刻意的:每份 SRS 現在是 16K~30K 字元,三份就吃掉整個
+    提示詞預算。摘要讓節點知道「有這些東西、談的是什麼」,要細節時它自己去讀檔 ——
+    工作目錄就在它手上。
+
+    回 None 代表**沒有工作目錄可讀**(問不到);回 [] 代表**讀了,而目前沒有規格**。
+    兩者在下游是不同的話,合併就是這一整條工作在對抗的那種錯。
+    """
+    if not workdir:
+        return None
+    base = os.path.join(workdir, "docs", "specs")
+    if not os.path.isdir(base):
+        return []
+    out = []
+    for slug in sorted(os.listdir(base)):
+        d = os.path.join(base, slug)
+        if not os.path.isdir(d):
+            continue
+        for name in sorted(os.listdir(d)):
+            if not name.endswith(".md"):
+                continue
+            fp = os.path.join(d, name)
+            try:
+                with open(fp, encoding="utf-8") as f:
+                    head = [ln.rstrip() for ln in f.read(4000).splitlines()]
+            except Exception:
+                continue
+            # 取「第一個實質段落」當摘要 —— 跳過標題、表格、分隔線與空行。
+            gist = next((ln for ln in head
+                         if ln and not ln.startswith(("#", "|", "-", "*", ">"))), "")
+            out.append({
+                "path": os.path.join("docs", "specs", slug, name),
+                "feature": slug,
+                "kind": name[:-3],
+                "gist": gist[:220],
+            })
+    return out
 
 
 def project_brief(payload, workdir=None):
@@ -911,7 +967,10 @@ def project_brief(payload, workdir=None):
     label = {"personas": "使用者角色", "existingFeatures": "已存在的功能與路由",
              "alreadyBuilt": "這個產品已經跑過(或正在跑)的 feature —— 用來判斷這是新案還是延續",
              "inFlight": "同批正在開發的功能", "humanNotes": "人類在此功能上留下的指示",
-             "flows": "本產品的業務流程", "verificationGaps": "尚未被可證偽情境覆蓋的驗證維度"}
+             "flows": "本產品的業務流程", "verificationGaps": "尚未被可證偽情境覆蓋的驗證維度",
+             "existingSpecs": "**這個 repo 已有的規格**(docs/specs/)—— 前幾輪 SA / SD 的產出。"
+                              "要細節請直接讀那個檔案(工作目錄就在你手上);設計前先確認你要做的事"
+                              "與它們一致,或明說你為什麼要偏離"}
     for k, v in ctx.items():
         body = json.dumps(v, ensure_ascii=False) if not isinstance(v, str) else v
         parts.append("\n### %s\n%s\n" % (label.get(k, k), body))
@@ -1023,7 +1082,7 @@ def prompt_intake(p):
     return (
         "你是這個產品的 PM。任務**不是**決定要不要做,而是把「這個需求在這個產品裡到底是什麼」"
         "弄清楚,並且把**還不清楚的部分明確列出來**,讓後面寫規格的人有依據、而不是自己猜。\n\n"
-        "## 需求(原始輸入)\n" + str(p.get("feature_request") or p.get("goal") or "(未提供)") + "\n"
+        "## 需求(原始輸入)\n" + str(_pv(p, "feature_request", None) or _pv(p, "goal", None) or "(未提供)") + "\n"
         + _intake_form_section(p)
         + project_brief(p, _ensure_checkout(p) if p.get("_piid") else p.get("_workdir"))
         + "\n## 你要產出什麼\n"
@@ -1579,17 +1638,17 @@ def prompt_pm_review(p):
         f"PR: {p.get('prUrl')}  (subject: {p.get('job') or p.get('subject')})\n"
         f"Inspect the ACTUAL change first: `gh pr diff {p.get('prUrl') or ''}` and `gh pr view "
         f"{p.get('prUrl') or ''}`. Judge against the evidence, do not trust summaries.\n"
-        f"- SRS (acceptance criteria to trace): {str(p.get('srs'))[:4000]}\n"
-        f"- SDD (design to conform to): {str(p.get('sdd'))[:3000]}\n"
-        f"- UI/UX spec (usability target, if user-facing): {str(p.get('uiuxSpec'))[:3000]}\n"
+        f"- SRS (acceptance criteria to trace): {str(_pv(p, 'srs', ''))[:4000]}\n"
+        f"- SDD (design to conform to): {str(_pv(p, 'sdd', ''))[:3000]}\n"
+        f"- UI/UX spec (usability target, if user-facing): {str(_pv(p, 'uiuxSpec', ''))[:3000]}\n"
         f"- SIBLING features in this SAME initiative (each with its verdict/state — cross-check against "
         f"these, like a countersigner reading prior sign-offs): {str(p.get('siblings'))[:2800]}\n"
-        f"- APP NAVIGATION MAP — ALL existing top-level features + routes at base `{p.get('base') or 'main'}` "
+        f"- APP NAVIGATION MAP — ALL existing top-level features + routes at base `{_pv(p, 'base', 'main') or 'main'}` "
         f"(to judge IA redundancy against the WHOLE app, not just siblings): "
         f"{_fetch_app_map(p) or '(unavailable — degrade to the siblings check)'}\n"
         f"- TEST NODE RESULT (the platform's OWN CI — it built THIS exact PR and ran feature testcases + the "
         f"AI semantic gate + a GOAL-DIRECTED JOURNEY WALKTHROUGH on it): "
-        f"{_report_for_pm(p.get('testReport'))}\n"
+        f"{_report_for_pm(_pv(p, 'testReport', None))}\n"
         # What a human said to THIS feature while it was being built. The worker fetches it
         # (main.rs manager_notes -> "managerNotes") and the PM skill instructs the model to read
         # `data.managerNotes` as AUTHORITATIVE intent — but this prompt never included the key,
@@ -1659,7 +1718,7 @@ def prompt_pm_review(p):
         "deduped against siblings. HOLD is only for THIS feature's own human-decision gaps.\n"
         "ANTI-GOODHART (non-negotiable): never lower/soften an AC, design, or UX bar to reach GO; no dimension "
         "passes without cited evidence; if the SAME gap survived the previous round -> HOLD (do not churn).\n"
-        f"Previous round verdict (no-progress detection): {str(p.get('pmReview'))[:1500]}\n"
+        f"Previous round verdict (no-progress detection): {str(_pv(p, 'pmReview'))[:1500]}\n"
         f"Iteration (pmAttempts): {p.get('pmAttempts')}\n"
         "Return the verdict JSON (verdict GO|NOGO|HOLD, per-dimension pass+note citing evidence, and if NOGO "
         "a concrete actionable `feedback` naming the exact gap + fix so Implement resolves it in ONE pass)."
@@ -3724,7 +3783,16 @@ def write_specs(workdir, slug, payload):
     base = os.path.join("docs", "specs", str(slug))
     node_of = {"srs": "SA", "sdd": "SD", "uiuxSpec": "UI/UX"}
     for name, key in (("SRS.md", "srs"), ("SDD.md", "sdd"), ("UIUX.md", "uiuxSpec")):
-        body = payload.get(key)
+        # **`_pv`,不是 `payload.get`。** SA / SD / uiux 走的是 `do_execute`,它把每一個
+        # 實例變數塞在 `data` 底下;只翻頂層會拿到 None,然後被下面的 `if not body: continue`
+        # 安靜跳過 —— 沒有錯誤、沒有 log,結果就是 docs/specs/ 永遠是空的。
+        #
+        # 2026-08-28 實測:專為驗證這件事跑的一輪(91153d94),SA 與 SD 都跑完、規格
+        # 確實在流程變數裡、implement 也開出了 PR #288,而 `docs/specs/<slug>/` 一個檔都沒有。
+        #
+        # 這是同一天內第三次踩到同一個坑(_intake_form_section 兩處、這裡一處)。
+        # `_pv` 的 docstring 早就寫出這個差異,而全檔 29 處用了它,唯獨這裡沒有。
+        body = _pv(payload, key, None)
         if isinstance(body, (dict, list)):
             body = json.dumps(body, ensure_ascii=False, indent=2)
         body = (body or "").strip()
@@ -4226,7 +4294,7 @@ def _touched_flows(payload):
     """
     if "_touched_flows" in payload:
         return payload["_touched_flows"]
-    flows, paths, repo = [], [], payload.get("repo") or ""
+    flows, paths, repo = [], [], _pv(payload, "repo", "") or ""
     url, _ = _pr_url_and_branch(payload)
     num = ""
     m = re.search(r"/pull/(\d+)", url or "")
@@ -4298,7 +4366,7 @@ def _scenario_autofill(payload):
                 "reason": "flow-sim scenario schema %s < required %s — stale binary in image"
                           % (_have, _need_schema)}
     net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
-    repo = payload.get("repo") or ""
+    repo = _pv(payload, "repo", "") or ""
     _, branch = _pr_url_and_branch(payload)
     if not (repo and branch):
         return {"ran": False, "reason": "no repo/branch"}
@@ -4446,7 +4514,8 @@ def _gen_testcases(payload):
     """T4-2: generate feature-specific Playwright testcases (.mjs) from the ACs + the PR diff, so
     the Test gate checks THIS feature (not just org regression). Returns the .mjs text, or None to
     fall back to the default regression set (the runner then uses org-designer.testcases.mjs)."""
-    srs = payload.get("srs") or ""
+    # `_pv`:讀不到 SRS 時,產出的測試案例就是憑空猜的 —— 而它們看起來和真的一樣。
+    srs = _pv(payload, "srs", "") or ""
     if isinstance(srs, (dict, list)):
         srs = json.dumps(srs, ensure_ascii=False)
     url, _ = _pr_url_and_branch(payload)
@@ -4521,7 +4590,8 @@ def _gen_journeys(payload):
     None to skip the journey gate (non-UI feature / no source)."""
     if str(payload.get("uiFacing", "")).strip().lower() not in ("true", "1", "yes"):
         return None  # backend-only feature → no UI journey
-    srs = payload.get("srs") or ""
+    # `_pv`:讀不到 SRS 時,產出的測試案例就是憑空猜的 —— 而它們看起來和真的一樣。
+    srs = _pv(payload, "srs", "") or ""
     if isinstance(srs, (dict, list)):
         srs = json.dumps(srs, ensure_ascii=False)
     url, _ = _pr_url_and_branch(payload)
@@ -4593,7 +4663,8 @@ def _gen_api_checks(payload):
     string, or None to skip (UI feature / no source)."""
     if str(payload.get("uiFacing", "")).strip().lower() in ("true", "1", "yes"):
         return None  # UI feature → the journey gate owns acceptance
-    srs = payload.get("srs") or ""
+    # `_pv`:讀不到 SRS 時,產出的測試案例就是憑空猜的 —— 而它們看起來和真的一樣。
+    srs = _pv(payload, "srs", "") or ""
     if isinstance(srs, (dict, list)):
         srs = json.dumps(srs, ensure_ascii=False)
     url, _ = _pr_url_and_branch(payload)
@@ -5795,9 +5866,9 @@ def test_flow(payload):
     keep = lambda v: "".join(c for c in str(v) if c.isalnum() or c in "-_") or "adhoc"
     piid = keep(payload.get("_piid") or payload.get("slug") or "adhoc")
     net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
-    repo = payload.get("repo") or ""
+    repo = _pv(payload, "repo", "") or ""
     _, branch = _pr_url_and_branch(payload)
-    base = payload.get("base") or "main"
+    base = _pv(payload, "base", "main") or "main"
     # A PR that changes the backend gets its OWN read-API built and pointed at; otherwise the
     # deployed one stays the right target and nothing extra is paid. `teardown` runs in the
     # finally below — a leaked container would poison every later run on this network.
