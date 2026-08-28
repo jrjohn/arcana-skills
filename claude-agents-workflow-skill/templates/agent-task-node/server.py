@@ -934,8 +934,33 @@ def _intake_form_section(p):
     then costs the person time and returns nothing, which is how a human-in-the-loop step
     gets removed for being annoying rather than for being wrong.
     """
-    raw = p.get("intakeForm")
-    rnd = p.get("intakeRound") or 0
+    # **一律走 `_pv`,不要 `p.get`。** 這個 dispatcher 有兩種擺法:`do_implement` 把變數
+    # 放頂層,而 `do_execute`(驅動 SA / SD / uiux / IntakeReview)把每一個實例變數
+    # 塞在 `data` 底下 —— `_pv` 存在就是為了吸收這個差異。
+    #
+    # 2026-08-28 實測:使用者逐條答完 11 個欄位、`pm_answers` 1697 字確實寫進流程變數、
+    # 任務 inputs 也帶著它,而這個函式讀 `p.get("pm_answers")` 得到 None(它在 `data` 裡),
+    # 於是回報「尚無填答內容」,IntakeReview 把同樣三題**原封不動再問一次**,
+    # 而且明寫「此題在第 1 輪已問過且未獲回覆」。人回答了,讀的人收不到。
+    #
+    # 從外面看,流程一切正常 —— 它只是顯得「AI 問題很多」。
+    # 那正是人機迴圈會因為「很煩」被拿掉的死法,而它不是煩,是壞了。
+    raw = _pv(p, "intakeForm", None)
+    # 一份表單必定是 JSON **物件**。`intakeForm` 綁的是 userTask 的 `out`,而 out 是
+    # 決議字串("approve" / "request-changes")—— 解析不出物件的東西就**不是**表單。
+    #
+    # 原本它會被包成 {"(unparsed)": "approve"} 一路走下去,於是決議字串以「填答內容」
+    # 的姿態出現在提示詞裡。那比沒有更糟:節點看到一段像是填答的東西,就不會說
+    # 「尚無填答」,而它實際上什麼都沒讀到 —— 錯誤因此變得看不見。
+    #
+    # 所以這裡先把它歸零,讓下面的具名欄位 fallback 接手。
+    if raw is not None and not isinstance(raw, dict):
+        try:
+            _probe = json.loads(raw) if isinstance(raw, str) else None
+        except Exception:
+            _probe = None
+        raw = _probe if isinstance(_probe, dict) else None
+    rnd = _pv(p, "intakeRound", 0) or 0
     if not raw:
         # `intakeForm` 是這個節點宣告的 dataOutput,但**送答的路徑不一定會填它**。
         #
@@ -951,17 +976,15 @@ def _intake_form_section(p):
         #
         # 所以改成:**讀得到什麼就讀什麼**。答案裝在哪個容器裡是上游的實作細節,
         # 不該讓「有沒有人回答過」這件事取決於它。兩邊都空才是真的沒填。
-        loose = {k: p.get(k) for k in (
+        loose = {k: _pv(p, k, None) for k in (
             "feature_request", "target_users", "placement", "acceptance",
             "out_of_scope", "pm_answers", "pm_questions", "pm_assumptions")
-            if p.get(k) not in (None, "", [], {})}
+            if _pv(p, k, None) not in (None, "", [], {})}
         if not loose:
             return "\n## 表單狀態\n第 1 輪,尚無填答內容。\n"
         raw = loose
-    try:
-        form = json.loads(raw) if isinstance(raw, str) else raw
-    except Exception:
-        form = {"(unparsed)": str(raw)[:2000]}
+    # 到這裡 raw 必定是 dict(上面已把非物件歸零,fallback 也只產生 dict)。
+    form = raw if isinstance(raw, dict) else {}
     label = {"feature_request": "需求描述", "target_users": "服務對象", "placement": "放在哪裡",
              "acceptance": "怎麼算做完", "out_of_scope": "這次不做什麼",
              "pm_answers": "對上輪追問的回覆", "pm_questions": "上輪的追問",
