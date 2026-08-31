@@ -3790,8 +3790,16 @@ SPEC_SECTIONS = {
     "nonFunctional":"非功能需求",
     "edgeCases":    "邊界情況",
     "approach":     "設計取向",
+    "design":       "設計項目",
     "files":        "影響的檔案",
     "steps":        "實作步驟",
+}
+
+# 節點的內部簿記 —— 是資料,不是規格。放進附錄並標明來歷,
+# 而不是當成正文的第 6 章。**不是刪掉**:刪掉會讓「這一輪 AI 有多少把握」
+# 這件事從文件裡消失,而那正是審查者該看到的。
+SPEC_APPENDIX = {
+    "_confidence": "附錄：節點自評（非規格內容）",
 }
 
 SPEC_TITLE = {"srs": "SRS 軟體需求規格書", "sdd": "SDD 軟體設計規格書",
@@ -3989,7 +3997,7 @@ def _spec_markdown(kind, slug, value):
     # 表裡沒有的欄位 —— 用原本的鍵名當標題印出來。少印一個欄位,下游就少看見一段需求,
     # 而且沒有人會發現:文件看起來是完整的。
     for key in value:
-        if key in seen:
+        if key in seen or key in SPEC_APPENDIX:
             continue
         n += 1
         out += ["## %d. %s" % (n, key), "", _spec_md_block(value[key]), ""]
@@ -3999,6 +4007,11 @@ def _spec_markdown(kind, slug, value):
     if rtm:
         n += 1
         out += ["## %d. 需求追蹤矩陣 (RTM)" % n, "", rtm, ""]
+    for key, label in SPEC_APPENDIX.items():
+        if key not in value or value[key] in (None, "", [], {}):
+            continue
+        n += 1
+        out += ["## %d. %s" % (n, label), "", _spec_md_block(value[key]), ""]
     return "\n".join(out).rstrip() + "\n"
 
 
