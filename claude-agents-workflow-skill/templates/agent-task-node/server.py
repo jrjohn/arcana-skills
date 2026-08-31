@@ -6363,6 +6363,13 @@ def uiux_audit_flow(payload):
     engine = os.environ.get("ENGINE_URL", "http://aaf-kogito-bpmn:8080")
     di = os.environ.get("DATA_INDEX_URL", "http://aaf-data-index:8080")
     repo = payload.get("repo") or os.environ.get("UIUX_AUDIT_REPO", "jrjohn/arcana-ai-bpm")
+    # 誰負責回答這些單的追問。**沒有預設值**:硬編一個人名在別的部署會指到不存在的帳號,
+    # 而指到不存在的帳號跟沒有指派一樣糟 —— 只是更難發現。
+    requester = (payload.get("requester")
+                 or os.environ.get("UIUX_AUDIT_REQUESTER", "")).strip()
+    project_id = (payload.get("projectId")
+                  or os.environ.get("UIUX_AUDIT_PROJECT", "aaf")).strip()
+    unowned = []
     target_base = payload.get("target_base") or os.environ.get("UIUX_AUDIT_TARGET_BASE", "main")
     _cap = payload.get("cap")  # explicit None check so cap=0 (dry-run) is honoured, not falsy->default
     cap = int(_cap if _cap is not None else os.environ.get("UIUX_AUDIT_MAX", "2"))
@@ -6447,16 +6454,38 @@ def uiux_audit_flow(payload):
         fr = ("[UI/UX 自動稽核] %s — %s。請依 app-uiux-designer rubric 修正此問題(純前端 dashboard,"
               "不動後端 API);修好後同一畫面應通過 AI 語意 gate。%s"
               % (f.get("route", ""), f.get("detail", ""), _audit_marker(slug)))
+        # **一張沒有負責人的單,等於製造看不見的工。**
+        #
+        # 2026-08-31 量到的:6 條停在「需求詢問」的實例,最久的卡了 3 天。
+        # 每一層都看得到它們(引擎、Data Index、收件匣 API、畫面前三列都有),
+        # 所以不是被藏起來 —— 是**沒有人被指名**。人開的單 requester='boss',
+        # 機器開的單 requester=None,而 IntakeReview 一旦判定資訊不足就會停下來問,
+        # 那個問題於是懸在半空。
+        #
+        # 這裡 fail-closed:指派不到人就不開。少開一張單,好過多一張沒人回答的單。
+        if not requester:
+            skipped += 1
+            unowned.append(slug)
+            continue
         sr = _curl_json("POST", engine + "/sdlc-code-flow",
                         {"feature_request": fr, "repo": repo, "base": target_base,
-                         "slug": slug, "uiFacing": "true"}, 60)
+                         "slug": slug, "uiFacing": "true",
+                         # 指派回答人:追問有人收,抽單也才有人有權做
+                         # (requester 為空時連撤回都沒有人能做 —— 同一個根)。
+                         "requester": requester, "projectId": project_id}, 60)
         if sr.get("id"):
             started += 1
             triggered.append(slug)
         else:
             skipped += 1
-    return {"findings": len(data.get("findings", [])), "fails": len(fails),
-            "started": started, "skipped": skipped, "triggered": triggered, "cap": cap}
+    out = {"findings": len(data.get("findings", [])), "fails": len(fails),
+           "started": started, "skipped": skipped, "triggered": triggered, "cap": cap}
+    if unowned:
+        # 說出來,而不是靜靜跳過。一個「skipped 3」看起來跟去重跳過一模一樣。
+        out["unowned"] = unowned
+        out["unownedReason"] = ("UIUX_AUDIT_REQUESTER 未設定,這些發現沒有開單 —— "
+                                "自動開的單必須指名回答人,否則追問會沒有人收")
+    return out
 
 
 # ── consult: ask a peer role a question WITHOUT waiting for the next loop ─────────────
