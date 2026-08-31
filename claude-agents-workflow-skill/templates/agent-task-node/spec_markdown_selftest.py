@@ -80,7 +80,10 @@ extra["openQuestions"] = "門檻要不要跟著螢幕寬度走?"
 md2 = m._spec_markdown("srs", "x", extra)
 check("未知欄位 riskRegister 有印出來", "riskRegister" in md2 and "RK-1" in md2)
 check("未知欄位 openQuestions 有印出來", "openQuestions" in md2 and "門檻要不要" in md2)
-check("_confidence 這種簿記欄位也不丟", "_confidence" in md2)
+# 用意是「簿記不得被丟掉」,不是「原始鍵名必須出現」。
+# I 組之後 _confidence 改以附錄呈現,所以驗的是**內容還在**,不是鍵名還在。
+check("_confidence 這種簿記欄位也不丟（改以附錄呈現）",
+      "節點自評" in md2 and "notApplicable" in md2)
 
 print("\n════ D. 內容一個字都不能掉 ════")
 def strings_of(v):
@@ -184,6 +187,31 @@ check("有標準的那條不會被誤點名", "REQ-A-001" not in gm.split("缺�
 check("未列在 REQ_FIELDS 的鍵也印得出來",
       "riskLevel" in m._spec_markdown("srs", "x",
           {"requirements": [{"id": "R", "name": "N", "riskLevel": "高"}]}))
+
+print("\n════ I. 內部簿記不得當成規格章節 ════")
+# 實例 d310a25d(PR #296)實際產出的章節裡有 `## 6. _confidence` 與 `## 5. design` ——
+# 原始鍵名直接當標題。前者是節點自評(是資料,不是規格),後者只是沒有中文名。
+# 判準:移到附錄並改名,**但不刪** —— 刪掉會讓「這一輪 AI 有多少把握」
+# 從文件裡消失,而那正是審查者該看到的。
+withconf = {"problem": "P",
+            "requirements": [{"id": "R-1", "name": "N", "description": "D",
+                              "source": "S", "verification": "測試",
+                              "acceptance": ["A"]}],
+            "_confidence": {"policy": "none", "verdict": "notApplicable"}}
+cm = m._spec_markdown("srs", "x", withconf)
+heads = [l for l in cm.split("\n") if l.startswith("## ")]
+check("_confidence 不再是正文章節",
+      not any(h.endswith("_confidence") for h in heads))
+check("_confidence 仍然看得到（移到附錄，不是刪掉）",
+      "節點自評" in cm and "notApplicable" in cm)
+check("附錄排在需求追蹤矩陣之後",
+      cm.index("節點自評") > cm.index("需求追蹤矩陣"))
+sd = m._spec_markdown("sdd", "x", {"approach": "A",
+        "design": [{"id": "SDD-1", "name": "N", "description": "D",
+                    "reqTrace": "R-1"}]})
+check("SD 的 design 有中文章節名", "## 2. 設計項目" in sd)
+check("design 也走結構化渲染（有 reqTrace 屬性列）",
+      "### SDD-1: N" in sd and "reqTrace" in sd)
 
 print("\n════ G. 端到端:轉成 .docx 之後真的有內文 ════")
 JS = os.path.expanduser("~/.claude/skills/app-requirements-skill/md-to-docx.js")
