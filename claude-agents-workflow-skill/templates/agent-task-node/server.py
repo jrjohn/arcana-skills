@@ -3784,8 +3784,10 @@ SPEC_SECTIONS = {
     # 照樣會被印出來(見 _spec_markdown 的第二段迴圈)。把未知欄位默默丟掉,
     # 就是這條流水線反覆出現的那個病:某一層的覆蓋範圍靜默地小於它看起來的樣子。
     "problem":      "問題陳述",
+    "scope":        "範圍",
     "requirements": "需求項目",
-    "acceptance":   "驗收條件",
+    "acceptance":   "本輪驗收條件",
+    "nonFunctional":"非功能需求",
     "edgeCases":    "邊界情況",
     "approach":     "設計取向",
     "files":        "影響的檔案",
@@ -3794,6 +3796,80 @@ SPEC_SECTIONS = {
 
 SPEC_TITLE = {"srs": "SRS 軟體需求規格書", "sdd": "SDD 軟體設計規格書",
               "uiuxSpec": "UI/UX 設計規格書"}
+
+
+def _is_req_list(v):
+    """判斷這串是不是「結構化需求」—— 每一筆都有 id 與 name。
+
+    判準刻意嚴格:只要有一筆不像,就整串退回舊的清單渲染。寧可少認,
+    不要把半結構化的東西硬塞進屬性表 —— 那會產出一堆空欄位,
+    而空欄位在文件裡看起來跟「這項沒有要求」一模一樣。
+    """
+    return (isinstance(v, list) and v and all(
+        isinstance(x, dict) and x.get("id") and x.get("name") for x in v))
+
+
+def _uniform_dict_list(v):
+    """一串鍵相同的 dict —— 可以直接畫成表格(非功能需求就是這種)。"""
+    if not (isinstance(v, list) and v and all(isinstance(x, dict) for x in v)):
+        return None
+    keys = list(v[0].keys())
+    if not keys or any(list(x.keys()) != keys for x in v):
+        return None
+    if any(isinstance(x.get(k), (dict, list)) for x in v for k in keys):
+        return None
+    return keys
+
+
+COLUMN_LABELS = {
+    # 表頭用中文。不認得的鍵原樣顯示 —— 同樣是命名表,不是過濾器。
+    "id": "ID", "name": "名稱", "category": "類別", "requirement": "需求",
+    "measurement": "量測方法", "status": "現況", "description": "描述",
+    "source": "來源", "verification": "驗證方法", "note": "備註",
+    "inScope": "範圍內", "outOfScope": "範圍外",
+}
+
+REQ_FIELDS = [("id", "ID"), ("name", "名稱"), ("description", "描述"),
+              ("source", "來源"), ("verification", "驗證方法"),
+              ("precondition", "前置條件"), ("postcondition", "後置條件"),
+              ("related", "相關需求"), ("sddTrace", "SDD 追蹤")]
+
+
+def _req_blocks(items, level=3):
+    """每條需求:標題 + 屬性表 + 接受標準。
+
+    未在 REQ_FIELDS 列出的鍵也會印出來(用原鍵名) —— 同樣的理由:
+    表是命名與排序,不是過濾器。
+    """
+    h = "#" * level
+    out = []
+    for r in items:
+        out.append("%s %s: %s" % (h, r.get("id"), r.get("name")))
+        out.append("")
+        out.append("| 屬性 | 內容 |")
+        out.append("|-----|------|")
+        shown = set()
+        for k, label in REQ_FIELDS:
+            if r.get(k) in (None, "", []):
+                continue
+            shown.add(k)
+            out.append("| **%s** | %s |" % (label, r[k]))
+        for k, v in r.items():
+            if k in shown or k == "acceptance" or v in (None, "", []):
+                continue
+            if isinstance(v, (dict, list)):
+                v = json.dumps(v, ensure_ascii=False)
+            out.append("| **%s** | %s |" % (k, v))
+        out.append("")
+        acc = r.get("acceptance") or []
+        if isinstance(acc, str):
+            acc = [acc]
+        if acc:
+            out.append("**接受標準**：")
+            for i, a in enumerate(acc, 1):
+                out.append("%d. %s" % (i, a))
+            out.append("")
+    return "\n".join(out).strip()
 
 
 def _spec_md_block(value, level=3):
@@ -3807,6 +3883,16 @@ def _spec_md_block(value, level=3):
         return "_(無)_"
     if isinstance(value, str):
         return value.strip()
+    if _is_req_list(value):
+        return _req_blocks(value, level)
+    if isinstance(value, list) and _uniform_dict_list(value):
+        keys = _uniform_dict_list(value)
+        head = [COLUMN_LABELS.get(k, k) for k in keys]
+        rows = ["| %s |" % " | ".join(head), "|%s|" % "|".join(["---"] * len(keys))]
+        for x in value:
+            rows.append("| %s |" % " | ".join(
+                str(x.get(k, "")).replace("\n", " ") for k in keys))
+        return "\n".join(rows)
     if isinstance(value, list):
         out = []
         for item in value:
@@ -3907,7 +3993,34 @@ def _spec_markdown(kind, slug, value):
             continue
         n += 1
         out += ["## %d. %s" % (n, key), "", _spec_md_block(value[key]), ""]
+    # 追蹤矩陣只在**真的有結構化需求**時產生。沒有就不畫 ——
+    # 一張空的 RTM 比沒有 RTM 更糟:它讓可追溯性看起來已經處理過了。
+    rtm = _rtm_table(value)
+    if rtm:
+        n += 1
+        out += ["## %d. 需求追蹤矩陣 (RTM)" % n, "", rtm, ""]
     return "\n".join(out).rstrip() + "\n"
+
+
+def _rtm_table(value):
+    """由結構化需求生出追蹤矩陣;沒有結構化需求就回空字串。"""
+    reqs = value.get("requirements") if isinstance(value, dict) else None
+    if not _is_req_list(reqs):
+        return ""
+    rows = ["| 需求 ID | 名稱 | 來源 | 驗證方法 | 接受標準數 | SDD 追蹤 |",
+            "|---------|------|------|---------|-----------|---------|"]
+    for r in reqs:
+        acc = r.get("acceptance") or []
+        if isinstance(acc, str):
+            acc = [acc]
+        rows.append("| %s | %s | %s | %s | %d | %s |" % (
+            r.get("id", ""), r.get("name", ""), r.get("source", "—"),
+            r.get("verification", "—"), len(acc), r.get("sddTrace", "—")))
+    missing = [r.get("id") for r in reqs if not (r.get("acceptance"))]
+    if missing:
+        rows.append("")
+        rows.append("> **缺口**：下列需求沒有接受標準，無法驗證：%s" % "、".join(missing))
+    return "\n".join(rows)
 
 
 def write_specs(workdir, slug, payload):
