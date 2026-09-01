@@ -59,6 +59,14 @@ def offenders():
         recv = n.func.value
         if not (isinstance(recv, ast.Name) and recv.id in ("payload", "p")):
             continue
+        # `p` 是迴圈或推導式綁出來的 → 它是**被迭代出來的一列**(例如註冊表回應的
+        # `body["projects"]`),不是流程 payload。同名不同物。
+        #
+        # 這一條原本是用「整個函式豁免」處理的,而對照組證明那是萬用擋箭牌:
+        # 在被豁免的函式裡塞一行真的 `payload.get("srs")`,閘照樣綠。
+        # 豁免擋掉的是雜訊,同時也擋掉了訊號 —— 所以改成看**這個名字怎麼來的**。
+        if recv.id == "p" and _is_iteration_bound(n.lineno):
+            continue
         a0 = n.args[0]
         if isinstance(a0, ast.Constant) and a0.value in FLOW_KEYS:
             out.append((a0.value, n.lineno))
@@ -75,6 +83,28 @@ def offenders():
     # 行號會漂,而搬家之後漂掉的判準看起來仍然正常。
     allow = _funcs_allowed_top_level()
     return [(k, l) for k, l in out if _func_at(l) not in allow]
+
+
+def _is_iteration_bound(lineno):
+    """這一行所在的 for / 推導式,是不是用 `p` 當迭代變數。"""
+    for n in ast.walk(tree):
+        binds = None
+        if isinstance(n, (ast.For, ast.AsyncFor)):
+            binds = [n.target]
+            span = (n.lineno, max(getattr(x, "end_lineno", n.lineno) or n.lineno
+                                  for x in (n.body or [n])))
+        elif isinstance(n, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+            binds = [g.target for g in n.generators]
+            span = (n.lineno, getattr(n, "end_lineno", n.lineno) or n.lineno)
+        if not binds:
+            continue
+        if not (span[0] <= lineno <= span[1]):
+            continue
+        for t in binds:
+            for nm in ast.walk(t):
+                if isinstance(nm, ast.Name) and nm.id == "p":
+                    return True
+    return False
 
 
 def _func_at(lineno):
