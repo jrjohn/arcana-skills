@@ -104,6 +104,29 @@ for empty in (None, "", {}, []):
     if got: break
 check("srs 是空的(None/空字串/空 dict/空 list)時完全不寫檔", not got)
 
+# **worker 送的不是 Python None,是字串 `"null"`。**
+#
+# `build_implement_design`(workflow-task-worker/src/main.rs:967)對 uiuxSpec 走
+# `x.to_string()` —— JSON 的 null 因此被字串化成 4 個字元的 `"null"`。
+# 而上面那一組的 fixture 送的是 Python `None`,那個形狀 worker 從來不會送出。
+#
+# 後果實測過(PR #291 的 SA 在自己的 diff 裡看到的):uiFacing=false、
+# 根本沒有 UI 規格,卻照樣落了一份 192 bytes 的 UIUX.md,正文只有一個 `null`。
+# `body = (body or "").strip()` 擋得掉 None,擋不掉長度 4 的 truthy 字串。
+#
+# 那個 bug 已由 #65 修掉(字串先 json.loads,解出 None 就回空字串),
+# 但**斷言仍然守著一個不存在的情境** —— 綠燈證明不了修有沒有效。這一組補上真形狀。
+for shape in ('null', 'NULL', ' null ', 'none', 'None'):
+    d3 = tempfile.mkdtemp()
+    g3 = m.write_specs(d3, "x", {"design": {"srs": {"problem": "P"}, "uiuxSpec": shape}})
+    check("uiuxSpec 是字串 %r（worker 的真形狀）時不寫 UIUX.md" % shape,
+          not any("UIUX" in x for x in g3))
+# 而真的有 UI 規格時必須照寫 —— 沒有這一條,上面那五格可以靠「永遠不寫」作弊。
+d4 = tempfile.mkdtemp()
+g4 = m.write_specs(d4, "x", {"design": {"uiuxSpec": {"layout": "兩欄"}}})
+check("真的有 UI 規格時仍然寫得出 UIUX.md",
+      any("UIUX" in x for x in g4))
+
 print("\n════ F2. 節點拿到的是 JSON **字串**,不是 dict ════")
 # 這一組的存在理由,是這支自驗第一版全綠而真跑失敗(實例 7d88a7f0 / PR #292)。
 # BPMN 把 srs/sdd/uiuxSpec 宣告成 `_strItem`(structureRef="String"),引擎存的是
