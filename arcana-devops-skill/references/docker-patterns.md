@@ -139,7 +139,7 @@ Embedded Dockerfiles are **build-only** — they produce firmware artifacts, not
 ### ESP32 (ESP-IDF)
 
 ```dockerfile
-FROM espressif/idf:v5.5.2 AS builder
+FROM espressif/idf:v6.0.2 AS builder
 WORKDIR /app
 COPY . .
 RUN . /opt/esp/idf/export.sh && idf.py set-target esp32 && idf.py build

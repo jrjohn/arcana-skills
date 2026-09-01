@@ -220,7 +220,7 @@ arcana.boo/arcana/api:1.2.3
 | Swift/iOS | Xcode 26.2 | XCTest | macOS agent (Mac Mini) | Fastlane → TestFlight |
 | Android/Kotlin | Gradle (gradlew) | JUnit + Espresso | eclipse-temurin:21 + Android SDK 36 (amd64) | Fastlane → Play Console |
 | HarmonyOS | hvigorw | hvigorw test | ubuntu:22.04 + JDK 17 + OHOS SDK 6.0.0.858 (amd64) | Fastlane → AppGallery |
-| ESP32 (Firmware) | idf.py (CMake) | Unity/QEMU | espressif/idf:v5.5.2 (build only; reference project now on IDF v6.x — prefer matching the project's idf version) | esptool.py / OTA |
+| ESP32 (Firmware) | idf.py (CMake) | Unity/QEMU | espressif/idf:v6.0.2 (build only; reference project now on IDF v6.x — prefer matching the project's idf version) | esptool.py / OTA |
 | STM32 (Firmware) | CMake + Make | Unity/CTest | ubuntu:24.04 + arm-gcc (build only) | OpenOCD / J-Link / OTA |
 
 ---
@@ -430,7 +430,7 @@ bash ~/.claude/skills/arcana-devops-skill/process/00-init/exit-validation.sh {pr
 | Image too large | Review multi-stage build, check `.dockerignore` |
 | Jenkins `docker compose: unknown flag` | Mount compose plugin: `-v /usr/libexec/docker/cli-plugins:/usr/libexec/docker/cli-plugins:ro` |
 | Jenkins node offline (disk space) | `docker system prune -af`, remove unused images; min 1GB free for jenkins_home |
-| ESP32 image pull slow (~11GB ARM64) | Pre-pull with `docker pull espressif/idf:v5.5.2`; use docker compose for cached builds (reference project now on IDF v6.x — prefer matching the project's idf version) |
+| ESP32 image pull slow (~11GB ARM64) | Pre-pull with `docker pull espressif/idf:v6.0.2`; use docker compose for cached builds |
 | STM32 CMake compiler test fails | Add `set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)` to toolchain cmake |
 | Android aapt2 `Syntax error: "(" unexpected` on ARM64 | aapt2 is x86_64 only; use `platform: linux/amd64` in docker-compose.yml + install binfmt: `docker run --rm --privileged tonistiigi/binfmt --install amd64` |
 | Android aapt2 `Could not open ld-linux-x86-64.so.2` | Must use full amd64 image (not just binfmt on ARM64 image); set `platforms: [linux/amd64]` in compose build config |
