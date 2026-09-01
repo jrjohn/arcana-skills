@@ -273,8 +273,117 @@ img_case('沒有 docker → 不擋', True, '', docker_ok=False)
 img_case('讀不到 repo 樹 → 不擋', True, '', gh_ok=False)
 
 print()
+print('  ── flow-sim 版本握手(S4)——過舊的 binary 會被擋下嗎 ──')
+
+
+def handshake():
+    """`--version` 握手的對照組。
+
+    計畫要的是「binary 回報支援的 schema 版本,過舊即拒絕」。程式碼在那裡,
+    而這幾格證明它**會拒絕** —— 含必須放行的那一格。
+
+    binary 是 gitignored 產物、手動 COPY 進映像、沒有任何新鮮度檢查,
+    所以這個數字是唯一能讓「映像裡那份太舊」變成一句話而不是一個錯結論的東西:
+    舊 binary 拿到宣告 groups 的情境不會報錯,serde 的 default 把它填成 ["human"],
+    平台流程的 ai / jenkins 關卡一個都看不到,然後回報「沒有人工關卡」。
+    """
+    global bad
+    binary = os.environ.get('FLOW_SIM_BIN_FOR_TEST') or _find_flow_sim()
+    if not binary:
+        # notRun 與 notApplicable 的差別在於**由誰說**,而處置不同:
+        #
+        #   這個 repo 沒有 Rust、也不該有 flow-sim → notApplicable(可見,不擋)
+        #   aaf 的 pipeline 建完卻找不到           → notRun(該跑卻沒跑成,要擋)
+        #
+        # 所以由呼叫端宣告:`FLOW_SIM_REQUIRED=1` 時,缺 binary 是 notRun 而且擋。
+        # 一律不擋,會讓「這裡本來就沒有」與「說好要驗卻沒驗到」變成同一件事,
+        # 而後者正是這一整輪在拆的那個病。
+        if os.environ.get('FLOW_SIM_REQUIRED') == '1':
+            global bad
+            bad += 1
+            print('  ✗ notRun —— 說好要驗握手卻找不到 flow-sim。'
+                  '先跑 cargo build -p flow-sim --bin flow-sim。')
+            return 2
+        print('  notApplicable —— 這個環境沒有 flow-sim(可見,不擋)。'
+              '握手在 aaf 的 pipeline 裡驗,那邊 binary 是建出來的。')
+        return 3
+
+    # 版本閘的上游要求「這次 PR 有動到流程」。那一步要讀 PR 的改動檔案(gh),
+    # 與握手無關 —— stub 掉,讓每一格的結論只可能來自握手本身。
+    mod._touched_flows = lambda payload: [{'slug': 'x', 'path': 'x.bpmn2'}]
+    os.environ['SCENARIO_AUTOFILL'] = '1'
+
+    def hs(name, min_schema, path, want_in):
+        global bad
+        os.environ['FLOW_SIM_MIN_SCHEMA'] = str(min_schema)
+        os.environ['FLOW_SIM_BIN'] = path
+        res = mod._scenario_autofill({'repo': 'x/y', 'base': 'main'})
+        reason = res.get('reason', '')
+        good = (not res.get('ran')) and (want_in in reason)
+        print('  %s %-28s %s' % ('✓' if good else '✗', name, reason[:62]))
+        if not good:
+            bad += 1
+
+    hs('要求 schema 3(比 binary 新)', 3, binary, 'stale binary')
+    hs('binary 根本不存在', 2, '/nonexistent/flow-sim', 'not in agent image')
+    # 必須放行的那一格:相符時,停下來的理由不可以是版本。
+    hs('要求 schema 2(相符)', 2, binary, 'no repo/branch')
+    return 0
+
+
+def _find_flow_sim():
+    # 測試接縫:`FLOW_SIM_NO_SEARCH=1` 讓搜尋一定落空。
+    # 沒有它就問不出「說好要驗卻找不到 binary」那一格 —— 這台機器的 fallback
+    # 路徑剛好找得到,於是那個前提根本不成立,而我差點把「測試設定錯」讀成
+    # 「程式碼不會擋」。
+    if os.environ.get('FLOW_SIM_NO_SEARCH') == '1':
+        return ''
+    for c in ('/usr/local/bin/flow-sim',
+              os.path.expanduser('~/Documents/projects/aaf-designer-catalog/'
+                                 'arcana-cloud-rust/target/debug/flow-sim')):
+        if os.path.exists(c):
+            return c
+    return ''
+
+
+_hs_rc = handshake()
+
+print()
+print('  ── 宣告的路徑必須存在(S6 的最後一角)──')
+if os.environ.get('PREFLIGHT_NETWORK') == '1':
+    # 這一格會真的打 gh api —— 路徑存在性只能問 GitHub,所以預設不跑。
+    # 預設不跑**不是通過**:下面印的是 notApplicable,而它與 pass 分開計。
+    _repo = os.environ.get('PREFLIGHT_NETWORK_REPO', 'jrjohn/arcana-ai-bpm')
+
+    def path_case(name, appdir, want_ok, want_in=''):
+        global bad
+        prof = profile(app={'appDir': appdir})
+        PROJECTS_LOCAL = [{'projectId': 'p', 'repo': _repo, 'integrationBranch': 'main',
+                           'status': 'active', 'tier': 'company'}]
+        res, _ = run(PROJECTS_LOCAL, prof=prof, repo=_repo)
+        ok = bool(res.get('ok'))
+        good = ok == want_ok and (want_in in res.get('reason', '') if want_in else True)
+        print('  %s %-28s ok=%-5s %s' % ('✓' if good else '✗', name, ok,
+                                         (res.get('reason') or 'ok')[:56]))
+        if not good:
+            bad += 1
+
+    path_case('宣告一個不存在的目錄', 'no-such-dir-xyz', False, 'do not exist')
+    path_case('宣告真的存在的目錄', 'dashboard', True)
+else:
+    print('  notApplicable —— 需要網路(gh api)。PREFLIGHT_NETWORK=1 才跑。')
+    print('  這一格不跑不等於通過,只等於沒問。')
+
+print()
 if bad == 0:
-    print('  pass —— 該擋的擋了、該放行的放行了、「問不到」不會被說成「不存在」,而內容不同擋得住、內容相同不誤擋、環境差異不誤擋')
+    # 兩邊各自加了檢查,所以兩句都要留 —— 挑一句等於讓另一組檢查
+    # 跑了卻沒有人知道它跑過,而沒有人知道的檢查跟沒有檢查沒有分別。
+    print('  pass —— 該擋的擋了、該放行的放行了、「問不到」不會被說成「不存在」,'
+          '而內容不同擋得住、內容相同不誤擋、環境差異不誤擋;'
+          '品質線放寬不了,過舊的 binary 進不來')
+    if _hs_rc == 3:
+        print('  (握手那一段是 notApplicable —— 這個環境沒有 flow-sim;'
+              '要它成為硬閘就設 FLOW_SIM_REQUIRED=1)')
 else:
     print('  gap —— %d 格不符' % bad)
 sys.exit(1 if bad else 0)
