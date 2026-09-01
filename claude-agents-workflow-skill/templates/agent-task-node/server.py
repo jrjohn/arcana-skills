@@ -2132,6 +2132,170 @@ def _write_workspace_claude_md(root, payload):
         pass
 
 
+def _project_of(payload):
+    """這次 run 屬於哪個專案 —— 回 (projectId, displayName, 怎麼知道的)。
+
+    優先序,而且**兩層都可能答不出來**:
+
+      1. payload 明說 `projectId`         —— 最可靠,worker 傳下來的
+      2. 用 `(repo, base)` 反查註冊表      —— 不必動 worker,但有一個真的死角
+
+    死角是這樣:註冊表的自然鍵是 `(repo, integration_branch)`,所以**同一個 repo 的
+    兩條整合分支是兩個專案**。反查如果命中多筆,正確的答案是「不知道」,
+    不是挑第一個 —— 挑錯的代價是這次 run 的稽核與成本全部記到別的專案頭上,
+    而且沒有人會發現。
+
+    註冊表打不通也是「不知道」,不是「沒有這個專案」。兩者的處置不同:
+    前者要重試或修連線,後者要去登記。
+    """
+    pid = str(_pv(payload, "projectId") or "").strip()
+    if pid:
+        reg = _registry_project_by_id(pid)
+        return pid, (reg or {}).get("displayName", ""), "payload"
+
+    repo = str(_pv(payload, "repo") or "").strip().lower()
+    base = str(_pv(payload, "base", "main") or "main").strip()
+    if not repo:
+        return None, "", "no repo"
+    url = (os.environ.get("SDLC_REGISTRY_URL") or "").rstrip("/")
+    if not url:
+        return None, "", "registry not configured"
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url if url.startswith("http") else "http://" + url,
+                                    timeout=15) as r:
+            body = json.load(r)
+    except Exception as e:                                       # noqa: BLE001
+        return None, "", "registry unreachable (%s)" % e
+    hits = [p for p in (body.get("projects") or [])
+            if (p.get("repo") or "").lower() == repo]
+    exact = [p for p in hits if (p.get("integrationBranch") or "") == base]
+    if len(exact) == 1:
+        return exact[0].get("projectId"), exact[0].get("displayName", ""), "registry (repo+branch)"
+    if len(exact) > 1:
+        return None, "", "ambiguous: %d projects claim %s@%s" % (len(exact), repo, base)
+    if len(hits) == 1:
+        # 分支對不上但 repo 只有一個專案 —— 可以說,但要說出是怎麼來的。
+        return hits[0].get("projectId"), hits[0].get("displayName", ""), "registry (repo only)"
+    if len(hits) > 1:
+        return None, "", "ambiguous: %d projects share repo %s" % (len(hits), repo)
+    return None, "", "no registered project for %s@%s" % (repo, base)
+
+
+def _registry_project_by_id(pid):
+    url = (os.environ.get("SDLC_REGISTRY_URL") or "").rstrip("/")
+    if not url:
+        return None
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url if url.startswith("http") else "http://" + url,
+                                    timeout=15) as r:
+            body = json.load(r)
+    except Exception:                                            # noqa: BLE001
+        return None
+    for p in body.get("projects") or []:
+        if p.get("projectId") == pid:
+            return p
+    return None
+
+
+# ── 工作區佈局契約 ─────────────────────────────────────────────────────────
+#
+# 這一段與 arcana-ai-bpm 的 `scripts/workspace-git.sh` 是**同一套佈局的兩份實作**。
+# 兩份不是疏忽,是兩種呼叫者:管線走這裡(Python，在 run 之中)，維運走那支腳本
+# (CLI，在 run 之外)。跨 repo 呼叫對方會把「管線能不能起工作區」綁在另一個 repo
+# 的 checkout 上，那比重複更糟。
+#
+# **但重複會漂移，這是這一整輪反覆講的事。** 所以佈局寫成契約，並且由
+# `workspace-contract.selftest.py` 同時對兩份實作跑 —— 而且不只比對結構長得一樣，
+# 是要求**彼此讀得懂對方產生的東西**。結構相同可以兩邊一起錯；互相讀得懂不行。
+#
+#   <root>/.git-pool/<projectId>.git      bare，帶 project.json
+#   <root>/<instance>/repo                worktree，分支 run/<instance>
+#   <root>/<instance>/.workspace.json     instance/projectId/projectName/repo/branch/from/createdAt
+#   commit 訊息                            "[<node>] ..."
+WORKSPACE_LAYOUT = {
+    "pool": ".git-pool/{projectId}.git",
+    "worktree": "{instance}/repo",
+    "branch": "run/{instance}",
+    "meta": "{instance}/.workspace.json",
+    "metaKeys": ["instance", "projectId", "projectName", "repo", "branch", "from", "createdAt"],
+    "commitPrefix": "[{node}]",
+}
+
+
+def _git_pool(root, pid):
+    return os.path.join(root, ".git-pool", "%s.git" % pid)
+
+
+def _git_instance_workspace(payload, root, pid, name, repo, branch, src_instance):
+    """把這個 instance 的工作區做成一個 git worktree。回 (ok, 說明)。
+
+    為什麼是 git 而不是 `cp -a`(實測，不是偏好):
+      舊機制 41G 裡 **90% 是 target/node_modules**，而那正是 git 從來不存的東西；
+      `.git` 只佔 1.7%。所以換 git **不是為了省空間** —— 省空間要靠建置快取。
+      換來的是先前完全沒有的東西:「這次 run 對樹做了什麼」有答案，
+      而血緣是 parent commit、凍結是 commit 本身不可變(那個布林欄位可以消失，
+      它從來擋不住任何人就地編輯)。
+    """
+    pool = _git_pool(root, pid)
+    if not os.path.isdir(pool):
+        os.makedirs(os.path.dirname(pool), exist_ok=True)
+        for url in ("git@github.com:%s.git" % repo, "https://github.com/%s.git" % repo):
+            r = subprocess.run(["git", "clone", "--bare", "--quiet", url, pool],
+                               capture_output=True, text=True, timeout=1800)
+            if r.returncode == 0:
+                break
+        else:
+            return False, "clone bare failed"
+        try:
+            with open(os.path.join(pool, "project.json"), "w") as f:
+                json.dump({"projectId": pid, "displayName": name, "repo": repo,
+                           "integrationBranch": branch}, f, ensure_ascii=False)
+        except OSError:
+            pass
+    subprocess.run(["git", "-C", pool, "fetch", "--quiet", "origin",
+                    "+refs/heads/%s:refs/heads/%s" % (branch, branch)],
+                   capture_output=True, timeout=900)
+
+    base = branch
+    if src_instance:
+        r = subprocess.run(["git", "-C", pool, "rev-parse", "--verify", "--quiet",
+                            "refs/heads/run/%s" % src_instance], capture_output=True, text=True)
+        if r.returncode != 0:
+            # 來源找不到就是找不到 —— 不要靜靜地退回乾淨起跑，那會讓「接續失敗」
+            # 長得跟「本來就沒有要接續」一模一樣。
+            return False, "lineage source %s not found" % src_instance
+        base = (r.stdout or "").strip()
+
+    wt = os.path.join(root, "repo")
+    r = subprocess.run(["git", "-C", pool, "worktree", "add", "--quiet",
+                        "-b", "run/%s" % os.path.basename(root), wt, base],
+                       capture_output=True, text=True, timeout=900)
+    if r.returncode != 0:
+        return False, "worktree add failed: %s" % (r.stderr or "")[:120]
+    return True, ("from " + src_instance) if src_instance else "clean"
+
+
+def _git_commit_node(payload, node, msg=""):
+    """一格一個 commit。沒有改動就不留空 commit —— 空 commit 會讓「這一格做了事」
+    與「這一格什麼都沒做」在歷史上長得一樣。"""
+    root = _instance_root(payload.get("_piid"))
+    wt = os.path.join(root or "", "repo")
+    if not os.path.isdir(os.path.join(wt, ".git")) and not os.path.isfile(os.path.join(wt, ".git")):
+        return None
+    subprocess.run(["git", "-C", wt, "add", "-A"], capture_output=True, timeout=300)
+    if subprocess.run(["git", "-C", wt, "diff", "--cached", "--quiet"],
+                      capture_output=True).returncode == 0:
+        return None
+    subprocess.run(["git", "-C", wt, "-c", "user.email=agent@arcana",
+                    "-c", "user.name=sdlc:%s" % node, "commit", "--quiet",
+                    "-m", "[%s] %s" % (node, msg or node)], capture_output=True, timeout=300)
+    r = subprocess.run(["git", "-C", wt, "rev-parse", "--short", "HEAD"],
+                       capture_output=True, text=True, timeout=60)
+    return (r.stdout or "").strip() or None
+
+
 def _ensure_instance_workspace(payload):
     """Create this instance's workspace once, copying a previous run when asked.
 
@@ -2155,8 +2319,44 @@ def _ensure_instance_workspace(payload):
     # `repo` is part of the workspace's identity, not decoration: without it a later
     # `workspaceFrom:"latest"` cannot tell which product this tree belongs to, and lineage
     # you cannot key on is lineage you cannot trust.
+    # 1377 個舊工作區裡只有 24 個說得出自己屬於哪個 repo，一個都說不出 projectId。
+    # 註冊表已經有兩個專案，「這次 run 屬於哪一個」對舊資料是答不出來的問題 ——
+    # 而稽核與成本要 roll up 的單位正是專案。所以現在無條件記，答不出來也記下為什麼。
+    _pid, _pname, _how = _project_of(payload)
     meta = {"instance": piid, "slug": _pv(payload, "slug"), "repo": str(_pv(payload, "repo")).strip(),
+            "projectId": _pid, "projectName": _pname, "projectSource": _how,
+            "createdAt": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             "from": None, "frozen": False}
+    if not _pid:
+        # **不是靜靜跳過。** 一個說不出自己屬於哪個專案的工作區，日後的稽核與成本
+        # 分析就少了一列，而少的那一列不會有人察覺。
+        print("[agent-task-node] workspace %s 無法歸屬專案：%s" % (piid, _how), flush=True)
+    # 旗標保護:預設仍走 `cp -a`。換工作區機制會動到每一次 run 的起點，
+    # 而「兩條路都驗過」與「新的那條看起來會動」不是同一件事。
+    if os.environ.get("WORKSPACE_GIT") == "1" and _pid:
+        _srcw = _resolve_workspace_source(payload)
+        _from = os.path.basename(_srcw) if _srcw else None
+        os.makedirs(root, exist_ok=True)
+        _ok, _how = _git_instance_workspace(
+            payload, root, _pid, _pname,
+            str(_pv(payload, "repo")).strip(),
+            str(_pv(payload, "base", "main")).strip(), _from)
+        meta["branch"] = str(_pv(payload, "base", "main")).strip()
+        meta["from"] = _from if _ok else None
+        meta["how"] = "git:" + _how
+        if not _ok:
+            # 失敗要說出來並讓上層知道 —— 靜靜退回 cp 會讓「git 路徑其實沒在用」
+            # 看起來像「git 路徑運作正常」。
+            print("[agent-task-node] git workspace 失敗(%s)—— 這一輪沒有用 git 路徑" % _how,
+                  flush=True)
+        try:
+            with open(marker, "w") as f:
+                json.dump(meta, f, ensure_ascii=False)
+        except OSError:
+            return None
+        _write_workspace_claude_md(root, payload)
+        return root
+
     src = _resolve_workspace_source(payload)
     if src:
         ok, how = _copy_tree(src, root)
