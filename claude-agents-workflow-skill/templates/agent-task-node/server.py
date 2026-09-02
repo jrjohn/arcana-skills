@@ -6548,6 +6548,41 @@ def _audit_markers_in(text):
     return set(_AUDIT_MARK_RE.findall(text))
 
 
+def _start_via_product_api(requester, body):
+    """經產品 API 啟動 sdlc-code-flow —— 回 `{"id": iid}` 形狀,與舊的引擎回應相容。
+
+    為什麼要登入:產品 API 的啟動端點強制 `requester = JWT 呼叫者`(body 帶的會被
+    覆蓋,見 flow_lifecycle_controller)。所以要讓 requester 是那個真人,就得**以他
+    登入**。密碼取自 `UIUX_AUDIT_PASS`(預設 `pw`,本機 dev 帳號);沒有帳密或登入
+    失敗時回 `{}`,呼叫端據此當成沒開成 —— **絕不退回去直接打引擎**,那會把要修的
+    洞又打開。
+    """
+    def _post(url, payload, timeout, token=None):
+        cmd = ["curl", "-s", "-X", "POST", url, "-H", "Content-Type: application/json"]
+        if token:
+            cmd += ["-H", "Authorization: Bearer " + token]
+        cmd += ["-d", json.dumps(payload)]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            return json.loads(r.stdout or "{}")
+        except Exception:
+            return {}
+
+    api = (os.environ.get("READ_API") or os.environ.get("TEST_API_TARGET")
+           or "http://aaf-arcana-cloud-rust:8080").rstrip("/")
+    pw = os.environ.get("UIUX_AUDIT_PASS", "pw")
+    login = _post(api + "/api/v1/auth/login",
+                  {"username_or_email": requester, "password": pw}, 20)
+    token = ((login.get("data") or {}).get("access_token")
+             if isinstance(login.get("data"), dict) else None)
+    if not token:
+        return {}  # 登不進 → 當成沒開成;不繞道打引擎
+    r = _post(api + "/api/v1/workflows/sdlc-code-flow/start", body, 60, token)
+    # 產品 API 回 {"iid": "..."};正規化成引擎那條路的 {"id": "..."}
+    iid = r.get("iid") or r.get("id")
+    return {"id": iid} if iid else {}
+
+
 def uiux_audit_flow(payload):
     """Deterministic UI/UX self-audit -> auto-open GATED PRs (the detection->action wiring).
     Runs the AI semantic gate (uiux-ai-review) against the DEPLOYED dashboard via the test-runner,
@@ -6667,12 +6702,21 @@ def uiux_audit_flow(payload):
             skipped += 1
             unowned.append(slug)
             continue
-        sr = _curl_json("POST", engine + "/sdlc-code-flow",
-                        {"feature_request": fr, "repo": repo, "base": target_base,
-                         "slug": slug, "uiFacing": "true",
-                         # 指派回答人:追問有人收,抽單也才有人有權做
-                         # (requester 為空時連撤回都沒有人能做 —— 同一個根)。
-                         "requester": requester, "projectId": project_id}, 60)
+        # **走產品 API 開單,不直接打引擎。**
+        #
+        # 直接打 `engine + "/sdlc-code-flow"` 會繞過 flow_lifecycle_controller 的
+        # 「啟動時記一刻」(#285)—— 起點表單那一刻不會寫進 artifact_instance_log,
+        # 於是流程詳情的每一關都顯示「這個階段當時沒有記錄表單內容」,即使值就在
+        # 流程變數裡。2026-09-02 實測:稽核開的實例 by-flow 回 0 筆,而同一份 payload
+        # 走產品 API 回 1 筆(formData 帶著 feature_request)。
+        #
+        # #285 的記錄邏輯只有產品 API 這一條路有;讓稽核也走這條 = 單一漏斗,
+        # 同一份測試同時涵蓋兩者。requester 由產品 API 從 JWT 取(登入者),
+        # 所以這裡登入的身分**就是**回答追問的人 —— 與上面挑的 requester 一致。
+        sr = _start_via_product_api(requester, {
+            "projectId": project_id, "feature_request": fr,
+            "repo": repo, "base": target_base, "slug": slug, "uiFacing": "true",
+        })
         if sr.get("id"):
             started += 1
             triggered.append(slug)

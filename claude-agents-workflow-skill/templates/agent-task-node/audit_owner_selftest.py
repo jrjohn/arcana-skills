@@ -78,11 +78,19 @@ def run_audit(env):
             for i, x in enumerate(c):
                 if x == "-d" and i + 1 < len(c):
                     body = json.loads(c[i + 1])
-            url = c[3] if len(c) > 3 else ""
-            POSTS.append((url, body))
+            url = c[c.index("-X") + 2] if "-X" in c else ""
+            POSTS.append((url, body, c))
+            # 2026-09-02:稽核改走產品 API —— 先登入拿 token,再打 /start。
+            # 登入那一發要回 access_token,否則 _start_via_product_api 當成登不進。
+            if url.endswith("/auth/login"):
+                out = {"data": {"access_token": "FAKE.JWT"}}
+            elif url.endswith("/workflows/sdlc-code-flow/start"):
+                out = {"iid": "fake-iid"}
+            else:
+                out = {"data": {"ProcessInstances": []}}
             class R:
                 returncode = 0
-                stdout = json.dumps({"id": "fake-iid", "data": {"ProcessInstances": []}})
+                stdout = json.dumps(out)
                 stderr = ""
             return R()
         return orig_run(cmd, *a, **k)
@@ -103,24 +111,31 @@ def run_audit(env):
 
 print("\n════ A. 有指派回答人時,開單並帶上 requester ════")
 r = run_audit({"UIUX_AUDIT_REQUESTER": "boss", "UIUX_AUDIT_PROJECT": "aaf"})
-starts = [b for u, b in POSTS if b and "feature_request" in b]
+starts = [b for u, b, _ in POSTS if b and "feature_request" in b]
 check("稽核跑完沒有提早 return（%s）" % ((r or {}).get("error") or "無錯誤"),
       "error" not in (r or {}))
 check("有開單（%d 張）" % len(starts), len(starts) >= 1)
-check("每張單都帶 requester",
-      bool(starts) and all(b.get("requester") == "boss" for b in starts))
+# requester 由產品 API 從 JWT 取(登入者),不在 body。改驗「登入用的身分是 boss」——
+# 那個身分就會成為單子的 requester,所以「真人回答」的性質(#68)由此保住。
+logins = [b for u, b, _ in POSTS if u.endswith("/auth/login")]
+check("有先登入產品 API", len(logins) >= 1)
+check("登入身分是指派的 requester(boss)",
+      bool(logins) and all(b.get("username_or_email") == "boss" for b in logins))
 check("每張單都帶 projectId",
       bool(starts) and all(b.get("projectId") == "aaf" for b in starts))
 check("原有欄位沒有掉",
       bool(starts) and all(all(k in b for k in
           ("feature_request", "repo", "base", "slug", "uiFacing")) for b in starts))
+start_urls = [u for u, b, _ in POSTS if b and "feature_request" in b]
+check("開單打的是產品 API /workflows/.../start,不是引擎(%s)" % (start_urls or "無"),
+      bool(start_urls) and all(u.endswith("/workflows/sdlc-code-flow/start") for u in start_urls))
 check("回報 started > 0", (r or {}).get("started", 0) >= 1)
 check("沒有人被列為 unowned", not (r or {}).get("unowned"))
 
 print("\n════ B. 指派不到人時,fail-closed 且說得出來 ════")
 # 這一組是重點:沉默地照開才是舊行為,而舊行為的後果是 3 天沒人回答的單。
 r2 = run_audit({"UIUX_AUDIT_REQUESTER": None, "UIUX_AUDIT_PROJECT": "aaf"})
-starts2 = [b for u, b in POSTS if b and "feature_request" in b]
+starts2 = [b for u, b, _ in POSTS if b and "feature_request" in b]
 check("稽核真的跑到了開單那一步（防假綠）",
       (r2 or {}).get("fails", 0) >= 1 and "error" not in (r2 or {}))
 check("一張單都沒開", not starts2)
@@ -132,7 +147,7 @@ check("started 為 0", (r2 or {}).get("started", 0) == 0)
 
 print("\n════ C. 空白字串等同沒設定 ════")
 r3 = run_audit({"UIUX_AUDIT_REQUESTER": "   "})
-check("只有空白也算沒指派", not [b for u, b in POSTS if b and "feature_request" in b])
+check("只有空白也算沒指派", not [b for u, b, _ in POSTS if b and "feature_request" in b])
 check("同樣說得出理由", bool((r3 or {}).get("unownedReason")))
 
 print("\n" + "═" * 46)
