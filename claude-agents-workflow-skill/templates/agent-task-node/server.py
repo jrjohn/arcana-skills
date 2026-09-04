@@ -4236,6 +4236,71 @@ def _rtm_table(value):
     return "\n".join(rows)
 
 
+def _sdlc_stamp(payload):
+    """這一輪的身分章 —— 要蓋在 git 上的那幾個 id。
+
+    為什麼要蓋:2026-09-04 查 40 個 sdlc 實例、11 個 PR,git 裡**零**處有 projectId 或
+    實例 id,唯一的身分是 slug;而同一需求開了 v1/v2/v3、自動稽核同題重開 5 次,
+    slug 分不出「同一張 CR 的第幾次」。進化記錄靠的證據層(retro)又壞了幾週沒人發現。
+    git 是唯一耐久、版本化、人真的會看的帳本 —— 蓋章之後 `git log --grep 'Sdlc-Project: aaf'`
+    就是 CR 帳本,`git grep 'Sdlc-Instance:'` 能從成品反查流程實例。
+
+    三個 id 都不用新增傳遞:worker 每個任務已送 projectId / slug,console_fields 帶 _piid。
+    回傳 [(key, value)],順序固定;缺的值省略而不是寫空字串(空字串會讓「沒有」看起來像「有」)。
+    """
+    pid, _pname, _how = _project_of(payload)
+    piid = str(payload.get("_piid") or "").strip()
+    slug = str(_pv(payload, "slug") or "").strip()
+    # 同一張 CR 的多次嘗試靠 slug 尾巴的 -vN 區分;去掉尾巴就是能把它們連起來的 key。
+    feature = re.sub(r"-v\d+$", "", slug) if slug else ""
+    out = []
+    if pid:
+        out.append(("Sdlc-Project", str(pid)))
+    if piid:
+        out.append(("Sdlc-Instance", piid))
+    if feature:
+        out.append(("Sdlc-Feature", feature))
+    if slug:
+        out.append(("Sdlc-Slug", slug))
+        out.append(("Sdlc-Specs", "docs/specs/%s/" % slug))
+    return out
+
+
+def _sdlc_stamp_lines(payload):
+    """`Key: value` 一行一個 —— git trailer 與 PR body 共用同一種寫法,兩邊 grep 得到同一串。"""
+    return ["%s: %s" % (k, v) for k, v in _sdlc_stamp(payload)]
+
+
+def _sdlc_pr_stamp_block(payload):
+    """PR body 尾巴那一塊。沒有任何 id 就回空字串,不留一個空標題。"""
+    lines = _sdlc_stamp_lines(payload)
+    if not lines:
+        return ""
+    return "\n\n---\n<!-- sdlc stamp: 同一組 id 也在每個 commit 的 trailer 與 docs/specs/<slug>/ 的文件資訊表 -->\n" + "\n".join(lines) + "\n"
+
+
+def _stamp_spec_markdown(md, payload):
+    """把 projectId / 實例 id 寫進規格的「文件資訊」表。
+
+    寫在表格裡而不是只寫在檔頭註解:表格是 md-to-docx 會轉出去的內容,註解不是。
+    找不到「功能代號」那一列(規格不是我們渲染的、沒有表)就原樣回傳 —— 不硬插,
+    檔頭的 HTML 註解仍會帶同一組 id。
+    """
+    st = dict(_sdlc_stamp(payload))
+    rows = []
+    if st.get("Sdlc-Project"):
+        rows.append("| 專案 | `%s` |" % st["Sdlc-Project"])
+    if st.get("Sdlc-Instance"):
+        rows.append("| 流程實例 | `%s` |" % st["Sdlc-Instance"])
+    if not rows:
+        return md
+    lines = md.split("\n")
+    for i, ln in enumerate(lines):
+        if ln.startswith("| 功能代號 |"):
+            return "\n".join(lines[: i + 1] + rows + lines[i + 1 :])
+    return md
+
+
 def write_specs(workdir, slug, payload):
     """把這一輪的 SRS / SDD / UI-UX 規格寫進 repo,跟著同一個 gated PR 進版控。
 
@@ -4274,13 +4339,17 @@ def write_specs(workdir, slug, payload):
         body = _spec_markdown(key, str(slug), raw).strip()
         if not body:
             continue
+        # 文件資訊表補上專案與實例 id —— 規格檔進了 git,這兩個 id 就跟著任何合併方式留下來。
+        body = _stamp_spec_markdown(body, payload)
         rel = os.path.join(base, name)
         dst = os.path.join(workdir, rel)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
+        stamp_note = "".join("     %s\n" % ln for ln in _sdlc_stamp_lines(payload))
         header = (
             "<!-- \u7531 sdlc-code-flow \u7684 %s \u7bc0\u9ede\u7522\u51fa\uff0c\u96a8 feature `%s` \u7684 gated PR \u9032\u7248\u63a7\u3002\n"
-            "     \u624b\u6539\u9019\u88e1\u4e0d\u6703\u56de\u5230\u6d41\u7a0b \u2014\u2014 \u8981\u6539\u898f\u683c\u8acb\u8d70\u6d41\u7a0b\u3002 -->\n\n"
-            % (node_of[key], slug)
+            "     \u624b\u6539\u9019\u88e1\u4e0d\u6703\u56de\u5230\u6d41\u7a0b \u2014\u2014 \u8981\u6539\u898f\u683c\u8acb\u8d70\u6d41\u7a0b\u3002\n"
+            "%s -->\n\n"
+            % (node_of[key], slug, stamp_note)
         )
         with open(dst, "w") as f:
             f.write(header + body + "\n")
@@ -4605,6 +4674,23 @@ def implement_flow(payload):
             return {"dry_run": True, "branch": branch, "summary": summary,
                     "filesChanged": files_changed, "diffstat": stat.stdout[-2000:],
                     "pushed": False}
+        # 蓋章:把這一輪的身分寫進 HEAD 的 trailer。做在 push 之前、對 HEAD amend ——
+        # 不管這個 commit 是上面 server 做的、還是 agent 在自己 session 裡做的,都一樣蓋;
+        # 下一行本來就是 --force push,amend 不改變推送模型。HEAD 已有章(rework 再進來)就跳過,
+        # 免得同一個 key 疊兩份。不開空 commit(空 commit 會讓「做了」與「沒做」在歷史上長得一樣)。
+        _stamp = _sdlc_stamp_lines(payload)
+        if _stamp:
+            _head_msg = _git("log", "-1", "--format=%B")
+            if "Sdlc-Instance:" not in (_head_msg.stdout or ""):
+                _am = ["-c", "user.email=agent@arcana.boo", "-c", "user.name=AI-BPM Implementer",
+                       "commit", "--amend", "--no-edit"]
+                for _ln in _stamp:
+                    _am += ["--trailer", _ln]
+                _amr = _git(*_am)
+                if _amr.returncode != 0:
+                    # 蓋不上不擋出貨 —— 但要說出來,不然「沒章」會被讀成「本來就不蓋」。
+                    print("[agent-task-node] sdlc stamp: amend failed: %s"
+                          % (_amr.stderr or _amr.stdout)[-300:], flush=True)
         ps = _git("push", "-u", "origin", branch, "--force")
         if ps.returncode != 0:
             return {"error": "push failed: %s" % (ps.stderr or ps.stdout)[-500:]}
@@ -4711,7 +4797,7 @@ def implement_flow(payload):
                     "supersededPrs": superseded}
         pr = subprocess.run(
             ["gh", "pr", "create", "-R", repo, "--base", base, "--head", branch,
-             "--title", "feat: %s" % slug, "--body", body],
+             "--title", "feat: %s" % slug, "--body", body + _sdlc_pr_stamp_block(payload)],
             capture_output=True, text=True, timeout=120, cwd=workdir, env=env)
         if pr.returncode != 0:
             # Lost a race, or the listing missed it: recover the URL rather than fail a round
