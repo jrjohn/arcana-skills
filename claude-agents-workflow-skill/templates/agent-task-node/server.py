@@ -1156,6 +1156,37 @@ def post_open_questions(payload, questions):
 
 
 
+def pr_ready(payload):
+    """PM GO 之後、交給 merge-flow 之前:把 PR 從草稿轉回 ready。
+
+    一輪 HOLD/BLOCKED 會把 PR 轉成草稿(dispose_pr),下一輪 GO 時 PR 還是草稿,而 merge-flow 的
+    Merge 動詞拒收草稿 —— 於是「GO」的實例綠著結束,PR 卻永遠等一個人按 ready(報告 P1(f))。
+    只在 OPEN 且 isDraft 時動手;不是草稿就是 ready,回 wasDraft=false。任何失敗都回 ready=false
+    並說原因,worker 據此 Err,不讓實例綠著結束。"""
+    url = str(payload.get("prUrl") or "").strip()
+    if not url:
+        url, _ = _pr_url_and_branch(payload)
+    if not url:
+        m = re.search(r"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+", str(_pv(payload, "pr") or ""))
+        url = m.group(0) if m else ""
+    if not url:
+        return {"ready": False, "wasDraft": None, "reason": "no PR url in payload"}
+    r = subprocess.run(["gh", "pr", "view", url, "--json", "state,isDraft"], capture_output=True, text=True, timeout=60)
+    if r.returncode != 0:
+        return {"ready": False, "wasDraft": None, "reason": "gh pr view failed: " + (r.stderr or "")[-200:], "pr": url}
+    try:
+        j = json.loads(r.stdout or "{}")
+    except Exception:
+        return {"ready": False, "wasDraft": None, "reason": "gh pr view returned non-JSON", "pr": url}
+    if str(j.get("state") or "").upper() != "OPEN":
+        return {"ready": False, "wasDraft": bool(j.get("isDraft")), "reason": "PR is not open (%s)" % j.get("state"), "pr": url}
+    if not j.get("isDraft"):
+        return {"ready": True, "wasDraft": False, "pr": url}
+    r = subprocess.run(["gh", "pr", "ready", url], capture_output=True, text=True, timeout=60)
+    return {"ready": r.returncode == 0, "wasDraft": True, "pr": url,
+            "reason": None if r.returncode == 0 else "gh pr ready failed: " + (r.stderr or "")[-200:]}
+
+
 def dispose_pr(payload):
     """Close out this run's PR according to how the run ended.
 
@@ -5078,6 +5109,44 @@ def _api_grounding_block(payload):
     )
 
 
+def _testcases_cache_path(payload):
+    """上一輪生成的測試案例存哪:/work/testcases/<實例 id>.testcases.mjs(/work 是 agent-work 的 bind mount,
+    跨輪、跨重啟都在)。以實例為鍵 —— 「沿用」只該沿用**同一次流程**的上一輪;同 slug 的下一次嘗試 diff 已經不同。"""
+    piid = str(payload.get("_piid") or "").strip()
+    if not piid:
+        return ""
+    d = os.environ.get("TESTCASES_CACHE_DIR", "/work/testcases")
+    return os.path.join(d, re.sub(r"[^A-Za-z0-9_.-]", "_", piid) + ".testcases.mjs")
+
+
+def _resolve_testcases(gen, cache_path):
+    """(要餵給 runner 的 .mjs 或 None, 來源)。來源三種:
+         generated  — 這一輪生成成功(順手存起來)
+         reused     — 這一輪生成失敗,沿用上一輪存的(報告 P1(g):第一輪的 FEAT-01~04 品質很好,
+                      第二輪生成失敗就該沿用,否則退回通用回歸 → PM 永遠驗不到修正 → 永遠 NOGO)
+         regression — 兩者皆無,退回通用回歸集(runner 用 org-designer.testcases.mjs)
+    存檔失敗不影響本輪;快取檔不是模組(沒有 export const testcases)就不沿用。"""
+    if gen:
+        if cache_path:
+            try:
+                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    f.write(gen)
+            except Exception as e:  # noqa: BLE001
+                print("[agent-task-node] testcases cache write failed: %s" % e, flush=True)
+        return gen, "generated"
+    if cache_path and os.path.isfile(cache_path):
+        try:
+            prior = open(cache_path, encoding="utf-8").read()
+        except Exception:
+            prior = ""
+        if "export const testcases" in prior:
+            print("[agent-task-node] testcase GEN failed this round — REUSING last round's generated testcases (%s)"
+                  % cache_path, flush=True)
+            return prior, "reused"
+    return None, "regression"
+
+
 def _gen_testcases(payload):
     """T4-2: generate feature-specific Playwright testcases (.mjs) from the ACs + the PR diff, so
     the Test gate checks THIS feature (not just org regression). Returns the .mjs text, or None to
@@ -6532,7 +6601,8 @@ def test_flow(payload):
                 "-e", "GH_TOKEN=" + os.environ.get("GH_TOKEN", "")]
     else:                # regression fallback: test the already-running app
         cmd += ["-e", "TARGET_URL=" + os.environ.get("TEST_TARGET_URL", "http://aaf-dashboard:80")]
-    gen = _gen_testcases(payload)  # T4-2: feature-specific testcases (else default regression)
+    gen, tc_source = _resolve_testcases(_gen_testcases(payload), _testcases_cache_path(payload))
+    # T4-2: feature-specific testcases; 生成失敗就沿用上一輪的(reused),都沒有才退回通用回歸
     if gen:
         cmd += ["-e", "TESTCASES_B64=" + base64.b64encode(gen.encode()).decode()]
     jrn = _gen_journeys(payload)  # T4-3: goal-directed journeys for the walkthrough gate (UI features)
@@ -6586,6 +6656,7 @@ def test_flow(payload):
         if line:
             rep = json.loads(line[len("TESTREPORT:"):])
             rep["featureTests"] = bool(gen)  # true = tested THIS feature; false = regression only
+            rep["testcasesSource"] = tc_source  # generated | reused(上一輪的) | regression —— PM 要分得出
             # Which backend answered matters as much as the result: a green earned against the
             # DEPLOYED api says nothing about a PR that changed the backend, and the PM has to be
             # able to tell those two greens apart.
@@ -7262,6 +7333,9 @@ class Handler(BaseHTTPRequestHandler):
                 result = site_flow(payload)
             elif task == "dispose-pr":
                 result = dispose_pr(payload)
+            elif task == "pr-ready":
+                # GO 路徑的前一步:草稿轉回 ready,否則 merge-flow 拒收(見 pr_ready)。
+                result = pr_ready(payload)
             elif task == "consult":
                 # A node asking a peer role a question, inside its own execution. Never
                 # resumes a session, always recorded, capped per instance — see run_consult.
