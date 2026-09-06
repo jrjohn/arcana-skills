@@ -103,13 +103,15 @@ r = run([{"number": 7, "state": "OPEN", "title": m._uiux_title("/org", "i18n", S
 check("只開 workflow 那張,org 去重(filed=%d deduped=%d)" % (len(r["filed"]), r["deduped"]), len(creates()) == 1 and r["deduped"] == 1)
 check("open 且仍 FAIL 的不會被自動關", not closes())
 
-print("\n════ C. 同指紋是 CLOSED(人判不做)→ 也不重開 ════")
-r = run([{"number": 7, "state": "CLOSED", "title": m._uiux_title("/org", "i18n", SLUG_ORG), "url": "u7"}])
-check("closed 也算已記:org 不重開(filed=%d deduped=%d)" % (len(r["filed"]), r["deduped"]), len(creates()) == 1 and r["deduped"] == 1)
-# 對照組:舊語意「只看 open」—— 對同一份資料必須重開。判準要能對著壞版本變紅。
-old_only_open = [it for it in [{"number": 7, "state": "CLOSED", "title": m._uiux_title("/org", "i18n", SLUG_ORG), "url": "u7"}] if it["state"] == "OPEN"]
-r = run(old_only_open)
-check("對照組:去重只看 open 時,closed 的 org 會被重開(這正是舊寫法的病)", len(creates()) == 2)
+print("\n════ C. 同指紋 CLOSED:人判不做(not planned)不重開;修好/自動關(completed)再出現要重開 ════")
+NP = {"number": 7, "state": "CLOSED", "stateReason": "NOT_PLANNED", "title": m._uiux_title("/org", "i18n", SLUG_ORG), "url": "u7"}
+r = run([NP])
+check("not planned 算已記:org 不重開(filed=%d deduped=%d)" % (len(r["filed"]), r["deduped"]), len(creates()) == 1 and r["deduped"] == 1)
+r = run([dict(NP, stateReason="COMPLETED")])
+check("completed(修好過)再出現 = 回歸:org 重開(filed=%d)" % len(r["filed"]), len(creates()) == 2 and r["deduped"] == 0)
+# 對照組:舊語意「只看 open」—— 對 not planned 那份資料必須重開。判準要能對著壞版本變紅。
+r = run([it for it in [NP] if it["state"] == "OPEN"])
+check("對照組:去重只看 open 時,not planned 的 org 會被重開(這正是舊寫法的病)", len(creates()) == 2)
 
 print("\n════ D. 本輪不再 FAIL 的 open issue 自動關閉;沒稽核到的路由不動 ════")
 r = run([{"number": 8, "state": "OPEN", "title": m._uiux_title("/org", "spacing", "uiux-org-spacing"), "url": "u8"},
@@ -119,6 +121,46 @@ cl = closes()
 check("org/spacing(稽核到、沒再 FAIL)被關", len(cl) == 1 and arg(cl[0], "-R") and "8" in cl[0])
 check("governance 沒在本輪路由裡 → 不關;已 CLOSED 的不再關", not any("9" in c or "10" in c for c in cl))
 check("closed 回報帶 url", r["closed"] == ["u8"])
+
+print("\n════ D2. 自動關閉用 reason=completed(再出現會重開),不是 not planned ════")
+r = run([{"number": 8, "state": "OPEN", "title": m._uiux_title("/org", "spacing", "uiux-org-spacing"), "url": "u8"}])
+check("close 帶 --reason completed", closes() and arg(closes()[0], "--reason") == "completed")
+
+print("\n════ G. 兩輪同時跑:第二輪必須看得到第一輪剛開的(鎖) ════")
+import threading, time as _time
+ORDER = []
+def run_parallel():
+    orig = subprocess.run
+    created = []
+    def patched(cmd, *a, **k):
+        c = cmd if isinstance(cmd, list) else [str(cmd)]
+        class R: returncode = 0; stdout = ""; stderr = ""
+        r = R()
+        if c[:2] == ["docker", "run"]: r.stdout = json.dumps(FINDINGS); return r
+        if c[0] == "gh":
+            if c[1:3] == ["label", "create"]: r.returncode = 1; r.stderr = "already exists"; return r
+            if c[1:3] == ["issue", "list"]:
+                ORDER.append("list"); _time.sleep(0.3)   # 拉長「列清單→開單」的窗,沒鎖就一定撞
+                r.stdout = json.dumps(list(created)); return r
+            if c[1:3] == ["issue", "create"]:
+                ORDER.append("create"); url = "https://x/%d" % (len(created) + 1)
+                created.append({"number": len(created) + 1, "state": "OPEN", "title": arg(c, "--title"), "url": url})
+                r.stdout = url + "\n"; return r
+            return r
+        if c[0] == "curl": r.stdout = json.dumps({"data": {"ProcessInstances": []}}); return r
+        return orig(cmd, *a, **k)
+    subprocess.run = patched
+    try:
+        res = [None, None]
+        th = [threading.Thread(target=lambda i=i: res.__setitem__(i, m.uiux_audit_flow({}))) for i in range(2)]
+        [x.start() for x in th]; [x.join() for x in th]
+        return res, len(created)
+    finally:
+        subprocess.run = orig
+res, total = run_parallel()
+check("兩輪並行只開 2 張(不是 4),第二輪 deduped=2(filed=%s/%s, total=%d)" % (len(res[0]["filed"]), len(res[1]["filed"]), total),
+      total == 2 and sorted([len(res[0]["filed"]), len(res[1]["filed"])]) == [0, 2] and sorted([res[0]["deduped"], res[1]["deduped"]]) == [0, 2])
+check("呼叫順序是 list,create,create,list(第二次 list 在第一輪開完之後)", ORDER[:4] == ["list", "create", "create", "list"])
 
 print("\n════ E. gh 壞掉不能靜默 ════")
 r = run([], create_rc=1)

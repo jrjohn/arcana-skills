@@ -6670,6 +6670,9 @@ def _start_via_product_api(requester, body):
 
 
 UIUX_BACKLOG_LABEL = "uiux-audit"
+# 同一個 agent 程序可能同時跑兩輪稽核(worker 有兩個名額;09-06 實測定時器與手動起點差 11 秒同時觸發,
+# 兩輪各自先列了清單,結果開出兩對同指紋的 issue)。鎖住整段 backlog:第二輪看得到第一輪剛開的。
+_UIUX_BACKLOG_LOCK = threading.Lock()
 _UIUX_TITLE_RE = re.compile(r"^\[UI/UX 自動稽核\] (\S+) — .*\(([a-z0-9-]{1,60})\)\s*$")
 
 
@@ -6731,7 +6734,24 @@ def _uiux_issue_body(f, slug, history):
     return "\n".join(lines)
 
 
+def _uiux_already_filed(issue):
+    """這張 issue 算不算「已記」(同指紋不再開):
+      OPEN                      → 已記(還在處理)
+      CLOSED + NOT_PLANNED      → 已記(人判「不做」;永不重開 —— 這就是 backlog 存在的理由)
+      CLOSED + COMPLETED / 其他  → 不算(修好了或自動關閉;再出現 = 回歸,該重新開單)
+    自動關閉一律用 --reason completed,所以它關掉的題目再出現會重開,與留言承諾的一致。"""
+    st = (issue.get("state") or "").upper()
+    if st == "OPEN":
+        return True
+    return st == "CLOSED" and (issue.get("stateReason") or "").upper().replace("-", "_") == "NOT_PLANNED"
+
+
 def _uiux_backlog(fails, repo, di, audited_routes, max_issues):
+    with _UIUX_BACKLOG_LOCK:
+        return _uiux_backlog_locked(fails, repo, di, audited_routes, max_issues)
+
+
+def _uiux_backlog_locked(fails, repo, di, audited_routes, max_issues):
     """發現 → 去重 → GitHub issue(label uiux-audit);不開任何 sdlc 實例。
 
     去重比 **open + closed**:人關掉(不做)的題目不會下一輪又回來 —— 這正是舊寫法
@@ -6744,7 +6764,7 @@ def _uiux_backlog(fails, repo, di, audited_routes, max_issues):
     if rc != 0 and "already exists" not in se:
         out["errors"].append("gh label create: " + se.strip()[-200:])
     rc, so, se = _gh(["issue", "list", "-R", repo, "--label", UIUX_BACKLOG_LABEL, "--state", "all",
-                      "--limit", "500", "--json", "number,state,title,url"])
+                      "--limit", "500", "--json", "number,state,stateReason,title,url"])
     if rc != 0:
         out["errors"].append("gh issue list 失敗,本輪不開單(沒有去重的開單就是洪水): " + se.strip()[-200:])
         return out
@@ -6753,10 +6773,10 @@ def _uiux_backlog(fails, repo, di, audited_routes, max_issues):
     except Exception:
         out["errors"].append("gh issue list 回的不是 JSON,本輪不開單")
         return out
-    by_slug = {}  # 指紋 → issue;同指紋有 open 就以 open 為準
+    by_slug = {}  # 指紋 → 算「已記」的那張 issue(open 優先);修好/自動關掉的不算,再出現要重開
     for it in issues:
         route, slug = _uiux_parse_title(it.get("title"))
-        if not slug:
+        if not slug or not _uiux_already_filed(it):
             continue
         if slug not in by_slug or (it.get("state") or "").upper() == "OPEN":
             by_slug[slug] = dict(it, route=route)
@@ -6787,8 +6807,9 @@ def _uiux_backlog(fails, repo, di, audited_routes, max_issues):
             continue
         if not it.get("number"):
             continue
-        rc, _, se = _gh(["issue", "close", "-R", repo, str(it["number"]),
-                         "--comment", "本輪稽核(%s)已不再發現此問題,自動關閉。若再出現會重新開單。" % stamp])
+        rc, _, se = _gh(["issue", "close", "-R", repo, str(it["number"]), "--reason", "completed",
+                         "--comment", "本輪稽核(%s)已不再發現此問題,自動關閉(reason=completed)。若再出現會重新開單;"
+                                      "人判「不做」請用 not planned 關,那樣才不會再開。" % stamp])
         if rc == 0:
             out["closed"].append(it.get("url") or str(it["number"]))
         else:
