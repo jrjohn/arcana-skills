@@ -41,6 +41,38 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 CLAUDE = shutil.which("claude") or "/usr/local/bin/claude"
 MODEL = os.environ.get("AGENT_MODEL", "")  # empty => settings-driven default
+
+
+def _models_breakdown(mu):
+    """modelUsage → {model: input tokens}(含 cache read/creation),給成本帳看得到每個模型各花多少。"""
+    out = {}
+    for name, u in (mu or {}).items():
+        if not isinstance(u, dict):
+            continue
+        out[name] = int((u.get("inputTokens") or u.get("input_tokens") or 0)
+                        + (u.get("cacheReadInputTokens") or u.get("cache_read_input_tokens") or 0)
+                        + (u.get("cacheCreationInputTokens") or u.get("cache_creation_input_tokens") or 0))
+    return out
+
+
+def _dominant_model(mu):
+    b = _models_breakdown(mu)
+    return max(b, key=b.get) if b else (next(iter(mu), None) if mu else None)
+
+
+def _model_key(name):
+    return re.sub(r"[^A-Z0-9]+", "_", str(name or "").upper()).strip("_")
+
+
+def _model_for(payload):
+    """分級用模型(報告 P2(h)):節點名優先(AGENT_MODEL_<NODE>,如 AGENT_MODEL_SA / AGENT_MODEL_PMREVIEW),
+    再看動詞(AGENT_MODEL_<TASK>),都沒有就 AGENT_MODEL。空字串 = 交給 CLI 設定的預設。
+    節點名優先於動詞的理由與 _confidence_policy 相同:同一個動詞可以接在兩個成本完全不同的節點上。"""
+    for key in (payload.get("_node"), payload.get("_task"), payload.get("task")):
+        k = _model_key(key)
+        if k and os.environ.get("AGENT_MODEL_" + k):
+            return os.environ["AGENT_MODEL_" + k]
+    return MODEL
 TIMEOUT = int(os.environ.get("AGENT_TASK_TIMEOUT", "900"))  # 15 min per task
 STUB = os.environ.get("AGENT_STUB", "") == "1"  # test mode: skip claude, return canned typed JSON
 STUB_RESPONSES = {
@@ -2672,8 +2704,8 @@ def _invoke_claude_once(prompt, schema, payload, wall, cwd=None):
         # the model's context, which is where it belongs.
         cmd = [CLAUDE, "-p", "--json-schema", schema,
                "--output-format", "stream-json", "--verbose"] + _resume(payload) + _skill_flags(payload) + _perm_flags(payload) + _dir_flags(payload)
-        if MODEL:
-            cmd += ["--model", MODEL]
+        if _model_for(payload):
+            cmd += ["--model", _model_for(payload)]
         collected = []
         # Retries of the same node reuse the SAME <piid>__<node>.jsonl path; opening "w"
         # would clobber the FAILED attempt we most need to debug (a timed-out implement
@@ -2730,8 +2762,8 @@ def _invoke_claude_once(prompt, schema, payload, wall, cwd=None):
         # Same reason as the streaming path above: prompt on stdin, never argv.
         cmd = [CLAUDE, "-p", "--json-schema", schema,
                "--output-format", "json"] + _resume(payload) + _skill_flags(payload) + _perm_flags(payload) + _dir_flags(payload)
-        if MODEL:
-            cmd += ["--model", MODEL]
+        if _model_for(payload):
+            cmd += ["--model", _model_for(payload)]
         proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
                               timeout=wall, cwd=cwd, env=run_env)
         if proc.returncode != 0:
@@ -2755,9 +2787,13 @@ def _invoke_claude_once(prompt, schema, payload, wall, cwd=None):
     if isinstance(so, dict):
         usage = env.get("usage") or {}
         mu = env.get("modelUsage") or {}
-        model = next(iter(mu), None) or env.get("model")
+        # 主模型 = 吃最多 input token 的那個,不是 dict 的第一個 key。
+        # 09-06 實測:AGENT_MODEL=claude-opus-5,usage 檔卻每一筆都寫 haiku —— CLI 順手用 haiku 做的
+        # 小事排在 modelUsage 前面,next(iter(...)) 把它當成主模型,整個成本帳標錯模型。
+        model = _dominant_model(mu) or env.get("model")
         so["_usage"] = {
             "model": model,
+            "models": _models_breakdown(mu),
             "input": int((usage.get("input_tokens") or 0)
                          + (usage.get("cache_read_input_tokens") or 0)
                          + (usage.get("cache_creation_input_tokens") or 0)),
@@ -5432,6 +5468,38 @@ def _pr_backend_fail_reason(built):
             "先看尾段再決定要不要 rework —— 重做修不好資源問題。尾段:" + tail[-400:])
 
 
+def _image_label(image, key):
+    r = subprocess.run(["docker", "image", "inspect", image, "--format", "{{ index .Config.Labels \"%s\" }}" % key],
+                       capture_output=True, text=True, timeout=60)
+    return (r.stdout or "").strip() if r.returncode == 0 else None
+
+
+def _backend_build_needed(image, src, head):
+    """(要不要重建, 說明)。上一輪替這個實例建的映像帶 label aaf.sha=<建置時的 commit>;
+    若 <那個 commit>..HEAD 沒有動到 arcana-cloud-rust/ 就沿用。任何一步查不到(沒映像、
+    label 缺、舊 commit 不在 depth-50 的 clone 裡)都回「要建」—— 少建一次的代價是拿舊後端
+    當新的測,而那正是這條路存在的理由的反面。"""
+    built = _image_label(image, "aaf.sha")
+    if not built:
+        return True, "no previous image for this instance — building"
+    if built == head:
+        return False, "REUSING previous image (same commit %s)" % head[:8]
+    d = subprocess.run(["git", "diff", "--name-only", built, head, "--", "arcana-cloud-rust"],
+                       cwd=src, capture_output=True, text=True, timeout=60)
+    if d.returncode != 0:
+        return True, "previous build commit %s not in this clone — building" % built[:8]
+    if (d.stdout or "").strip():
+        return True, "arcana-cloud-rust/ changed since %s — building" % built[:8]
+    return False, "REUSING previous image built at %s (arcana-cloud-rust/ unchanged since; %s only touched other layers)" % (built[:8], head[:8])
+
+
+def _prune_pr_api_images():
+    """清超過 PR_API_IMAGE_TTL_DAYS 沒被用到的 aaf-pr-api:* 映像(留著沿用 vs 佔磁碟的折衷)。"""
+    days = int(os.environ.get("PR_API_IMAGE_TTL_DAYS", "7"))
+    subprocess.run(["docker", "image", "prune", "-f", "--filter", "label=aaf.pr-api=1",
+                    "--filter", "until=%dh" % (24 * days)], capture_output=True, timeout=120)
+
+
 def _start_pr_backend(repo, branch, base, piid, net):
     """Build the PR's read-API + give it a throwaway copy of the dev DB. Returns
     `(api_target, teardown)`; `(None, teardown)` when it does not apply or could not be built.
@@ -5451,8 +5519,9 @@ def _start_pr_backend(repo, branch, base, piid, net):
             subprocess.run(["docker", "rm", "-f", state["container"]], capture_output=True, timeout=120)
         if state["db"]:
             _pg_exec(f'DROP DATABASE IF EXISTS "{state["db"]}" WITH (FORCE)')
-        if state["image"]:
-            subprocess.run(["docker", "rmi", "-f", state["image"]], capture_output=True, timeout=120)
+        # 映像**留著**(報告 P2(i)):同一個實例的下一輪 rework 若沒動到 arcana-cloud-rust/,
+        # 直接沿用這顆(見 _backend_build_needed),省掉 ~13 分鐘的冷建置。每個實例一顆、
+        # 以實例 id 為 tag;過期的由 PR_API_IMAGE_TTL_DAYS(預設 7)在下一次建置時清。
         shutil.rmtree(state["src"], ignore_errors=True)
 
     try:
@@ -5470,37 +5539,45 @@ def _start_pr_backend(repo, branch, base, piid, net):
             print("[agent-task-node] " + "pr-backend: PR does not touch the backend — deployed API is the right target", flush=True)
             return None, teardown
 
-        print("[agent-task-node] " + "pr-backend: building the PR's read-API (this is the point — its own code, not the deployed one)", flush=True)
-        # 逾時 1800 而不是 3000。
-        #
-        # 這一步不是獨立計時的:外層 worker 給 /task/test 的是 3300s,而內層還有
-        # runner 自己的 2400s。3000 + 2400 = 5400 > 3300 —— **只要後端真的需要重建,
-        # 那個外層逾時就不可能被滿足**,而外層先斷時我們只拿得到一句連線錯誤,
-        # 內層先斷才拿得到原因。2026-08-21 實測建置 780s(冷快取),1800 已經很寬。
-        b = subprocess.run(
-            ["docker", "build", "-f", "Dockerfile.flow", "-t", image, "."],
-            cwd=os.path.join(src, "arcana-cloud-rust"), capture_output=True, text=True, timeout=1800)
-        if b.returncode != 0:
-            tail = (b.stderr or b.stdout or "")[-1200:]
-            print("[agent-task-node] " + "pr-backend: BUILD FAILED — " + tail[-400:], flush=True)
-            # **分類,不要斷言。**
-            #
-            # 原本這裡只回一個不帶資訊的 "BUILD_FAILED",而下游把它寫成
-            # 「unbuildable backend code」—— 一個從來沒有被檢查過的原因。
-            # 2026-08-21 實測:那次失敗是記憶體(agent 容器 OOMKilled=true,
-            # VM 15.6 GiB 已被佔掉約 12 GiB),而同一個 commit 在主機上
-            # `cargo check` 零錯誤、Jenkins 的 ci/rust 也是 pass。
-            #
-            # 兩者的處置完全相反:「編不過」要改程式(流程據此退回 implement
-            # 重做了一輪),「資源不足」一個字都不用改。判錯方向 = 整輪白做。
-            #
-            # cargo 的編譯錯誤會在輸出留下 `error[E1234]` 或 `error: could not compile`。
-            # 有那個字串才叫編不過;沒有就說「未分類」,並把尾巴帶上 ——
-            # 三態,和這個 repo 其他閘一樣。
-            if re.search(r"error\[E\d+\]|error: could not compile", tail):
-                return "BUILD_FAILED:compile:" + tail[-600:], teardown
-            return "BUILD_FAILED:unclassified:" + tail[-600:], teardown
-        state["image"] = image
+        head = (subprocess.run(["git", "rev-parse", "HEAD"], cwd=src, capture_output=True, text=True, timeout=30).stdout or "").strip()
+        need, why = _backend_build_needed(image, src, head)
+        print("[agent-task-node] pr-backend: %s" % why, flush=True)
+        if not need:
+            state["image"] = image
+        else:
+          _prune_pr_api_images()
+          print("[agent-task-node] " + "pr-backend: building the PR's read-API (this is the point — its own code, not the deployed one)", flush=True)
+          # 逾時 1800 而不是 3000。
+          #
+          # 這一步不是獨立計時的:外層 worker 給 /task/test 的是 3300s,而內層還有
+          # runner 自己的 2400s。3000 + 2400 = 5400 > 3300 —— **只要後端真的需要重建,
+          # 那個外層逾時就不可能被滿足**,而外層先斷時我們只拿得到一句連線錯誤,
+          # 內層先斷才拿得到原因。2026-08-21 實測建置 780s(冷快取),1800 已經很寬。
+          b = subprocess.run(
+              ["docker", "build", "-f", "Dockerfile.flow", "-t", image,
+               "--label", "aaf.pr-api=1", "--label", "aaf.sha=" + head, "."],
+              cwd=os.path.join(src, "arcana-cloud-rust"), capture_output=True, text=True, timeout=1800)
+          if b.returncode != 0:
+              tail = (b.stderr or b.stdout or "")[-1200:]
+              print("[agent-task-node] " + "pr-backend: BUILD FAILED — " + tail[-400:], flush=True)
+              # **分類,不要斷言。**
+              #
+              # 原本這裡只回一個不帶資訊的 "BUILD_FAILED",而下游把它寫成
+              # 「unbuildable backend code」—— 一個從來沒有被檢查過的原因。
+              # 2026-08-21 實測:那次失敗是記憶體(agent 容器 OOMKilled=true,
+              # VM 15.6 GiB 已被佔掉約 12 GiB),而同一個 commit 在主機上
+              # `cargo check` 零錯誤、Jenkins 的 ci/rust 也是 pass。
+              #
+              # 兩者的處置完全相反:「編不過」要改程式(流程據此退回 implement
+              # 重做了一輪),「資源不足」一個字都不用改。判錯方向 = 整輪白做。
+              #
+              # cargo 的編譯錯誤會在輸出留下 `error[E1234]` 或 `error: could not compile`。
+              # 有那個字串才叫編不過;沒有就說「未分類」,並把尾巴帶上 ——
+              # 三態,和這個 repo 其他閘一樣。
+              if re.search(r"error\[E\d+\]|error: could not compile", tail):
+                  return "BUILD_FAILED:compile:" + tail[-600:], teardown
+              return "BUILD_FAILED:unclassified:" + tail[-600:], teardown
+          state["image"] = image
 
         # Throwaway copy of the dev DB: real data, and migrations in the PR stay contained.
         _pg_exec(f'DROP DATABASE IF EXISTS "{dbname}" WITH (FORCE)')
