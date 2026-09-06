@@ -194,7 +194,7 @@ SCHEMAS = {
     "pm-review": {
         "type": "object",
         "properties": {
-            "verdict": {"type": "string", "enum": ["GO", "NOGO", "HOLD"]},
+            "verdict": {"type": "string", "enum": ["GO", "NOGO", "HOLD", "BLOCKED"]},
             "dimensions": {"type": "array", "items": {"type": "object", "properties": {
                 "name": {"type": "string"}, "pass": {"type": "boolean"}, "note": {"type": "string"}},
                 "required": ["name", "pass"]}},
@@ -1190,7 +1190,7 @@ def dispose_pr(payload):
     if not verdict:
         # Same tolerance for whitespace the gateway uses.
         flat = review_raw.replace(" ", "").replace("\n", "")
-        for v in ("GO", "NOGO", "HOLD"):
+        for v in ("GO", "NOGO", "HOLD", "BLOCKED"):
             if '"verdict":"%s"' % v in flat:
                 verdict = v
                 break
@@ -1251,8 +1251,11 @@ def dispose_pr(payload):
         return {"disposed": r.returncode == 0, "action": "closed", "verdict": verdict,
                 "pr": url, "error": (r.stderr or "")[-200:] if r.returncode else None}
 
-    # HOLD, or a run that ended without a verdict at all (aborted, escalated, crashed).
+    # HOLD / BLOCKED, or a run that ended without a verdict at all (aborted, escalated, crashed).
+    # BLOCKED 是第四態:流水線驗不到(CI 沒跑、測試閘跑不起來),不是產品缺陷也不是要人裁決 ——
+    # 轉草稿並說清楚要修的是環境,否則讀佇列的人會把它當成又一個「等裁決」。
     why = "PM 判定 HOLD — 需要人裁決" if verdict == "HOLD" else \
+          "PM 判定 BLOCKED — 流水線驗不到(CI 沒跑 / 測試閘跑不起來),重驗一次仍如此;要修的是環境,不是這份 PR" if verdict == "BLOCKED" else \
           "流程結束時沒有 PM 判定(中止或升級)"
     body = ("【自動轉為草稿 — %s】\n\n"
             "這份 PR 在等一個人,而不是在等審查。轉成草稿是為了讓佇列裡「可以動手的」與"
@@ -1686,8 +1689,11 @@ def prompt_pm_review(p):
         "view'); this is the class the diff/screenshot review misses, NOGO naming the blocked journey + reason "
         "so Implement wires the missing path. **`testReport.prCi` is the PR's OWN build and is NOT optional**: "
         "`verdict=red` -> NOGO(quality) quoting `prCi.summary` so Implement fixes the named check — this is a "
-        "defect in the branch and it is fixable; `verdict=notRun` -> HOLD, NOT NOGO, because nothing was built "
-        "and there is nothing in the code for Implement to fix (sending it to 'fix' an unbuilt PR burns a round); "
+        "defect in the branch and it is fixable; `verdict=notRun` -> **BLOCKED**, NOT NOGO and NOT HOLD, because nothing "
+        "was built and there is nothing in the code for Implement to fix (sending it to 'fix' an unbuilt PR burns a round) "
+        "— BLOCKED means 'the pipeline could not produce evidence': the flow re-runs Test once without charging a PM attempt. "
+        "Likewise testReport.disposition=escalate (the gate itself could not run) -> BLOCKED naming what did not run in "
+        "`feedback`. NEVER BLOCKED when evidence exists and is red — that is NOGO; NEVER BLOCKED for a judgment call — that is HOLD; "
         "`notApplicable` = this repo has no CI, carry on. Absent is not green — that distinction is the whole "
         "reason the field has four values. SonarQube remains CONFIRMATORY: do NOT HOLD merely because "
         "SONARQUBE_TOKEN is unset when the testReport is present. arch-qube>=90 "

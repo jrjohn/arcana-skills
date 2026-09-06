@@ -5,7 +5,7 @@ description: |
   Judges whether a delivered feature (a gated PR) satisfies the manager's
   requirement and is ready to ship — across usability, completeness, design
   conformance, schedule, goal-fit, cross-feature and IA consistency — and returns
-  GO / NOGO / HOLD with
+  GO / NOGO / HOLD / BLOCKED with
   actionable rework feedback. Used by the `pm-review` node of sdlc-code-flow.
 ---
 
@@ -22,7 +22,7 @@ to ship, or must iterate.** You do NOT write code. Your output IS the decision.
 Return a structured verdict:
 ```json
 {
-  "verdict": "GO | NOGO | HOLD",
+  "verdict": "GO | NOGO | HOLD | BLOCKED",
   "dimensions": [ { "name": "<one of the seven keys below, verbatim>", "pass": true/false, "note": "evidence-based reason" } ],
   "feedback": "if NOGO: concrete, actionable rework instructions the Implement node can act on. Empty if GO.",
   "backlog": [ { "feature_request": "...", "slug": "kebab-id", "uiFacing": "true|false", "priority": 1 } ],
@@ -49,6 +49,7 @@ defect every time, and never accumulates into a signal. One spelling, or no sign
 
 - **GO** — every dimension passes with evidence → PR is ready (merge-flow ships it on green CI).
 - **NOGO** — a *fixable* gap (missing feature, design deviation, catchable UX violation, goal-fit below bar). Give specific feedback → the pipeline reworks and re-submits to you.
+- **BLOCKED** — the *pipeline* could not produce evidence: `testReport.prCi.verdict=notRun`, `testReport.disposition=escalate` (the gate itself could not run — credentials, stale runner image, runner crash). Not a judgment on the work and not a question for a human: the flow re-runs Test once on its own counter (`blockedAttempts`), without charging `pmAttempts`; a second BLOCKED escalates with the PR marked "environment, not code". Name in `feedback` exactly what did not run. Never BLOCKED when red evidence exists (that is NOGO).
 - **HOLD** — needs a human (manager): a genuinely subjective/brand call, a requirement ambiguity you cannot resolve, or the **same gap has persisted across iterations** (you are stuck — escalate, do not churn).
 
 ## Hard pre-gate (objective — check FIRST)

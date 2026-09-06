@@ -155,7 +155,8 @@ print("\n[6] PM 的裁決指示")
 pm = m.prompt_pm_review({"prUrl": "https://github.com/x/y/pull/1", "_piid": "x"})
 check("PM 被告知 prCi 不是選配", "prCi" in pm and "NOT optional" in pm)
 check("PM 被告知 red → NOGO", "verdict=red" in pm and "NOGO" in pm)
-check("PM 被告知 notRun → HOLD 而不是 NOGO", "notRun" in pm and "HOLD, NOT NOGO" in pm)
+# 2026-09-06 起 notRun 是第四態 BLOCKED(流水線驗不到),不再借用 HOLD(要人裁決)—— 見 pm_blocked_selftest.py
+check("PM 被告知 notRun → BLOCKED,既不是 NOGO 也不是 HOLD", "notRun" in pm and "**BLOCKED**, NOT NOGO and NOT HOLD" in pm)
 check("『缺席不是綠』有寫進去", "Absent is not green" in pm)
 check("舊的『CI 只是輔助、不必理會』那句已經不在",
       "CI check-rollup / SonarQube is CONFIRMATORY but NOT required" not in pm)
