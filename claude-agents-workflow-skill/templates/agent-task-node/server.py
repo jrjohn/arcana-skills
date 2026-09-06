@@ -6669,6 +6669,133 @@ def _start_via_product_api(requester, body):
     return {"id": iid} if iid else {}
 
 
+UIUX_BACKLOG_LABEL = "uiux-audit"
+_UIUX_TITLE_RE = re.compile(r"^\[UI/UX 自動稽核\] (\S+) — .*\(([a-z0-9-]{1,60})\)\s*$")
+
+
+def _uiux_slug(route, kind):
+    """稽核發現的指紋:uiux-<route>-<kind>。同一個指紋 = 同一題,不論它被開過幾次。"""
+    s = ("uiux-" + (route or "").strip("/").replace("/", "-") + "-" + (kind or "issue")).lower()
+    s = re.sub(r"[^a-z0-9-]+", "-", s).strip("-")[:60]
+    return s or "uiux-audit"
+
+
+def _uiux_title(route, kind, slug):
+    return "[UI/UX 自動稽核] %s — %s (%s)" % (route or "/", kind or "issue", slug)
+
+
+def _uiux_parse_title(title):
+    """從 issue 標題讀回 (route, slug);不是稽核開的標題回 (None, None)。"""
+    m = _UIUX_TITLE_RE.match(title or "")
+    return (m.group(1), m.group(2)) if m else (None, None)
+
+
+def _gh(args, timeout=60):
+    """跑 gh,回 (rc, stdout, stderr)。失敗不丟例外 —— 呼叫端要把它寫進 errors,不能靜默。"""
+    try:
+        r = subprocess.run(["gh"] + list(args), capture_output=True, text=True, timeout=timeout, env=dict(os.environ))
+        return r.returncode, (r.stdout or ""), (r.stderr or "")
+    except Exception as e:  # timeout / gh 不在
+        return 1, "", str(e)
+
+
+def _uiux_instance_history(di):
+    """{指紋: [(iid 前 8 碼, state), …]} —— 查**所有狀態**的 sdlc 實例,讓挑單的人看得到「上次開了、死在哪」。
+    查不到回空 dict(歷史是附註,不是判準;查不到不該擋開單)。"""
+    q = {"query": "{ ProcessInstances(where:{processId:{equal:\"sdlc-code-flow\"}}){ id state variables } }"}
+    try:
+        r = subprocess.run(["curl", "-s", "-X", "POST", di + "/graphql", "-H", "Content-Type: application/json",
+                            "-d", json.dumps(q)], capture_output=True, text=True, timeout=30)
+        rows = (json.loads(r.stdout or "{}").get("data", {}) or {}).get("ProcessInstances", []) or []
+    except Exception:
+        return {}
+    hist = {}
+    for pi in rows:
+        v = pi.get("variables")
+        v = json.loads(v) if isinstance(v, str) else (v or {})
+        for slug in _audit_markers_in(v.get("feature_request")):
+            hist.setdefault(slug, []).append(((pi.get("id") or "")[:8], pi.get("state") or "?"))
+    return hist
+
+
+def _uiux_issue_body(f, slug, history):
+    lines = ["**路由**:`%s`　**種類**:`%s`" % (f.get("route", ""), f.get("kind", "issue")), "",
+             "**稽核發現**:", "", (f.get("detail") or "").strip() or "(稽核沒有附說明)", "",
+             "---", "**怎麼開單**:登入 dashboard → 啟動表單 `sdlc-code-flow` → projectId 選這個產品 → 把上面「稽核發現」連同下面那行識別碼一起貼進需求。",
+             "識別碼跟著需求走,流程內的去重才認得它;人判「不做」就直接關掉這張 issue,稽核不會再開。"]
+    h = history.get(slug) or []
+    if h:
+        lines += ["", "**這個指紋開過的實例**(%d):" % len(h)] + ["- `%s` %s" % (iid, st) for iid, st in h[:10]]
+    lines += ["", "請依 app-uiux-designer rubric 修正此問題(純前端 dashboard,不動後端 API);修好後同一畫面應通過 AI 語意 gate。"
+              + _audit_marker(slug)]
+    return "\n".join(lines)
+
+
+def _uiux_backlog(fails, repo, di, audited_routes, max_issues):
+    """發現 → 去重 → GitHub issue(label uiux-audit);不開任何 sdlc 實例。
+
+    去重比 **open + closed**:人關掉(不做)的題目不會下一輪又回來 —— 這正是舊寫法
+    (只比活著的實例與開著的 PR)做不到、害同一題重開 5 次的地方。
+    本輪稽核過的路由裡,open 的 issue 若這輪不再 FAIL → 自動關閉:這就是「什麼證據出現時它該自動關」。
+    gh 任何一步失敗都寫進 errors;列不到既有 issue 就**不開單**(沒有去重的開單就是洪水)。"""
+    out = {"mode": "backlog", "filed": [], "deduped": 0, "closed": [], "capped": [], "errors": []}
+    rc, _, se = _gh(["label", "create", UIUX_BACKLOG_LABEL, "-R", repo, "--color", "C2E0C6",
+                     "--description", "UI/UX 自動稽核的發現(backlog);關掉 = 不做,稽核不會再開"])
+    if rc != 0 and "already exists" not in se:
+        out["errors"].append("gh label create: " + se.strip()[-200:])
+    rc, so, se = _gh(["issue", "list", "-R", repo, "--label", UIUX_BACKLOG_LABEL, "--state", "all",
+                      "--limit", "500", "--json", "number,state,title,url"])
+    if rc != 0:
+        out["errors"].append("gh issue list 失敗,本輪不開單(沒有去重的開單就是洪水): " + se.strip()[-200:])
+        return out
+    try:
+        issues = json.loads(so or "[]")
+    except Exception:
+        out["errors"].append("gh issue list 回的不是 JSON,本輪不開單")
+        return out
+    by_slug = {}  # 指紋 → issue;同指紋有 open 就以 open 為準
+    for it in issues:
+        route, slug = _uiux_parse_title(it.get("title"))
+        if not slug:
+            continue
+        if slug not in by_slug or (it.get("state") or "").upper() == "OPEN":
+            by_slug[slug] = dict(it, route=route)
+    history = _uiux_instance_history(di)
+    failing = set()
+    for f in fails:
+        slug = _uiux_slug(f.get("route", ""), f.get("kind", "issue"))
+        failing.add(slug)
+        if slug in by_slug:
+            out["deduped"] += 1
+            continue
+        if len(out["filed"]) >= max_issues:
+            out["capped"].append(slug)
+            continue
+        rc, so, se = _gh(["issue", "create", "-R", repo, "--label", UIUX_BACKLOG_LABEL,
+                          "--title", _uiux_title(f.get("route", ""), f.get("kind", "issue"), slug),
+                          "--body", _uiux_issue_body(f, slug, history)])
+        url = (so.strip().splitlines() or [""])[-1]
+        if rc == 0 and url.startswith("http"):
+            out["filed"].append(url)
+            by_slug[slug] = {"state": "OPEN", "url": url, "route": f.get("route", "")}
+        else:
+            out["errors"].append("gh issue create %s: %s" % (slug, (se or so).strip()[-200:]))
+    audited = {r.strip() for r in audited_routes if r.strip()}
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    for slug, it in by_slug.items():
+        if (it.get("state") or "").upper() != "OPEN" or slug in failing or it.get("route") not in audited:
+            continue
+        if not it.get("number"):
+            continue
+        rc, _, se = _gh(["issue", "close", "-R", repo, str(it["number"]),
+                         "--comment", "本輪稽核(%s)已不再發現此問題,自動關閉。若再出現會重新開單。" % stamp])
+        if rc == 0:
+            out["closed"].append(it.get("url") or str(it["number"]))
+        else:
+            out["errors"].append("gh issue close #%s: %s" % (it["number"], se.strip()[-200:]))
+    return out
+
+
 def uiux_audit_flow(payload):
     """Deterministic UI/UX self-audit -> auto-open GATED PRs (the detection->action wiring).
     Runs the AI semantic gate (uiux-ai-review) against the DEPLOYED dashboard via the test-runner,
@@ -6723,6 +6850,20 @@ def uiux_audit_flow(payload):
                 "tail": (r.stdout or r.stderr or "")[-300:]}
     fails = [f for f in data.get("findings", []) if f.get("severity") == "fail"]
 
+    # 模式:backlog(預設)= 發現去重後進 GitHub issue,由人挑選再開單;start = 原行為(直接開 sdlc 實例),留作回退。
+    # 為什麼預設不再直接開:09-04 量到 24 張自動單 0 落地、13 個殭屍、同一題重開 5 次 ——
+    # 第一關是人工的需求詢問,沒有人要填的單開出來就是殭屍。
+    mode = (payload.get("mode") or os.environ.get("UIUX_AUDIT_MODE", "backlog")).strip().lower()
+    if mode != "start":
+        _mi = payload.get("max_issues")
+        max_issues = int(_mi if _mi is not None else os.environ.get("UIUX_AUDIT_MAX_ISSUES", "10"))
+        # 「本輪稽核到的路由」以閘**實際跑過**的為準(data["routes"]),不是設定值 —— 閘跳過的路由不該把它的 issue 關掉。
+        audited = data.get("routes") or routes.split(",")
+        res = _uiux_backlog(fails, repo, di, audited, max_issues)
+        res.update({"findings": len(data.get("findings", [])), "fails": len(fails),
+                    "started": 0, "skipped": res["deduped"], "triggered": [], "cap": max_issues})
+        return res
+
     # 2. dedup: 哪些發現已經在跑了 —— 別重開在飛的。
     #
     # 這裡原本只讀 `slug`,而**流程自己會把 slug 改掉**:SA 節點會換成人看得懂的名字。
@@ -6749,10 +6890,7 @@ def uiux_audit_flow(payload):
             active_slugs.add(v["slug"])
         active_slugs |= _audit_markers_in(v.get("feature_request"))
 
-    def _slug(route, kind):
-        s = ("uiux-" + (route or "").strip("/").replace("/", "-") + "-" + (kind or "issue")).lower()
-        s = re.sub(r"[^a-z0-9-]+", "-", s).strip("-")[:60]
-        return s or "uiux-audit"
+    _slug = _uiux_slug   # 指紋只有一個定義(模組層),backlog 與 start 兩種模式共用
 
     env = dict(os.environ)
     started, skipped, triggered = 0, 0, []

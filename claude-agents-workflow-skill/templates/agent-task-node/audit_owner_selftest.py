@@ -26,6 +26,9 @@ import importlib.util, json, os, sys
 D = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, D)
 os.environ.setdefault("STUB", "")
+# 這支測的是「直接開 sdlc 實例」那條路(start 模式)。2026-09-06 起預設改成 backlog(發現進 GitHub issue,
+# 見 uiux_backlog_selftest.py),所以這裡要明說要測舊路徑 —— 否則「一張單都沒開」會被讀成 A 組全紅。
+os.environ["UIUX_AUDIT_MODE"] = "start"
 spec = importlib.util.spec_from_file_location("atn_server", os.path.join(D, "server.py"))
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
