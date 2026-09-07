@@ -6000,6 +6000,37 @@ def test_only_diff(before, after):
 _SONAR_SCANNER_IMAGE = os.environ.get("SONAR_SCANNER_IMAGE", "sonarsource/sonar-scanner-cli:latest")
 
 
+def _cov_project_dir(workdir, app):
+    """Angular CLI 把覆蓋率寫進 `coverage/<專案名>/`。專案名讀 angular.json 的第一個 project,
+    讀不到就回空字串(呼叫端會跳過這個候選,改用掃描)。Rust 沒有這層,一樣回空。"""
+    if app != "angular":
+        return ""
+    for rel in ("dashboard/angular.json", "angular.json"):
+        f = os.path.join(workdir, rel)
+        if os.path.isfile(f):
+            try:
+                projects = (json.load(open(f, encoding="utf-8")).get("projects") or {})
+                return next(iter(projects), "")
+            except Exception:                                    # noqa: BLE001
+                return ""
+    return ""
+
+
+def _find_in_container(cname, filename):
+    """在已停止的容器裡找一個檔案的真實路徑(docker export + tar -t;exec 對停止的容器不能用)。
+    找不到回 None。只取第一個命中 —— 覆蓋率報告只會有一份。"""
+    try:
+        exp = subprocess.Popen(["docker", "export", cname], stdout=subprocess.PIPE)
+        lst = subprocess.run(["tar", "-t"], stdin=exp.stdout, capture_output=True, text=True, timeout=300)
+        exp.stdout.close(); exp.wait(timeout=60)
+        for line in (lst.stdout or "").splitlines():
+            if line.rstrip("/").endswith("/" + filename) or line.strip() == filename:
+                return "/" + line.lstrip("./").rstrip()
+    except Exception:                                            # noqa: BLE001
+        return None
+    return None
+
+
 def _sonar_coverage(workdir, app):
     """跑一個 app 的覆蓋率,回傳 (報告在容器內的絕對路徑, 說明)。
 
@@ -6011,10 +6042,9 @@ def _sonar_coverage(workdir, app):
     Rust」這個判斷本身會出錯,而出錯的方向是**少評一個條件**。
     """
     if app == "angular":
-        compose, svc, inside = "dashboard/docker-compose.test.yml", "test", "/app/coverage/lcov.info"
+        compose, svc = "dashboard/docker-compose.test.yml", "test"
     else:
-        compose, svc, inside = ("arcana-cloud-rust/docker-compose.coverage.yml",
-                                "coverage", "/app/coverage/lcov.info")
+        compose, svc = "arcana-cloud-rust/docker-compose.coverage.yml", "coverage"
     proj = "sonarcov-%s-%s" % (app, os.getpid())
     cname = "%s-run" % proj
     out = os.path.join(workdir, "%s-lcov.info" % app)
@@ -6029,11 +6059,38 @@ def _sonar_coverage(workdir, app):
                            cwd=workdir, capture_output=True, text=True, timeout=3600)
         # 具名容器 + docker cp,不用 -v:這個 agent 在容器裡,bind mount 的來源路徑會被
         # docker HOST 解析並靜默掛上空目錄 —— 那正是 Rust 覆蓋率從來沒產出過的原因。
-        cp = subprocess.run(["docker", "cp", "%s:%s" % (cname, inside), out],
-                            capture_output=True, text=True, timeout=300)
-        if cp.returncode != 0 or not os.path.isfile(out) or os.path.getsize(out) == 0:
-            return None, ("%s: no coverage report (run rc=%s): %s"
-                          % (app, r.returncode, (cp.stderr or r.stderr or "")[-200:]))
+        # 報告寫在哪,由**產生它的工具**決定,不是由我們猜。
+        #
+        # 2026-09-07 實測:覆蓋率容器 rc=0、報告確實產出了,而檔案在
+        # `/app/coverage/arcana-angular/lcov.info` —— Angular CLI 會多包一層專案名的資料夾,
+        # 頂層根本沒有 lcov.info。寫死 `/app/coverage/lcov.info` 於是每一次都「找不到報告」,
+        # `_sonar` 回 ran=False,PM 從來沒看過 Sonar 數字,而 testReport 每輪都是 sonarNotRun。
+        # (第一層是 agent 映像沒有 compose 外掛,已修;這是被它擋住、看不見的第二層。)
+        #
+        # 所以:先試常見路徑,再從容器裡**找**。找不到時把找過哪些地方說出來 —— 下一個人
+        # 不必像這次一樣從 docker export 挖。
+        found, tried = None, []
+        for cand in ("/app/coverage/lcov.info", "/app/coverage/%s/lcov.info" % _cov_project_dir(workdir, app)):
+            if not cand or cand in tried:
+                continue
+            tried.append(cand)
+            cp = subprocess.run(["docker", "cp", "%s:%s" % (cname, cand), out],
+                                capture_output=True, text=True, timeout=300)
+            if cp.returncode == 0 and os.path.isfile(out) and os.path.getsize(out) > 0:
+                found = cand
+                break
+        if not found:
+            hit = _find_in_container(cname, "lcov.info")
+            if hit:
+                tried.append(hit + "(掃出來的)")
+                cp = subprocess.run(["docker", "cp", "%s:%s" % (cname, hit), out],
+                                    capture_output=True, text=True, timeout=300)
+                if cp.returncode == 0 and os.path.isfile(out) and os.path.getsize(out) > 0:
+                    found = hit
+        if not found:
+            return None, ("%s: no coverage report (run rc=%s;找過:%s): %s"
+                          % (app, r.returncode, ", ".join(tried) or "(無)",
+                             (r.stderr or "")[-200:]))
         return out, None
     except Exception as e:                                       # noqa: BLE001
         return None, "%s: coverage error: %s" % (app, e)

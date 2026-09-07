@@ -57,4 +57,18 @@ src = open(os.path.join(D, "server.py"), encoding="utf-8").read()
 aq = src[src.index("def _arch_qube("):]
 check("掃了檔案卻沒分數時,verdict 是 notRun 且說得出鍵", "no score in the report" in aq and "notRun" in aq)
 check("scanned 0 files 會附上報告實際有的鍵(下次形狀再變不必重挖)", "報告的鍵" in aq)
-print("\n  通過 %d,失敗 %d" % (ok, fail)); sys.exit(1 if fail else 0)
+
+print("\n════ E. 覆蓋率報告的路徑要用產生它的工具決定,不是猜 ════")
+import tempfile, json as _json
+_wd = tempfile.mkdtemp(); os.makedirs(os.path.join(_wd, "dashboard"), exist_ok=True)
+open(os.path.join(_wd, "dashboard", "angular.json"), "w").write(_json.dumps({"projects": {"arcana-angular": {}}}))
+check("angular 專案名讀自 angular.json(實測就是 arcana-angular)", m._cov_project_dir(_wd, "angular") == "arcana-angular")
+check("rust 沒有這層 → 空字串(呼叫端會跳過這個候選)", m._cov_project_dir(_wd, "rust") == "")
+check("讀不到 angular.json → 空字串,不是猜一個名字", m._cov_project_dir(tempfile.mkdtemp(), "angular") == "")
+_src = open(os.path.join(D, "server.py"), encoding="utf-8").read()
+_cov = _src[_src.index("def _sonar_coverage("):]; _cov = _cov[:_cov.index("\ndef ", 10)]
+check("先試頂層,再試 coverage/<專案名>/", '"/app/coverage/lcov.info"' in _cov and 'coverage/%s/lcov.info' in _cov)
+check("兩個候選都沒有時,從容器裡真的去找", "_find_in_container" in _cov)
+check("找不到時說出「找過哪些地方」(下一個人不必從 docker export 挖)", "找過:" in _cov)
+check("不再寫死單一 inside 路徑", "inside = " not in _cov)
+print("\n  總計 通過 %d,失敗 %d" % (ok, fail)); sys.exit(1 if fail else 0)
