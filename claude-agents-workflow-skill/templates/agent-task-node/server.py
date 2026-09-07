@@ -6364,9 +6364,27 @@ def _arch_qube(payload):
             run = subprocess.run(["docker", "start", "-a", cname],
                                  capture_output=True, text=True, timeout=1200)
             rec["exitCode"] = run.returncode
-            rep = subprocess.run(["docker", "exec", cname, "cat", "/output/arch-qube.json"],
-                                 capture_output=True, text=True, timeout=120)
-            raw = rep.stdout
+            # `docker start -a` 等到容器**結束**才回來,所以這時候 `docker exec` 一定失敗
+            # (「container is not running」),輸出是空的,而空的被讀成「掃了 0 個檔」。
+            #
+            # 2026-09-07 實測:同一份輸入,arch-qube 本身回 PASS 100.0/100 (A+)、報告裡
+            # files_scanned=1;而這個節點回報的是 notRun / scanned 0 files。閘跑了、也給了分數,
+            # 只是沒有人讀得到 —— 連續 47 個實例都是這樣,PM 於是永遠看不到架構分數。
+            #
+            # `docker cp` 對已停止的容器照樣可用(它走的是 daemon 的檔案系統,不是 exec),
+            # 輸出是 tar 串流,所以要解出來。
+            rep = subprocess.run(["docker", "cp", cname + ":/output/arch-qube.json", "-"],
+                                 capture_output=True, timeout=120)
+            raw = ""
+            if rep.returncode == 0 and rep.stdout:
+                try:
+                    import io as _io, tarfile as _tarfile
+                    with _tarfile.open(fileobj=_io.BytesIO(rep.stdout)) as _tf:
+                        _m = next((m for m in _tf.getmembers() if m.isfile()), None)
+                        if _m:
+                            raw = _tf.extractfile(_m).read().decode("utf-8", "replace")
+                except Exception as _e:                          # noqa: BLE001
+                    rec["reason"] = "arch-qube 報告解不開:%s" % _e
             if not raw.strip():
                 # 容器已結束時 exec 不可用 —— 改用 cp 到 stdout 取不到,所以走 create 的
                 # 第二次讀:把檔案 cp 出來再讀。

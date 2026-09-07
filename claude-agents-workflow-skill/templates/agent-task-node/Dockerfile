@@ -12,6 +12,17 @@ RUN curl -fsSL https://download.docker.com/linux/static/stable/aarch64/docker-27
     && tar xzf /tmp/d.tgz -C /tmp && install /tmp/docker/docker /usr/local/bin/docker \
     && rm -rf /tmp/d.tgz /tmp/docker
 
+# ...and the compose PLUGIN, because the docker CLI alone does not have it: `docker compose` then
+# prints docker's own help text and exits non-zero. That is what the coverage step reads as
+# "coverage image build failed", so no lcov is produced, so `_sonar` reports ran=False — and the
+# PM never sees a Sonar number. 2026-09-07: measured across every sdlc-code-flow round so far.
+# A plugin, not a v1 `docker-compose` binary: the code calls `docker compose` (space).
+RUN mkdir -p /usr/local/lib/docker/cli-plugins \
+    && curl -fsSL https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-aarch64 \
+       -o /usr/local/lib/docker/cli-plugins/docker-compose \
+    && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose \
+    && docker compose version
+
 # server.py only needs python3 (already present in the agent image).
 # flow-sim binary (linux) for S3b in-pipeline scenario auto-fill — the agent runs the divergence
 # proof itself. Built separately (cargo build --bin flow-sim in a linux rust container) and copied
