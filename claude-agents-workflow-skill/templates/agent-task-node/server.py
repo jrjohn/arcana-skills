@@ -6282,6 +6282,36 @@ def _sonar(payload):
     return out
 
 
+def _aq_files(j):
+    """arch-qube 報告裡的「掃了幾個檔」。真形狀是 meta.files_scanned;舊鍵留作後備
+    (別的版本可能是平的,少認一種形狀就是少一次能讀到)。"""
+    if not isinstance(j, dict):
+        return None
+    m = j.get("meta") or {}
+    for v in (m.get("files_scanned"), m.get("filesScanned"), j.get("files"), j.get("fileCount")):
+        if isinstance(v, (int, float)):
+            return int(v)
+    return None
+
+
+def _aq_score(j):
+    """總分(0-100)。真形狀是 score.total(score 是物件);舊鍵留作後備。
+    回 None = 讀不到 —— 由呼叫端說成 notRun,不是 0 分。"""
+    if not isinstance(j, dict):
+        return None
+    sc = j.get("score")
+    if isinstance(sc, dict):
+        for k in ("total", "overall", "value"):
+            if isinstance(sc.get(k), (int, float)):
+                return float(sc[k])
+        return None
+    summary = j.get("summary") if isinstance(j.get("summary"), dict) else {}
+    for v in (sc, j.get("overallScore"), summary.get("score")):
+        if isinstance(v, (int, float)):
+            return float(v)
+    return None
+
+
 def _arch_qube(payload):
     """架構稽核,在 test 節點自己跑一次。
 
@@ -6401,19 +6431,34 @@ def _arch_qube(payload):
                 j = json.loads(raw)
             except Exception:
                 j = {}
-            rec["score"] = j.get("score", j.get("overallScore"))
-            rec["files"] = j.get("files", j.get("fileCount"))
+            # 讀 arch-qube 自己的形狀,不是我們以為的形狀。
+            #
+            # 2026-09-07 拿一份真的報告對過:頂層是 {meta, rules, score, summary},
+            #   · 檔案數在 `meta.files_scanned`(實測掃 dashboard 得 379)—— 沒有 `files`、沒有 `fileCount`
+            #   · 分數是**物件** score = {total: 100.0, grade: "A+", pass: true, threshold: 95.0},不是數字
+            # 舊寫法讀 `files`/`fileCount` 永遠是 None → 每一次都判「scanned 0 files / notRun」;
+            # 就算讀到了,`float(dict)` 也會丟例外落進 except,變成另一種 notRun。
+            # 也就是說:這道閘一直在評 A+ 100 分,而沒有任何一輪讀到過,PM 從沒看過架構分數。
+            rec["score"] = _aq_score(j)
+            rec["files"] = _aq_files(j)
             if not j:
                 rec["verdict"] = "notRun"
                 rec["reason"] = "no arch-qube.json produced (exit %s)" % run.returncode
             elif not rec["files"]:
                 # 空掃描:實測 exit 0 且零輸出。通過一個沒看過任何檔案的稽核毫無意義。
+                # 附上報告實際有的鍵 —— 形狀再變一次時,下一個人不必像這次一樣從頭挖。
                 rec["verdict"] = "notRun"
-                rec["reason"] = "scanned 0 files"
+                rec["reason"] = "scanned 0 files (報告的鍵:%s)" % ", ".join(sorted(j.keys())[:6])
+            elif rec["score"] is None:
+                # 掃了檔案卻讀不到分數 = 形狀又變了。不能當 0 分判 gap(把「沒讀到」講成「很差」),
+                # 也不能當通過。三態裡它是 notRun。
+                rec["verdict"] = "notRun"
+                rec["reason"] = ("scanned %s files but no score in the report (鍵:%s)"
+                                 % (rec["files"], ", ".join(sorted(j.keys())[:6])))
             else:
                 rec["ran"] = True
                 ran_any = True
-                rec["verdict"] = "pass" if float(rec["score"] or 0) >= threshold else "gap"
+                rec["verdict"] = "pass" if float(rec["score"]) >= threshold else "gap"
         except Exception as e:
             rec["verdict"] = "notRun"
             rec["reason"] = "arch-qube error: %s" % e
