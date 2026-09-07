@@ -220,8 +220,17 @@ SCHEMAS = {
                 "verified": {"type": "boolean"},
                 "why": {"type": "string"}},
                 "required": ["kind", "verified"]},
+            # 這個節點在 BPMN 宣告了 uiFacing 這個輸出(worker 由 userFacing.value 推導),
+            # 而 Kogito 對「宣告了卻沒交回來」的輸出寫 null —— 所以少了這個欄位不是「沒表達意見」,
+            # 是**把開單時的 uiFacing 洗成空的**,uiGate 於是走預設邊跳過 uiux。
+            # 2026-09-07 量到:47 個實例、38 個開單時 uiFacing=true,而 uiux 節點跑過 **0 次**。
+            # 所以它是 required:一個「最不確定時就會被省略」的可選欄位,正好在唯一需要它的時候消失。
+            "userFacing": {"type": "object", "properties": {
+                "value": {"type": "boolean"},
+                "why": {"type": "string"}},
+                "required": ["value"]},
         },
-        "required": ["sufficient", "understanding", "openQuestions"],
+        "required": ["sufficient", "understanding", "openQuestions", "userFacing"],
     },
     "pm-review": {
         "type": "object",
@@ -1141,6 +1150,13 @@ def prompt_intake(p):
         "一段編造的專案現況與真的無法區分,而它會讓後面每個節點更確信一件可能錯的事。\n"
         "- 若某個問題不被回答就**無法**負責任地繼續,把它放進 `blocking: true`。\n"
         "- 重述必須可被對照:引用你依據的是哪一條擷取到的事實。\n"
+        # userFacing 是這個節點**必答**的一題,而不是隨手勾的旗標:它決定 uiGate 走不走 uiux,
+        # 也就是這個功能有沒有 UI/UX 規格可以被 PM 對照。開單時送進來的 uiFacing 只是提交者的猜測。
+        "- `userFacing`:**必答**。這個需求會改變使用者在畫面上看到或操作的東西嗎?"
+        "是就 `value: true`(它會多走一關 UI/UX 規格),純後端/純腳本才是 false。"
+        "開單時帶進來的 uiFacing=%s 只是提交者的初判,你要依需求內容自己判斷;不確定時傾向 true —— "
+        "多做一份 UI/UX 規格的代價,遠小於一個改了畫面卻沒有人審視覺的功能。並在 `why` 說出依據。\n"
+        % (str(_pv(p, "uiFacing", "") or "(未提供)"))
         # Earned it. Told only that a history db existed and nothing about how to reach it,
         # this node went and found it — probing `which vsearch csearch`, locating
         # /work/_memory/<product>, and composing the invocation itself. What it could not
