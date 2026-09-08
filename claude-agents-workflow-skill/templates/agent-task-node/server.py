@@ -1929,6 +1929,16 @@ def _verb_registry_check():
 
 _verb_registry_check()
 
+# 不走模型的動詞(有自己的 Python 實作,不讀 PROMPTS/SCHEMAS)。`do_POST` 拿這份當門口名單。
+#
+# 為什麼要有這個常數,而不是把字串寫在那個 if 裡:2026-09-08 量到 `pr-ready` 分派鏈裡有
+# `elif task == "pr-ready"`、函式也寫好了,但那個 tuple 漏了它 —— 於是 GO 路徑「草稿轉正式 PR」
+# 這一步**從上線第一天起就是 404**,而沒有任何東西說得出來。檔尾的 `_dispatch_door_check()`
+# 現在會在 import 時比對這份名單與分派鏈,漏一個就起不來。
+DETERMINISTIC_TASKS = ("release", "execute", "publish-flow", "implement", "test", "coverage",
+                       "uiux-audit", "site", "smoke", "dispose-pr", "consult", "pr-ready")
+
+
 
 def _resume(payload):
     """Resume an existing Claude session if the worker threaded a `sid` back in.
@@ -7606,8 +7616,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         task = self.path.rsplit("/", 1)[-1]
-        if task not in PROMPTS and task not in ("release", "execute", "publish-flow", "implement", "test", "coverage", "uiux-audit", "site", "smoke", "dispose-pr", "consult"):
+        if task not in PROMPTS and task not in DETERMINISTIC_TASKS:
             return self._send(404, {"error": f"unknown task {task}"})
+        # 只探路由,不開工。
+        #
+        # 「worker 打得出去的動詞,agent 都收得下」這條接縫壞過兩次(root-cause 打了一週、
+        # pr-ready 從上線第一天起),兩次都要等流程真的跑到那一格才由一個 404 說出來。
+        # 想在部署後 30 秒內問完這個問題,唯一的障礙是:普通的 POST 會**真的開始工作**
+        # (叫模型、建映像、開 PR),所以沒有人敢逐一去打。
+        #
+        # 這個表頭讓「路由在不在」變成可以單獨問的問題:上面的 404 判定照跑,
+        # 走到這裡就代表收得下,直接回報並結束 —— 不讀 payload、不花錢、不留下任何東西。
+        # 用的人是 aaf 的 scripts/seam-smoke.sh。
+        if self.headers.get("X-Seam-Probe"):
+            return self._send(200, {"probe": "routed", "task": task})
         try:
             n = int(self.headers.get("Content-Length", 0))
             payload = json.loads(self.rfile.read(n) or b"{}")
@@ -7750,3 +7772,33 @@ if __name__ == "__main__":
     print(f"[agent-task-node] listening on :{port} (claude={CLAUDE})", flush=True)
     _announce_optional_capabilities()
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+
+
+def _dispatch_door_check():
+    """門口收得下的,分派鏈要接得住;分派鏈接得住的,門口要放得進來。
+
+    `_verb_registry_check()` 守的是 PROMPTS/SCHEMAS/run_claude 三者(走模型的動詞)。
+    這一支守的是另一半:不走模型的動詞,它們的門口名單與 if/elif 鏈是兩處手寫的清單。
+    `pr-ready` 就是漏在這道縫裡 —— 有函式、有分支、沒進門,404 了一整個上線週期。
+    """
+    import ast as _ast
+    try:
+        with open(os.path.abspath(__file__), encoding="utf-8") as fh:
+            tree = _ast.parse(fh.read())
+    except (OSError, SyntaxError):
+        return                              # 讀不到自己就不假裝檢查過
+    handled = set()
+    for n in _ast.walk(tree):
+        if (isinstance(n, _ast.Compare) and getattr(n.left, "id", None) == "task"
+                and len(n.ops) == 1 and isinstance(n.ops[0], _ast.Eq)
+                and isinstance(n.comparators[0], _ast.Constant)
+                and isinstance(n.comparators[0].value, str)):
+            handled.add(n.comparators[0].value)
+    door = set(DETERMINISTIC_TASKS)
+    closed = sorted(handled - door - set(PROMPTS))
+    assert not closed, "分派鏈接得住但門口 404 的動詞: %s(加進 DETERMINISTIC_TASKS)" % closed
+    orphan = sorted(door - handled)
+    assert not orphan, "門口放行卻沒有分支接手的動詞: %s(會掉進 run_claude → KeyError)" % orphan
+
+
+_dispatch_door_check()
