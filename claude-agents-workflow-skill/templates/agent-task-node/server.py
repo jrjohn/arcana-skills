@@ -7618,6 +7618,18 @@ class Handler(BaseHTTPRequestHandler):
         task = self.path.rsplit("/", 1)[-1]
         if task not in PROMPTS and task not in DETERMINISTIC_TASKS:
             return self._send(404, {"error": f"unknown task {task}"})
+        # 只探路由,不開工。
+        #
+        # 「worker 打得出去的動詞,agent 都收得下」這條接縫壞過兩次(root-cause 打了一週、
+        # pr-ready 從上線第一天起),兩次都要等流程真的跑到那一格才由一個 404 說出來。
+        # 想在部署後 30 秒內問完這個問題,唯一的障礙是:普通的 POST 會**真的開始工作**
+        # (叫模型、建映像、開 PR),所以沒有人敢逐一去打。
+        #
+        # 這個表頭讓「路由在不在」變成可以單獨問的問題:上面的 404 判定照跑,
+        # 走到這裡就代表收得下,直接回報並結束 —— 不讀 payload、不花錢、不留下任何東西。
+        # 用的人是 aaf 的 scripts/seam-smoke.sh。
+        if self.headers.get("X-Seam-Probe"):
+            return self._send(200, {"probe": "routed", "task": task})
         try:
             n = int(self.headers.get("Content-Length", 0))
             payload = json.loads(self.rfile.read(n) or b"{}")
