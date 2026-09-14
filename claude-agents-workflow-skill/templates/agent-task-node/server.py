@@ -412,7 +412,7 @@ def prompt_readmesync(p):
         "(maven/gradle), or sum the per-package 'ok' lines (go). Update the Tests badge to Tests-<N>%2520passing "
         "(note: a literal space in a shields URL is %2520... actually use %20). "
         "If you cannot determine a number reliably, LEAVE that badge unchanged — never guess.\n"
-        "Commit everything (versions + badges) in ONE commit titled 'docs: sync README versions + CI badges' "
+        "Commit everything (versions + badges) in ONE commit titled 'chore(docs): sync README versions + CI badges' (chore, NOT docs: release-please treats docs as releasable, so a docs: commit right after a release opens the next release PR, whose merge re-runs this sync -> endless release loop, seen 2026-09-14) "
         "via gh api PUT (fetch the file sha first). If the README is already accurate, change nothing. "
         "Respond with JSON: updated (bool), changes (list of 'old -> new' strings), reason."
     )
