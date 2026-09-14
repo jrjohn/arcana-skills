@@ -93,14 +93,6 @@ STUB_RESPONSES = {
 
 # --- JSON Schemas: the typed contract SonataFlow switches/retries on ---
 SCHEMAS = {
-    "scan-stale": {
-        "type": "object",
-        "properties": {
-            "started": {"type": "integer"},
-            "reason": {"type": "string"},
-        },
-        "required": ["started"],
-    },
     "rebase": {
         "type": "object",
         "properties": {
@@ -554,25 +546,6 @@ def prompt_escalate(p):
         "default if you cannot act."
     )
 
-
-def prompt_scan_stale(p):
-    return (
-        "You are the SCAN node of the unstick scheduler. Find stale-base PRs and start ONE "
-        "unstick-flow remediation per PR. A PR is 'stale-base stuck' when its CI is red ONLY because "
-        "its base moved (main advanced past it) — it will never go green on its own.\n"
-        "STEP 1 — list open PRs (start with jrjohn/arcana-ai-bpm): "
-        "`gh pr list --repo jrjohn/arcana-ai-bpm --state open --json number,url,headRefName,mergeStateStatus,isDraft`.\n"
-        "STEP 2 — for each NON-draft PR, classify as STALE-STUCK only if mergeStateStatus is BEHIND or "
-        "UNSTABLE/DIRTY AND `gh pr checks <url>` shows a failing check AND the PR is behind main (its "
-        "base moved since the failing build ran). SKIP PRs that are green, draft, or red for a genuine "
-        "code reason (not base-staleness).\n"
-        "STEP 3 — for each stale-stuck PR, START a remediation flow by POSTing to the engine:\n"
-        "`curl -s -X POST http://aaf-kogito-bpmn:8080/unstick-flow -H 'Content-Type: application/json' "
-        "-d '{\"prUrl\":\"<url>\",\"subject\":\"unstick <repo>#<num>\"}'`. ONE per PR — do not start a "
-        "second unstick-flow for a PR that already has an active one; when in doubt, skip rather than "
-        "duplicate.\n"
-        "Return started (how many unstick-flow instances you started) and a reason listing the PRs."
-    )
 
 
 def prompt_rebase(p):
@@ -1895,7 +1868,7 @@ def prompt_pm_review(p):
     )
 
 
-PROMPTS = {"intake": prompt_intake, "diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "scan-stale": prompt_scan_stale, "rebase": prompt_rebase, "audit": prompt_audit, "pm-review": prompt_pm_review,
+PROMPTS = {"intake": prompt_intake, "diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "rebase": prompt_rebase, "audit": prompt_audit, "pm-review": prompt_pm_review,
            # 重試耗盡後換角色查根因(BPMN 的 RootCause 節點;worker 打 /task/root-cause)。
            "root-cause": prompt_root_cause}
 
@@ -1936,7 +1909,8 @@ _verb_registry_check()
 # 這一步**從上線第一天起就是 404**,而沒有任何東西說得出來。檔尾的 `_dispatch_door_check()`
 # 現在會在 import 時比對這份名單與分派鏈,漏一個就起不來。
 DETERMINISTIC_TASKS = ("release", "execute", "publish-flow", "implement", "test", "coverage",
-                       "uiux-audit", "site", "smoke", "dispose-pr", "consult", "pr-ready")
+                       "uiux-audit", "site", "smoke", "dispose-pr", "consult", "pr-ready",
+                       "scan-stale")
 
 
 
@@ -7588,6 +7562,157 @@ def run_consult(payload):
     return dict(record, answered=True, recorded=True, asked=len(prior) + 1, cap=_CONSULT_CAP)
 
 
+
+# --- scan-stale without AI (2026-09-14) ---------------------------------------------------
+# The unstick-scan SCAN node used to be a `claude -p` run: ~156 runs/day, ~17 model calls and
+# ~216 s each, ~450K output tokens/day — and in the week before it was replaced it started ONE
+# unstick-flow. Every rule it applied is mechanical (read back from its own verdicts), so it is
+# plain code now: same inputs (gh + engine REST), same output shape ({started, reason}), no model.
+#
+# One rule the AI version did not have: a PR is started at most once per (head, base) pair.
+# If the unstick-flow could not fix it, the next scan would otherwise see the same stuck PR
+# and start another flow every scan — the same loop shape as the 2026-09-13 ci-flow storm.
+# A new push to the PR or a new commit on main makes it eligible again.
+UNSTICK_ENGINE = os.environ.get("ENGINE_URL", "http://aaf-kogito-bpmn:8080").rstrip("/")
+UNSTICK_REPOS = [r.strip() for r in os.environ.get("UNSTICK_SCAN_REPOS", "jrjohn/arcana-ai-bpm").split(",") if r.strip()]
+UNSTICK_MAX_START = int(os.environ.get("UNSTICK_SCAN_MAX_START", "2"))
+UNSTICK_STATE_FILE = os.environ.get("UNSTICK_SCAN_STATE", "/root/.claude/unstick-scan-state.json")
+UNSTICK_STATE_TTL_S = 14 * 24 * 3600
+_STALE_STATES = ("BEHIND", "UNSTABLE", "DIRTY", "BLOCKED")
+_CHECK_FAIL = ("FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE")
+_CHECK_PENDING = ("PENDING", "EXPECTED", "QUEUED", "IN_PROGRESS", "WAITING", "REQUESTED")
+
+
+def _check_buckets(rollup):
+    """(failing, pending) counts from gh's statusCheckRollup (CheckRun and StatusContext)."""
+    fail = pend = 0
+    for c in rollup or []:
+        state = (c.get("conclusion") or c.get("state") or "").upper()
+        status = (c.get("status") or "").upper()
+        if status and status != "COMPLETED":
+            pend += 1
+        elif state in _CHECK_FAIL:
+            fail += 1
+        elif state in _CHECK_PENDING or not state:
+            pend += 1
+    return fail, pend
+
+
+def _stale_verdict(pr, behind_by):
+    """None = stale-stuck (start a flow); otherwise the reason to skip."""
+    if pr.get("isDraft"):
+        return "draft"
+    if not behind_by or behind_by < 1:
+        return "up to date with base"
+    fail, pend = _check_buckets(pr.get("statusCheckRollup"))
+    if fail == 0:
+        return "no failing check" + (" (%d pending)" % pend if pend else "")
+    if pend:
+        return "checks still running (%d pending)" % pend
+    if (pr.get("mergeStateStatus") or "").upper() not in _STALE_STATES:
+        return "mergeState %s" % (pr.get("mergeStateStatus") or "UNKNOWN")
+    return None
+
+
+def _unstick_state_load(now):
+    try:
+        with open(UNSTICK_STATE_FILE) as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        st = {}
+    return {k: v for k, v in st.items() if isinstance(v, (int, float)) and now - v < UNSTICK_STATE_TTL_S}
+
+
+def _unstick_state_save(st):
+    try:
+        tmp = UNSTICK_STATE_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(st, f)
+        os.replace(tmp, UNSTICK_STATE_FILE)
+    except OSError as e:
+        print("[scan-stale] could not save state: %s" % e, flush=True)
+
+
+def _gh_json(args):
+    p = subprocess.run(["gh"] + args, capture_output=True, text=True, timeout=60)
+    if p.returncode != 0:
+        raise RuntimeError("gh %s: %s" % (" ".join(args[:3]), (p.stderr or "").strip()[:200]))
+    return json.loads(p.stdout or "null")
+
+
+def _engine(method, path, body=None):
+    import urllib.request
+    req = urllib.request.Request(UNSTICK_ENGINE + path, method=method,
+                                 data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        raw = r.read()
+        return r.status, (json.loads(raw) if raw else None)
+
+
+def scan_stale(payload, gh=_gh_json, engine=_engine, now=None):
+    now = now or time.time()
+    try:
+        _, active = engine("GET", "/unstick-flow")
+        active_urls = {i.get("prUrl") for i in (active or []) if isinstance(i, dict)}
+    except Exception as e:
+        # Cannot tell what is already running -> start nothing (a duplicate costs AI rebases).
+        return {"started": 0, "reason": "engine unreachable, nothing started: %s" % e}
+    state = _unstick_state_load(now)
+    started, lines, errors = 0, [], []
+    for repo in UNSTICK_REPOS:
+        try:
+            prs = gh(["pr", "list", "--repo", repo, "--state", "open", "--limit", "100", "--json",
+                      "number,url,isDraft,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup"])
+        except Exception as e:
+            errors.append(str(e))
+            continue
+        base_sha = {}
+        for pr in prs or []:
+            n, url = pr.get("number"), pr.get("url")
+            try:
+                if pr.get("isDraft"):
+                    behind = 0
+                else:
+                    base = pr.get("baseRefName") or "main"
+                    cmp = gh(["api", "repos/%s/compare/%s...%s" % (repo, base, pr.get("headRefOid"))])
+                    behind = int((cmp or {}).get("behind_by") or 0)
+                    base_sha[base] = ((cmp or {}).get("base_commit") or {}).get("sha", "")
+            except Exception as e:
+                errors.append("#%s: %s" % (n, e))
+                continue
+            why = _stale_verdict(pr, behind)
+            if why is None and url in active_urls:
+                why = "unstick-flow already active"
+            key = "%s@%s@%s" % (url, pr.get("headRefOid"), base_sha.get(pr.get("baseRefName") or "main", ""))
+            if why is None and key in state:
+                why = "already tried for this head+base; waiting for a new push or a new main"
+            if why is None and started >= UNSTICK_MAX_START:
+                why = "per-scan cap %d reached" % UNSTICK_MAX_START
+            if why is None:
+                try:
+                    code, _ = engine("POST", "/unstick-flow",
+                                     {"prUrl": url, "subject": "unstick %s#%s" % (repo.split("/")[-1], n)})
+                    if code in (200, 201):
+                        started += 1
+                        state[key] = now
+                        lines.append("#%s STARTED (behind %d)" % (n, behind))
+                    else:
+                        lines.append("#%s start FAILED (engine HTTP %s)" % (n, code))
+                        errors.append("#%s: engine HTTP %s" % (n, code))
+                except Exception as e:
+                    lines.append("#%s start FAILED" % n)
+                    errors.append("#%s: start failed: %s" % (n, e))
+                continue
+            lines.append("#%s skip: %s" % (n, why))
+    _unstick_state_save(state)
+    reason = "; ".join(lines) or "no open PRs"
+    if errors:
+        reason += " | errors: " + "; ".join(errors[:3])
+    print("[scan-stale] started=%d %s" % (started, reason[:300]), flush=True)
+    return {"started": started, "reason": reason, "errors": errors}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, obj):
         body = json.dumps(obj).encode()
@@ -7681,6 +7806,8 @@ class Handler(BaseHTTPRequestHandler):
                 # 只補測試的窄節點。它身上帶著 implement 放不下的那條硬約束:
                 # 產品碼一個字都不能動(見 coverage_flow 的說明)。
                 result = coverage_flow(payload)
+            elif task == "scan-stale":
+                result = scan_stale(payload)   # plain code, no model (see scan_stale)
             elif task == "uiux-audit":
                 result = uiux_audit_flow(payload)
             else:
