@@ -322,6 +322,14 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.30.0 — `csearch` / osearch pin leg: newest-N before dedup (common tokens no longer time out)
+
+- **Symptom** — a common token was slow in proportion to how many rows matched: `osearch 'error'` took **12.6s end to end**, past the 12s timeout of the auto-prompt hook. The pin (lexical) leg carried full `content` through `DISTINCT ON (content)` over **every** match (53K for `error`), detoasting and comparing megabytes of text and spilling the sort to disk.
+- **Fix** — candidates now carry only `(id, ts)`; the newest `cap` ids (`max(limit*20, 400)`) are joined back for content, deduped on `md5(content)`, then ordered by `ts`. Selective tokens are unaffected; the vector legs were already sublinear (HNSW).
+- **Verified identical** — old vs new top-30 id lists compared server-side on 11 probe terms incl. duplicate-heavy ones (`interrupted`: newest 300 matches hold only 61 distinct contents): all identical.
+- **Measured (DB side)** — `error` 11.1s → 0.37s, `bluesea` 4.6s → 0.17s, `的` 3.8s → 0.09s, `TOOL_RESULT` 49s → 4.6s (still bounded by match count). End to end warm: `osearch 'error'` 12.6s → 2.0s.
+- **Server tuning note** — a PG container with default `shared_buffers=128MB` / `work_mem=4MB` under an 11GB archive spills keyword sorts to disk; `shared_buffers≈1.5GB`, `work_mem=32MB` (needs a PG restart — then restart `pgsearchd` too, its pooled connections are dead).
+
 ### v1.27.0 — `osearch` self-query: auto date/project filtering (rules-based, no LLM) + `crs osearch-eval` harness
 
 - **Self-query on `osearch`** — a natural-language query with temporal/project intent now auto-applies a metadata filter: `osearch '六月 openfortivpn'` → June only; `osearch '上週的 X'` → last calendar week (Mon–Sun); `osearch 'network 的 Y'` → `project=network`. Rules-based extraction (`extract_filters`, **no LLM**): Chinese/English month names, relative windows (今天/昨天/上週/這週/上個月/近N天…), and known project slugs; matched words are stripped from the semantic query. **Conservative** — no date/project intent → query returned untouched, so plain queries stay **byte-identical** (no note, no filter). Explicit `osearch 'x' network` / `--project` / `--since <hours>` override auto-extraction.
