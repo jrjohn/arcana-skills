@@ -148,6 +148,33 @@ CREATE TRIGGER msg_jieba_sync_aiu AFTER INSERT OR UPDATE OF content ON msg
 --   INSERT INTO msg_jieba(id,cj) SELECT id, to_tsvector('jiebacfg',coalesce(content,'')) FROM msg
 --   ON CONFLICT (id) DO NOTHING;
 
+-- Optional but recommended: drop noise at insert (added 2026-09-14). A live archive was
+-- 54% dead weight: Claude Code metadata events (mode, last-prompt, ai-title, …) that no
+-- PG search path ever returns (every query filters role IN ('user','assistant')), plus
+-- 67K identical "[THINKING]" placeholders from redacted thinking — each still paid a
+-- 4KB embedding + a 4KB HNSW entry. Deleting them once is not enough: crs re-ingests a
+-- whole JSONL when its mtime changes (ON CONFLICT DO NOTHING), so they come back. This
+-- BEFORE trigger makes the INSERT a no-op for them (the AFTER jieba trigger then never
+-- fires). Deliberately a denylist: attachment / system / tool / result carry real content
+-- (@-mentioned files, API errors) and are kept even though search does not show them.
+CREATE OR REPLACE FUNCTION msg_drop_noise() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.role IN ('last-prompt','permission-mode','agent-setting','mode','queue-operation',
+                  'custom-title','ai-title','agent-name','file-history-snapshot','pr-link',
+                  'relocated','worktree-state','progress','atis-latch','file-history-delta',
+                  'bridge-session','cost-state','history-suppression','frame-link','started',
+                  'fork-context-ref','continued-in')
+     OR NEW.content ~ '^\[THINKING\]\s*$' THEN
+    RETURN NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER msg_drop_noise_bi BEFORE INSERT ON msg
+  FOR EACH ROW EXECUTE FUNCTION msg_drop_noise();
+-- New Claude Code event types are NOT dropped until added to the list (safer default:
+-- an unknown type is stored, never silently lost). Check periodically:
+--   SELECT role, count(*) FROM msg GROUP BY 1 ORDER BY 2 DESC;
+
 CREATE TABLE ingest_state (
     file_path TEXT PRIMARY KEY,
     mtime DOUBLE PRECISION NOT NULL,

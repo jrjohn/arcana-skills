@@ -356,7 +356,7 @@ These prompted the explicit blocking rules. Don't disable lightly — read `refe
 
 ## Critical guidance
 
-**1. Never delete old rows.** The whole point is permanent memory. If disk gets tight, move `~/claude-archive/` to external storage (rebuild `crs` against the new path), don't `DELETE FROM msg WHERE ts < ...`. Losing history defeats the purpose.
+**1. Never delete old rows.** The whole point is permanent memory. If disk gets tight, move `~/claude-archive/` to external storage (rebuild `crs` against the new path), don't `DELETE FROM msg WHERE ts < ...`. Losing history defeats the purpose. (Noise is not history: metadata events that no search path returns and empty `[THINKING]` placeholders can be removed and blocked at insert — see `msg_drop_noise_bi` in `references/pg-backend.md`. On the PG backend, reclaiming disk after such a delete needs `VACUUM FULL`, which rewrites the tables and needs free space roughly the size of what remains.)
 
 **2. FTS5 hyphen / colon trap.** FTS5 treats `-`, `:`, `.` as boolean / column operators. Anything containing them must be quoted as a phrase:
 ```bash
