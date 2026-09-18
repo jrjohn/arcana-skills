@@ -150,6 +150,48 @@ enum Cmd {
     /// Create the msg_distilled side table + indexes + owner-based RLS (idempotent). (pg-backend)
     #[cfg(feature = "pg-backend")]
     DistillInit,
+    /// Score msg rows that have no importance yet (deliverable / completion /
+    /// decision signals) so osearch can lift them above surrounding chatter.
+    /// Deterministic string rules, no LLM. (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    ImportanceBackfill {
+        /// 0 = all remaining
+        #[arg(long, default_value = "0")]
+        limit: usize,
+        #[arg(long = "project-prefix")]
+        project_prefix: Option<String>,
+    },
+    /// Create skill_registry + skill_asset (idempotent). (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    SkillInit,
+    /// Publish a skill directory: text knowledge → skill_registry (embedded for
+    /// osearch's skill leg), large/binary files → skill_asset (skipped when the
+    /// sha is unchanged). (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    SkillPublish {
+        /// Skill directory containing SKILL.md
+        dir: String,
+        /// 'all', or a role name once .204 enforces RLS on this table
+        #[arg(long, default_value = "all")]
+        visibility: String,
+    },
+    /// Fetch published skills into ~/.claude/skill-library (sha-gated: unchanged
+    /// skills are not re-downloaded). Never writes into ~/.claude/skills. (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    SkillSync {
+        /// Only this skill (default: all)
+        name: Option<String>,
+    },
+    /// Fetch one large asset (template, .docx …) on demand. (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    SkillGet {
+        name: String,
+        #[arg(long)]
+        asset: String,
+    },
+    /// List published skills. (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    SkillList,
     /// Distill msg rows lacking a msg_distilled entry: generative proposition
     /// extraction (Mac GPU / qwen2.5:7b) → embed → INSERT. Mirrors embed-missing. (pg-backend)
     #[cfg(feature = "pg-backend")]
@@ -3131,31 +3173,42 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
     //
     // Plus two filters baked in:
     //   role IN ('user','assistant')        — skip meta events
-    //   DISTINCT ON content (newest kept)   — dedup same-content rows
+    //   DISTINCT ON md5(content) (newest kept) — dedup same-content rows, over the
+    //   newest `cap` matches only (see the cand CTE for why)
     //
     // v1.15+: optionally UNION ALL with image_ocr (role='image_ocr'), default ON.
     // FTS path doesn't have a numeric rank, so de-emphasis is implicit (ts DESC
     // sort + DISTINCT ON content puts older noise behind newer real msgs).
     let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
+    // How many newest matches to look at before dedup. Duplicate-heavy tokens shrink
+    // fast (newest 300 "interrupted" rows = 61 distinct contents), so keep >=4x margin
+    // over that worst case: 20 candidates per requested row, never fewer than 400.
+    let cap = ((limit * 20).max(400)) as i64;
     let sql = if include_img {
-        "WITH msg_hits AS MATERIALIZED (
-             -- `content_tsv @@ q OR id IN (jieba subquery)` can't use one index for
-             -- the OR → planner falls back to a Seq Scan on msg (whole table). Split
-             -- into a UNION ALL so each leg hits its own GIN index (msg_tsv_idx /
-             -- msg_jieba_cj_idx); the outer DISTINCT ON (content) dedups any overlap.
-             SELECT id, ts, project, session_id, role, tool_name, content
-             FROM msg
+        "WITH msg_cand AS MATERIALIZED (
+             -- Candidates carry ONLY (id, ts). The old query carried full content through
+             -- DISTINCT ON (content) over EVERY match, so a common token ('error', 53K hits)
+             -- detoasted and compared megabytes of text and spilled the sort to disk —
+             -- 11.1s server-side, past the 12s hook timeout end to end. Now: newest `cap`
+             -- ids first, content fetched for those only, dedup on md5(content).
+             -- Identical top-30 to the old query on 11 probe terms (2026-09-14); 'error' 11.1s -> 0.37s.
+             SELECT id, ts FROM msg
              WHERE content_tsv @@ plainto_tsquery('simple', $1)
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
                AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
-             UNION ALL
-             SELECT id, ts, project, session_id, role, tool_name, content
-             FROM msg
+             UNION
+             -- Split from the tsv leg so each side hits its own GIN index
+             -- (msg_tsv_idx / msg_jieba_cj_idx); an OR here falls back to a Seq Scan.
+             SELECT id, ts FROM msg
              WHERE id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1))
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
                AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
+         ),
+         msg_recent AS (
+             SELECT m.id, m.ts, m.project, m.session_id, m.role, m.tool_name, m.content
+             FROM (SELECT id FROM msg_cand ORDER BY ts DESC LIMIT $6) r JOIN msg m USING (id)
          ),
          img_hits AS MATERIALIZED (
              SELECT id, ts, project, session_id,
@@ -3166,44 +3219,52 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
                AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
          ),
          hits AS (
-             SELECT * FROM msg_hits
+             SELECT * FROM msg_recent
              UNION ALL
              SELECT * FROM img_hits
          ),
          deduped AS (
-             SELECT DISTINCT ON (content)
+             SELECT DISTINCT ON (md5(content))
                     id, ts, project, session_id, role, tool_name, content
-             FROM hits ORDER BY content, ts DESC
+             FROM hits ORDER BY md5(content), ts DESC
          )
          SELECT id, ts, project, session_id, role, tool_name, content
          FROM deduped ORDER BY ts DESC LIMIT $3"
     } else {
-        "WITH hits AS MATERIALIZED (
-             -- See the include_img branch: OR-subquery → Seq Scan; UNION ALL keeps
-             -- each leg on its own GIN index (msg_tsv_idx / msg_jieba_cj_idx).
-             SELECT id, ts, project, session_id, role, tool_name, content
-             FROM msg
+        "WITH cand AS MATERIALIZED (
+             -- Candidates carry ONLY (id, ts). The old query carried full content through
+             -- DISTINCT ON (content) over EVERY match, so a common token ('error', 53K hits)
+             -- detoasted and compared megabytes of text and spilled the sort to disk —
+             -- 11.1s server-side, past the 12s hook timeout end to end. Now: newest `cap`
+             -- ids first, content fetched for those only, dedup on md5(content).
+             -- Identical top-30 to the old query on 11 probe terms (2026-09-14); 'error' 11.1s -> 0.37s.
+             SELECT id, ts FROM msg
              WHERE content_tsv @@ plainto_tsquery('simple', $1)
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
                AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
-             UNION ALL
-             SELECT id, ts, project, session_id, role, tool_name, content
-             FROM msg
+             UNION
+             -- Split from the tsv leg so each side hits its own GIN index
+             -- (msg_tsv_idx / msg_jieba_cj_idx); an OR here falls back to a Seq Scan.
+             SELECT id, ts FROM msg
              WHERE id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1))
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
                AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
          ),
+         hits AS (
+             SELECT m.id, m.ts, m.project, m.session_id, m.role, m.tool_name, m.content
+             FROM (SELECT id FROM cand ORDER BY ts DESC LIMIT $6) r JOIN msg m USING (id)
+         ),
          deduped AS (
-             SELECT DISTINCT ON (content)
+             SELECT DISTINCT ON (md5(content))
                     id, ts, project, session_id, role, tool_name, content
-             FROM hits ORDER BY content, ts DESC
+             FROM hits ORDER BY md5(content), ts DESC
          )
          SELECT id, ts, project, session_id, role, tool_name, content
          FROM deduped ORDER BY ts DESC LIMIT $3"
     };
-    let rows = client.query(sql, &[&query, &proj_like, &(limit as i64), &since, &until])?;
+    let rows = client.query(sql, &[&query, &proj_like, &(limit as i64), &since, &until, &cap])?;
     Ok(rows.iter().map(|r| PgRow {
         id: r.get(0),
         ts: r.get(1),
@@ -4132,6 +4193,37 @@ fn osearch_ranked(pg: &mut postgres::Client, http: &reqwest::blocking::Client,
             row_of.entry(key).or_insert(r);
         }
     }
+    // Importance boost. This is a RE-RANK, not a retrieval change: it multiplies
+    // the fused score of rows the three legs ALREADY returned, so it can lift a
+    // deliverable above the chatter it is sitting among but can never inject a
+    // row nothing matched. Worst case is a worse order — not a page of
+    // high-importance noise. One extra round trip for the whole candidate set,
+    // in preference to adding the column to three separate leg queries.
+    // Capped at 4 → at most +60%, chosen so it reorders near-ties without
+    // letting a weak match beat a clearly better one. Rows never scored
+    // (importance IS NULL) coalesce to 0 and are untouched.
+    // CRS_NO_IMPORTANCE=1 is the control arm. A boost you cannot switch off is a
+    // boost you cannot prove: if scoring on and scoring off return the same order,
+    // the feature is doing nothing and any "it looks better" reading is wishful.
+    const IMPORTANCE_ALPHA: f64 = 0.15;
+    let importance_on = std::env::var("CRS_NO_IMPORTANCE").map(|v| v != "1").unwrap_or(true);
+    if importance_on && !score.is_empty() {
+        let ids: Vec<i64> = score.keys().copied().collect();
+        if let Ok(rows) = pg.query(
+            "SELECT id, COALESCE(importance,0)::int FROM msg WHERE id = ANY($1)", &[&ids])
+        {
+            for r in &rows {
+                let id: i64 = r.get(0);
+                let imp: i32 = r.get(1);
+                if imp > 0 {
+                    if let Some(s) = score.get_mut(&id) {
+                        *s *= 1.0 + IMPORTANCE_ALPHA * (imp.min(4) as f64);
+                    }
+                }
+            }
+        }
+    }
+
     let mut ranked_ids: Vec<i64> = score.keys().copied().collect();
     ranked_ids.sort_by(|a, b| score[b].partial_cmp(&score[a]).unwrap_or(std::cmp::Ordering::Equal));
     let fused_n = score.len();
@@ -4305,7 +4397,37 @@ fn cmd_osearch(query: &str, project: Option<&str>, limit: usize, no_img: bool, w
 
     let mut pg = pg_connect()?;
     let http = http_client()?;
-    let r = osearch_ranked(&mut pg, &http, text, eff_project.as_deref(), limit, include_img, eff_since, eff_until);
+
+    // Skill leg, run CONCURRENTLY with the three row legs on its own connection.
+    // It needs a local embed (the row legs may get theirs server-side via the
+    // daemon, so there is nothing to share), and serially that embed was pure
+    // added latency on every single prompt — the auto-osearch hook runs this on
+    // each user message under a 12s timeout. Alongside, it costs nothing: it
+    // finishes long before the slowest row leg.
+    let (r, skill_hits) = std::thread::scope(|sc| {
+        let sk = sc.spawn(|| {
+            let (Ok(mut c), Ok(h)) = (pg_connect(), http_client()) else { return Vec::new() };
+            match embed_text(&h, text) {
+                Ok(e) => skill_leg(&mut c, &e, 2),
+                Err(_) => Vec::new(),
+            }
+        });
+        let r = osearch_ranked(&mut pg, &http, text, eff_project.as_deref(), limit, include_img, eff_since, eff_until);
+        (r, sk.join().unwrap_or_default())
+    });
+
+    // Printed BEFORE the rows, because it answers a different question: the rows
+    // say "here is what you did", a skill says "here is how this is done, don't
+    // re-derive it". A pointer only — never fetched or executed automatically.
+    // The 0.62 cut-off keeps it silent on unrelated queries; without it every
+    // search would name its nearest skill, which is how a hint becomes noise
+    // people learn to scroll past.
+    for (name, desc, dist) in skill_hits.iter().filter(|(_, _, d)| *d < 0.62) {
+        let short: String = desc.chars().take(110).collect();
+        println!("📌 現成 SOP: {name}  (d={dist:.3})  → crs skill-sync {name}");
+        println!("   {short}");
+    }
+
     for (row, tag) in &r.ranked {
         let prefix = if with_id {
             format!("id={} sid={} ", row.id.unwrap_or(-1), row.session_id.chars().take(8).collect::<String>())
@@ -4315,6 +4437,425 @@ fn cmd_osearch(query: &str, project: Option<&str>, limit: usize, no_img: bool, w
     eprintln!("\n# osearch(RRF): pin={} recall={} orient={} → {} fused, top {} shown",
         r.pin_n, r.recall_n, r.orient_n, r.fused_n, r.ranked.len());
     Ok(())
+}
+
+// ─────────────────────────── row importance (pg-backend) ───────────────────────────
+//
+// osearch had no notion that one row matters more than another: the only weight
+// was recall×2 for natural-language queries, so a throwaway `ls` output and a
+// finished change report competed on similarity alone. Deliverables therefore sat
+// at the same altitude as the chatter around them.
+//
+// The score is filled by `importance-backfill`, NOT at ingest. There are three
+// separate INSERT INTO msg sites (sync PG, async batch PG, sqlite); computing the
+// score at each one would put the same rule in three places, which is how the
+// rule silently drifts. Embedding already works this way — write the row, enrich
+// it on a later pass — so this follows the mechanism that is already proven here.
+//
+// `importance` is nullable on purpose: NULL means "not scored yet" and 0 means
+// "scored, ordinary". Collapsing those into one value would make the backfill
+// unable to tell what it has already done.
+
+/// Deterministic, cheap (no LLM). Returns 0-4. The ONLY implementation of this
+/// rule — backfill calls it, nothing else re-derives it.
+#[cfg(feature = "pg-backend")]
+fn importance_of(role: &str, tool_name: Option<&str>, content: &str) -> i16 {
+    // +3 — a document was produced. Written artefacts are the thing people go
+    // looking for later ("where's that report"), and they are rare enough that
+    // boosting them does not flood anything.
+    if matches!(tool_name, Some("Write") | Some("Edit")) {
+        if let Some(rest) = content.split("\"file_path\":\"").nth(1) {
+            let path = rest.split('"').next().unwrap_or("");
+            let lower = path.to_lowercase();
+            let is_doc = [".md", ".docx", ".pptx", ".xlsx", ".pdf"]
+                .iter().any(|e| lower.ends_with(e));
+            // Scratch space is not a deliverable, however document-shaped it looks.
+            let is_scratch = ["/tmp/", "/.claude/jobs/", "node_modules/", "/target/", "/cache/", "/.cache/"]
+                .iter().any(|p| lower.contains(p));
+            if is_doc && !is_scratch { return 3; }
+        }
+    }
+    // +2 — a finished piece of work reporting its own completion.
+    if role == "assistant" && content.len() > 400 {
+        for m in ["result:", "✅", "## 完成", "部署完成", "全部完成"] {
+            if content.contains(m) { return 2; }
+        }
+    }
+    // +1 — a standing decision. Short, easy to lose, and expensive to re-litigate.
+    if role == "user" {
+        for m in ["一律", "以後", "定案", "不要再", "改用", "永遠不要"] {
+            if content.contains(m) { return 1; }
+        }
+    }
+    0
+}
+
+#[cfg(feature = "pg-backend")]
+fn cmd_importance_backfill(limit: usize, project_prefix: Option<String>) -> Result<()> {
+    let mut pg = pg_connect()?;
+    pg.batch_execute("ALTER TABLE msg ADD COLUMN IF NOT EXISTS importance SMALLINT")?;
+    pg.batch_execute(
+        "CREATE INDEX IF NOT EXISTS msg_importance_null ON msg(id) WHERE importance IS NULL")?;
+
+    let prefix_clause = match &project_prefix {
+        Some(_) => " AND project LIKE $1",
+        None => "",
+    };
+    const CHUNK: usize = 2000;
+    let mut done = 0usize;
+    let t0 = std::time::Instant::now();
+    loop {
+        if limit > 0 && done >= limit { break; }
+        let take = if limit > 0 { (limit - done).min(CHUNK) } else { CHUNK };
+        let sql = format!(
+            "SELECT id, role, tool_name, content FROM msg \
+             WHERE importance IS NULL{} ORDER BY id DESC LIMIT {}", prefix_clause, take);
+        let rows = match &project_prefix {
+            Some(p) => { let like = format!("{}%", p); pg.query(&sql, &[&like])? }
+            None => pg.query(&sql, &[])?,
+        };
+        if rows.is_empty() { break; }
+        // ONE multi-row UPDATE per chunk, not one per row. The row-at-a-time
+        // version measured 424s for 2000 rows against bluesea — 0.21s each,
+        // which is the WAN round trip, not the work. Same lesson the ingest path
+        // already learned (see the batched INSERT above). Both values are numbers
+        // this function computed, so inlining them cannot inject anything and it
+        // sidesteps PG's 65535-parameter ceiling.
+        use std::fmt::Write as _;
+        let mut values = String::new();
+        for r in &rows {
+            let id: i64 = r.get(0);
+            let role: Option<String> = r.get(1);
+            let tool: Option<String> = r.get(2);
+            let content: Option<String> = r.get(3);
+            let score = importance_of(
+                role.as_deref().unwrap_or(""), tool.as_deref(), content.as_deref().unwrap_or(""));
+            if !values.is_empty() { values.push(','); }
+            let _ = write!(values, "({},{})", id, score);
+        }
+        pg.execute(&format!(
+            "UPDATE msg SET importance = v.s FROM (VALUES {}) AS v(id, s) \
+             WHERE msg.id = v.id::bigint", values), &[])?;
+        done += rows.len();
+        eprintln!("  scored {done} rows ({:.1}s)", t0.elapsed().as_secs_f64());
+        if rows.len() < take { break; }
+    }
+    let dist = pg.query(
+        "SELECT COALESCE(importance,0)::int AS s, count(*) FROM msg WHERE importance IS NOT NULL \
+         GROUP BY 1 ORDER BY 1 DESC", &[])?;
+    println!("importance-backfill: scored {done} rows in {:.1}s", t0.elapsed().as_secs_f64());
+    for r in &dist {
+        let s: i32 = r.get(0);
+        let n: i64 = r.get(1);
+        println!("  importance={s}  {n} rows");
+    }
+    Ok(())
+}
+
+// ─────────────────────────── skill registry (pg-backend) ───────────────────────────
+//
+// Why this exists (2026-09-18). A skill's knowledge is only worth anything if it
+// gets LOADED, and Claude Code loads what sits in ~/.claude/skills behind a
+// SKILL.md. Two consequences followed:
+//
+//   1. inap-release-manager had instructions.md + references/ (including a CR
+//      update rule learned the hard way) but no SKILL.md, so it was never once
+//      loaded — the directory was there, the content was complete, nothing ever
+//      errored. Work restarted from scratch because the knowledge was invisible.
+//   2. Everything under ~/.claude/skills is machine-local: no single source of
+//      truth, no way to push a correction, and every skill costs a permanent
+//      slot in the always-loaded description list (measured 14,528 chars for 35
+//      skills) where the right one stops standing out among the wrong ones.
+//
+// So: skills are AUTHORED in git and PUBLISHED into PG for distribution. osearch
+// grows a 4th leg over description_embedding, so a relevant SOP surfaces on the
+// normal auto-osearch pass instead of occupying a permanent context slot.
+// Measured before building this: 11/12 realistic queries route to the right
+// skill top-1 from description alone (the one miss was a skill whose entire
+// description is the word "metadata" — a content bug, not a retrieval one).
+//
+// Storage shape — two tables, because their update rates differ by ~280x:
+//   skill_registry.payload = JSON {relative path -> file text} of the small text
+//     knowledge (SKILL.md, instructions, references/). 56 KB for
+//     inap-release-manager. Plain bytea; PG's TOAST compresses it, so no tar or
+//     gzip crate is pulled in and the same code path works on Windows.
+//   skill_asset = one row per large or binary file (templates/*.docx …), fetched
+//     only when a document actually has to be produced. 15.8 MB for that same
+//     skill — 99% of it. Splitting them means fixing one line of a rule uploads
+//     56 KB, not 16 MB.
+//
+// bytea, never Large Object: `lo` carries its own ACL in pg_largeobject_metadata
+// and RLS cannot see it. The employee deployment (.204) is built entirely on RLS,
+// so a Large Object would be a hole in the wall the rest of that design needs.
+// owner / visibility are written from day one but carry no policy here (bluesea
+// is single-user); .204 adds the policy later without a schema change.
+
+#[cfg(feature = "pg-backend")]
+const SKILL_REGISTRY_DDL: &str = "
+CREATE TABLE IF NOT EXISTS skill_registry (
+  name        TEXT PRIMARY KEY,
+  version     TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL,
+  payload     BYTEA NOT NULL,
+  sha256      TEXT NOT NULL,
+  visibility  TEXT NOT NULL DEFAULT 'all',
+  owner       TEXT NOT NULL DEFAULT current_user,
+  description_embedding vector(1024),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS skill_registry_hnsw
+  ON skill_registry USING hnsw(description_embedding vector_cosine_ops);
+
+CREATE TABLE IF NOT EXISTS skill_asset (
+  skill_name TEXT NOT NULL REFERENCES skill_registry(name) ON DELETE CASCADE,
+  path       TEXT NOT NULL,
+  blob       BYTEA NOT NULL,
+  sha256     TEXT NOT NULL,
+  owner      TEXT NOT NULL DEFAULT current_user,
+  PRIMARY KEY (skill_name, path)
+);
+";
+
+#[cfg(feature = "pg-backend")]
+fn cmd_skill_init() -> Result<()> {
+    let mut pg = pg_connect()?;
+    pg.batch_execute(SKILL_REGISTRY_DDL)?;
+    println!("skill_registry + skill_asset ready.");
+    Ok(())
+}
+
+/// Where `skill-sync` materialises fetched skills. Deliberately NOT
+/// ~/.claude/skills: a synced skill must not silently rejoin the always-loaded
+/// description list, which is the cost this whole mechanism exists to avoid.
+#[cfg(feature = "pg-backend")]
+fn skill_library_dir() -> std::path::PathBuf {
+    dirs::home_dir().unwrap_or_default().join(".claude/skill-library")
+}
+
+/// (name, description) from a SKILL.md. Falls back to the first H1 for
+/// description because Claude Code itself does — several working skills here
+/// have no frontmatter at all and load via their title.
+#[cfg(feature = "pg-backend")]
+fn skill_frontmatter(text: &str) -> (String, String) {
+    let (mut name, mut desc) = (String::new(), String::new());
+    let mut lines = text.lines();
+    if lines.next().map(|l| l.trim()) == Some("---") {
+        for l in lines.by_ref() {
+            if l.trim() == "---" { break; }
+            if let Some(v) = l.strip_prefix("name:") { name = v.trim().to_string(); }
+            else if let Some(v) = l.strip_prefix("description:") { desc = v.trim().to_string(); }
+        }
+    }
+    if desc.is_empty() {
+        if let Some(h) = text.lines().find(|l| l.starts_with('#')) {
+            desc = h.trim_start_matches('#').trim().to_string();
+        }
+    }
+    (name, desc)
+}
+
+#[cfg(feature = "pg-backend")]
+const SKILL_TEXT_EXT: &[&str] = &["md", "txt", "json", "yaml", "yml", "sql", "sh", "py", "toml", "csv"];
+#[cfg(feature = "pg-backend")]
+const SKILL_TEXT_MAX: u64 = 256 * 1024;
+
+/// Split a skill directory into (knowledge, assets).
+/// Knowledge = small text files outside templates/. Everything else is an asset.
+#[cfg(feature = "pg-backend")]
+fn collect_skill_files(dir: &std::path::Path)
+    -> Result<(std::collections::BTreeMap<String, String>, Vec<(String, Vec<u8>)>)>
+{
+    use std::collections::BTreeMap;
+    let mut knowledge: BTreeMap<String, String> = BTreeMap::new();
+    let mut assets: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(cur) = stack.pop() {
+        for ent in std::fs::read_dir(&cur)? {
+            let ent = ent?;
+            let p = ent.path();
+            let rel = p.strip_prefix(dir).unwrap_or(&p).to_string_lossy().replace('\\', "/");
+            if rel.starts_with('.') { continue; }                  // .git, .DS_Store…
+            let md = match std::fs::metadata(&p) { Ok(m) => m, Err(_) => continue };
+            if md.is_dir() { stack.push(p); continue; }
+            if !md.is_file() { continue; }
+
+            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            let is_template = rel.starts_with("templates/") || rel.starts_with("workspace-template/");
+            let is_text = SKILL_TEXT_EXT.contains(&ext.as_str()) && md.len() <= SKILL_TEXT_MAX;
+            if is_text && !is_template {
+                match std::fs::read_to_string(&p) {
+                    Ok(s) => { knowledge.insert(rel, s); }
+                    Err(_) => assets.push((rel, std::fs::read(&p)?)),
+                }
+            } else {
+                assets.push((rel, std::fs::read(&p)?));
+            }
+        }
+    }
+    Ok((knowledge, assets))
+}
+
+#[cfg(feature = "pg-backend")]
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut h = Sha256::new();
+    h.update(bytes);
+    format!("{:x}", h.finalize())
+}
+
+#[cfg(feature = "pg-backend")]
+fn cmd_skill_publish(dir: &str, visibility: &str) -> Result<()> {
+    let dir = std::path::Path::new(dir);
+    let skill_md = dir.join("SKILL.md");
+    if !skill_md.exists() {
+        return Err(anyhow!("{} has no SKILL.md — publish the entry point, not a bare folder", dir.display()));
+    }
+    let name = dir.file_name().and_then(|s| s.to_str())
+        .ok_or_else(|| anyhow!("cannot read directory name"))?.to_string();
+    let md_text = std::fs::read_to_string(&skill_md)?;
+    let (_fm_name, description) = skill_frontmatter(&md_text);
+    if description.is_empty() {
+        return Err(anyhow!("SKILL.md has neither a frontmatter description nor an H1 — nothing to route on"));
+    }
+
+    let (knowledge, assets) = collect_skill_files(dir)?;
+    let payload = serde_json::to_vec(&knowledge)?;
+    let sha = sha256_hex(&payload);
+
+    let http = http_client()?;
+    let emb = embed_text(&http, &format!("{}. {}", name, description))?;
+    let lit = vec_literal(&emb);
+
+    let mut pg = pg_connect()?;
+    pg.batch_execute(SKILL_REGISTRY_DDL)?;
+    let sql = format!(
+        "INSERT INTO skill_registry (name, description, payload, sha256, visibility, description_embedding, updated_at) \
+         VALUES ($1, $2, $3, $4, $5, '{lit}'::vector, now()) \
+         ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, \
+           payload = EXCLUDED.payload, sha256 = EXCLUDED.sha256, visibility = EXCLUDED.visibility, \
+           description_embedding = EXCLUDED.description_embedding, updated_at = now()");
+    pg.execute(&sql, &[&name, &description, &payload, &sha, &visibility])?;
+
+    // Assets are content-addressed: re-uploading an unchanged 16 MB template is
+    // the exact cost the two-table split exists to avoid, so skip by sha.
+    let mut sent = 0usize;
+    let mut skipped = 0usize;
+    for (path, blob) in &assets {
+        let asha = sha256_hex(blob);
+        let cur: Option<String> = pg.query_opt(
+            "SELECT sha256 FROM skill_asset WHERE skill_name = $1 AND path = $2", &[&name, path])?
+            .map(|r| r.get(0));
+        if cur.as_deref() == Some(asha.as_str()) { skipped += 1; continue; }
+        pg.execute(
+            "INSERT INTO skill_asset (skill_name, path, blob, sha256) VALUES ($1,$2,$3,$4) \
+             ON CONFLICT (skill_name, path) DO UPDATE SET blob = EXCLUDED.blob, sha256 = EXCLUDED.sha256",
+            &[&name, path, blob, &asha])?;
+        sent += 1;
+    }
+
+    println!("published {name}");
+    println!("  knowledge : {} files, {} KB (sha {})", knowledge.len(), payload.len() / 1024, &sha[..12]);
+    println!("  assets    : {} uploaded, {} unchanged (of {})", sent, skipped, assets.len());
+    Ok(())
+}
+
+#[cfg(feature = "pg-backend")]
+fn cmd_skill_sync(only: Option<String>) -> Result<()> {
+    let lib = skill_library_dir();
+    std::fs::create_dir_all(&lib)?;
+    let mut pg = pg_connect()?;
+    let rows = match &only {
+        Some(n) => pg.query("SELECT name, sha256, payload FROM skill_registry WHERE name = $1", &[n])?,
+        None    => pg.query("SELECT name, sha256, payload FROM skill_registry ORDER BY name", &[])?,
+    };
+    if rows.is_empty() {
+        println!("nothing published yet (run: crs skill-publish <dir>)");
+        return Ok(());
+    }
+    let (mut fetched, mut unchanged) = (0usize, 0usize);
+    for r in &rows {
+        let name: String = r.get(0);
+        let sha: String = r.get(1);
+        let dest = lib.join(&name);
+        let stamp = dest.join(".crs-sha256");
+        if std::fs::read_to_string(&stamp).map(|s| s.trim() == sha).unwrap_or(false) {
+            unchanged += 1;
+            println!("  unchanged {name}");
+            continue;
+        }
+        let payload: Vec<u8> = r.get(2);
+        let files: std::collections::BTreeMap<String, String> = serde_json::from_slice(&payload)?;
+        for (rel, content) in &files {
+            // A published path is data, so refuse anything that could escape the
+            // skill directory rather than trusting it.
+            if rel.contains("..") || rel.starts_with('/') {
+                eprintln!("  skip unsafe path {rel}");
+                continue;
+            }
+            let out = dest.join(rel);
+            if let Some(parent) = out.parent() { std::fs::create_dir_all(parent)?; }
+            std::fs::write(&out, content)?;
+        }
+        std::fs::write(&stamp, &sha)?;
+        fetched += 1;
+        println!("  fetched   {name} ({} files)", files.len());
+    }
+    println!("skill-sync: {fetched} fetched, {unchanged} unchanged → {}", lib.display());
+    Ok(())
+}
+
+#[cfg(feature = "pg-backend")]
+fn cmd_skill_get(name: &str, asset: &str) -> Result<()> {
+    let mut pg = pg_connect()?;
+    let row = pg.query_opt(
+        "SELECT blob, sha256 FROM skill_asset WHERE skill_name = $1 AND path = $2", &[&name, &asset])?
+        .ok_or_else(|| anyhow!("no asset {asset} for skill {name}"))?;
+    let blob: Vec<u8> = row.get(0);
+    let sha: String = row.get(1);
+    if sha256_hex(&blob) != sha {
+        return Err(anyhow!("sha256 mismatch for {name}/{asset} — refusing to write"));
+    }
+    let out = skill_library_dir().join(name).join(asset);
+    if let Some(p) = out.parent() { std::fs::create_dir_all(p)?; }
+    std::fs::write(&out, &blob)?;
+    println!("{} ({} KB, sha {})", out.display(), blob.len() / 1024, &sha[..12]);
+    Ok(())
+}
+
+#[cfg(feature = "pg-backend")]
+fn cmd_skill_list() -> Result<()> {
+    let mut pg = pg_connect()?;
+    pg.batch_execute(SKILL_REGISTRY_DDL)?;
+    let rows = pg.query(
+        "SELECT r.name, r.visibility, length(r.payload), r.updated_at::date::text, \
+                (SELECT count(*) FROM skill_asset a WHERE a.skill_name = r.name) \
+         FROM skill_registry r ORDER BY r.name", &[])?;
+    if rows.is_empty() { println!("(empty)"); return Ok(()); }
+    for r in &rows {
+        let name: String = r.get(0);
+        let vis: String = r.get(1);
+        let len: i32 = r.get(2);
+        let day: String = r.get(3);
+        let assets: i64 = r.get(4);
+        println!("{name:<32} {:>5} KB  {assets:>3} assets  {vis:<8} {day}", len / 1024);
+    }
+    Ok(())
+}
+
+/// osearch's skill leg: nearest published SOPs for the query. Returned as
+/// (name, description, distance) — printed as a pointer, never auto-executed.
+#[cfg(feature = "pg-backend")]
+fn skill_leg(client: &mut postgres::Client, emb: &[f32], limit: usize)
+    -> Vec<(String, String, f64)>
+{
+    let lit = vec_literal(emb);
+    let sql = format!(
+        "SELECT name, description, description_embedding <=> '{lit}'::vector AS dist \
+         FROM skill_registry WHERE description_embedding IS NOT NULL \
+         ORDER BY description_embedding <=> '{lit}'::vector LIMIT $1");
+    match client.query(&sql, &[&(limit as i64)]) {
+        Ok(rows) => rows.iter().map(|r| (r.get(0), r.get(1), r.get(2))).collect(),
+        Err(_) => Vec::new(),   // table not created yet — absence is not an error
+    }
 }
 
 // ─────────────────────────── osearch-eval (Phase 0 baseline) ───────────────────────────
@@ -4422,7 +4963,24 @@ fn cmd_osearch_eval(queryset_path: &str, k: usize, variant: &str) -> Result<()> 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
-        Cmd::Build { no_embed, no_refresh, workers, project_prefix } => cmd_build(no_embed, no_refresh, workers, project_prefix),
+        // Score what this build just ingested, for the same reason embedding runs
+        // inside build: a row enriched only by a command someone has to remember
+        // is a row that stays unenriched. New rows carry importance NULL, so
+        // without this the feature decays into "whatever was true the last time
+        // the backfill was run by hand". Hooked at the dispatch layer rather than
+        // inside cmd_build because there are four build paths and the call must
+        // exist in exactly one place. Cheap (string rules, one batched UPDATE) and
+        // non-fatal: ingest has already succeeded and the next build retries.
+        Cmd::Build { no_embed, no_refresh, workers, project_prefix } => {
+            let r = cmd_build(no_embed, no_refresh, workers, project_prefix.clone());
+            #[cfg(feature = "pg-backend")]
+            if r.is_ok() {
+                if let Err(e) = cmd_importance_backfill(0, project_prefix) {
+                    eprintln!("(importance warning: {})", e);
+                }
+            }
+            r
+        }
         Cmd::Csearch { query, project, limit, no_img, snippet, full: _full_deprecated, with_id } => cmd_csearch(&query, project.as_deref(), limit, no_img, snippet, with_id),
         Cmd::Vsearch { query, project, limit, no_img } => cmd_vsearch(&query, project.as_deref(), limit, no_img),
         Cmd::VsearchSince { query, project, hours, limit, min_len, max_len, max_distance, max_snippet, knn } => {
@@ -4435,6 +4993,12 @@ fn main() -> Result<()> {
         Cmd::EmbedText { text } => cmd_embed_text(&text),
         #[cfg(feature = "pg-backend")]
         Cmd::DistillInit => cmd_distill_init(),
+        Cmd::ImportanceBackfill { limit, project_prefix } => cmd_importance_backfill(limit, project_prefix),
+        Cmd::SkillInit => cmd_skill_init(),
+        Cmd::SkillPublish { dir, visibility } => cmd_skill_publish(&dir, &visibility),
+        Cmd::SkillSync { name } => cmd_skill_sync(name),
+        Cmd::SkillGet { name, asset } => cmd_skill_get(&name, &asset),
+        Cmd::SkillList => cmd_skill_list(),
         #[cfg(feature = "pg-backend")]
         Cmd::DistillMissing { workers, limit, project_prefix } => cmd_distill_missing(workers, limit, project_prefix),
         #[cfg(feature = "pg-backend")]
