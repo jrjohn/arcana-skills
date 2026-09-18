@@ -57,6 +57,18 @@ for dir in "$SKILLS_DIR"/*/; do
     if [ -z "$fm_desc" ]; then
       sad_lines="${sad_lines}  SAD  $name — SKILL.md 無 frontmatter description,退化成用標題當觸發詞\n"
       sad=$((sad + 1))
+    elif [ "$fm_desc" != "|" ] && [ "$fm_desc" != ">" ] && [ "${#fm_desc}" -lt 30 ]; then
+      # A description that exists but says nothing is worse than none: it still
+      # occupies a slot in the always-loaded list and competes for routing.
+      # Measured: meta-skill's entire description was the word "metadata", and it
+      # took "幫我寫一個新的 skill" away from skill-creator — the one miss in a
+      # 12-query routing test. ("|" and ">" open a YAML block scalar, so the real
+      # text is on the following lines and the length here means nothing.)
+      # Braces are load-bearing: `$fm_desc」` swallows the closing 」 into the
+      # variable name and dies under `set -u`. It only ever runs on the failure
+      # path, so the check would have broken exactly when it had something to say.
+      sad_lines="${sad_lines}  SAD  ${name} — description 只有 ${#fm_desc} 字元(「${fm_desc}」),太籠統會搶錯路由\n"
+      sad=$((sad + 1))
     elif [ -n "$fm_name" ] && [ "$fm_name" != "$name" ]; then
       # 目錄名才是清單顯示的名字,不致命
       sad_lines="${sad_lines}  SAD  $name — frontmatter name='$fm_name' 與目錄名不符(以目錄名為準)\n"
