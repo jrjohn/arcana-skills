@@ -192,6 +192,31 @@ enum Cmd {
     /// List published skills. (pg-backend)
     #[cfg(feature = "pg-backend")]
     SkillList,
+    /// Find recurring work that no published skill covers — a CANDIDATE LIST for
+    /// a human to judge, never a generated skill. Clusters one representative per
+    /// document-producing session and reports groups that span several days with
+    /// no SOP nearby. (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    SkillSuggest {
+        /// How many distinct subjects (filenames / similar asks) make it "recurring"
+        #[arg(long, default_value = "2")]
+        min_count: usize,
+        /// How many distinct days it must span (1 burst of work is not a procedure)
+        #[arg(long, default_value = "2")]
+        min_days: usize,
+        /// Cosine distance within which two tasks count as the same kind
+        #[arg(long, default_value = "0.35")]
+        radius: f64,
+        /// A skill this close already covers the cluster. Stricter than osearch's
+        /// 0.62 pointer cut-off on purpose: here a false "covered" HIDES a real
+        /// candidate, and at 0.62 a single published skill was silently absorbing
+        /// eleven unrelated clusters simply by being the only thing to be nearest to.
+        #[arg(long, default_value = "0.45")]
+        covered: f64,
+        /// Look back this many days (0 = all history)
+        #[arg(long, default_value = "180")]
+        days: i64,
+    },
     /// Distill msg rows lacking a msg_distilled entry: generative proposition
     /// extraction (Mac GPU / qwen2.5:7b) → embed → INSERT. Mirrors embed-missing. (pg-backend)
     #[cfg(feature = "pg-backend")]
@@ -4841,6 +4866,271 @@ fn cmd_skill_list() -> Result<()> {
     Ok(())
 }
 
+// ─────────────────── skill-suggest: where a SOP is missing ───────────────────
+//
+// Writing a skill is a judgement call made once a month; distillation is a GPU
+// pass over every row every fifteen minutes. They must not be wired together —
+// the part of a skill worth having ("we misread 'shared' as 'unchanged', it is
+// actually 6 fields") is causal knowledge that only the session which hit the
+// problem ever had. A distiller reading the same text days later cannot
+// reconstruct it, and a skill auto-generated from flattened facts is a skill
+// nobody trusts.
+//
+// What a machine CAN do is notice the gap: the same kind of work done repeatedly
+// with no SOP covering it. That is exactly the shape of the inap-release-manager
+// failure — the reports existed, the work recurred, nothing pointed at how.
+//
+// Output is a CANDIDATE LIST, never a generated skill. The human decides.
+//
+// Two deliberate discriminators, because a list that cries wolf gets ignored:
+//   • Cluster on ONE representative per session. Ten writes inside a single
+//     afternoon are one task, not ten, and counting rows would rank the longest
+//     session first rather than the most repeated task.
+//   • Require the cluster to span multiple DAYS. Work that only ever happened
+//     once, however many files it produced, is not a recurring procedure.
+#[cfg(feature = "pg-backend")]
+fn parse_vec_text(s: &str) -> Vec<f32> {
+    s.trim_matches(|c| c == '[' || c == ']')
+        .split(',')
+        .filter_map(|x| x.trim().parse::<f32>().ok())
+        .collect()
+}
+
+#[cfg(feature = "pg-backend")]
+fn cosine_dist(a: &[f32], b: &[f32]) -> f64 {
+    let (mut dot, mut na, mut nb) = (0f64, 0f64, 0f64);
+    for (x, y) in a.iter().zip(b.iter()) {
+        dot += (*x as f64) * (*y as f64);
+        na += (*x as f64) * (*x as f64);
+        nb += (*y as f64) * (*y as f64);
+    }
+    if na == 0.0 || nb == 0.0 { return 1.0; }
+    1.0 - dot / (na.sqrt() * nb.sqrt())
+}
+
+#[cfg(feature = "pg-backend")]
+fn cmd_skill_suggest(min_count: usize, min_days: usize, radius: f64, covered: f64, days: i64)
+    -> Result<()>
+{
+    let mut pg = pg_connect()?;
+    pg.batch_execute(SKILL_REGISTRY_DDL)?;
+
+    // importance = 3 is "a document was written" — the marker of a task that
+    // produced something, which is what a procedure is worth writing for.
+    let sql = "SELECT session_id, project, ts, content FROM msg \
+               WHERE importance = 3 \
+                 AND ($1 = 0 OR ts > now() - make_interval(days => $1::int)) \
+               ORDER BY ts";
+    let rows = pg.query(sql, &[&(days as i32)])?;
+    if rows.is_empty() {
+        println!("no scored deliverables yet — run `crs importance-backfill` first.");
+        return Ok(());
+    }
+
+    // Group by NORMALISED FILENAME, not by embedding.
+    //
+    // The first version clustered the rows' vectors and collapsed 265 of 268 into
+    // a single blob. Every deliverable row opens with the same
+    // `[TOOL_USE Write] input={"file_path":…}` scaffolding, so its embedding
+    // encodes mostly the tool call and barely the work — everything looked alike.
+    // The signal was in the filename the whole time: `…-1.3.13-變更報告.md` and
+    // `…-1.3.12-變更報告.md` are obviously the same recurring job once the version
+    // is stripped. Deterministic, no embedding pass over history, and a human can
+    // see exactly why two things grouped — which matters for a list whose entire
+    // purpose is to be judged by a human.
+    use std::collections::BTreeMap;
+    struct Group { bases: Vec<String>, days: Vec<String>, projects: Vec<String>, samples: Vec<String> }
+    let mut groups: BTreeMap<String, Group> = BTreeMap::new();
+
+    for r in &rows {
+        let content: Option<String> = r.get(3);
+        let content = content.unwrap_or_default();
+        let Some(rest) = content.split("\"file_path\":\"").nth(1) else { continue };
+        let path = rest.split('"').next().unwrap_or("");
+        let base = path.rsplit('/').next().unwrap_or(path);
+        if base.is_empty() { continue; }
+
+        // Strip what varies between runs of the SAME job — versions, dates,
+        // sequence numbers, extension. What survives is the job's name.
+        let stem = base.rsplit_once('.').map(|(a, _)| a).unwrap_or(base).to_lowercase();
+        let key: String = stem.chars().filter(|c| !c.is_ascii_digit()).collect::<String>()
+            .replace("..", ".").replace("--", "-").replace("__", "_")
+            .trim_matches(|c: char| c == '-' || c == '_' || c == '.' || c == ' ' || c == '(' || c == ')')
+            .to_string();
+        if key.chars().count() < 4 { continue; }   // too generic to mean anything
+
+        let ts: Option<chrono::DateTime<Utc>> = r.get(2);
+        let day = ts.map(|t| t.format("%Y-%m-%d").to_string()).unwrap_or_default();
+        let proj: String = r.get(1);
+        let g = groups.entry(key).or_insert_with(|| Group {
+            bases: Vec::new(), days: Vec::new(), projects: Vec::new(), samples: Vec::new() });
+        // Case-insensitive: ARCHITECTURE.md and architecture.md are one filename,
+        // not two subjects. Counting them as two was this detector's only
+        // "candidate" on the first honest run.
+        let base_s = base.to_lowercase();
+        let is_new_base = !g.bases.contains(&base_s);
+        if is_new_base { g.bases.push(base_s); }
+        if !g.days.contains(&day) { g.days.push(day.clone()); }
+        if !g.projects.contains(&proj) { g.projects.push(proj); }
+        if is_new_base && g.samples.len() < 3 {
+            g.samples.push(format!("[{}] {}", day, base));
+        }
+    }
+
+    // Say what the grouping produced before any filter runs. A detector that
+    // prints "nothing found" without distinguishing "found nothing" from
+    // "filtered everything away" is indistinguishable from a broken one — the
+    // first version of this command printed exactly that and hid a real bug.
+    eprintln!("# {} deliverable rows → {} distinct job names (需 ≥{} 個不同檔名)",
+        rows.len(), groups.len(), min_count);
+
+    // Recurrence = the SAME job done on DIFFERENT subjects, which shows up as
+    // several distinct filenames collapsing to one key. Not "written many times":
+    // MEMORY.md was rewritten 73 times and is one file being maintained, not a
+    // procedure worth documenting. Not "spanning many days" either — that was the
+    // first discriminator here and it silently excluded the case this command was
+    // built for: the 1.3.12 and 1.3.13 change reports were both produced in one
+    // catch-up session on 09-08, one calendar day, two releases.
+    let mut cands: Vec<(usize, &String, &Group)> = groups.iter()
+        .filter(|(_, g)| g.bases.len() >= min_count)
+        .map(|(k, g)| (g.bases.len(), k, g))
+        .collect();
+    cands.sort_by(|a, b| b.0.cmp(&a.0));
+
+    let mut shown = 0usize;
+    let mut drop_cov = 0usize;
+    let http = http_client()?;
+    for (n, key, g) in &cands {
+        // Does a published skill already document this? Asked through the same
+        // leg osearch uses, so "covered" means the same thing in both places.
+        let probe = format!("{} {}", key, g.samples.first().cloned().unwrap_or_default());
+        let (cov_name, cov_d) = match embed_text(&http, &probe) {
+            Ok(e) => skill_leg(&mut pg, &e, 1).into_iter().next()
+                .map(|(nm, _, d)| (nm, d)).unwrap_or_else(|| ("(尚無已發布的 skill)".into(), 9.9)),
+            Err(_) => ("(embed failed)".into(), 9.9),
+        };
+        if cov_d <= covered { drop_cov += 1; continue; }
+
+        shown += 1;
+        let mut ds = g.days.clone(); ds.sort();
+        println!("\n### 候選 {shown}:「{}」", key);
+        println!("    {} 個不同對象 / 跨 {} 天 / {} 個專案    {} ~ {}",
+            n, g.days.len(), g.projects.len(), ds[0], ds[ds.len() - 1]);
+        println!("    最近的 SOP: {} (d={:.3}) ← 太遠,等於沒有", cov_name, cov_d);
+        for s in &g.samples { println!("    · {}", s); }
+    }
+
+    println!("\n── A. 重複產出的文件 ──");
+    if shown == 0 {
+        println!("   沒有候選:{} 組符合,其中 {} 組已有 SOP 覆蓋。", cands.len(), drop_cov);
+    } else {
+        println!("   {shown} 個候選(另有 {} 組已被現有 SOP 覆蓋)。", drop_cov);
+    }
+
+    // ── Second signal: recurring ASKS ──────────────────────────────────────────
+    //
+    // Filenames only catch work that produces a differently-named document. Most
+    // recurring work does not: "why is this host unreachable", "the CI build went
+    // red again". Those recur as the QUESTION, so cluster the opening ask of each
+    // session instead.
+    //
+    // Clustering works on this population precisely where it failed on the other:
+    // an opening prompt is clean human text, while a deliverable row is dominated
+    // by `[TOOL_USE Write] input={"file_path":…}` scaffolding that made 265 of 268
+    // rows look identical.
+    // The NOT LIKE list strips messages that are stored as role='user' but were
+    // never a person asking: subagent persona prompts ("You are …"), harness
+    // chatter (Stop hook feedback, cwd /…), and liveness pings. Left in, they were
+    // the four loudest "candidates" — recurring, yes, but nothing a human could
+    // write a procedure for. A templated prompt the user themselves reuses (e.g.
+    // "# 任務:expand-vol3-ch02…") is deliberately NOT filtered: that IS recurring
+    // work, and it is exactly what this command should surface.
+    let ask_sql = "SELECT DISTINCT ON (session_id) session_id, project, ts, content, embedding::text \
+                   FROM msg \
+                   WHERE role = 'user' AND embedding IS NOT NULL \
+                     AND content NOT LIKE '[%' \
+                     AND content NOT LIKE 'This session is being continued%' \
+                     AND content NOT LIKE '<%' \
+                     AND content NOT LIKE 'You are %' \
+                     AND content NOT LIKE 'Stop hook feedback%' \
+                     AND content NOT LIKE 'cwd /%' \
+                     AND content NOT LIKE 'Reply with only%' \
+                     AND content NOT LIKE 'reply exactly%' \
+                     AND content NOT LIKE 'Respond immediately%' \
+                     AND length(content) BETWEEN 12 AND 1200 \
+                     AND ($1 = 0 OR ts > now() - make_interval(days => $1::int)) \
+                   ORDER BY session_id, ts";
+    let ask_rows = pg.query(ask_sql, &[&(days as i32)])?;
+    struct Ask { project: String, day: String, text: String, emb: Vec<f32> }
+    let asks: Vec<Ask> = ask_rows.iter().map(|r| {
+        let ts: Option<chrono::DateTime<Utc>> = r.get(2);
+        let c: Option<String> = r.get(3);
+        let e: Option<String> = r.get(4);
+        Ask {
+            project: r.get::<_, String>(1),
+            day: ts.map(|t| t.format("%Y-%m-%d").to_string()).unwrap_or_default(),
+            text: c.unwrap_or_default(),
+            emb: parse_vec_text(&e.unwrap_or_default()),
+        }
+    }).filter(|a| !a.emb.is_empty()).collect();
+
+    eprintln!("# {} session openings; clustering at radius {}", asks.len(), radius);
+
+    let n = asks.len();
+    let mut used = vec![false; n];
+    let mut ask_shown = 0usize;
+    let mut ask_cov = 0usize;
+    loop {
+        // Densest unassigned point absorbs its neighbourhood. No guess at how many
+        // kinds of work exist, which k-means would demand.
+        let mut best = (0usize, 0usize);
+        for i in 0..n {
+            if used[i] { continue; }
+            let c = (0..n).filter(|&j| !used[j] && cosine_dist(&asks[i].emb, &asks[j].emb) < radius).count();
+            if c > best.0 { best = (c, i); }
+        }
+        if best.0 < min_count { break; }
+        let members: Vec<usize> = (0..n)
+            .filter(|&j| !used[j] && cosine_dist(&asks[best.1].emb, &asks[j].emb) < radius)
+            .collect();
+        for &m in &members { used[m] = true; }
+
+        let mut ds: Vec<&str> = members.iter().map(|&i| asks[i].day.as_str()).collect();
+        ds.sort_unstable(); ds.dedup();
+        if ds.len() < min_days { continue; }   // one afternoon's work is not a procedure
+
+        let probe: String = asks[best.1].text.chars().take(200).collect();
+        let (cov_name, cov_d) = match embed_text(&http, &probe) {
+            Ok(e) => skill_leg(&mut pg, &e, 1).into_iter().next()
+                .map(|(nm, _, d)| (nm, d)).unwrap_or_else(|| ("(尚無已發布的 skill)".into(), 9.9)),
+            Err(_) => ("(embed failed)".into(), 9.9),
+        };
+        if cov_d <= covered { ask_cov += 1; continue; }
+
+        ask_shown += 1;
+        let mut ps: Vec<&str> = members.iter().map(|&i| asks[i].project.as_str()).collect();
+        ps.sort_unstable(); ps.dedup();
+        println!("\n### 候選 B{ask_shown}: 問過 {} 次 / 跨 {} 天 / {} 個專案   {} ~ {}",
+            members.len(), ds.len(), ps.len(), ds[0], ds[ds.len() - 1]);
+        println!("    最近的 SOP: {} (d={:.3}) ← 太遠,等於沒有", cov_name, cov_d);
+        for &m in members.iter().take(3) {
+            let one: String = asks[m].text.replace(['\n', '\r'], " ").chars().take(100).collect();
+            println!("    · [{}] {}", asks[m].day, one);
+        }
+    }
+
+    println!("\n── B. 重複問到的工作 ──");
+    if ask_shown == 0 {
+        println!("   沒有候選(另有 {} 組已被現有 SOP 覆蓋)。", ask_cov);
+    } else {
+        println!("   {ask_shown} 個候選(另有 {} 組已被現有 SOP 覆蓋)。", ask_cov);
+    }
+
+    println!("\n這是名單,不是 skill —— 要不要寫、寫成什麼樣,你決定。");
+    println!("寫好後:crs skill-publish ~/.claude/skills/<名字>");
+    Ok(())
+}
+
 /// osearch's skill leg: nearest published SOPs for the query. Returned as
 /// (name, description, distance) — printed as a pointer, never auto-executed.
 #[cfg(feature = "pg-backend")]
@@ -4999,6 +5289,8 @@ fn main() -> Result<()> {
         Cmd::SkillSync { name } => cmd_skill_sync(name),
         Cmd::SkillGet { name, asset } => cmd_skill_get(&name, &asset),
         Cmd::SkillList => cmd_skill_list(),
+        Cmd::SkillSuggest { min_count, min_days, radius, covered, days } =>
+            cmd_skill_suggest(min_count, min_days, radius, covered, days),
         #[cfg(feature = "pg-backend")]
         Cmd::DistillMissing { workers, limit, project_prefix } => cmd_distill_missing(workers, limit, project_prefix),
         #[cfg(feature = "pg-backend")]
