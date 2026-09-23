@@ -7146,6 +7146,130 @@ def _uiux_already_filed(issue):
     return st == "CLOSED" and (issue.get("stateReason") or "").upper().replace("-", "_") == "NOT_PLANNED"
 
 
+QUALITY_METRICS_WINDOW_DAYS = 30
+
+
+def _quality_metrics(repo, di):
+    """產品化收斂指標的快照 —— 回答「還要不要人來當 QA」。
+
+    三個數(只有三個),每 12 小時隨稽核一起算一次:
+      ① humanFound        本期**人親自發現**的缺陷數 → 目標 0   ← 頭條
+      ② gateCoverage      確定性閘覆蓋的缺陷類別數     → 要往上
+      ③ auditBacklogOpen  稽核 backlog(open)          → 要往下
+
+    **缺來源一律回 None(判不出來),不是 0。** 尤其①:`found-by-human` 標籤還沒開始貼時
+    回 0,會變成「已經沒人需要當 QA 了」—— 一個剛好相反的結論。沒記到 ≠ 零。
+
+    刻意**不**把①與「閘擋下幾次」相除:前者是缺陷數、後者是輪次數,單位不同,
+    相除只會得到一個看起來精確、其實沒有意義的數字。並列,不相除。
+
+    閘數用 GitHub contents API 數,不需要 repo 檢出(這個容器沒有)。
+    """
+    since = (datetime.datetime.now(datetime.timezone.utc)
+             - datetime.timedelta(days=QUALITY_METRICS_WINDOW_DAYS)).isoformat()
+
+    def _count(kind, label, state="all", window=False):
+        rc, out, _ = _gh([kind, "list", "-R", repo, "--label", label, "--state", state,
+                          "--limit", "500", "--json", "number,createdAt"])
+        if rc != 0:
+            return None
+        try:
+            rows = json.loads(out or "[]")
+        except ValueError:
+            return None
+        return len([r for r in rows if (r.get("createdAt") or "") >= since]) if window else len(rows)
+
+    # ① 標籤不存在 → 尚未開始記錄(None),不是 0
+    rc, out, _ = _gh(["label", "list", "-R", repo, "--limit", "200", "--json", "name"])
+    human = None
+    if rc == 0:
+        try:
+            if any(l.get("name") == "found-by-human" for l in json.loads(out or "[]")):
+                i = _count("issue", "found-by-human", window=True)
+                # PR 也要算:人回報的缺陷常常直接開一條修正 PR、沒有先開 issue。
+                pr = _count("pr", "found-by-human", window=True)
+                human = None if (i is None or pr is None) else i + pr
+        except ValueError:
+            pass
+
+    # ② 閘數(GitHub contents API;這個容器沒有 repo 檢出)
+    rc, out, _ = _gh(["api", "repos/%s/contents/dashboard/e2e/checks" % repo,
+                      "--jq", '[.[] | select(.name|endswith("-check.mjs")) | .name] | length'])
+    gates = None
+    if rc == 0:
+        try:
+            gates = int((out or "").strip())
+        except ValueError:
+            gates = None
+
+    # 脈絡:閘在合併前擋下東西的輪次(不與①相除)
+    #
+    # **None 一定要附理由**(diError)。第一版這裡吞掉所有例外就回 None,而當時的 None 其實是
+    # `NameError: urllib`(這個檔案的慣例是在函式內 import,我漏了)—— Data Index 明明 200,
+    # 指標卻說「讀不到」。沒有理由欄位時,**程式壞掉**與**對方掛掉**長得一模一樣,
+    # 而這兩件事要修的地方完全不同。故改用本檔既有的 curl 寫法(與 _uiux_instance_history 一致,
+    # 不依賴 import),並把錯誤原文帶出來。
+    blocked = total = None
+    di_err = None
+    try:
+        q = {"query": '{ ProcessInstances(where:{processId:{equal:"sdlc-code-flow"}}, '
+                      'orderBy:{start:DESC}, pagination:{limit:200}){ start variables } }'}
+        r = subprocess.run(["curl", "-s", "-X", "POST", di.rstrip("/") + "/graphql",
+                            "-H", "Content-Type: application/json", "-d", json.dumps(q)],
+                           capture_output=True, text=True, timeout=30)
+        body = json.loads(r.stdout or "{}")
+        rows = (body.get("data") or {}).get("ProcessInstances")
+        if rows is None:
+            raise ValueError("ProcessInstances 缺席: " + json.dumps(body)[:200])
+        blocked = total = 0
+        for pi in rows:
+            if (pi.get("start") or "") < since:
+                continue
+            v = pi.get("variables")
+            v = json.loads(v) if isinstance(v, str) else (v or {})
+            tr = v.get("testReport")
+            if not tr:
+                continue
+            try:
+                t = json.loads(tr) if isinstance(tr, str) else tr
+            except ValueError:
+                continue
+            total += 1
+            if t.get("blockingReasons"):
+                blocked += 1
+    except Exception as e:
+        blocked = total = None      # 讀不到就是讀不到,不要寫 0
+        di_err = "%s: %s" % (type(e).__name__, str(e)[:200])
+
+    return {
+        "computedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "windowDays": QUALITY_METRICS_WINDOW_DAYS,
+        "humanFound": human,
+        "humanFoundMeasured": human is not None,
+        "gateCoverage": gates,
+        "auditBacklogOpen": _count("issue", "uiux-audit", state="open"),
+        "gateBlockedRounds": blocked,
+        "roundsWithReport": total,
+        "diError": di_err,
+    }
+
+
+def _write_quality_metrics(m):
+    """寫到 agent 與 read-API 共用的 console 目錄(agent 可寫、read-API 唯讀掛載),
+    所以不必新增任何掛載。latest 供畫面讀;jsonl 留歷史,趨勢才看得出來。
+    寫不進去只記錄,不影響稽核本身。"""
+    d = os.environ.get("CONSOLE_DIR", "/console")
+    try:
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "quality-metrics.json"), "w", encoding="utf-8") as fh:
+            json.dump(m, fh, ensure_ascii=False, indent=2)
+        with open(os.path.join(d, "quality-metrics.jsonl"), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(m, ensure_ascii=False) + "\n")
+        return None
+    except Exception as e:
+        return str(e)[:200]
+
+
 def _uiux_backlog(fails, repo, di, audited_routes, max_issues):
     with _UIUX_BACKLOG_LOCK:
         return _uiux_backlog_locked(fails, repo, di, audited_routes, max_issues)
@@ -7283,6 +7407,17 @@ def uiux_audit_flow(payload):
         res = _uiux_backlog(fails, repo, di, audited, max_issues)
         res.update({"findings": len(data.get("findings", [])), "fails": len(fails),
                     "started": 0, "skipped": res["deduped"], "triggered": [], "cap": max_issues})
+        # 順手算一次產品化收斂指標。這裡是最自然的家:每 12 小時本來就會跑、這個容器
+        # 本來就有 gh 與網路、而且它本來就在數 backlog。算完寫進共用的 console 目錄,
+        # 之後平台維運頁讀得到 —— 不必新增排程、不必新增掛載。
+        try:
+            qm = _quality_metrics(repo, di)
+            werr = _write_quality_metrics(qm)
+            res["qualityMetrics"] = qm
+            if werr:
+                res.setdefault("errors", []).append("quality metrics write failed: " + werr)
+        except Exception as e:      # 指標是附加品,不能把稽核本身弄壞
+            res.setdefault("errors", []).append("quality metrics failed: " + str(e)[:200])
         return res
 
     # 2. dedup: 哪些發現已經在跑了 —— 別重開在飛的。
