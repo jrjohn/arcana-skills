@@ -56,3 +56,8 @@ jobs:
             echo "缺另一份實作時應該回 notRun(2),得到 $rc —— 那會讓半個契約看起來像整個" >&2
             exit 1
           fi
+
+      # scan-stale 改成不用 AI(2026-09-14):判斷跟 AI 版一致(09-13/09-14 真實案例),
+      # 同一組 head+base 只開一次、一輪上限、問不到引擎就不開。
+      - name: scan_stale_selftest.py
+        run: python3 scan_stale_selftest.py
