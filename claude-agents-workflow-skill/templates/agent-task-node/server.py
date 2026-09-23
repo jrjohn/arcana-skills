@@ -280,8 +280,14 @@ SCHEMAS = {
 def prompt_diagnose(p):
     return (
         f"A Jenkins pipeline build failed. job={p.get('job')} buildUrl={p.get('buildUrl')}.\n"
-        "Fetch the console log (curl the buildUrl + /consoleText via the jenkins service), "
-        "find the FIRST failing stage and the actual error.\n"
+        "Fetch the log TRIMMED — NEVER read a whole console log into context "
+        "(2026-09-21 measurement: one Triage call read 1,483,510 input tokens because the "
+        "whole android log was pulled in). Save it first, then read only what matters:\n"
+        "  curl -s -u \"$JENKINS_USER:$JENKINS_TOKEN\" \"<buildUrl>consoleText\" > /tmp/b.log\n"
+        "  grep -nEi 'error|fail|exception|cannot|no space|exit code|BUILD FAILED' /tmp/b.log | head -80\n"
+        "  tail -c 60000 /tmp/b.log\n"
+        "Widen with sed -n '<from>,<to>p' /tmp/b.log ONLY if those two are inconclusive.\n"
+        "Find the FIRST failing stage and the actual error.\n"
         "BEFORE you classify, SEARCH THE SHARED SESSION ARCHIVE — it holds every past run "
         "(yours and jrjohn's) and the recurring CI traps WITH how they were resolved. Run "
         "`csearch '\"<verbatim error line>\"'` on the exact error string (phrase-quote it), and "
@@ -397,6 +403,8 @@ def prompt_readmesync(p):
         "color >=80 brightgreen, >=60 yellow, else red).\n"
         " - TESTS: read the latest GREEN main build console "
         "curl -s -u \"$JENKINS_USER:$JENKINS_TOKEN\" \"$JENKINS_URL/job/<job>-app-pipeline-mb/job/main/lastStableBuild/consoleText\" "
+        "| grep -aEi 'TOTAL:|Test Files|Tests run:|passed|^ok ' | tail -40 "
+        "(always pipe it — the raw log is megabytes and must not enter context) "
         "(derive <job> from the repo: arcana-angular->angular, arcana-cloud-go->go, arcana-cloud-nodejs->node, "
         "arcana-cloud-python->python, arcana-cloud-rust->rust, arcana-cloud-springboot->springboot). Extract the "
         "test runner's total passing count — match whichever appears: 'TOTAL: N SUCCESS' (karma), "
@@ -404,7 +412,7 @@ def prompt_readmesync(p):
         "(maven/gradle), or sum the per-package 'ok' lines (go). Update the Tests badge to Tests-<N>%2520passing "
         "(note: a literal space in a shields URL is %2520... actually use %20). "
         "If you cannot determine a number reliably, LEAVE that badge unchanged — never guess.\n"
-        "Commit everything (versions + badges) in ONE commit titled 'docs: sync README versions + CI badges' "
+        "Commit everything (versions + badges) in ONE commit titled 'chore(docs): sync README versions + CI badges' (chore, NOT docs: release-please treats docs as releasable, so a docs: commit right after a release opens the next release PR, whose merge re-runs this sync -> endless release loop, seen 2026-09-14) "
         "via gh api PUT (fetch the file sha first). If the README is already accurate, change nothing. "
         "Respond with JSON: updated (bool), changes (list of 'old -> new' strings), reason."
     )
@@ -514,9 +522,12 @@ def prompt_escalate(p):
         "before returning.\n"
         "STEP 1 — READ THE REAL EVIDENCE; do NOT trust the diagnosis blindly (it has been wrong "
         "before: a flaky testcontainers startup was misdiagnosed as a JDK/toolchain bug and a PR was "
-        "parked three times). Fetch the actual build log and read the genuine failure tail: "
-        f"curl -s -u \"$JENKINS_USER:$JENKINS_TOKEN\" \"{p.get('buildUrl','')}consoleText\" "
-        "(append 'consoleText' to buildUrl).\n"
+        "parked three times). Read the genuine failure tail — TRIMMED, never the whole log "
+        "(a full android log is ~1.4M tokens of context):\n"
+        f"  curl -s -u \"$JENKINS_USER:$JENKINS_TOKEN\" \"{p.get('buildUrl','')}consoleText\" > /tmp/b.log\n"
+        "  grep -nEi 'error|fail|exception|cannot|no space|exit code|BUILD FAILED' /tmp/b.log | head -80\n"
+        "  tail -c 60000 /tmp/b.log\n"
+        "Widen with sed -n '<from>,<to>p' /tmp/b.log ONLY if those two are inconclusive.\n"
         "STEP 2 — CROSS-SIGNAL via the shared archive (decisive): `vsearch '<failure concept>' aaf` "
         "and `csearch '\"<exact error>\"' aaf` for how this class of failure resolved before, AND "
         "check whether main is currently green and whether sibling PRs pass. If main/siblings are "
@@ -7120,6 +7131,130 @@ def _uiux_already_filed(issue):
     return st == "CLOSED" and (issue.get("stateReason") or "").upper().replace("-", "_") == "NOT_PLANNED"
 
 
+QUALITY_METRICS_WINDOW_DAYS = 30
+
+
+def _quality_metrics(repo, di):
+    """產品化收斂指標的快照 —— 回答「還要不要人來當 QA」。
+
+    三個數(只有三個),每 12 小時隨稽核一起算一次:
+      ① humanFound        本期**人親自發現**的缺陷數 → 目標 0   ← 頭條
+      ② gateCoverage      確定性閘覆蓋的缺陷類別數     → 要往上
+      ③ auditBacklogOpen  稽核 backlog(open)          → 要往下
+
+    **缺來源一律回 None(判不出來),不是 0。** 尤其①:`found-by-human` 標籤還沒開始貼時
+    回 0,會變成「已經沒人需要當 QA 了」—— 一個剛好相反的結論。沒記到 ≠ 零。
+
+    刻意**不**把①與「閘擋下幾次」相除:前者是缺陷數、後者是輪次數,單位不同,
+    相除只會得到一個看起來精確、其實沒有意義的數字。並列,不相除。
+
+    閘數用 GitHub contents API 數,不需要 repo 檢出(這個容器沒有)。
+    """
+    since = (datetime.datetime.now(datetime.timezone.utc)
+             - datetime.timedelta(days=QUALITY_METRICS_WINDOW_DAYS)).isoformat()
+
+    def _count(kind, label, state="all", window=False):
+        rc, out, _ = _gh([kind, "list", "-R", repo, "--label", label, "--state", state,
+                          "--limit", "500", "--json", "number,createdAt"])
+        if rc != 0:
+            return None
+        try:
+            rows = json.loads(out or "[]")
+        except ValueError:
+            return None
+        return len([r for r in rows if (r.get("createdAt") or "") >= since]) if window else len(rows)
+
+    # ① 標籤不存在 → 尚未開始記錄(None),不是 0
+    rc, out, _ = _gh(["label", "list", "-R", repo, "--limit", "200", "--json", "name"])
+    human = None
+    if rc == 0:
+        try:
+            if any(l.get("name") == "found-by-human" for l in json.loads(out or "[]")):
+                i = _count("issue", "found-by-human", window=True)
+                # PR 也要算:人回報的缺陷常常直接開一條修正 PR、沒有先開 issue。
+                pr = _count("pr", "found-by-human", window=True)
+                human = None if (i is None or pr is None) else i + pr
+        except ValueError:
+            pass
+
+    # ② 閘數(GitHub contents API;這個容器沒有 repo 檢出)
+    rc, out, _ = _gh(["api", "repos/%s/contents/dashboard/e2e/checks" % repo,
+                      "--jq", '[.[] | select(.name|endswith("-check.mjs")) | .name] | length'])
+    gates = None
+    if rc == 0:
+        try:
+            gates = int((out or "").strip())
+        except ValueError:
+            gates = None
+
+    # 脈絡:閘在合併前擋下東西的輪次(不與①相除)
+    #
+    # **None 一定要附理由**(diError)。第一版這裡吞掉所有例外就回 None,而當時的 None 其實是
+    # `NameError: urllib`(這個檔案的慣例是在函式內 import,我漏了)—— Data Index 明明 200,
+    # 指標卻說「讀不到」。沒有理由欄位時,**程式壞掉**與**對方掛掉**長得一模一樣,
+    # 而這兩件事要修的地方完全不同。故改用本檔既有的 curl 寫法(與 _uiux_instance_history 一致,
+    # 不依賴 import),並把錯誤原文帶出來。
+    blocked = total = None
+    di_err = None
+    try:
+        q = {"query": '{ ProcessInstances(where:{processId:{equal:"sdlc-code-flow"}}, '
+                      'orderBy:{start:DESC}, pagination:{limit:200}){ start variables } }'}
+        r = subprocess.run(["curl", "-s", "-X", "POST", di.rstrip("/") + "/graphql",
+                            "-H", "Content-Type: application/json", "-d", json.dumps(q)],
+                           capture_output=True, text=True, timeout=30)
+        body = json.loads(r.stdout or "{}")
+        rows = (body.get("data") or {}).get("ProcessInstances")
+        if rows is None:
+            raise ValueError("ProcessInstances 缺席: " + json.dumps(body)[:200])
+        blocked = total = 0
+        for pi in rows:
+            if (pi.get("start") or "") < since:
+                continue
+            v = pi.get("variables")
+            v = json.loads(v) if isinstance(v, str) else (v or {})
+            tr = v.get("testReport")
+            if not tr:
+                continue
+            try:
+                t = json.loads(tr) if isinstance(tr, str) else tr
+            except ValueError:
+                continue
+            total += 1
+            if t.get("blockingReasons"):
+                blocked += 1
+    except Exception as e:
+        blocked = total = None      # 讀不到就是讀不到,不要寫 0
+        di_err = "%s: %s" % (type(e).__name__, str(e)[:200])
+
+    return {
+        "computedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "windowDays": QUALITY_METRICS_WINDOW_DAYS,
+        "humanFound": human,
+        "humanFoundMeasured": human is not None,
+        "gateCoverage": gates,
+        "auditBacklogOpen": _count("issue", "uiux-audit", state="open"),
+        "gateBlockedRounds": blocked,
+        "roundsWithReport": total,
+        "diError": di_err,
+    }
+
+
+def _write_quality_metrics(m):
+    """寫到 agent 與 read-API 共用的 console 目錄(agent 可寫、read-API 唯讀掛載),
+    所以不必新增任何掛載。latest 供畫面讀;jsonl 留歷史,趨勢才看得出來。
+    寫不進去只記錄,不影響稽核本身。"""
+    d = os.environ.get("CONSOLE_DIR", "/console")
+    try:
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "quality-metrics.json"), "w", encoding="utf-8") as fh:
+            json.dump(m, fh, ensure_ascii=False, indent=2)
+        with open(os.path.join(d, "quality-metrics.jsonl"), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(m, ensure_ascii=False) + "\n")
+        return None
+    except Exception as e:
+        return str(e)[:200]
+
+
 def _uiux_backlog(fails, repo, di, audited_routes, max_issues):
     with _UIUX_BACKLOG_LOCK:
         return _uiux_backlog_locked(fails, repo, di, audited_routes, max_issues)
@@ -7257,6 +7392,17 @@ def uiux_audit_flow(payload):
         res = _uiux_backlog(fails, repo, di, audited, max_issues)
         res.update({"findings": len(data.get("findings", [])), "fails": len(fails),
                     "started": 0, "skipped": res["deduped"], "triggered": [], "cap": max_issues})
+        # 順手算一次產品化收斂指標。這裡是最自然的家:每 12 小時本來就會跑、這個容器
+        # 本來就有 gh 與網路、而且它本來就在數 backlog。算完寫進共用的 console 目錄,
+        # 之後平台維運頁讀得到 —— 不必新增排程、不必新增掛載。
+        try:
+            qm = _quality_metrics(repo, di)
+            werr = _write_quality_metrics(qm)
+            res["qualityMetrics"] = qm
+            if werr:
+                res.setdefault("errors", []).append("quality metrics write failed: " + werr)
+        except Exception as e:      # 指標是附加品,不能把稽核本身弄壞
+            res.setdefault("errors", []).append("quality metrics failed: " + str(e)[:200])
         return res
 
     # 2. dedup: 哪些發現已經在跑了 —— 別重開在飛的。
@@ -7711,6 +7857,98 @@ def scan_stale(payload, gh=_gh_json, engine=_engine, now=None):
         reason += " | errors: " + "; ".join(errors[:3])
     print("[scan-stale] started=%d %s" % (started, reason[:300]), flush=True)
     return {"started": started, "reason": reason, "errors": errors}
+# --- Runaway guard (2026-09-14): email on give-up + token-burn early warning ---
+# Weekend incident: angular/node main went red, every ci-flow rebuild spawned yet
+# another ci-flow, and ~11M output tokens were burned on the operator's personal plan for
+# 24h before anyone noticed. The loop itself is now blocked in the Jenkins trigger
+# (one active ci-flow per job + one flow per commit). This block is the alarm for
+# anything that slips past: it never blocks work, it only emails.
+import threading as _gthreading
+import collections as _gcollections
+import urllib.request as _gurl
+
+# Unset NOTIFY_EMAIL = alarms are only logged, never mailed (set it per deployment).
+NOTIFY_EMAIL = os.environ.get("NOTIFY_EMAIL", "")
+NOTIFY_FROM = os.environ.get("NOTIFY_FROM", "ci@arcana.boo")
+SENDGRID_KEY_FILE = os.environ.get("SENDGRID_KEY_FILE", "/root/.claude/.sendgrid-key")
+# Measured 2026-08-31..09-13: normal busiest hour ~300K output tokens, the runaway
+# ran 250K-480K/hour for 24h. Hours overlap, so this alarms on a SUSTAINED rate
+# (3h window) rather than hard-blocking legit sdlc bursts.
+BURN_WINDOW_S = int(os.environ.get("BURN_WINDOW_S", str(3 * 3600)))
+BURN_ALERT_OUT_TOKENS = int(os.environ.get("BURN_ALERT_OUT_TOKENS", "800000"))
+ALERT_COOLDOWN_S = int(os.environ.get("ALERT_COOLDOWN_S", str(6 * 3600)))
+GIVE_UP_RESOLUTIONS = ("recorded", "closed")
+
+_guard_lock = _gthreading.Lock()
+_burn = _gcollections.deque()   # (ts, output_tokens) per finished Claude task
+_last_alert = {}                # alert key -> ts of last email
+
+
+def _send_email(subject, text):
+    if not NOTIFY_EMAIL:
+        print(f"[notify] NOTIFY_EMAIL unset; not sent: {subject}", flush=True)
+        return False
+    try:
+        key = open(SENDGRID_KEY_FILE).read().strip()
+    except OSError:
+        print(f"[notify] no sendgrid key at {SENDGRID_KEY_FILE}; not sent: {subject}", flush=True)
+        return False
+    body = {
+        "personalizations": [{"to": [{"email": NOTIFY_EMAIL}]}],
+        "from": {"email": NOTIFY_FROM, "name": "Arcana CI"},
+        "subject": subject,
+        "content": [{"type": "text/plain", "value": text}],
+    }
+    req = _gurl.Request("https://api.sendgrid.com/v3/mail/send", data=json.dumps(body).encode(),
+                        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+    try:
+        r = _gurl.urlopen(req, timeout=20)
+        print(f"[notify] email sent (HTTP {r.status}): {subject}", flush=True)
+        return True
+    except Exception as e:
+        print(f"[notify] email FAILED ({e}): {subject}", flush=True)
+        return False
+
+
+def _alert_once(key, subject, text):
+    now = time.time()
+    with _guard_lock:
+        if now - _last_alert.get(key, 0) < ALERT_COOLDOWN_S:
+            return False
+        _last_alert[key] = now
+    _gthreading.Thread(target=_send_email, args=(subject, text), daemon=True).start()
+    return True
+
+
+def _account(task, payload, result):
+    """Record a finished task's output tokens; email on sustained burn or give-up."""
+    if not isinstance(result, dict):
+        return
+    out = int(((result.get("_usage") or {}).get("output")) or 0)
+    now = time.time()
+    with _guard_lock:
+        _burn.append((now, out))
+        while _burn and now - _burn[0][0] > BURN_WINDOW_S:
+            _burn.popleft()
+        total = sum(o for _, o in _burn)
+        tasks = len(_burn)
+    if total >= BURN_ALERT_OUT_TOKENS:
+        _alert_once("burn",
+                    f"[arcana-ci] Claude 用量過高:{total // 1000}K 輸出 token / 近 {BURN_WINDOW_S // 3600} 小時",
+                    f"bluesea agent-task-node 近 {BURN_WINDOW_S // 3600} 小時共 {tasks} 個任務、"
+                    f"{total // 1000}K 輸出 token(門檻 {BURN_ALERT_OUT_TOKENS // 1000}K)。\n"
+                    "這個帳號就是你的 Claude 訂閱,持續下去會吃掉週額度。\n\n"
+                    "看在跑什麼: ssh bluesea 'docker logs --tail 40 aaf-task-worker'\n"
+                    "緊急停手:   ssh bluesea 'docker stop aaf-task-worker'\n")
+    if task == "escalate" and str(result.get("resolution")) in GIVE_UP_RESOLUTIONS:
+        job = payload.get("job") or payload.get("subject") or "?"
+        _alert_once("escalate:" + str(job),
+                    f"[arcana-ci] 自動修復放棄:{job}",
+                    f"job: {job}\nbuild: {payload.get('buildUrl', '')}\n"
+                    f"修復嘗試次數: {payload.get('attempts')}  重試次數: {payload.get('retryCount')}\n"
+                    f"結果: {result.get('resolution')}\n動作: {result.get('action')}\n\n"
+                    f"原因:\n{result.get('reason')}\n\n"
+                    "同一個 commit 不會再自動修;推新的 commit 才會重新開始。\n")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -7812,6 +8050,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = uiux_audit_flow(payload)
             else:
                 result = run_claude(task, payload)
+            try:
+                _account(task, payload, result)
+            except Exception as ge:  # the alarm must never break a task response
+                print(f"[notify] guard error: {ge}", flush=True)
             # Flush this product's transcripts before answering.
             #
             # _invoke_claude already ingests when a model-invoking verb finishes, which
