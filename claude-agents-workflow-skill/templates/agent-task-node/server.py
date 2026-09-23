@@ -7723,6 +7723,100 @@ def run_consult(payload):
     return dict(record, answered=True, recorded=True, asked=len(prior) + 1, cap=_CONSULT_CAP)
 
 
+# --- Runaway guard (2026-09-14): email on give-up + token-burn early warning ---
+# Weekend incident: angular/node main went red, every ci-flow rebuild spawned yet
+# another ci-flow, and ~11M output tokens were burned on the operator's personal plan for
+# 24h before anyone noticed. The loop itself is now blocked in the Jenkins trigger
+# (one active ci-flow per job + one flow per commit). This block is the alarm for
+# anything that slips past: it never blocks work, it only emails.
+import threading as _gthreading
+import collections as _gcollections
+import urllib.request as _gurl
+
+# Unset NOTIFY_EMAIL = alarms are only logged, never mailed (set it per deployment).
+NOTIFY_EMAIL = os.environ.get("NOTIFY_EMAIL", "")
+NOTIFY_FROM = os.environ.get("NOTIFY_FROM", "ci@arcana.boo")
+SENDGRID_KEY_FILE = os.environ.get("SENDGRID_KEY_FILE", "/root/.claude/.sendgrid-key")
+# Measured 2026-08-31..09-13: normal busiest hour ~300K output tokens, the runaway
+# ran 250K-480K/hour for 24h. Hours overlap, so this alarms on a SUSTAINED rate
+# (3h window) rather than hard-blocking legit sdlc bursts.
+BURN_WINDOW_S = int(os.environ.get("BURN_WINDOW_S", str(3 * 3600)))
+BURN_ALERT_OUT_TOKENS = int(os.environ.get("BURN_ALERT_OUT_TOKENS", "800000"))
+ALERT_COOLDOWN_S = int(os.environ.get("ALERT_COOLDOWN_S", str(6 * 3600)))
+GIVE_UP_RESOLUTIONS = ("recorded", "closed")
+
+_guard_lock = _gthreading.Lock()
+_burn = _gcollections.deque()   # (ts, output_tokens) per finished Claude task
+_last_alert = {}                # alert key -> ts of last email
+
+
+def _send_email(subject, text):
+    if not NOTIFY_EMAIL:
+        print(f"[notify] NOTIFY_EMAIL unset; not sent: {subject}", flush=True)
+        return False
+    try:
+        key = open(SENDGRID_KEY_FILE).read().strip()
+    except OSError:
+        print(f"[notify] no sendgrid key at {SENDGRID_KEY_FILE}; not sent: {subject}", flush=True)
+        return False
+    body = {
+        "personalizations": [{"to": [{"email": NOTIFY_EMAIL}]}],
+        "from": {"email": NOTIFY_FROM, "name": "Arcana CI"},
+        "subject": subject,
+        "content": [{"type": "text/plain", "value": text}],
+    }
+    req = _gurl.Request("https://api.sendgrid.com/v3/mail/send", data=json.dumps(body).encode(),
+                        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+    try:
+        r = _gurl.urlopen(req, timeout=20)
+        print(f"[notify] email sent (HTTP {r.status}): {subject}", flush=True)
+        return True
+    except Exception as e:
+        print(f"[notify] email FAILED ({e}): {subject}", flush=True)
+        return False
+
+
+def _alert_once(key, subject, text):
+    now = time.time()
+    with _guard_lock:
+        if now - _last_alert.get(key, 0) < ALERT_COOLDOWN_S:
+            return False
+        _last_alert[key] = now
+    _gthreading.Thread(target=_send_email, args=(subject, text), daemon=True).start()
+    return True
+
+
+def _account(task, payload, result):
+    """Record a finished task's output tokens; email on sustained burn or give-up."""
+    if not isinstance(result, dict):
+        return
+    out = int(((result.get("_usage") or {}).get("output")) or 0)
+    now = time.time()
+    with _guard_lock:
+        _burn.append((now, out))
+        while _burn and now - _burn[0][0] > BURN_WINDOW_S:
+            _burn.popleft()
+        total = sum(o for _, o in _burn)
+        tasks = len(_burn)
+    if total >= BURN_ALERT_OUT_TOKENS:
+        _alert_once("burn",
+                    f"[arcana-ci] Claude 用量過高:{total // 1000}K 輸出 token / 近 {BURN_WINDOW_S // 3600} 小時",
+                    f"bluesea agent-task-node 近 {BURN_WINDOW_S // 3600} 小時共 {tasks} 個任務、"
+                    f"{total // 1000}K 輸出 token(門檻 {BURN_ALERT_OUT_TOKENS // 1000}K)。\n"
+                    "這個帳號就是你的 Claude 訂閱,持續下去會吃掉週額度。\n\n"
+                    "看在跑什麼: ssh bluesea 'docker logs --tail 40 aaf-task-worker'\n"
+                    "緊急停手:   ssh bluesea 'docker stop aaf-task-worker'\n")
+    if task == "escalate" and str(result.get("resolution")) in GIVE_UP_RESOLUTIONS:
+        job = payload.get("job") or payload.get("subject") or "?"
+        _alert_once("escalate:" + str(job),
+                    f"[arcana-ci] 自動修復放棄:{job}",
+                    f"job: {job}\nbuild: {payload.get('buildUrl', '')}\n"
+                    f"修復嘗試次數: {payload.get('attempts')}  重試次數: {payload.get('retryCount')}\n"
+                    f"結果: {result.get('resolution')}\n動作: {result.get('action')}\n\n"
+                    f"原因:\n{result.get('reason')}\n\n"
+                    "同一個 commit 不會再自動修;推新的 commit 才會重新開始。\n")
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, obj):
         body = json.dumps(obj).encode()
@@ -7820,6 +7914,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = uiux_audit_flow(payload)
             else:
                 result = run_claude(task, payload)
+            try:
+                _account(task, payload, result)
+            except Exception as ge:  # the alarm must never break a task response
+                print(f"[notify] guard error: {ge}", flush=True)
             # Flush this product's transcripts before answering.
             #
             # _invoke_claude already ingests when a model-invoking verb finishes, which
