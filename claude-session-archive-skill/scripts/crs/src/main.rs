@@ -3131,31 +3131,42 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
     //
     // Plus two filters baked in:
     //   role IN ('user','assistant')        — skip meta events
-    //   DISTINCT ON content (newest kept)   — dedup same-content rows
+    //   DISTINCT ON md5(content) (newest kept) — dedup same-content rows, over the
+    //   newest `cap` matches only (see the cand CTE for why)
     //
     // v1.15+: optionally UNION ALL with image_ocr (role='image_ocr'), default ON.
     // FTS path doesn't have a numeric rank, so de-emphasis is implicit (ts DESC
     // sort + DISTINCT ON content puts older noise behind newer real msgs).
     let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
+    // How many newest matches to look at before dedup. Duplicate-heavy tokens shrink
+    // fast (newest 300 "interrupted" rows = 61 distinct contents), so keep >=4x margin
+    // over that worst case: 20 candidates per requested row, never fewer than 400.
+    let cap = ((limit * 20).max(400)) as i64;
     let sql = if include_img {
-        "WITH msg_hits AS MATERIALIZED (
-             -- `content_tsv @@ q OR id IN (jieba subquery)` can't use one index for
-             -- the OR → planner falls back to a Seq Scan on msg (whole table). Split
-             -- into a UNION ALL so each leg hits its own GIN index (msg_tsv_idx /
-             -- msg_jieba_cj_idx); the outer DISTINCT ON (content) dedups any overlap.
-             SELECT id, ts, project, session_id, role, tool_name, content
-             FROM msg
+        "WITH msg_cand AS MATERIALIZED (
+             -- Candidates carry ONLY (id, ts). The old query carried full content through
+             -- DISTINCT ON (content) over EVERY match, so a common token ('error', 53K hits)
+             -- detoasted and compared megabytes of text and spilled the sort to disk —
+             -- 11.1s server-side, past the 12s hook timeout end to end. Now: newest `cap`
+             -- ids first, content fetched for those only, dedup on md5(content).
+             -- Identical top-30 to the old query on 11 probe terms (2026-09-14); 'error' 11.1s -> 0.37s.
+             SELECT id, ts FROM msg
              WHERE content_tsv @@ plainto_tsquery('simple', $1)
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
                AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
-             UNION ALL
-             SELECT id, ts, project, session_id, role, tool_name, content
-             FROM msg
+             UNION
+             -- Split from the tsv leg so each side hits its own GIN index
+             -- (msg_tsv_idx / msg_jieba_cj_idx); an OR here falls back to a Seq Scan.
+             SELECT id, ts FROM msg
              WHERE id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1))
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
                AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
+         ),
+         msg_recent AS (
+             SELECT m.id, m.ts, m.project, m.session_id, m.role, m.tool_name, m.content
+             FROM (SELECT id FROM msg_cand ORDER BY ts DESC LIMIT $6) r JOIN msg m USING (id)
          ),
          img_hits AS MATERIALIZED (
              SELECT id, ts, project, session_id,
@@ -3166,44 +3177,52 @@ fn pg_fts(client: &mut postgres::Client, query: &str, project: Option<&str>, lim
                AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
          ),
          hits AS (
-             SELECT * FROM msg_hits
+             SELECT * FROM msg_recent
              UNION ALL
              SELECT * FROM img_hits
          ),
          deduped AS (
-             SELECT DISTINCT ON (content)
+             SELECT DISTINCT ON (md5(content))
                     id, ts, project, session_id, role, tool_name, content
-             FROM hits ORDER BY content, ts DESC
+             FROM hits ORDER BY md5(content), ts DESC
          )
          SELECT id, ts, project, session_id, role, tool_name, content
          FROM deduped ORDER BY ts DESC LIMIT $3"
     } else {
-        "WITH hits AS MATERIALIZED (
-             -- See the include_img branch: OR-subquery → Seq Scan; UNION ALL keeps
-             -- each leg on its own GIN index (msg_tsv_idx / msg_jieba_cj_idx).
-             SELECT id, ts, project, session_id, role, tool_name, content
-             FROM msg
+        "WITH cand AS MATERIALIZED (
+             -- Candidates carry ONLY (id, ts). The old query carried full content through
+             -- DISTINCT ON (content) over EVERY match, so a common token ('error', 53K hits)
+             -- detoasted and compared megabytes of text and spilled the sort to disk —
+             -- 11.1s server-side, past the 12s hook timeout end to end. Now: newest `cap`
+             -- ids first, content fetched for those only, dedup on md5(content).
+             -- Identical top-30 to the old query on 11 probe terms (2026-09-14); 'error' 11.1s -> 0.37s.
+             SELECT id, ts FROM msg
              WHERE content_tsv @@ plainto_tsquery('simple', $1)
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
                AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
-             UNION ALL
-             SELECT id, ts, project, session_id, role, tool_name, content
-             FROM msg
+             UNION
+             -- Split from the tsv leg so each side hits its own GIN index
+             -- (msg_tsv_idx / msg_jieba_cj_idx); an OR here falls back to a Seq Scan.
+             SELECT id, ts FROM msg
              WHERE id IN (SELECT id FROM msg_jieba WHERE cj @@ plainto_tsquery('jiebacfg', $1))
                AND role IN ('user', 'assistant')
                AND ($2::text IS NULL OR project LIKE $2)
                AND ($4::timestamptz IS NULL OR ts >= $4) AND ($5::timestamptz IS NULL OR ts <= $5)
          ),
+         hits AS (
+             SELECT m.id, m.ts, m.project, m.session_id, m.role, m.tool_name, m.content
+             FROM (SELECT id FROM cand ORDER BY ts DESC LIMIT $6) r JOIN msg m USING (id)
+         ),
          deduped AS (
-             SELECT DISTINCT ON (content)
+             SELECT DISTINCT ON (md5(content))
                     id, ts, project, session_id, role, tool_name, content
-             FROM hits ORDER BY content, ts DESC
+             FROM hits ORDER BY md5(content), ts DESC
          )
          SELECT id, ts, project, session_id, role, tool_name, content
          FROM deduped ORDER BY ts DESC LIMIT $3"
     };
-    let rows = client.query(sql, &[&query, &proj_like, &(limit as i64), &since, &until])?;
+    let rows = client.query(sql, &[&query, &proj_like, &(limit as i64), &since, &until, &cap])?;
     Ok(rows.iter().map(|r| PgRow {
         id: r.get(0),
         ts: r.get(1),
