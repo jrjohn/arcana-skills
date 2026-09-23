@@ -114,6 +114,7 @@ CREATE TABLE msg (
     content     TEXT,
     content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('simple', COALESCE(content,''))) STORED,
     embedding   vector(1024),     -- bge-m3
+    importance  SMALLINT,         -- 0-4, since v1.30.0; NULL = not scored yet
     UNIQUE (session_id, seq)
 );
 CREATE INDEX msg_ts_idx       ON msg (ts);
@@ -121,6 +122,22 @@ CREATE INDEX msg_project_idx  ON msg (project, ts);
 CREATE INDEX msg_tool_idx     ON msg (tool_name);
 CREATE INDEX msg_tsv_idx      ON msg USING GIN  (content_tsv);
 CREATE INDEX msg_emb_idx      ON msg USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX msg_importance_null ON msg (id) WHERE importance IS NULL;
+
+-- importance (v1.30.0). Filled by `crs importance-backfill`, NOT at ingest: there
+-- are three separate INSERT INTO msg sites and the rule must live in exactly one
+-- place (importance_of() in main.rs). Nullable on purpose — NULL is "not scored
+-- yet", 0 is "scored, ordinary"; collapsing them would leave the backfill unable
+-- to tell what it had already done. osearch multiplies a row's fused RRF score by
+-- 1 + 0.15·min(importance,4): a RE-RANK over rows the legs already returned, so a
+-- deliverable can rise above surrounding chatter but nothing unmatched is injected.
+-- Scoring is deterministic string rules (no LLM): 3 = a document was written
+-- (Write/Edit to .md/.docx/.pptx/.xlsx/.pdf outside /tmp, .claude/jobs, target,
+-- node_modules, cache), 2 = an assistant message >400 chars reporting completion,
+-- 1 = a user message carrying a standing decision (一律 / 以後 / 定案 / 不要再 …).
+-- Backfill batches one multi-row UPDATE … FROM (VALUES …) per chunk; the
+-- row-at-a-time first version measured 424s for 2000 rows over the WAN vs 35.7s
+-- for 6000 batched.
 
 -- Optional: Chinese csearch via pg_jieba (since v1.24.0). A SIDE TABLE, not a column
 -- on msg — backfilling a column would rewrite every bloated msg tuple (4KB embedding)
@@ -147,6 +164,51 @@ CREATE TRIGGER msg_jieba_sync_aiu AFTER INSERT OR UPDATE OF content ON msg
 -- one-time backfill (append-only, ~130K rows/min): 
 --   INSERT INTO msg_jieba(id,cj) SELECT id, to_tsvector('jiebacfg',coalesce(content,'')) FROM msg
 --   ON CONFLICT (id) DO NOTHING;
+
+-- Skill distribution (v1.30.0). `crs skill-init` creates these; skills are authored
+-- in git and published here, so a correction reaches every machine instead of
+-- living in one ~/.claude/skills copy. Two tables because their update rates differ
+-- ~280x: the knowledge is 38 KB and changes often, the templates are 15.8 MB and
+-- almost never do — fixing one line of a rule must not re-upload 16 MB.
+--
+-- bytea, NEVER Large Object: `lo` carries its own ACL in pg_largeobject_metadata,
+-- which RLS cannot see. The employee deployment (.204) is built entirely on RLS,
+-- so an `lo` would be a hole in the wall the rest of that design depends on.
+-- owner / visibility are written from day one but carry no policy on a single-user
+-- instance; a multi-tenant deploy adds ENABLE/FORCE ROW LEVEL SECURITY plus
+--   USING (visibility = 'all' OR pg_has_role(current_user, visibility, 'USAGE'))
+-- without any schema change.
+CREATE TABLE skill_registry (
+    name        TEXT PRIMARY KEY,
+    version     TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL,          -- what osearch's skill leg routes on
+    payload     BYTEA NOT NULL,         -- JSON {relative path -> file text}; TOAST compresses
+    sha256      TEXT NOT NULL,          -- skill-sync skips an unchanged skill on this
+    visibility  TEXT NOT NULL DEFAULT 'all',
+    owner       TEXT NOT NULL DEFAULT current_user,
+    description_embedding vector(1024),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX skill_registry_hnsw ON skill_registry USING hnsw (description_embedding vector_cosine_ops);
+
+CREATE TABLE skill_asset (            -- large / binary files, fetched on demand
+    skill_name TEXT NOT NULL REFERENCES skill_registry(name) ON DELETE CASCADE,
+    path       TEXT NOT NULL,
+    blob       BYTEA NOT NULL,
+    sha256     TEXT NOT NULL,          -- content-addressed: unchanged assets are not re-sent
+    owner      TEXT NOT NULL DEFAULT current_user,
+    PRIMARY KEY (skill_name, path)
+);
+-- Usage:
+--   crs skill-publish ~/.claude/skills/<name>     # git → PG
+--   crs skill-sync [name]                         # PG → ~/.claude/skill-library (sha-gated)
+--   crs skill-get <name> --asset templates/x.docx # one large file, on demand
+-- skill-sync writes to ~/.claude/skill-library, deliberately NOT ~/.claude/skills:
+-- a synced skill must not silently rejoin the always-loaded description list
+-- (14,528 chars for 35 skills) that publishing to PG exists to relieve. osearch
+-- prints a `📌 現成 SOP` pointer when a skill is within distance 0.62 — a pointer
+-- only; nothing is fetched or executed automatically, and sha256 is verified on
+-- every fetch with `..`/absolute paths refused.
 
 CREATE TABLE ingest_state (
     file_path TEXT PRIMARY KEY,
