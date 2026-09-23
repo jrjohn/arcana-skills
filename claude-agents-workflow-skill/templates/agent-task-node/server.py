@@ -93,14 +93,6 @@ STUB_RESPONSES = {
 
 # --- JSON Schemas: the typed contract SonataFlow switches/retries on ---
 SCHEMAS = {
-    "scan-stale": {
-        "type": "object",
-        "properties": {
-            "started": {"type": "integer"},
-            "reason": {"type": "string"},
-        },
-        "required": ["started"],
-    },
     "rebase": {
         "type": "object",
         "properties": {
@@ -288,8 +280,14 @@ SCHEMAS = {
 def prompt_diagnose(p):
     return (
         f"A Jenkins pipeline build failed. job={p.get('job')} buildUrl={p.get('buildUrl')}.\n"
-        "Fetch the console log (curl the buildUrl + /consoleText via the jenkins service), "
-        "find the FIRST failing stage and the actual error.\n"
+        "Fetch the log TRIMMED — NEVER read a whole console log into context "
+        "(2026-09-21 measurement: one Triage call read 1,483,510 input tokens because the "
+        "whole android log was pulled in). Save it first, then read only what matters:\n"
+        "  curl -s -u \"$JENKINS_USER:$JENKINS_TOKEN\" \"<buildUrl>consoleText\" > /tmp/b.log\n"
+        "  grep -nEi 'error|fail|exception|cannot|no space|exit code|BUILD FAILED' /tmp/b.log | head -80\n"
+        "  tail -c 60000 /tmp/b.log\n"
+        "Widen with sed -n '<from>,<to>p' /tmp/b.log ONLY if those two are inconclusive.\n"
+        "Find the FIRST failing stage and the actual error.\n"
         "BEFORE you classify, SEARCH THE SHARED SESSION ARCHIVE — it holds every past run "
         "(yours and jrjohn's) and the recurring CI traps WITH how they were resolved. Run "
         "`csearch '\"<verbatim error line>\"'` on the exact error string (phrase-quote it), and "
@@ -405,6 +403,8 @@ def prompt_readmesync(p):
         "color >=80 brightgreen, >=60 yellow, else red).\n"
         " - TESTS: read the latest GREEN main build console "
         "curl -s -u \"$JENKINS_USER:$JENKINS_TOKEN\" \"$JENKINS_URL/job/<job>-app-pipeline-mb/job/main/lastStableBuild/consoleText\" "
+        "| grep -aEi 'TOTAL:|Test Files|Tests run:|passed|^ok ' | tail -40 "
+        "(always pipe it — the raw log is megabytes and must not enter context) "
         "(derive <job> from the repo: arcana-angular->angular, arcana-cloud-go->go, arcana-cloud-nodejs->node, "
         "arcana-cloud-python->python, arcana-cloud-rust->rust, arcana-cloud-springboot->springboot). Extract the "
         "test runner's total passing count — match whichever appears: 'TOTAL: N SUCCESS' (karma), "
@@ -522,9 +522,12 @@ def prompt_escalate(p):
         "before returning.\n"
         "STEP 1 — READ THE REAL EVIDENCE; do NOT trust the diagnosis blindly (it has been wrong "
         "before: a flaky testcontainers startup was misdiagnosed as a JDK/toolchain bug and a PR was "
-        "parked three times). Fetch the actual build log and read the genuine failure tail: "
-        f"curl -s -u \"$JENKINS_USER:$JENKINS_TOKEN\" \"{p.get('buildUrl','')}consoleText\" "
-        "(append 'consoleText' to buildUrl).\n"
+        "parked three times). Read the genuine failure tail — TRIMMED, never the whole log "
+        "(a full android log is ~1.4M tokens of context):\n"
+        f"  curl -s -u \"$JENKINS_USER:$JENKINS_TOKEN\" \"{p.get('buildUrl','')}consoleText\" > /tmp/b.log\n"
+        "  grep -nEi 'error|fail|exception|cannot|no space|exit code|BUILD FAILED' /tmp/b.log | head -80\n"
+        "  tail -c 60000 /tmp/b.log\n"
+        "Widen with sed -n '<from>,<to>p' /tmp/b.log ONLY if those two are inconclusive.\n"
         "STEP 2 — CROSS-SIGNAL via the shared archive (decisive): `vsearch '<failure concept>' aaf` "
         "and `csearch '\"<exact error>\"' aaf` for how this class of failure resolved before, AND "
         "check whether main is currently green and whether sibling PRs pass. If main/siblings are "
@@ -554,25 +557,6 @@ def prompt_escalate(p):
         "default if you cannot act."
     )
 
-
-def prompt_scan_stale(p):
-    return (
-        "You are the SCAN node of the unstick scheduler. Find stale-base PRs and start ONE "
-        "unstick-flow remediation per PR. A PR is 'stale-base stuck' when its CI is red ONLY because "
-        "its base moved (main advanced past it) — it will never go green on its own.\n"
-        "STEP 1 — list open PRs (start with jrjohn/arcana-ai-bpm): "
-        "`gh pr list --repo jrjohn/arcana-ai-bpm --state open --json number,url,headRefName,mergeStateStatus,isDraft`.\n"
-        "STEP 2 — for each NON-draft PR, classify as STALE-STUCK only if mergeStateStatus is BEHIND or "
-        "UNSTABLE/DIRTY AND `gh pr checks <url>` shows a failing check AND the PR is behind main (its "
-        "base moved since the failing build ran). SKIP PRs that are green, draft, or red for a genuine "
-        "code reason (not base-staleness).\n"
-        "STEP 3 — for each stale-stuck PR, START a remediation flow by POSTing to the engine:\n"
-        "`curl -s -X POST http://aaf-kogito-bpmn:8080/unstick-flow -H 'Content-Type: application/json' "
-        "-d '{\"prUrl\":\"<url>\",\"subject\":\"unstick <repo>#<num>\"}'`. ONE per PR — do not start a "
-        "second unstick-flow for a PR that already has an active one; when in doubt, skip rather than "
-        "duplicate.\n"
-        "Return started (how many unstick-flow instances you started) and a reason listing the PRs."
-    )
 
 
 def prompt_rebase(p):
@@ -1895,7 +1879,7 @@ def prompt_pm_review(p):
     )
 
 
-PROMPTS = {"intake": prompt_intake, "diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "scan-stale": prompt_scan_stale, "rebase": prompt_rebase, "audit": prompt_audit, "pm-review": prompt_pm_review,
+PROMPTS = {"intake": prompt_intake, "diagnose": prompt_diagnose, "fix": prompt_fix, "merge": prompt_merge, "sweep": prompt_sweep, "decide": prompt_decide, "analyze": prompt_analyze, "readmesync": prompt_readmesync, "escalate": prompt_escalate, "rebase": prompt_rebase, "audit": prompt_audit, "pm-review": prompt_pm_review,
            # 重試耗盡後換角色查根因(BPMN 的 RootCause 節點;worker 打 /task/root-cause)。
            "root-cause": prompt_root_cause}
 
@@ -1936,7 +1920,8 @@ _verb_registry_check()
 # 這一步**從上線第一天起就是 404**,而沒有任何東西說得出來。檔尾的 `_dispatch_door_check()`
 # 現在會在 import 時比對這份名單與分派鏈,漏一個就起不來。
 DETERMINISTIC_TASKS = ("release", "execute", "publish-flow", "implement", "test", "coverage",
-                       "uiux-audit", "site", "smoke", "dispose-pr", "consult", "pr-ready")
+                       "uiux-audit", "site", "smoke", "dispose-pr", "consult", "pr-ready",
+                       "scan-stale")
 
 
 
@@ -7146,6 +7131,130 @@ def _uiux_already_filed(issue):
     return st == "CLOSED" and (issue.get("stateReason") or "").upper().replace("-", "_") == "NOT_PLANNED"
 
 
+QUALITY_METRICS_WINDOW_DAYS = 30
+
+
+def _quality_metrics(repo, di):
+    """產品化收斂指標的快照 —— 回答「還要不要人來當 QA」。
+
+    三個數(只有三個),每 12 小時隨稽核一起算一次:
+      ① humanFound        本期**人親自發現**的缺陷數 → 目標 0   ← 頭條
+      ② gateCoverage      確定性閘覆蓋的缺陷類別數     → 要往上
+      ③ auditBacklogOpen  稽核 backlog(open)          → 要往下
+
+    **缺來源一律回 None(判不出來),不是 0。** 尤其①:`found-by-human` 標籤還沒開始貼時
+    回 0,會變成「已經沒人需要當 QA 了」—— 一個剛好相反的結論。沒記到 ≠ 零。
+
+    刻意**不**把①與「閘擋下幾次」相除:前者是缺陷數、後者是輪次數,單位不同,
+    相除只會得到一個看起來精確、其實沒有意義的數字。並列,不相除。
+
+    閘數用 GitHub contents API 數,不需要 repo 檢出(這個容器沒有)。
+    """
+    since = (datetime.datetime.now(datetime.timezone.utc)
+             - datetime.timedelta(days=QUALITY_METRICS_WINDOW_DAYS)).isoformat()
+
+    def _count(kind, label, state="all", window=False):
+        rc, out, _ = _gh([kind, "list", "-R", repo, "--label", label, "--state", state,
+                          "--limit", "500", "--json", "number,createdAt"])
+        if rc != 0:
+            return None
+        try:
+            rows = json.loads(out or "[]")
+        except ValueError:
+            return None
+        return len([r for r in rows if (r.get("createdAt") or "") >= since]) if window else len(rows)
+
+    # ① 標籤不存在 → 尚未開始記錄(None),不是 0
+    rc, out, _ = _gh(["label", "list", "-R", repo, "--limit", "200", "--json", "name"])
+    human = None
+    if rc == 0:
+        try:
+            if any(l.get("name") == "found-by-human" for l in json.loads(out or "[]")):
+                i = _count("issue", "found-by-human", window=True)
+                # PR 也要算:人回報的缺陷常常直接開一條修正 PR、沒有先開 issue。
+                pr = _count("pr", "found-by-human", window=True)
+                human = None if (i is None or pr is None) else i + pr
+        except ValueError:
+            pass
+
+    # ② 閘數(GitHub contents API;這個容器沒有 repo 檢出)
+    rc, out, _ = _gh(["api", "repos/%s/contents/dashboard/e2e/checks" % repo,
+                      "--jq", '[.[] | select(.name|endswith("-check.mjs")) | .name] | length'])
+    gates = None
+    if rc == 0:
+        try:
+            gates = int((out or "").strip())
+        except ValueError:
+            gates = None
+
+    # 脈絡:閘在合併前擋下東西的輪次(不與①相除)
+    #
+    # **None 一定要附理由**(diError)。第一版這裡吞掉所有例外就回 None,而當時的 None 其實是
+    # `NameError: urllib`(這個檔案的慣例是在函式內 import,我漏了)—— Data Index 明明 200,
+    # 指標卻說「讀不到」。沒有理由欄位時,**程式壞掉**與**對方掛掉**長得一模一樣,
+    # 而這兩件事要修的地方完全不同。故改用本檔既有的 curl 寫法(與 _uiux_instance_history 一致,
+    # 不依賴 import),並把錯誤原文帶出來。
+    blocked = total = None
+    di_err = None
+    try:
+        q = {"query": '{ ProcessInstances(where:{processId:{equal:"sdlc-code-flow"}}, '
+                      'orderBy:{start:DESC}, pagination:{limit:200}){ start variables } }'}
+        r = subprocess.run(["curl", "-s", "-X", "POST", di.rstrip("/") + "/graphql",
+                            "-H", "Content-Type: application/json", "-d", json.dumps(q)],
+                           capture_output=True, text=True, timeout=30)
+        body = json.loads(r.stdout or "{}")
+        rows = (body.get("data") or {}).get("ProcessInstances")
+        if rows is None:
+            raise ValueError("ProcessInstances 缺席: " + json.dumps(body)[:200])
+        blocked = total = 0
+        for pi in rows:
+            if (pi.get("start") or "") < since:
+                continue
+            v = pi.get("variables")
+            v = json.loads(v) if isinstance(v, str) else (v or {})
+            tr = v.get("testReport")
+            if not tr:
+                continue
+            try:
+                t = json.loads(tr) if isinstance(tr, str) else tr
+            except ValueError:
+                continue
+            total += 1
+            if t.get("blockingReasons"):
+                blocked += 1
+    except Exception as e:
+        blocked = total = None      # 讀不到就是讀不到,不要寫 0
+        di_err = "%s: %s" % (type(e).__name__, str(e)[:200])
+
+    return {
+        "computedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "windowDays": QUALITY_METRICS_WINDOW_DAYS,
+        "humanFound": human,
+        "humanFoundMeasured": human is not None,
+        "gateCoverage": gates,
+        "auditBacklogOpen": _count("issue", "uiux-audit", state="open"),
+        "gateBlockedRounds": blocked,
+        "roundsWithReport": total,
+        "diError": di_err,
+    }
+
+
+def _write_quality_metrics(m):
+    """寫到 agent 與 read-API 共用的 console 目錄(agent 可寫、read-API 唯讀掛載),
+    所以不必新增任何掛載。latest 供畫面讀;jsonl 留歷史,趨勢才看得出來。
+    寫不進去只記錄,不影響稽核本身。"""
+    d = os.environ.get("CONSOLE_DIR", "/console")
+    try:
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "quality-metrics.json"), "w", encoding="utf-8") as fh:
+            json.dump(m, fh, ensure_ascii=False, indent=2)
+        with open(os.path.join(d, "quality-metrics.jsonl"), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(m, ensure_ascii=False) + "\n")
+        return None
+    except Exception as e:
+        return str(e)[:200]
+
+
 def _uiux_backlog(fails, repo, di, audited_routes, max_issues):
     with _UIUX_BACKLOG_LOCK:
         return _uiux_backlog_locked(fails, repo, di, audited_routes, max_issues)
@@ -7283,6 +7392,17 @@ def uiux_audit_flow(payload):
         res = _uiux_backlog(fails, repo, di, audited, max_issues)
         res.update({"findings": len(data.get("findings", [])), "fails": len(fails),
                     "started": 0, "skipped": res["deduped"], "triggered": [], "cap": max_issues})
+        # 順手算一次產品化收斂指標。這裡是最自然的家:每 12 小時本來就會跑、這個容器
+        # 本來就有 gh 與網路、而且它本來就在數 backlog。算完寫進共用的 console 目錄,
+        # 之後平台維運頁讀得到 —— 不必新增排程、不必新增掛載。
+        try:
+            qm = _quality_metrics(repo, di)
+            werr = _write_quality_metrics(qm)
+            res["qualityMetrics"] = qm
+            if werr:
+                res.setdefault("errors", []).append("quality metrics write failed: " + werr)
+        except Exception as e:      # 指標是附加品,不能把稽核本身弄壞
+            res.setdefault("errors", []).append("quality metrics failed: " + str(e)[:200])
         return res
 
     # 2. dedup: 哪些發現已經在跑了 —— 別重開在飛的。
@@ -7626,7 +7746,7 @@ def evaluate_security_gate(comments, labels, head_commit_time):
     return True, "security gate: review has no security section - fail-open"
 
 
-def _gh_json(args):
+def _sg_gh_json(args):
     r = _sg_sp.run(["gh"] + args, capture_output=True, text=True, timeout=90)
     if r.returncode != 0:
         raise RuntimeError((r.stderr or r.stdout)[-300:])
@@ -7640,12 +7760,12 @@ def gemini_security_gate(pr_url):
         return True, "security gate: unrecognised PR url - fail-open"
     owner, repo, num = m.groups()
     try:
-        cs = _gh_json(["api", "--paginate", "repos/%s/%s/issues/%s/comments" % (owner, repo, num)])
+        cs = _sg_gh_json(["api", "--paginate", "repos/%s/%s/issues/%s/comments" % (owner, repo, num)])
         comments = [{"login": (c.get("user") or {}).get("login"), "body": c.get("body"),
                      "updated_at": c.get("updated_at")} for c in cs]
-        pr = _gh_json(["api", "repos/%s/%s/pulls/%s" % (owner, repo, num)])
+        pr = _sg_gh_json(["api", "repos/%s/%s/pulls/%s" % (owner, repo, num)])
         labels = {l.get("name") for l in pr.get("labels", [])}
-        commits = _gh_json(["api", "--paginate", "repos/%s/%s/pulls/%s/commits" % (owner, repo, num)])
+        commits = _sg_gh_json(["api", "--paginate", "repos/%s/%s/pulls/%s/commits" % (owner, repo, num)])
         head_t = ((commits[-1].get("commit") or {}).get("committer") or {}).get("date", "") if commits else ""
     except Exception as e:  # noqa: BLE001 - the gate must never be the thing that breaks merging
         return True, "security gate: could not read PR (%s) - fail-open" % str(e)[:120]
@@ -7655,7 +7775,7 @@ def gemini_security_gate(pr_url):
 def block_for_security(pr_url, reason):
     """Label + one explanatory comment (only the first time, so retries do not spam)."""
     try:
-        pr = _gh_json(["pr", "view", pr_url, "--json", "labels"])
+        pr = _sg_gh_json(["pr", "view", pr_url, "--json", "labels"])
         if SEC_BLOCK_LABEL in {l.get("name") for l in pr.get("labels", [])}:
             return
         _sg_sp.run(["gh", "label", "create", SEC_BLOCK_LABEL, "--color", "B60205",
@@ -7674,6 +7794,247 @@ def block_for_security(pr_url, reason):
     except Exception:  # noqa: BLE001
         pass
 # --- end Gemini security gate ------------------------------------------------------
+
+# --- scan-stale without AI (2026-09-14) ---------------------------------------------------
+# The unstick-scan SCAN node used to be a `claude -p` run: ~156 runs/day, ~17 model calls and
+# ~216 s each, ~450K output tokens/day — and in the week before it was replaced it started ONE
+# unstick-flow. Every rule it applied is mechanical (read back from its own verdicts), so it is
+# plain code now: same inputs (gh + engine REST), same output shape ({started, reason}), no model.
+#
+# One rule the AI version did not have: a PR is started at most once per (head, base) pair.
+# If the unstick-flow could not fix it, the next scan would otherwise see the same stuck PR
+# and start another flow every scan — the same loop shape as the 2026-09-13 ci-flow storm.
+# A new push to the PR or a new commit on main makes it eligible again.
+UNSTICK_ENGINE = os.environ.get("ENGINE_URL", "http://aaf-kogito-bpmn:8080").rstrip("/")
+UNSTICK_REPOS = [r.strip() for r in os.environ.get("UNSTICK_SCAN_REPOS", "jrjohn/arcana-ai-bpm").split(",") if r.strip()]
+UNSTICK_MAX_START = int(os.environ.get("UNSTICK_SCAN_MAX_START", "2"))
+UNSTICK_STATE_FILE = os.environ.get("UNSTICK_SCAN_STATE", "/root/.claude/unstick-scan-state.json")
+UNSTICK_STATE_TTL_S = 14 * 24 * 3600
+_STALE_STATES = ("BEHIND", "UNSTABLE", "DIRTY", "BLOCKED")
+_CHECK_FAIL = ("FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE")
+_CHECK_PENDING = ("PENDING", "EXPECTED", "QUEUED", "IN_PROGRESS", "WAITING", "REQUESTED")
+
+
+def _check_buckets(rollup):
+    """(failing, pending) counts from gh's statusCheckRollup (CheckRun and StatusContext)."""
+    fail = pend = 0
+    for c in rollup or []:
+        state = (c.get("conclusion") or c.get("state") or "").upper()
+        status = (c.get("status") or "").upper()
+        if status and status != "COMPLETED":
+            pend += 1
+        elif state in _CHECK_FAIL:
+            fail += 1
+        elif state in _CHECK_PENDING or not state:
+            pend += 1
+    return fail, pend
+
+
+def _stale_verdict(pr, behind_by):
+    """None = stale-stuck (start a flow); otherwise the reason to skip."""
+    if pr.get("isDraft"):
+        return "draft"
+    if not behind_by or behind_by < 1:
+        return "up to date with base"
+    fail, pend = _check_buckets(pr.get("statusCheckRollup"))
+    if fail == 0:
+        return "no failing check" + (" (%d pending)" % pend if pend else "")
+    if pend:
+        return "checks still running (%d pending)" % pend
+    if (pr.get("mergeStateStatus") or "").upper() not in _STALE_STATES:
+        return "mergeState %s" % (pr.get("mergeStateStatus") or "UNKNOWN")
+    return None
+
+
+def _unstick_state_load(now):
+    try:
+        with open(UNSTICK_STATE_FILE) as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        st = {}
+    return {k: v for k, v in st.items() if isinstance(v, (int, float)) and now - v < UNSTICK_STATE_TTL_S}
+
+
+def _unstick_state_save(st):
+    try:
+        tmp = UNSTICK_STATE_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(st, f)
+        os.replace(tmp, UNSTICK_STATE_FILE)
+    except OSError as e:
+        print("[scan-stale] could not save state: %s" % e, flush=True)
+
+
+def _scan_gh_json(args):
+    p = subprocess.run(["gh"] + args, capture_output=True, text=True, timeout=60)
+    if p.returncode != 0:
+        raise RuntimeError("gh %s: %s" % (" ".join(args[:3]), (p.stderr or "").strip()[:200]))
+    return json.loads(p.stdout or "null")
+
+
+def _engine(method, path, body=None):
+    import urllib.request
+    req = urllib.request.Request(UNSTICK_ENGINE + path, method=method,
+                                 data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        raw = r.read()
+        return r.status, (json.loads(raw) if raw else None)
+
+
+def scan_stale(payload, gh=_scan_gh_json, engine=_engine, now=None):
+    now = now or time.time()
+    try:
+        _, active = engine("GET", "/unstick-flow")
+        active_urls = {i.get("prUrl") for i in (active or []) if isinstance(i, dict)}
+    except Exception as e:
+        # Cannot tell what is already running -> start nothing (a duplicate costs AI rebases).
+        return {"started": 0, "reason": "engine unreachable, nothing started: %s" % e}
+    state = _unstick_state_load(now)
+    started, lines, errors = 0, [], []
+    for repo in UNSTICK_REPOS:
+        try:
+            prs = gh(["pr", "list", "--repo", repo, "--state", "open", "--limit", "100", "--json",
+                      "number,url,isDraft,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup"])
+        except Exception as e:
+            errors.append(str(e))
+            continue
+        base_sha = {}
+        for pr in prs or []:
+            n, url = pr.get("number"), pr.get("url")
+            try:
+                if pr.get("isDraft"):
+                    behind = 0
+                else:
+                    base = pr.get("baseRefName") or "main"
+                    cmp = gh(["api", "repos/%s/compare/%s...%s" % (repo, base, pr.get("headRefOid"))])
+                    behind = int((cmp or {}).get("behind_by") or 0)
+                    base_sha[base] = ((cmp or {}).get("base_commit") or {}).get("sha", "")
+            except Exception as e:
+                errors.append("#%s: %s" % (n, e))
+                continue
+            why = _stale_verdict(pr, behind)
+            if why is None and url in active_urls:
+                why = "unstick-flow already active"
+            key = "%s@%s@%s" % (url, pr.get("headRefOid"), base_sha.get(pr.get("baseRefName") or "main", ""))
+            if why is None and key in state:
+                why = "already tried for this head+base; waiting for a new push or a new main"
+            if why is None and started >= UNSTICK_MAX_START:
+                why = "per-scan cap %d reached" % UNSTICK_MAX_START
+            if why is None:
+                try:
+                    code, _ = engine("POST", "/unstick-flow",
+                                     {"prUrl": url, "subject": "unstick %s#%s" % (repo.split("/")[-1], n)})
+                    if code in (200, 201):
+                        started += 1
+                        state[key] = now
+                        lines.append("#%s STARTED (behind %d)" % (n, behind))
+                    else:
+                        lines.append("#%s start FAILED (engine HTTP %s)" % (n, code))
+                        errors.append("#%s: engine HTTP %s" % (n, code))
+                except Exception as e:
+                    lines.append("#%s start FAILED" % n)
+                    errors.append("#%s: start failed: %s" % (n, e))
+                continue
+            lines.append("#%s skip: %s" % (n, why))
+    _unstick_state_save(state)
+    reason = "; ".join(lines) or "no open PRs"
+    if errors:
+        reason += " | errors: " + "; ".join(errors[:3])
+    print("[scan-stale] started=%d %s" % (started, reason[:300]), flush=True)
+    return {"started": started, "reason": reason, "errors": errors}
+# --- Runaway guard (2026-09-14): email on give-up + token-burn early warning ---
+# Weekend incident: angular/node main went red, every ci-flow rebuild spawned yet
+# another ci-flow, and ~11M output tokens were burned on the operator's personal plan for
+# 24h before anyone noticed. The loop itself is now blocked in the Jenkins trigger
+# (one active ci-flow per job + one flow per commit). This block is the alarm for
+# anything that slips past: it never blocks work, it only emails.
+import threading as _gthreading
+import collections as _gcollections
+import urllib.request as _gurl
+
+# Unset NOTIFY_EMAIL = alarms are only logged, never mailed (set it per deployment).
+NOTIFY_EMAIL = os.environ.get("NOTIFY_EMAIL", "")
+NOTIFY_FROM = os.environ.get("NOTIFY_FROM", "ci@arcana.boo")
+SENDGRID_KEY_FILE = os.environ.get("SENDGRID_KEY_FILE", "/root/.claude/.sendgrid-key")
+# Measured 2026-08-31..09-13: normal busiest hour ~300K output tokens, the runaway
+# ran 250K-480K/hour for 24h. Hours overlap, so this alarms on a SUSTAINED rate
+# (3h window) rather than hard-blocking legit sdlc bursts.
+BURN_WINDOW_S = int(os.environ.get("BURN_WINDOW_S", str(3 * 3600)))
+BURN_ALERT_OUT_TOKENS = int(os.environ.get("BURN_ALERT_OUT_TOKENS", "800000"))
+ALERT_COOLDOWN_S = int(os.environ.get("ALERT_COOLDOWN_S", str(6 * 3600)))
+GIVE_UP_RESOLUTIONS = ("recorded", "closed")
+
+_guard_lock = _gthreading.Lock()
+_burn = _gcollections.deque()   # (ts, output_tokens) per finished Claude task
+_last_alert = {}                # alert key -> ts of last email
+
+
+def _send_email(subject, text):
+    if not NOTIFY_EMAIL:
+        print(f"[notify] NOTIFY_EMAIL unset; not sent: {subject}", flush=True)
+        return False
+    try:
+        key = open(SENDGRID_KEY_FILE).read().strip()
+    except OSError:
+        print(f"[notify] no sendgrid key at {SENDGRID_KEY_FILE}; not sent: {subject}", flush=True)
+        return False
+    body = {
+        "personalizations": [{"to": [{"email": NOTIFY_EMAIL}]}],
+        "from": {"email": NOTIFY_FROM, "name": "Arcana CI"},
+        "subject": subject,
+        "content": [{"type": "text/plain", "value": text}],
+    }
+    req = _gurl.Request("https://api.sendgrid.com/v3/mail/send", data=json.dumps(body).encode(),
+                        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+    try:
+        r = _gurl.urlopen(req, timeout=20)
+        print(f"[notify] email sent (HTTP {r.status}): {subject}", flush=True)
+        return True
+    except Exception as e:
+        print(f"[notify] email FAILED ({e}): {subject}", flush=True)
+        return False
+
+
+def _alert_once(key, subject, text):
+    now = time.time()
+    with _guard_lock:
+        if now - _last_alert.get(key, 0) < ALERT_COOLDOWN_S:
+            return False
+        _last_alert[key] = now
+    _gthreading.Thread(target=_send_email, args=(subject, text), daemon=True).start()
+    return True
+
+
+def _account(task, payload, result):
+    """Record a finished task's output tokens; email on sustained burn or give-up."""
+    if not isinstance(result, dict):
+        return
+    out = int(((result.get("_usage") or {}).get("output")) or 0)
+    now = time.time()
+    with _guard_lock:
+        _burn.append((now, out))
+        while _burn and now - _burn[0][0] > BURN_WINDOW_S:
+            _burn.popleft()
+        total = sum(o for _, o in _burn)
+        tasks = len(_burn)
+    if total >= BURN_ALERT_OUT_TOKENS:
+        _alert_once("burn",
+                    f"[arcana-ci] Claude 用量過高:{total // 1000}K 輸出 token / 近 {BURN_WINDOW_S // 3600} 小時",
+                    f"bluesea agent-task-node 近 {BURN_WINDOW_S // 3600} 小時共 {tasks} 個任務、"
+                    f"{total // 1000}K 輸出 token(門檻 {BURN_ALERT_OUT_TOKENS // 1000}K)。\n"
+                    "這個帳號就是你的 Claude 訂閱,持續下去會吃掉週額度。\n\n"
+                    "看在跑什麼: ssh bluesea 'docker logs --tail 40 aaf-task-worker'\n"
+                    "緊急停手:   ssh bluesea 'docker stop aaf-task-worker'\n")
+    if task == "escalate" and str(result.get("resolution")) in GIVE_UP_RESOLUTIONS:
+        job = payload.get("job") or payload.get("subject") or "?"
+        _alert_once("escalate:" + str(job),
+                    f"[arcana-ci] 自動修復放棄:{job}",
+                    f"job: {job}\nbuild: {payload.get('buildUrl', '')}\n"
+                    f"修復嘗試次數: {payload.get('attempts')}  重試次數: {payload.get('retryCount')}\n"
+                    f"結果: {result.get('resolution')}\n動作: {result.get('action')}\n\n"
+                    f"原因:\n{result.get('reason')}\n\n"
+                    "同一個 commit 不會再自動修;推新的 commit 才會重新開始。\n")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -7769,6 +8130,8 @@ class Handler(BaseHTTPRequestHandler):
                 # 只補測試的窄節點。它身上帶著 implement 放不下的那條硬約束:
                 # 產品碼一個字都不能動(見 coverage_flow 的說明)。
                 result = coverage_flow(payload)
+            elif task == "scan-stale":
+                result = scan_stale(payload)   # plain code, no model (see scan_stale)
             elif task == "uiux-audit":
                 result = uiux_audit_flow(payload)
             else:
@@ -7783,6 +8146,10 @@ class Handler(BaseHTTPRequestHandler):
                         result = {"merged": False, "reason": _why}
                 if result is None:
                     result = run_claude(task, payload)
+            try:
+                _account(task, payload, result)
+            except Exception as ge:  # the alarm must never break a task response
+                print(f"[notify] guard error: {ge}", flush=True)
             # Flush this product's transcripts before answering.
             #
             # _invoke_claude already ingests when a model-invoking verb finishes, which
