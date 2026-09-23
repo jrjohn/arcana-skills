@@ -7708,6 +7708,92 @@ def run_consult(payload):
     return dict(record, answered=True, recorded=True, asked=len(prior) + 1, cap=_CONSULT_CAP)
 
 
+# --- Gemini security gate for autonomous merge (2026-09-23) -----------------------
+# merge-flow used to merge any PR whose checks were green; nothing read the PR Agent
+# (Gemini) review. This gate blocks ONLY when a *fresh* Gemini review explicitly flags
+# security concerns. Everything else fails open: no review (Renovate/release PRs are
+# skipped by the workflow), a failed review, a review older than the head commit, or a
+# human override label. It is deterministic — a string check on pr-agent's own rendering
+# ("No security concerns identified" vs "Security concerns"), not an LLM judgement.
+import json as _sg_json
+import re as _sg_re
+import subprocess as _sg_sp
+
+SEC_OVERRIDE_LABEL = "security-reviewed"      # a human looked and accepts it
+SEC_BLOCK_LABEL = "needs-security-review"     # set by the gate when it blocks
+
+
+def evaluate_security_gate(comments, labels, head_commit_time):
+    """comments: [{login, body, updated_at}], labels: {name}, head_commit_time: ISO str.
+    Returns (allow: bool, reason: str)."""
+    if SEC_OVERRIDE_LABEL in labels:
+        return True, "security gate: override label '%s' present" % SEC_OVERRIDE_LABEL
+    reviews = [c for c in comments
+               if c.get("login") in ("github-actions[bot]", "github-actions")
+               and "Reviewer Guide" in (c.get("body") or "")]
+    if not reviews:
+        return True, "security gate: no Gemini review on this PR (skipped or failed) - fail-open"
+    rev = max(reviews, key=lambda c: c.get("updated_at") or "")
+    body = rev.get("body") or ""
+    rev_t = rev.get("updated_at") or ""
+    if head_commit_time and rev_t and rev_t < head_commit_time:
+        return True, ("security gate: Gemini review (%s) is older than the head commit (%s) "
+                      "- fail-open" % (rev_t, head_commit_time))
+    if "No security concerns identified" in body:
+        return True, "security gate: Gemini found no security concerns"
+    if _sg_re.search(r"Security concerns", body):
+        return False, "security gate: Gemini flagged security concerns in its latest review"
+    return True, "security gate: review has no security section - fail-open"
+
+
+def _sg_gh_json(args):
+    r = _sg_sp.run(["gh"] + args, capture_output=True, text=True, timeout=90)
+    if r.returncode != 0:
+        raise RuntimeError((r.stderr or r.stdout)[-300:])
+    return _sg_json.loads(r.stdout)
+
+
+def gemini_security_gate(pr_url):
+    """Fetch the PR's state from GitHub and evaluate. Any error -> allow (fail-open)."""
+    m = _sg_re.search(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)", pr_url or "")
+    if not m:
+        return True, "security gate: unrecognised PR url - fail-open"
+    owner, repo, num = m.groups()
+    try:
+        cs = _sg_gh_json(["api", "--paginate", "repos/%s/%s/issues/%s/comments" % (owner, repo, num)])
+        comments = [{"login": (c.get("user") or {}).get("login"), "body": c.get("body"),
+                     "updated_at": c.get("updated_at")} for c in cs]
+        pr = _sg_gh_json(["api", "repos/%s/%s/pulls/%s" % (owner, repo, num)])
+        labels = {l.get("name") for l in pr.get("labels", [])}
+        commits = _sg_gh_json(["api", "--paginate", "repos/%s/%s/pulls/%s/commits" % (owner, repo, num)])
+        head_t = ((commits[-1].get("commit") or {}).get("committer") or {}).get("date", "") if commits else ""
+    except Exception as e:  # noqa: BLE001 - the gate must never be the thing that breaks merging
+        return True, "security gate: could not read PR (%s) - fail-open" % str(e)[:120]
+    return evaluate_security_gate(comments, labels, head_t)
+
+
+def block_for_security(pr_url, reason):
+    """Label + one explanatory comment (only the first time, so retries do not spam)."""
+    try:
+        pr = _sg_gh_json(["pr", "view", pr_url, "--json", "labels"])
+        if SEC_BLOCK_LABEL in {l.get("name") for l in pr.get("labels", [])}:
+            return
+        _sg_sp.run(["gh", "label", "create", SEC_BLOCK_LABEL, "--color", "B60205",
+                    "--description", "Auto-merge paused: Gemini flagged security concerns",
+                    "-R", "/".join(pr_url.split("/")[3:5])], capture_output=True, timeout=60)
+        _sg_sp.run(["gh", "pr", "edit", pr_url, "--add-label", SEC_BLOCK_LABEL],
+                   capture_output=True, timeout=60)
+        _sg_sp.run(["gh", "pr", "comment", pr_url, "--body",
+                    "Auto-merge paused: the Gemini review above flagged **security concerns**, "
+                    "so merge-flow will not merge this PR on its own.\n\n"
+                    "- Looked at it and it is fine: merge it yourself, or add the label "
+                    "`%s` and the next green build will let merge-flow merge it.\n"
+                    "- Push a fix: the review re-runs on the new commit, and a clean review "
+                    "lifts the pause automatically.\n\n(%s)" % (SEC_OVERRIDE_LABEL, reason)],
+                   capture_output=True, timeout=60)
+    except Exception:  # noqa: BLE001
+        pass
+# --- end Gemini security gate ------------------------------------------------------
 
 # --- scan-stale without AI (2026-09-14) ---------------------------------------------------
 # The unstick-scan SCAN node used to be a `claude -p` run: ~156 runs/day, ~17 model calls and
@@ -7779,7 +7865,7 @@ def _unstick_state_save(st):
         print("[scan-stale] could not save state: %s" % e, flush=True)
 
 
-def _gh_json(args):
+def _scan_gh_json(args):
     p = subprocess.run(["gh"] + args, capture_output=True, text=True, timeout=60)
     if p.returncode != 0:
         raise RuntimeError("gh %s: %s" % (" ".join(args[:3]), (p.stderr or "").strip()[:200]))
@@ -7796,7 +7882,7 @@ def _engine(method, path, body=None):
         return r.status, (json.loads(raw) if raw else None)
 
 
-def scan_stale(payload, gh=_gh_json, engine=_engine, now=None):
+def scan_stale(payload, gh=_scan_gh_json, engine=_engine, now=None):
     now = now or time.time()
     try:
         _, active = engine("GET", "/unstick-flow")
@@ -8049,7 +8135,17 @@ class Handler(BaseHTTPRequestHandler):
             elif task == "uiux-audit":
                 result = uiux_audit_flow(payload)
             else:
-                result = run_claude(task, payload)
+                result = None
+                if task == "merge":
+                    # Gemini security gate: blocks only on a fresh review that flags
+                    # security concerns; every other case fails open (see gate docs).
+                    _ok, _why = gemini_security_gate(payload.get("prUrl", ""))
+                    print(f"[merge-gate] {payload.get('prUrl', '')} allow={_ok} {_why}", flush=True)
+                    if not _ok:
+                        block_for_security(payload.get("prUrl", ""), _why)
+                        result = {"merged": False, "reason": _why}
+                if result is None:
+                    result = run_claude(task, payload)
             try:
                 _account(task, payload, result)
             except Exception as ge:  # the alarm must never break a task response
