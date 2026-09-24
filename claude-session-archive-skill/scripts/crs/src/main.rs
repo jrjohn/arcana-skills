@@ -1797,6 +1797,159 @@ fn embed_image_ocr_missing(workers: usize) -> Result<()> {
     Ok(())
 }
 
+// ─────────────────────── incremental ingest (v1.32.1) ───────────────────────
+// Session JSONL files only ever grow at the end, so a file whose mtime changed
+// only needs the lines after the ones already stored. Before v1.32.1 every mtime
+// change re-sent the whole file from line 0: a 110 MB / 39K-line active session
+// took ~49 min per pass (every row an ON CONFLICT no-op) — longer than the build
+// launcher's 45-min watchdog, so each run was killed mid-file and the next one
+// started over from line 0 again.
+//
+// ingest_state.lines = raw line index the next run may start from; every row
+// before it is already in msg. Values written before v1.32.1 are row counts,
+// which are never larger than that index, so resuming from one re-sends a few
+// lines and never skips any.
+
+/// mtime recorded with a mid-file checkpoint. It never equals a real mtime, so
+/// the mtime gate never skips a file whose last run did not reach the end.
+#[cfg(feature = "pg-backend")]
+const INGEST_CHECKPOINT_MTIME: f64 = -1.0;
+
+/// None = mtime unchanged, skip the file. Some(n) = start reading at raw line n.
+#[cfg(feature = "pg-backend")]
+fn ingest_start_line(prev: Option<(f64, i64)>, mtime: f64) -> Option<usize> {
+    match prev {
+        Some((m, _)) if (m - mtime).abs() < 1e-6 => None,
+        Some((_, lines)) => Some(usize::try_from(lines).unwrap_or(0)),
+        None => Some(0),
+    }
+}
+
+#[cfg(feature = "pg-backend")]
+struct ScannedRow {
+    seq: i32,
+    ts: Option<chrono::DateTime<Utc>>,
+    role: String,
+    tool: Option<String>,
+    content: String,
+}
+
+/// Reads a session JSONL from raw line `start`, handing each insertable row to
+/// `on_row(row, next_line)`; `next_line` is the line a checkpoint may record once
+/// this row (and all before it) is stored.
+///
+/// Returns the resume mark for ingest_state: the line count, minus any trailing
+/// lines that did not parse — the last line may still be half-written, and it
+/// must be read again next run, not skipped. Returns None when the file has
+/// fewer lines than `start` (rewritten, not appended): re-read it from 0.
+#[cfg(feature = "pg-backend")]
+fn scan_session_jsonl(
+    path: &Path,
+    start: usize,
+    mut on_row: impl FnMut(ScannedRow, usize) -> Result<()>,
+) -> Result<Option<usize>> {
+    let san = |s: &str| s.replace('\u{0000}', "");
+    let reader = BufReader::new(fs::File::open(path)?);
+    let mut total = 0usize;
+    let mut unparsed_tail: Option<usize> = None;
+    for (seq, line) in reader.lines().enumerate() {
+        total = seq + 1;
+        if seq < start { continue; }
+        let raw = match line { Ok(l) => l, Err(_) => continue };
+        if raw.is_empty() { continue; }
+        let rec: Value = match serde_json::from_str(&raw) {
+            Ok(v) => { unparsed_tail = None; v }
+            Err(_) => { unparsed_tail.get_or_insert(seq); continue }
+        };
+        let ts_raw = rec.get("timestamp").and_then(|v| v.as_str())
+            .or_else(|| rec.get("ts").and_then(|v| v.as_str()))
+            .unwrap_or("");
+        let (role, tool_name, content) = flatten_content(&rec);
+        let trimmed = content.trim();
+        if trimmed.is_empty() { continue; }
+        let bounded = truncate_chars(trimmed, 200_000);
+        let ts = if ts_raw.is_empty() { None } else {
+            chrono::DateTime::parse_from_rfc3339(ts_raw).ok().map(|t| t.with_timezone(&Utc))
+        };
+        on_row(ScannedRow {
+            seq: i32::try_from(seq)?,
+            ts,
+            role: san(&role),
+            tool: tool_name.as_deref().map(san),
+            content: san(&bounded),
+        }, seq + 1)?;
+    }
+    if total < start { return Ok(None); }
+    Ok(Some(unparsed_tail.unwrap_or(total)))
+}
+
+#[cfg(all(test, feature = "pg-backend"))]
+mod incremental_ingest_tests {
+    use super::*;
+
+    fn write(name: &str, body: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("crs-inc-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let p = dir.join(format!("{name}.jsonl"));
+        fs::write(&p, body).unwrap();
+        p
+    }
+    fn line(i: usize) -> String {
+        format!(r#"{{"type":"user","timestamp":"2026-09-24T00:00:00Z","message":{{"role":"user","content":"hello {i}"}}}}"#)
+    }
+    fn scan(p: &Path, start: usize) -> (Vec<i32>, Option<usize>) {
+        let mut seqs = Vec::new();
+        let mark = scan_session_jsonl(p, start, |r, next| {
+            assert_eq!(next, usize::try_from(r.seq).unwrap() + 1);
+            seqs.push(r.seq);
+            Ok(())
+        }).unwrap();
+        (seqs, mark)
+    }
+
+    #[test]
+    fn start_line_gate() {
+        assert_eq!(ingest_start_line(None, 5.0), Some(0));
+        assert_eq!(ingest_start_line(Some((5.0, 40)), 5.0), None);
+        assert_eq!(ingest_start_line(Some((4.0, 40)), 5.0), Some(40));
+        // a checkpoint never matches a real mtime
+        assert_eq!(ingest_start_line(Some((INGEST_CHECKPOINT_MTIME, 7)), 5.0), Some(7));
+        assert_eq!(ingest_start_line(Some((4.0, -3)), 5.0), Some(0));
+    }
+
+    #[test]
+    fn resumes_after_recorded_line() {
+        let body: String = (0..5).map(|i| line(i) + "\n").collect();
+        let p = write("resumes_after_recorded_line", &body);
+        assert_eq!(scan(&p, 0), (vec![0, 1, 2, 3, 4], Some(5)));
+        assert_eq!(scan(&p, 3), (vec![3, 4], Some(5)));
+        assert_eq!(scan(&p, 5), (vec![], Some(5)));
+    }
+
+    #[test]
+    fn half_written_last_line_is_read_again() {
+        let mut body: String = (0..3).map(|i| line(i) + "\n").collect();
+        body.push_str(&line(3)[..20]); // writer is mid-line
+        let p = write("half_written_last_line_is_read_again", &body);
+        let (seqs, mark) = scan(&p, 0);
+        assert_eq!(seqs, vec![0, 1, 2]);
+        assert_eq!(mark, Some(3), "must not skip the unfinished line");
+    }
+
+    #[test]
+    fn bad_line_in_the_middle_does_not_pin_the_mark() {
+        let body = format!("{}\nnot json\n{}\n", line(0), line(2));
+        let p = write("bad_line_in_the_middle_does_not_pin_the_mark", &body);
+        assert_eq!(scan(&p, 0), (vec![0, 2], Some(3)));
+    }
+
+    #[test]
+    fn shrunk_file_asks_for_full_reread() {
+        let p = write("shrunk_file_asks_for_full_reread", &(line(0) + "\n"));
+        assert_eq!(scan(&p, 10), (vec![], None));
+    }
+}
+
 // Direct-connect ingest — only used on non-unix (unix goes through the daemon
 // via ingest_file_pg_daemon).
 // Bare direct-connect ingest (continuous INSERT on a caller-held connection).
@@ -1813,14 +1966,10 @@ fn ingest_file_pg(pg: &mut postgres::Client, path: &Path) -> Result<usize> {
         .as_secs_f64();
     let path_str = path.to_string_lossy().to_string();
 
-    // mtime gate (skip if unchanged)
-    if let Some(r) = pg.query_opt("SELECT mtime FROM ingest_state WHERE file_path = $1", &[&path_str])? {
-        let prev: f64 = r.get(0);
-        if (prev - mtime).abs() < 1e-6 { return Ok(0); }
-    }
-
-    let f = fs::File::open(path)?;
-    let reader = BufReader::new(f);
+    // mtime gate (skip if unchanged) + where to resume (see ingest_start_line).
+    let prev = pg.query_opt("SELECT mtime, lines FROM ingest_state WHERE file_path = $1", &[&path_str])?
+        .map(|r| (r.get::<_, f64>(0), r.get::<_, i64>(1)));
+    let Some(start) = ingest_start_line(prev, mtime) else { return Ok(0) };
 
     // Batched commit: commit every COMMIT_BATCH rows on a fresh transaction
     // rather than accumulating the whole file in one transaction. A single big
@@ -1837,48 +1986,40 @@ fn ingest_file_pg(pg: &mut postgres::Client, path: &Path) -> Result<usize> {
     let session_id_s = san(&session_id);
     let project_s = san(&project);
     let mut new_rows = 0usize;
-    let mut in_batch = 0usize;
-    let mut tx = pg.transaction()?;
-    for (seq, line) in reader.lines().enumerate() {
-        let raw = match line { Ok(l) => l, Err(_) => continue };
-        if raw.is_empty() { continue; }
-        let rec: Value = match serde_json::from_str(&raw) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        let ts_raw = rec.get("timestamp").and_then(|v| v.as_str())
-            .or_else(|| rec.get("ts").and_then(|v| v.as_str()))
-            .unwrap_or("");
-        let (role, tool_name, content) = flatten_content(&rec);
-        let trimmed = content.trim();
-        if trimmed.is_empty() { continue; }
-        let bounded = truncate_chars(trimmed, 200_000);
-        let ts_opt: Option<chrono::DateTime<Utc>> = if !ts_raw.is_empty() {
-            chrono::DateTime::parse_from_rfc3339(ts_raw).ok().map(|t| t.with_timezone(&Utc))
-        } else { None };
-        let role_s = san(&role);
-        let tool_s = tool_name.as_deref().map(san);
-        let content_s = san(&bounded);
-        tx.execute(insert_sql, &[
-            &session_id_s, &project_s, &(seq as i32), &ts_opt,
-            &role_s, &tool_s, &content_s,
-        ])?;
-        new_rows += 1;
-        in_batch += 1;
-        if in_batch >= COMMIT_BATCH {
-            tx.commit()?;
-            tx = pg.transaction()?;
-            in_batch = 0;
+    let mut batch: Vec<ScannedRow> = Vec::with_capacity(COMMIT_BATCH);
+    // One transaction per batch: rows + ingest_state (a checkpoint mid-file, the
+    // real mtime at the end) commit together, so the recorded line never runs
+    // ahead of the rows actually stored.
+    let flush = |pg: &mut postgres::Client, batch: &mut Vec<ScannedRow>, state_mtime: f64, lines: usize| -> Result<()> {
+        let mut tx = pg.transaction()?;
+        for r in batch.iter() {
+            tx.execute(insert_sql, &[
+                &session_id_s, &project_s, &r.seq, &r.ts, &r.role, &r.tool, &r.content,
+            ])?;
         }
-    }
-
-    // Final batch: remaining rows + ingest_state, committed together.
-    tx.execute(
-        "INSERT INTO ingest_state (file_path, mtime, lines) VALUES ($1, $2, $3)
-         ON CONFLICT (file_path) DO UPDATE SET mtime = EXCLUDED.mtime, lines = EXCLUDED.lines",
-        &[&path_str, &mtime, &(new_rows as i64)],
-    )?;
-    tx.commit()?;
+        tx.execute(
+            "INSERT INTO ingest_state (file_path, mtime, lines) VALUES ($1, $2, $3)
+             ON CONFLICT (file_path) DO UPDATE SET mtime = EXCLUDED.mtime, lines = EXCLUDED.lines",
+            &[&path_str, &state_mtime, &(lines as i64)],
+        )?;
+        tx.commit()?;
+        batch.clear();
+        Ok(())
+    };
+    let mut on_row = |r: ScannedRow, next_line: usize| -> Result<()> {
+        batch.push(r);
+        new_rows += 1;
+        if batch.len() >= COMMIT_BATCH {
+            flush(pg, &mut batch, INGEST_CHECKPOINT_MTIME, next_line)?;
+        }
+        Ok(())
+    };
+    let mark = match scan_session_jsonl(path, start, &mut on_row)? {
+        Some(m) => m,
+        None => scan_session_jsonl(path, 0, &mut on_row)?.unwrap_or(0),
+    };
+    // Final batch: remaining rows + ingest_state with the real mtime.
+    flush(pg, &mut batch, mtime, mark)?;
     Ok(new_rows)
 }
 
@@ -1896,50 +2037,36 @@ fn ingest_file_async(pg: &mut AsyncPg, path: &Path) -> Result<usize> {
         .as_secs_f64();
     let path_str = path.to_string_lossy().to_string();
 
-    if let Some(r) = pg.query_opt("SELECT mtime FROM ingest_state WHERE file_path = $1", &[&path_str])? {
-        let prev: f64 = r.get(0);
-        if (prev - mtime).abs() < 1e-6 { return Ok(0); }
-    }
+    let prev = pg.query_opt("SELECT mtime, lines FROM ingest_state WHERE file_path = $1", &[&path_str])?
+        .map(|r| (r.get::<_, f64>(0), r.get::<_, i64>(1)));
+    let Some(start) = ingest_start_line(prev, mtime) else { return Ok(0) };
 
     let san = |s: &str| s.replace('\u{0000}', "");
     let session_id_s = san(&session_id);
     let project_s = san(&project);
 
-    let f = fs::File::open(path)?;
-    let reader = BufReader::new(f);
     const COMMIT_BATCH: usize = 100;
     let mut batch: Vec<AsyncIngestRow> = Vec::with_capacity(COMMIT_BATCH);
     let mut new_rows = 0usize;
-    for (seq, line) in reader.lines().enumerate() {
-        let raw = match line { Ok(l) => l, Err(_) => continue };
-        if raw.is_empty() { continue; }
-        let rec: Value = match serde_json::from_str(&raw) { Ok(v) => v, Err(_) => continue };
-        let ts_raw = rec.get("timestamp").and_then(|v| v.as_str())
-            .or_else(|| rec.get("ts").and_then(|v| v.as_str()))
-            .unwrap_or("");
-        let (role, tool_name, content) = flatten_content(&rec);
-        let trimmed = content.trim();
-        if trimmed.is_empty() { continue; }
-        let bounded = truncate_chars(trimmed, 200_000);
-        let ts_opt: Option<chrono::DateTime<Utc>> = if !ts_raw.is_empty() {
-            chrono::DateTime::parse_from_rfc3339(ts_raw).ok().map(|t| t.with_timezone(&Utc))
-        } else { None };
-        batch.push(AsyncIngestRow {
-            seq: seq as i32,
-            ts: ts_opt,
-            role: san(&role),
-            tool: tool_name.as_deref().map(san),
-            content: san(&bounded),
-        });
+    let mut on_row = |r: ScannedRow, next_line: usize| -> Result<()> {
+        batch.push(AsyncIngestRow { seq: r.seq, ts: r.ts, role: r.role, tool: r.tool, content: r.content });
         new_rows += 1;
         if batch.len() >= COMMIT_BATCH {
-            pg.ingest_batch(&session_id_s, &project_s, &batch, None)?;
+            // Checkpoint in the same statement round as the rows: a run killed
+            // mid-file (watchdog, stalled socket) resumes here instead of line 0.
+            pg.ingest_batch(&session_id_s, &project_s, &batch,
+                Some((&path_str, INGEST_CHECKPOINT_MTIME, next_line as i64)))?;
             batch.clear();
         }
-    }
-    // Final flush: remaining rows + ingest_state upsert, committed together (always
-    // runs, even with an empty tail, so the mtime gate is recorded).
-    pg.ingest_batch(&session_id_s, &project_s, &batch, Some((&path_str, mtime, new_rows as i64)))?;
+        Ok(())
+    };
+    let mark = match scan_session_jsonl(path, start, &mut on_row)? {
+        Some(m) => m,
+        None => scan_session_jsonl(path, 0, &mut on_row)?.unwrap_or(0),
+    };
+    // Final flush: remaining rows + ingest_state with the real mtime (always runs,
+    // even with an empty tail, so the mtime gate is recorded).
+    pg.ingest_batch(&session_id_s, &project_s, &batch, Some((&path_str, mtime, mark as i64)))?;
     Ok(new_rows)
 }
 
