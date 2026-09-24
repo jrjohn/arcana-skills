@@ -1,0 +1,84 @@
+#!/bin/bash
+# launchd entry point for `crs build` on macOS — installed by install.sh to
+# ~/claude-archive/bin/crs-build-launcher and referenced by the
+# com.<user>.claude-archive plist.
+#
+# Why launchd runs this instead of crs directly
+# ─────────────────────────────────────────────
+# 1. Credentials live in exactly one place: ~/.config/crs/env.sh. The plist
+#    carries none. The old template put CRS_PG_HOST / CRS_PG_PASSWORD
+#    placeholders in the plist and asked you to edit them by hand; re-running
+#    install.sh without --with-pg rewrote the plist from that template, and on
+#    2026-07-23 a working install silently reverted to `arcana.example.com`.
+#    Ingest kept working through the pgsearchd daemon (which reads env.sh), so
+#    nobody noticed for two months — until a feature that connects directly
+#    (importance scoring, OCR) failed on every single tick.
+# 2. Overlap guard. Two builds racing each other on the shared PG was observed
+#    (46 min + 43 min, both idle on an ESTABLISHED socket).
+# 3. Watchdog. The overlap guard does nothing about ONE build that hangs: it is
+#    alive, so its lock is never reclaimed, and every later tick is skipped
+#    while ingest stays frozen. Seen twice on 2026-09-24 — 4h40m at 0% CPU, then
+#    a half-open connection whose backend bluesea had already dropped while this
+#    Mac still showed ESTABLISHED.
+#
+# Tunables (env, e.g. in ~/.config/crs/env.sh):
+#   CRS_BUILD_WATCHDOG        max seconds per build            (default 2700)
+#   CRS_BUILD_WORKERS         embed/ocr concurrency            (default 2)
+#   CRS_BUILD_PROJECT_PREFIX  only embed these projects        (PG default below)
+#   CRS_BIN                   crs binary to run
+set -uo pipefail
+
+# ── overlap guard ────────────────────────────────────────────────────────────
+# mkdir is atomic on APFS; macOS ships no flock(1).
+LOCKDIR="${TMPDIR:-/tmp}/crs-build.lock.d"
+PIDFILE="$LOCKDIR/pid"
+if ! mkdir "$LOCKDIR" 2>/dev/null; then
+  # A SIGKILL skips the EXIT trap and orphans the lock, which would then skip
+  # every future tick forever — so reclaim it when its recorded owner is gone.
+  owner=$(cat "$PIDFILE" 2>/dev/null)
+  if [ -n "$owner" ] && kill -0 "$owner" 2>/dev/null; then
+    echo "$(date '+%F %T') skipped: crs build $owner still running"
+    exit 0
+  fi
+  echo "$(date '+%F %T') reclaiming stale lock (owner=${owner:-none}, not alive)"
+  rm -rf "$LOCKDIR"
+  mkdir "$LOCKDIR" 2>/dev/null || { echo "$(date '+%F %T') failed to reclaim lock"; exit 1; }
+fi
+echo $$ > "$PIDFILE"
+# Not `exec crs`: exec replaces this shell and the EXIT trap would never fire.
+trap 'rm -rf "$LOCKDIR" 2>/dev/null' EXIT INT TERM
+
+# ── credentials + mode ───────────────────────────────────────────────────────
+[ -f "$HOME/.config/crs/env.sh" ] && source "$HOME/.config/crs/env.sh"
+
+CRS="${CRS_BIN:-$HOME/claude-archive/crs/target/release/crs}"
+ARGS=(build --workers "${CRS_BUILD_WORKERS:-2}")
+# --workers 2: more parallel embed requests intermittently wedge a single local
+# Ollama (idle, not progressing).
+
+if [ -n "${CRS_PG_HOST:-}${CRS_PG_URL:-}" ]; then
+  # Shared PG. The async ingest path has per-operation timeouts and reconnect;
+  # the sync client has an unbounded read on macOS (no TCP_USER_TIMEOUT).
+  export CRS_BUILD_DIRECT=1
+  # Embed only rows THIS Mac ingested. Without it, every host with a GPU races
+  # to embed every other host's rows on the shared table.
+  ARGS+=("--project-prefix=${CRS_BUILD_PROJECT_PREFIX:--Users-$(id -un)}")
+elif [ -n "${CRS_BUILD_PROJECT_PREFIX:-}" ]; then
+  ARGS+=("--project-prefix=${CRS_BUILD_PROJECT_PREFIX}")
+fi
+
+# ── watchdog ─────────────────────────────────────────────────────────────────
+# perl's alarm survives exec, so SIGALRM lands on crs itself (exit 142). The
+# shell then continues, the EXIT trap releases the lock, and the next tick
+# starts clean. Nothing is lost by the kill: ingest is idempotent and embed
+# persists per chunk. 45 minutes covers a catch-up after an outage; a normal
+# 15-minute tick finishes in a few.
+WATCHDOG="${CRS_BUILD_WATCHDOG:-2700}"
+perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$WATCHDOG" "$CRS" "${ARGS[@]}"
+rc=$?
+if [ "$rc" -eq 142 ]; then
+  echo "$(date '+%F %T') ⏱ WATCHDOG killed crs build after ${WATCHDOG}s — something stalled; next tick starts fresh"
+elif [ "$rc" -ne 0 ]; then
+  echo "$(date '+%F %T') crs build exited rc=$rc"
+fi
+exit "$rc"
