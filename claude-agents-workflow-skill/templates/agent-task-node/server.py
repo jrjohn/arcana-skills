@@ -27,6 +27,7 @@ Design notes:
 import base64
 import datetime
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -53,6 +54,26 @@ def _models_breakdown(mu):
                         + (u.get("cacheReadInputTokens") or u.get("cache_read_input_tokens") or 0)
                         + (u.get("cacheCreationInputTokens") or u.get("cache_creation_input_tokens") or 0))
     return out
+
+
+def _cost_usd(env):
+    """CLI 自己算的本次花費(`total_cost_usd`)。不是有限、非負的數字 → None。
+
+    為什麼要帶這個:下面的 `input` 把快取讀取也加了進去,而快取讀取只收一成的錢。
+    讀取端原本拿 `input` × 原價去估,2026-09-24 量到同一段時間它算出 $68.82、
+    CLI 自己回報 $15.53(4.4 倍),loop 驅動器的週預算煞車讀的就是灌水的那個。
+    CLI 知道快取怎麼拆、也知道當下的價目,它的數字才是準的。
+
+    缺值回 None 而不是 0:0 會把一次花了錢的呼叫記成免費;None 讓讀取端退回估算。
+    """
+    v = env.get("total_cost_usd")
+    if isinstance(v, bool):
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) and f >= 0 else None
 
 
 def _dominant_model(mu):
@@ -2895,6 +2916,7 @@ def _invoke_claude_once(prompt, schema, payload, wall, cwd=None):
                          + (usage.get("cache_read_input_tokens") or 0)
                          + (usage.get("cache_creation_input_tokens") or 0)),
             "output": int(usage.get("output_tokens") or 0),
+            "cost_usd": _cost_usd(env),
         }
         # Hand the session id back so the worker can persist it on the process
         # instance (var `sid`) and thread it into the next AI task — continuity +
