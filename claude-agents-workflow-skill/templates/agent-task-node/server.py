@@ -6115,6 +6115,28 @@ def test_only_diff(before, after):
 
 
 _SONAR_SCANNER_IMAGE = os.environ.get("SONAR_SCANNER_IMAGE", "sonarsource/sonar-scanner-cli:latest")
+# 掃描容器裡放程式碼的地方 —— 必須是映像裡**已經存在**的資料夾。
+# sonar-scanner-cli 的 WORKDIR 是 /usr/src,**沒有 /src**。`docker cp - 容器:/src` 對不存在的
+# 目的地直接失敗(`destination must be a directory`),而那個結果沒有被檢查 → 掃描器對著一個
+# 不存在的專案資料夾跑 → `Project home must be an existing directory: /src` → EXECUTION FAILURE。
+# 錯誤又因為只留 stdout 而被丟掉。2026-09-24 查到時,test 節點的 Sonar 每一輪都是 notRun,
+# PM 因此每一輪都判 BLOCKED。
+_SCANNER_BASE = "/usr/src"
+
+
+def _scanner_failure(run):
+    """掃描器失敗時的理由:**錯誤行優先**,不論它印在 stdout 還是 stderr。
+
+    舊寫法 `(run.stdout or run.stderr)[-300:]` —— 只要 stdout 有東西就不看 stderr,而
+    sonar-scanner 的 INFO 在 stdout、ERROR 與 stack trace 在 stderr。結果理由永遠是最後
+    300 字的 INFO(「EXECUTION FAILURE / Total time」),真正的原因從來沒被留下來過。
+    """
+    out, err = (run.stdout or ""), (run.stderr or "")
+    errs = [ln.strip() for ln in (err + "\n" + out).splitlines()
+            if "ERROR" in ln or "Exception" in ln or "must be" in ln]
+    if errs:
+        return " | ".join(errs[:4])[:600]
+    return (err.strip() or out.strip())[-600:]
 
 
 def _cov_project_dir(workdir, app):
@@ -6379,12 +6401,12 @@ def _sonar(payload):
     cname = "sonar-scan-%s" % os.getpid()
     try:
         subprocess.run(["docker", "rm", "-f", cname], capture_output=True, timeout=120)
-        lcov = ",".join("/src/" + os.path.basename(p) for p in reports)
+        lcov = ",".join(_SCANNER_BASE + "/" + os.path.basename(p) for p in reports)
         create = subprocess.run(
             ["docker", "create", "--name", cname, "--network", "host",
              "-e", "SONAR_HOST_URL=" + host, "-e", "SONAR_TOKEN=" + token,
              _SONAR_SCANNER_IMAGE,
-             "-Dsonar.projectKey=" + key, "-Dsonar.projectBaseDir=/src",
+             "-Dsonar.projectKey=" + key, "-Dsonar.projectBaseDir=" + _SCANNER_BASE,
              "-Dsonar.sources=dashboard/src,arcana-cloud-rust/crates",
              "-Dsonar.exclusions=**/node_modules/**,**/target/**,**/*.spec.ts",
              "-Dsonar.scm.disabled=true",
@@ -6397,17 +6419,25 @@ def _sonar(payload):
         tar = subprocess.Popen(
             ["tar", "--exclude=./.git", "--exclude=./node_modules", "--exclude=./target",
              "--exclude=./dist", "-C", wd, "-cf", "-", "."], stdout=subprocess.PIPE)
-        subprocess.run(["docker", "cp", "-", cname + ":/src"], stdin=tar.stdout,
-                       capture_output=True, timeout=900)
+        cp = subprocess.run(["docker", "cp", "-", cname + ":" + _SCANNER_BASE], stdin=tar.stdout,
+                            capture_output=True, text=True, timeout=900)
         tar.stdout.close(); tar.wait(timeout=60)
+        if cp.returncode != 0:
+            # 程式碼沒進去就不要掃 —— 對著空資料夾掃出來的只會是一個看起來像結果的失敗。
+            out["reason"] = "copying the checkout into the scanner failed: " + (cp.stderr or cp.stdout or "")[-300:]
+            return out
         for p in reports:
-            subprocess.run(["docker", "cp", p, "%s:/src/%s" % (cname, os.path.basename(p))],
-                           capture_output=True, timeout=300)
+            rcp = subprocess.run(["docker", "cp", p, "%s:%s/%s" % (cname, _SCANNER_BASE, os.path.basename(p))],
+                                 capture_output=True, text=True, timeout=300)
+            if rcp.returncode != 0:
+                out["reason"] = "copying coverage report %s into the scanner failed: %s" % (
+                    os.path.basename(p), (rcp.stderr or rcp.stdout or "")[-300:])
+                return out
         run = subprocess.run(["docker", "start", "-a", cname],
                              capture_output=True, text=True, timeout=3600)
         out["scannerExit"] = run.returncode
         if run.returncode != 0:
-            out["reason"] = "scanner failed: " + (run.stdout or run.stderr or "")[-300:]
+            out["reason"] = "scanner failed: " + _scanner_failure(run)
             return out
     except Exception as e:                                       # noqa: BLE001
         out["reason"] = "sonar scan error: %s" % e
