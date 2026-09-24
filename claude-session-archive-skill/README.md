@@ -322,6 +322,12 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.32.0 — workers that survive stalls, enrichment only for searchable rows, re-runnable install.sh
+
+- **Watchdogs on both background workers.** The Mac mini distill loop and the Mac's 15-minute `crs build` each run on a synchronous PG client, which on macOS has no read timeout: a stalled or half-open connection means waiting for hours (measured: worker idle ~60% of the time; one build stuck 4h40m at 0% CPU). Each run is now wrapped in a perl-alarm watchdog (`CRS_DISTILL_WATCHDOG`, default 1800s; `CRS_BUILD_WATCHDOG`, default 2700s). The distill log now timestamps every batch, shows `err=` lines instead of dropping them, and no longer treats "182100 pending" as "0 pending".
+- **Embed and distill only touch rows search can return.** Search has always read `role IN ('user','assistant')`; enrichment read every role, spending ~64 GPU-hours distilling 16,473 unsearchable rows with 19,233 more queued. One `searchable_roles_sql!()` macro now feeds all seven selection queries. Empty distillations become tombstones so short-lived worker processes stop re-selecting them.
+- **`install.sh` can be re-run safely.** The launchd plist no longer carries credentials (they live only in `~/.config/crs/env.sh`) and runs `crs-build-launcher`, now tracked in the repo. The new `scripts/install-launchd-schedule.sh` never overwrites env.sh, migrates real inline credentials instead of dropping them, leaves a current install untouched, and refuses to overwrite a plist it cannot parse. Covered by `scripts/test-install-launchd-schedule.sh` (33 checks, scratch HOME, fake launchctl).
+
 ### v1.31.0 — skills distributed through PG (`skill-publish` / `skill-sync`) + row importance in `osearch`
 
 - **The problem this started from**: `inap-release-manager` held a complete `instructions.md` + `references/` — including a CR rule learned by getting it wrong once — but had **no `SKILL.md`**, and Claude Code only discovers skills through `SKILL.md`. It had never been loaded: directory present, content complete, nothing ever errored, and the same release work restarted from scratch each time. Retrieval was never at fault (`osearch 'iNAP Lab+ 變更報告'` returns the report as hit #1) — **the knowledge was simply invisible**. Distilling it would not have helped either: `DISTILL_PROMPT` explicitly says 不挑重點不省略長尾, so distillation is a *flattener*, not a prioritiser.

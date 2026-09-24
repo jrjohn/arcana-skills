@@ -379,6 +379,21 @@ struct EmbedResponse {
     embeddings: Vec<Vec<f32>>,
 }
 
+// The roles search can ever return: every csearch / vsearch / osearch leg filters
+// msg on exactly this (image_ocr hits come from their own table). Embedding or
+// distilling any other role is compute that no query will ever surface.
+//
+// Until 2026-09-24 neither embed-missing nor distill-missing filtered on role.
+// Measured then: 16,473 rows already distilled that search can never return
+// (~64 GPU-hours on the Mac mini at ~14 s/row), and 19,233 more — system
+// 17,837, attachment 1,391, result 5 — waiting in its queue, 11% of it.
+//
+// A macro rather than a const because format! only accepts a string literal and
+// concat! only accepts literals; this is the one place the list is written for
+// enrichment, so it cannot drift between the three embed paths and distill.
+#[allow(unused_macros)]
+macro_rules! searchable_roles_sql { () => { "role IN ('user', 'assistant')" } }
+
 fn http_client() -> Result<reqwest::blocking::Client> {
     Ok(reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
@@ -1527,7 +1542,8 @@ fn cmd_embed_missing_direct(workers: usize, limit: usize, project_prefix: Option
 
     let mut pg = AsyncPg::connect()?;
     let pending_sql = format!(
-        "SELECT COUNT(*) FROM msg WHERE embedding IS NULL AND length(content) >= 5{}",
+        concat!("SELECT COUNT(*) FROM msg WHERE embedding IS NULL AND length(content) >= 5 AND ",
+                searchable_roles_sql!(), "{}"),
         prefix_clause
     );
     let pending: i64 = pg.query_one(&pending_sql, &prefix_params[..])?.get(0);
@@ -1537,7 +1553,8 @@ fn cmd_embed_missing_direct(workers: usize, limit: usize, project_prefix: Option
     }
     let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
     let select_sql = format!(
-        "SELECT id, content FROM msg WHERE embedding IS NULL AND length(content) >= 5{} ORDER BY id DESC {}",
+        concat!("SELECT id, content FROM msg WHERE embedding IS NULL AND length(content) >= 5 AND ",
+                searchable_roles_sql!(), "{} ORDER BY id DESC {}"),
         prefix_clause, limit_clause
     );
     let rows = pg.query(&select_sql, &prefix_params[..])?;
@@ -2128,7 +2145,8 @@ fn cmd_embed_missing(workers: usize, limit: usize, project_prefix: Option<String
     let mut pg = pg_connect()?;
     let (prefix_clause, prefix_binds) = project_prefix_filter_pg(project_prefix.as_deref(), 1);
     let pending_sql = format!(
-        "SELECT COUNT(*) FROM msg WHERE embedding IS NULL AND length(content) >= 5{}",
+        concat!("SELECT COUNT(*) FROM msg WHERE embedding IS NULL AND length(content) >= 5 AND ",
+                searchable_roles_sql!(), "{}"),
         prefix_clause
     );
     let prefix_params: Vec<&(dyn postgres::types::ToSql + Sync)> =
@@ -2140,9 +2158,9 @@ fn cmd_embed_missing(workers: usize, limit: usize, project_prefix: Option<String
     }
     let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
     let select_sql = format!(
-        "SELECT id, content FROM msg
-         WHERE embedding IS NULL AND length(content) >= 5{}
-         ORDER BY id DESC {}",
+        concat!("SELECT id, content FROM msg
+         WHERE embedding IS NULL AND length(content) >= 5 AND ", searchable_roles_sql!(), "{}
+         ORDER BY id DESC {}"),
         prefix_clause, limit_clause
     );
     let rows = pg.query(&select_sql, &prefix_params[..])?;
@@ -3659,9 +3677,9 @@ fn rpc_embed_select(pool: &PgPool, req: &serde_json::Value) -> Result<serde_json
     let mut conn = pool.get()?;
     let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
     let sql = format!(
-        "SELECT id, content FROM msg
-         WHERE embedding IS NULL AND length(content) >= 5{}
-         ORDER BY id DESC {}",
+        concat!("SELECT id, content FROM msg
+         WHERE embedding IS NULL AND length(content) >= 5 AND ", searchable_roles_sql!(), "{}
+         ORDER BY id DESC {}"),
         prefix_clause, limit_clause
     );
     let rows = conn.query(&sql, &binds[..])?;
@@ -4007,8 +4025,9 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
     {
         let mut pg = pg_connect()?;
         let cnt_sql = format!(
-            "SELECT COUNT(*) FROM msg WHERE NOT EXISTS \
-             (SELECT 1 FROM msg_distilled d WHERE d.original_id = msg.id) AND length(content) >= 20{}",
+            concat!("SELECT COUNT(*) FROM msg WHERE NOT EXISTS \
+             (SELECT 1 FROM msg_distilled d WHERE d.original_id = msg.id) AND length(content) >= 20 AND ",
+             searchable_roles_sql!(), "{}"),
             prefix_clause);
         let binds: Vec<&(dyn postgres::types::ToSql + Sync)> =
             prefix_binds.iter().map(|s| s as &(dyn postgres::types::ToSql + Sync)).collect();
@@ -4033,9 +4052,10 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
         let remaining = if limit > 0 { (limit - total_done).min(CHUNK) } else { CHUNK };
         let sel_lim = remaining + attempted.len().min(60); // over-select past attempted-empties
         let select_sql = format!(
-            "SELECT id, content FROM msg \
+            concat!("SELECT id, content FROM msg \
              WHERE NOT EXISTS (SELECT 1 FROM msg_distilled d WHERE d.original_id = msg.id) \
-               AND length(content) >= 20{} ORDER BY id DESC LIMIT {}",
+               AND length(content) >= 20 AND ", searchable_roles_sql!(),
+               "{} ORDER BY id DESC LIMIT {}"),
             prefix_clause, sel_lim);
         let binds: Vec<&(dyn postgres::types::ToSql + Sync)> =
             prefix_binds.iter().map(|s| s as &(dyn postgres::types::ToSql + Sync)).collect();

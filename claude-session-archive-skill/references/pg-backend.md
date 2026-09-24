@@ -184,6 +184,23 @@ BEGIN
      OR NEW.content ~ '^\[THINKING\]\s*$' THEN
     RETURN NULL;
   END IF;
+  -- attachment (v1.32.0): drop ONLY the harness types verified as repetitive
+  -- boilerplate; everything else is stored, keeping the rule above for unknown
+  -- types. Human input and plan text are protected even if a noise type name
+  -- appears inside them; error-bearing types (hook_*_error, diagnostics) are kept.
+  IF NEW.role = 'attachment'
+     AND NOT (NEW.content LIKE '%"humanTurn":true%'
+              OR NEW.content ~ '"type":"(queued_command|text|structured_output|edited_text_file|plan_file_reference)"')
+     AND NEW.content ~ ('"type":"(output_style|output_style_instructions|total_tokens_reminder|task_reminder'
+                        '|silent_turn_reminder|batching_reminder_sent|deferred_tools_delta|deferred_tools_record'
+                        '|agent_listing_delta|skill_listing|mcp_instructions_delta|command_permissions'
+                        '|bash_output_audience_note|date_change|date|model|environment|session_context'
+                        '|prompt_snapshot|plan_mode|plan_mode_exit|plan_mode_reentry|auto_mode|auto_mode_exit'
+                        '|remote_session_change|hook_additional_context|hook_success|hook_cancelled'
+                        '|hook_system_message|invoked_skills|credential_org|task_status|workflow_keyword_request'
+                        '|thinking_drop|thinking_stripped|read_truncation_notice|compact_file_reference)"') THEN
+    RETURN NULL;
+  END IF;
   RETURN NEW;
 END $$;
 CREATE TRIGGER msg_drop_noise_bi BEFORE INSERT ON msg
@@ -191,6 +208,23 @@ CREATE TRIGGER msg_drop_noise_bi BEFORE INSERT ON msg
 -- New Claude Code event types are NOT dropped until added to the list (safer default:
 -- an unknown type is stored, never silently lost). Check periodically:
 --   SELECT role, count(*) FROM msg GROUP BY 1 ORDER BY 2 DESC;
+--
+-- attachment history (2026-09-24). The first version of the rule above left
+-- attachment alone, and 87K of them accumulated (18% of msg) — overwhelmingly one
+-- per turn of harness state: output_style, total_tokens_reminder, task_reminder,
+-- tool/skill listings, system-prompt snapshots. They were never searchable, but
+-- embed-missing and distill-missing did not filter on role, so they were embedded
+-- and queued for distillation all the same. Briefly the trigger was flipped to an
+-- attachment ALLOWLIST; that dropped unknown types by default and contradicted the
+-- rule above, so it was reverted to this denylist the same day. What actually fixed
+-- the compute cost is the other half: enrichment now filters on the searchable roles
+-- (see searchable_roles_sql! in main.rs), so an attachment kept here costs disk and
+-- nothing else. 81,959 boilerplate rows were deleted once, with a full copy kept in
+-- msg_attachment_purged_20260924 — 44 of them were plan_file_reference (plan text,
+-- also on disk under ~/.claude/plans/); restore with
+--   INSERT INTO msg (id,session_id,project,seq,ts,role,tool_name,content,importance)
+--   SELECT id,session_id,project,seq,ts,role,tool_name,content,importance
+--   FROM msg_attachment_purged_20260924 WHERE content LIKE '%plan_file_reference%';
 
 -- Skill distribution (v1.31.0). `crs skill-init` creates these; skills are authored
 -- in git and published here, so a correction reaches every machine instead of
