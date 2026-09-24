@@ -28,7 +28,7 @@
 #       command: hvigorw assembleHap --mode module -p product=default --no-daemon
 # ============================================
 
-FROM ubuntu:22.04
+FROM ubuntu:26.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV OHOS_SDK_HOME=/opt/ohos-sdk/command-line-tools/sdk
