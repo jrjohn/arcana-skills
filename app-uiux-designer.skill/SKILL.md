@@ -1,5 +1,5 @@
 ---
-name: app-uiux-designer
+name: app-uiux-designer.skill
 description: |
   Enterprise UI/UX design expert using Chain of Repository (CoR) architecture.
   SRS/SDD → 100% UI/UX + 100% Navigation.

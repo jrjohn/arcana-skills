@@ -1,3 +1,8 @@
+---
+name: mis-management-skill
+description: 從單一 CentOS 管理主機經營中小企業內網。當使用者處理下列任一項時載入:FortiGate threatfeed 自動化(社群來源 + 從 deny log 自動收錄攻擊者、巢狀 address-group 繞過 FortiOS 6.2 的 600 筆上限、local-in-policy)、NetBox 當 IP/聯絡人/密碼的真相來源並輸出 ip-name.tsv、LibreNMS 自訂服務(grep FG syslog 產 Nagios 格式 + SSH dispatcher 限制可呼叫的腳本)、QNAP NAS 老機問題(內建 OpenSSL 太舊連不上 Cloudflare CDN、freshclam 靜默失敗、隔離區清理)、從 CentOS 用 ldapsearch 查 Active Directory、以及比對 Windows DNS log 與 FG forward traffic 追蹤員工 AI 服務用量。不適用於一般 Linux 系統管理、雲原生部署、或全新的 FortiGate 初始安裝(本 skill 假設 FG 已設好 API token 與 SSL VPN)。
+---
+
 # MIS Management Skill
 
 Central infrastructure for managing a small/medium business network from a single CentOS hub. Pulls together FortiGate threatfeed automation, NetBox-driven IP labeling, LibreNMS service monitoring, QNAP NAS management (including ClamAV signature update proxy when the NAS itself can't TLS), AD LDAP queries from Linux, and DNS-based AI-usage tracking.

@@ -1,4 +1,6 @@
 ---
+name: claude-agents-workflow-skill
+description: 「已過時,不要用」—— 這份 skill 的編排層是 Apache KIE SonataFlow,而 SonataFlow 已於 2026-06-09 退役,平台改用單一 Kogito BPMN 引擎。狀態仍停在 scaffold (Phase 0),從未完工。要做 AI agent 編排、BPMN 流程、CI 自動修復或工作流監控,一律改用 arcana-ai-agent-flow-skill。只有在要考古「當初為什麼選 SonataFlow、為什麼後來退役」時才讀它。
 skill_name: claude-agents-workflow-skill
 skill_version: 0.1.0
 created_date: 2026-05-29

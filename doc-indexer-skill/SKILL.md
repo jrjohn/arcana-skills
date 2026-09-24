@@ -1,5 +1,5 @@
 ---
-name: doc-indexer
+name: doc-indexer-skill
 description: 文件索引與全文搜尋工具。使用 /doc-indexer search "關鍵字" 搜尋文件，/doc-indexer index "目錄" 建立索引。支援 PDF, Word, Excel, 圖片 OCR，中文分詞，分頁索引。
 allowed-tools: [Bash, Read, Write]
 ---
