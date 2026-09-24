@@ -114,7 +114,7 @@ CREATE TABLE msg (
     content     TEXT,
     content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('simple', COALESCE(content,''))) STORED,
     embedding   vector(1024),     -- bge-m3
-    importance  SMALLINT,         -- 0-4, since v1.30.0; NULL = not scored yet
+    importance  SMALLINT,         -- 0-4, since v1.31.0; NULL = not scored yet
     UNIQUE (session_id, seq)
 );
 CREATE INDEX msg_ts_idx       ON msg (ts);
@@ -124,7 +124,7 @@ CREATE INDEX msg_tsv_idx      ON msg USING GIN  (content_tsv);
 CREATE INDEX msg_emb_idx      ON msg USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX msg_importance_null ON msg (id) WHERE importance IS NULL;
 
--- importance (v1.30.0). Filled by `crs importance-backfill`, NOT at ingest: there
+-- importance (v1.31.0). Filled by `crs importance-backfill`, NOT at ingest: there
 -- are three separate INSERT INTO msg sites and the rule must live in exactly one
 -- place (importance_of() in main.rs). Nullable on purpose — NULL is "not scored
 -- yet", 0 is "scored, ordinary"; collapsing them would leave the backfill unable
@@ -165,7 +165,34 @@ CREATE TRIGGER msg_jieba_sync_aiu AFTER INSERT OR UPDATE OF content ON msg
 --   INSERT INTO msg_jieba(id,cj) SELECT id, to_tsvector('jiebacfg',coalesce(content,'')) FROM msg
 --   ON CONFLICT (id) DO NOTHING;
 
--- Skill distribution (v1.30.0). `crs skill-init` creates these; skills are authored
+-- Optional but recommended: drop noise at insert (added 2026-09-14). A live archive was
+-- 54% dead weight: Claude Code metadata events (mode, last-prompt, ai-title, …) that no
+-- PG search path ever returns (every query filters role IN ('user','assistant')), plus
+-- 67K identical "[THINKING]" placeholders from redacted thinking — each still paid a
+-- 4KB embedding + a 4KB HNSW entry. Deleting them once is not enough: crs re-ingests a
+-- whole JSONL when its mtime changes (ON CONFLICT DO NOTHING), so they come back. This
+-- BEFORE trigger makes the INSERT a no-op for them (the AFTER jieba trigger then never
+-- fires). Deliberately a denylist: attachment / system / tool / result carry real content
+-- (@-mentioned files, API errors) and are kept even though search does not show them.
+CREATE OR REPLACE FUNCTION msg_drop_noise() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.role IN ('last-prompt','permission-mode','agent-setting','mode','queue-operation',
+                  'custom-title','ai-title','agent-name','file-history-snapshot','pr-link',
+                  'relocated','worktree-state','progress','atis-latch','file-history-delta',
+                  'bridge-session','cost-state','history-suppression','frame-link','started',
+                  'fork-context-ref','continued-in')
+     OR NEW.content ~ '^\[THINKING\]\s*$' THEN
+    RETURN NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER msg_drop_noise_bi BEFORE INSERT ON msg
+  FOR EACH ROW EXECUTE FUNCTION msg_drop_noise();
+-- New Claude Code event types are NOT dropped until added to the list (safer default:
+-- an unknown type is stored, never silently lost). Check periodically:
+--   SELECT role, count(*) FROM msg GROUP BY 1 ORDER BY 2 DESC;
+
+-- Skill distribution (v1.31.0). `crs skill-init` creates these; skills are authored
 -- in git and published here, so a correction reaches every machine instead of
 -- living in one ~/.claude/skills copy. Two tables because their update rates differ
 -- ~280x: the knowledge is 38 KB and changes often, the templates are 15.8 MB and

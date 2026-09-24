@@ -37,6 +37,11 @@ jobs:
       - name: project-resolve.selftest.py
         run: python3 project-resolve.selftest.py
 
+      # 失控告警(2026-09-14 週末燒掉 ~11M 輸出 token):持續高用量寄一封、
+      # 修復放棄每個 job 寄一封、壞結果不能弄壞任務回應。
+      - name: runaway_guard_selftest.py
+        run: python3 runaway_guard_selftest.py
+
       # 佈局契約需要 arcana-ai-bpm 的 workspace-git.sh 才跑得起來 ——
       # 它在那邊的 pipeline 裡跑(兩份實作都在)。這裡只確認它**會誠實地說自己沒跑**,
       # 而不是靜靜地通過:少一份實作等於契約只驗了一半。
@@ -51,3 +56,8 @@ jobs:
             echo "缺另一份實作時應該回 notRun(2),得到 $rc —— 那會讓半個契約看起來像整個" >&2
             exit 1
           fi
+
+      # scan-stale 改成不用 AI(2026-09-14):判斷跟 AI 版一致(09-13/09-14 真實案例),
+      # 同一組 head+base 只開一次、一輪上限、問不到引擎就不開。
+      - name: scan_stale_selftest.py
+        run: python3 scan_stale_selftest.py
