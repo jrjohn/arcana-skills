@@ -89,5 +89,44 @@ else:
     check("映像裡 %s 存在(程式碼要複製進去的地方)" % m._SCANNER_BASE, has_dir(m._SCANNER_BASE))
     check("映像裡 /src 不存在(這就是舊寫法失敗的原因)", not has_dir("/src"))
 
+print("E 組 —— 等伺服器處理完這一次分析")
+REAL_LINE = "03:00:23.395 INFO  More about the report processing at http://host.docker.internal:9010/sonarqube/api/ce/task?id=79f69c03-8c3a-469e-94cf-a5a0922b128c\n"
+check("從真實的掃描器輸出抓到處理編號", m._ce_task_id(REAL_STDOUT + REAL_LINE) == "79f69c03-8c3a-469e-94cf-a5a0922b128c")
+check("輸出裡沒有編號 → None(不是空字串,也不是猜一個)", m._ce_task_id(REAL_STDOUT) is None)
+def seq(*states):
+    it = iter(states)
+    def get(url):
+        st = next(it)
+        if isinstance(st, Exception): raise st
+        return {"task": {"status": st}}
+    return get
+check("IN_PROGRESS → SUCCESS(09-27 實測的真實順序)→ SUCCESS",
+      m._wait_ce_task("h", "t", "x", interval=0, get=seq("IN_PROGRESS", "SUCCESS")) == "SUCCESS")
+check("PENDING → FAILED → FAILED(不可當成成功去讀數字)",
+      m._wait_ce_task("h", "t", "x", interval=0, get=seq("PENDING", "FAILED")) == "FAILED")
+check("CANCELED → CANCELED", m._wait_ce_task("h", "t", "x", interval=0, get=seq("CANCELED")) == "CANCELED")
+check("一直沒處理完 → TIMEOUT(不會無限等)",
+      m._wait_ce_task("h", "t", "x", timeout=0, interval=0, get=seq(*["IN_PROGRESS"] * 5)) == "TIMEOUT")
+check("問的時候網路斷一下 → 繼續問,之後 SUCCESS",
+      m._wait_ce_task("h", "t", "x", interval=0, get=seq(OSError("reset"), "SUCCESS")) == "SUCCESS")
+
+def waits_before_reading(src):
+    a, b, c = src.find("_ce_task_id("), src.find("_wait_ce_task("), src.find("api/measures/component")
+    return a != -1 and b != -1 and c != -1 and a < c and b < c
+
+print("F 組 —— 「等處理完」真的排在「讀數字」之前")
+check("_sonar 先等處理完,才讀數字", waits_before_reading(inspect.getsource(m._sonar)))
+try:
+    old = subprocess.run(["git", "-C", D, "show",
+                          "2665bee:claude-agents-workflow-skill/templates/agent-task-node/server.py"],
+                         capture_output=True, text=True, timeout=30)
+    b0 = old.stdout.find("def _sonar(payload):"); b1 = old.stdout.find("\ndef ", b0 + 10)
+    if old.returncode != 0 or b0 < 0:
+        print("  ? 取不到修之前的版本 —— F 組對照沒跑,不是通過"); fail += 1
+    else:
+        check("修之前(2665bee)的 _sonar 掃完立刻讀 → 判紅", not waits_before_reading(old.stdout[b0:b1]))
+except Exception as e:
+    print("  ? F 組對照沒跑:%s" % e); fail += 1
+
 print("\n  %d 過 / %d 失敗" % (ok, fail))
 sys.exit(1 if fail else 0)
