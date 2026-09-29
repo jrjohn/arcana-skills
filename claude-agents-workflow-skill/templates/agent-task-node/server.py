@@ -4575,6 +4575,51 @@ def _selftest_gaps(workdir):
     return gaps
 
 
+# ── 流程已經被中止,就不要替它留下痕跡(2026-09-27)──────────────────────────
+# 中止一個流程實例,不會停掉 agent 手上正在跑的工作。implement 一次要跑十幾分鐘,
+# 它做完之後照樣推 commit、開 PR —— 替一個已經沒有人在管的流程。
+#   09-24:4a2ace83 中止後,implement 自己做完開了 #451(遺孤 PR,手動關掉)
+#   09-25:d6fdedfd 中止時,是手動用工作資料夾找到 pid 停掉的,才沒有再冒一個
+# 所以在「留下痕跡」的兩個動作(push、開 PR)之前,先問一次這一輪還活著嗎。
+_GONE_STATES = ("ABORTED", "COMPLETED")
+
+
+def _instance_state(piid, query=None):
+    """Data Index 上這個實例的狀態;查不到回 None。`query` 可注入,自檢不必連線。"""
+    if not piid:
+        return None
+    if query is None:
+        di = (os.environ.get("DATA_INDEX_URL") or "http://aaf-data-index:8080").rstrip("/")
+
+        def query(q):
+            import urllib.request
+            req = urllib.request.Request(di + "/graphql", data=json.dumps({"query": q}).encode("utf-8"),
+                                         headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=15) as r:
+                return json.load(r)
+    try:
+        rows = ((query('{ ProcessInstances(where:{id:{equal:"%s"}}){ state } }' % piid)
+                 or {}).get("data") or {}).get("ProcessInstances") or []
+        return rows[0].get("state") if rows else None
+    except Exception:
+        return None
+
+
+def _refuse_if_instance_gone(payload, action, query=None):
+    """實例**確定**已中止/結束 → 回 error dict(不做這個動作);其他情況回 None(照做)。
+
+    只有確定不在才擋:查不到(網路、沒有 _piid)照做 —— 這道檢查是用來擋遺孤,
+    不能因為自己讀不到就把正常的工作擋掉。
+    """
+    piid = str(payload.get("_piid") or "").strip()
+    st = _instance_state(piid, query)
+    if st in _GONE_STATES:
+        msg = "instance %s is %s —— not %s(沒有流程在管這個結果,留下來只會是遺孤)" % (piid, st, action)
+        print("[agent-task-node] " + msg, flush=True)
+        return {"error": msg, "instanceGone": st, "ran": False}
+    return None
+
+
 def implement_flow(payload):
     """AI code-implementation → GATED PR.
 
@@ -4897,6 +4942,9 @@ def implement_flow(payload):
                     # 蓋不上不擋出貨 —— 但要說出來,不然「沒章」會被讀成「本來就不蓋」。
                     print("[agent-task-node] sdlc stamp: amend failed: %s"
                           % (_amr.stderr or _amr.stdout)[-300:], flush=True)
+        _gone = _refuse_if_instance_gone(payload, "pushing %s" % branch)
+        if _gone:
+            return _gone
         ps = _git("push", "-u", "origin", branch, "--force")
         if ps.returncode != 0:
             return {"error": "push failed: %s" % (ps.stderr or ps.stdout)[-500:]}
@@ -5001,6 +5049,9 @@ def implement_flow(payload):
                     "filesChanged": files_changed, "pushed": True,
                     "buildStatus": build_status, "selftestStatus": selftest_status, "prReused": True,
                     "supersededPrs": superseded}
+        _gone = _refuse_if_instance_gone(payload, "opening a PR for %s" % branch)
+        if _gone:
+            return _gone
         pr = subprocess.run(
             ["gh", "pr", "create", "-R", repo, "--base", base, "--head", branch,
              "--title", "feat: %s" % slug, "--body", body + _sdlc_pr_stamp_block(payload)],
