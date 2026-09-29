@@ -1266,6 +1266,77 @@ def pr_ready(payload):
             "reason": None if r.returncode == 0 else "gh pr ready failed: " + (r.stderr or "")[-200:]}
 
 
+# ── loop-drive:排程開輪(aaf 的 sdlc-loop-driver-flow → LoopDrive → 這裡) ──────────────
+#
+# 計時器每 6 小時叫一次;要不要真的開一輪由驅動器的四道上界決定(週預算 / 輪數 / 空轉 / 一次一輪)。
+# 驅動器**只有一份**:每次從 main 取 scripts/sdlc-loop-driver.py 來跑,不在這裡複製它的判準。
+#
+# 暫停:主機上 `touch ~/.claude/sdlc-loop-paused`(容器的 /root/.claude 就是主機的 ~/.claude),
+# 刪掉就恢復。不用重建任何容器 —— 要停的時候通常就是很急的時候。
+_LOOP_DRIVER_PATH = "scripts/sdlc-loop-driver.py"
+_LOOP_PAUSE_FILE = os.path.expanduser("~/.claude/sdlc-loop-paused")
+# 驅動器的預設網址是給主機跑的 localhost;在容器網路裡要換成服務名稱。已經有設的就不動。
+_LOOP_ENV_DEFAULTS = {"LOOP_READ_API": "http://aaf-arcana-cloud-rust:8080",
+                      "LOOP_DATA_INDEX": "http://aaf-data-index:8080",
+                      "LOOP_ENGINE": "http://kogito-bpmn:8080"}
+
+
+def _loop_drive_verdict(rc, stdout, start):
+    """驅動器的結束碼 + 輸出 → (判定, 實例 id 前 8 碼)。純函式。
+
+    驅動器的約定:0 = 開了一輪、或沒有單可開、或空跑;1 = 被上界擋下(它在工作,不是故障);
+    2 = 有東西讀不到(缺席不等於可以跑)。其他結束碼(逾時被砍等)一律當讀不到。
+    """
+    m = re.search(r"已開:([0-9a-f]{8})", stdout or "")
+    if rc == 0:
+        if m:
+            return "started", m.group(1)
+        return ("idle" if start else "dry"), None
+    if rc == 1:
+        return "braked", None
+    return "notRun", None
+
+
+def loop_drive(payload, fetch=None, run=None):
+    """跑一次驅動器。`fetch` / `run` 可注入(自檢用);預設是 gh 取檔、python3 執行。"""
+    if os.path.exists(_LOOP_PAUSE_FILE):
+        return {"verdict": "paused", "started": False, "exitCode": None,
+                "report": "排程已暫停(%s 存在);刪掉它就恢復" % _LOOP_PAUSE_FILE}
+    repo = str(payload.get("repo") or os.environ.get("LOOP_REPO") or "jrjohn/arcana-ai-bpm")
+    start = str(payload.get("dryRun") or _pv(payload, "dryRun") or "").strip().lower() != "true"
+    fetch = fetch or (lambda: subprocess.run(
+        ["gh", "api", "-H", "Accept: application/vnd.github.raw",
+         "repos/%s/contents/%s?ref=main" % (repo, _LOOP_DRIVER_PATH)],
+        capture_output=True, text=True, timeout=60))
+    f = fetch()
+    src = f.stdout if f.returncode == 0 else ""
+    # 拿到的東西要真的是驅動器。一個 404 的 JSON、一段錯誤訊息,都不能拿去當 python 執行。
+    if "def run(" not in src or "四道上界" not in src:
+        return {"verdict": "notRun", "started": False, "exitCode": None,
+                "report": "拿不到 main 上的驅動器(%s):%s" % (_LOOP_DRIVER_PATH, (f.stderr or src or "")[-300:])}
+    env = dict(os.environ)
+    for k, v in _LOOP_ENV_DEFAULTS.items():
+        env.setdefault(k, v)
+    env["LOOP_REPO"] = repo
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as tf:
+        tf.write(src)
+        path = tf.name
+    try:
+        run = run or (lambda argv, e: subprocess.run(argv, capture_output=True, text=True, timeout=300, env=e))
+        try:
+            p = run(["python3", path] + (["--start"] if start else []), env)
+            rc, out, err = p.returncode, p.stdout or "", p.stderr or ""
+        except subprocess.TimeoutExpired:
+            rc, out, err = None, "", "驅動器 300 秒沒有結束"
+    finally:
+        os.unlink(path)
+    verdict, iid = _loop_drive_verdict(rc, out, start)
+    issue = re.search(r"要開的單:#(\d+)", out)
+    return {"verdict": verdict, "started": verdict == "started", "instance": iid,
+            "issue": int(issue.group(1)) if issue else None, "exitCode": rc,
+            "dryRun": not start, "report": out[-3000:], "stderr": err[-800:]}
+
+
 def dispose_pr(payload):
     """Close out this run's PR according to how the run ended.
 
@@ -1942,7 +2013,7 @@ _verb_registry_check()
 # 現在會在 import 時比對這份名單與分派鏈,漏一個就起不來。
 DETERMINISTIC_TASKS = ("release", "execute", "publish-flow", "implement", "test", "coverage",
                        "uiux-audit", "site", "smoke", "dispose-pr", "consult", "pr-ready",
-                       "scan-stale")
+                       "scan-stale", "loop-drive")
 
 
 
@@ -8283,6 +8354,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = scan_stale(payload)   # plain code, no model (see scan_stale)
             elif task == "uiux-audit":
                 result = uiux_audit_flow(payload)
+            elif task == "loop-drive":
+                result = loop_drive(payload)   # 排程開輪:從 main 取驅動器來跑(見 loop_drive)
             else:
                 result = None
                 if task == "merge":
