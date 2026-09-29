@@ -6124,6 +6124,41 @@ _SONAR_SCANNER_IMAGE = os.environ.get("SONAR_SCANNER_IMAGE", "sonarsource/sonar-
 _SCANNER_BASE = "/usr/src"
 
 
+def _ce_task_id(stdout):
+    """掃描器印的「More about the report processing at …/api/ce/task?id=<id>」裡的 id;沒有就 None。"""
+    m = re.search(r"api/ce/task\?id=([A-Za-z0-9_-]+)", stdout or "")
+    return m.group(1) if m else None
+
+
+def _wait_ce_task(host, token, tid, timeout=300, interval=3, get=None):
+    """等 SonarQube 把這次分析處理完。回 "SUCCESS" / "FAILED" / "CANCELED" / "TIMEOUT"。
+
+    掃描器結束 ≠ 分析完成:報告送上去之後,伺服器要在背景處理(2026-09-25 實測約 10 秒)。
+    舊寫法掃完立刻讀數字 —— 新 key 讀到空的(`scan finished but returned no measures`),
+    舊 key 讀到**上一次**分析的數字,兩種都不是這一次的結果,而後者看起來完全正常。
+    `get` 可注入,自檢不必連真的伺服器。
+    """
+    if get is None:
+        import urllib.request, base64 as _b64
+
+        def get(url):
+            req = urllib.request.Request(url)
+            req.add_header("Authorization", "Basic " + _b64.b64encode((token + ":").encode()).decode())
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.loads(r.read().decode("utf-8", "replace"))
+    deadline = time.time() + timeout
+    while True:
+        try:
+            st = ((get("%s/api/ce/task?id=%s" % (host, tid)) or {}).get("task") or {}).get("status")
+        except Exception:                                        # noqa: BLE001
+            st = None
+        if st in ("SUCCESS", "FAILED", "CANCELED"):
+            return st
+        if time.time() >= deadline:
+            return "TIMEOUT"
+        time.sleep(interval)
+
+
 def _scanner_failure(run):
     """掃描器失敗時的理由:**錯誤行優先**,不論它印在 stdout 還是 stderr。
 
@@ -6438,6 +6473,17 @@ def _sonar(payload):
         out["scannerExit"] = run.returncode
         if run.returncode != 0:
             out["reason"] = "scanner failed: " + _scanner_failure(run)
+            return out
+        # 等伺服器處理完**這一次**分析再讀數字(見 _wait_ce_task)。
+        tid = _ce_task_id(run.stdout)
+        if not tid:
+            out["reason"] = ("scanner output has no CE task id —— 不知道要等哪一次分析,"
+                             "現在讀到的數字可能是上一次的")
+            return out
+        out["ceTask"] = tid
+        st = _wait_ce_task(host, token, tid)
+        if st != "SUCCESS":
+            out["reason"] = "analysis %s on the server (task %s)" % (st, tid)
             return out
     except Exception as e:                                       # noqa: BLE001
         out["reason"] = "sonar scan error: %s" % e
