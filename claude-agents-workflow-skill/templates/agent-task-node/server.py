@@ -7020,6 +7020,29 @@ def _pr_ci(repo, branch, base="main"):
     return ci
 
 
+def _sdd_files(payload):
+    """SD 節點宣告的檔案清單(給 task-boundary)。讀不到回 []。
+
+    `sdd` 可能是物件或 JSON 字串,放在頂層或 `data` 底下(_pv 兩處都找);`files` 的每一項
+    可能是字串,也可能是 {"path": …} / {"file": …}。只回非空字串。
+    """
+    sdd = _pv(payload, "sdd")
+    if isinstance(sdd, str):
+        try:
+            sdd = json.loads(sdd)
+        except ValueError:
+            return []
+    files = (sdd or {}).get("files") if isinstance(sdd, dict) else None
+    out = []
+    for f in files or []:
+        if isinstance(f, dict):
+            f = f.get("path") or f.get("file") or ""
+        f = str(f or "").strip()
+        if f:
+            out.append(f)
+    return out
+
+
 def test_flow(payload):
     """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted docker.sock.
     T4: when a PR branch is known, the runner clones + builds it and serves a preview so e2e run
@@ -7133,6 +7156,12 @@ def test_flow(payload):
     # T4-2: feature-specific testcases; 生成失敗就沿用上一輪的(reused),都沒有才退回通用回歸
     if gen:
         cmd += ["-e", "TESTCASES_B64=" + base64.b64encode(gen.encode()).decode()]
+    # task-boundary 要比的是「SD 宣告的檔案」與「PR 真的改的檔案」。2026-09-30 查到這一行從來沒有:
+    # run-test.sh 等著 SDD_FILES_B64,這裡從沒給 → task-boundary 每一輪都 notRun,照三態規則擋。
+    # (aaf #509 補了另一半 —— 讓 runner 有 base 可以 diff;沒有這一行,那一半也量不到東西。)
+    sdd_files = _sdd_files(payload)
+    if sdd_files:
+        cmd += ["-e", "SDD_FILES_B64=" + base64.b64encode(json.dumps(sdd_files).encode()).decode()]
     jrn = _gen_journeys(payload)  # T4-3: goal-directed journeys for the walkthrough gate (UI features)
     if jrn:
         cmd += ["-e", "JOURNEYS_B64=" + base64.b64encode(jrn.encode()).decode()]
