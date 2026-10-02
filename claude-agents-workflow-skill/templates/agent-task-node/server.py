@@ -2345,11 +2345,11 @@ def _write_workspace_claude_md(root, payload):
     if not PROJECT_MEM:
         return
     home = _project_mem_home(_project_slug(payload))
-    if not home or not os.path.isfile(os.path.join(home, "session.db")):
+    if not home or not os.path.isfile(_project_mem_db(home)):
         return
     if not os.path.exists(PROJECT_MEM_CRS):
         return
-    env = "HOME=%s CRS_DB=%s/session.db CRS_OLLAMA_URL=%s" % (home, home, PROJECT_MEM_OLLAMA)
+    env = "HOME=%s CRS_DB=%s CRS_OLLAMA_URL=%s" % (home, _project_mem_db(home), PROJECT_MEM_OLLAMA)
     body = (
         "# 🚨 最高優先 — 動工前先問這個產品的歷史\n\n"
         "> **你不是這個產品的第一個節點。** 這條流水線在這裡跑過很多輪,每一輪的對話都在\n"
@@ -3260,6 +3260,28 @@ PROJECT_MEM_ROOT = os.environ.get("PROJECT_MEM_ROOT", "/work/_memory")
 PROJECT_MEM_OLLAMA = os.environ.get(
     "PROJECT_MEM_OLLAMA", "http://host.docker.internal:11434/api/embed")
 
+# 逐字稿放哪裡和資料庫放哪裡是兩件事。2026-10-02 實測(4 個程序同時寫 WAL 模式的 sqlite,40 秒):
+#   Docker Desktop 從 Mac 掛進來的資料夾(virtiofs)→ 11 萬筆,integrity_check「Rowid out of order」
+#   Docker 自己的 volume                        → 61 萬筆,integrity_check ok
+# aaf 的 session.db 08-21、08-26、09-29 三次壞掉(第一頁被蓋成資料頁),10-02 重建的那顆 10 分鐘
+# 又壞 —— 都是這一種:-shm 共享記憶體與檔案鎖在 bind mount 上不可靠,同時寫的程序一多就寫錯頁。
+# 所以:逐字稿(純文字)留在 bind mount,主機看得到、不會壞;只有 db 放進 PROJECT_MEM_DB_ROOT
+# (compose 裡的 named volume)。db 是逐字稿的衍生物 —— 不見了,下一次 ingest 的 build 會從
+# 全部逐字稿整顆重建,所以不需要備份(John 2026-08-21、2026-10-02)。
+PROJECT_MEM_DB_ROOT = os.environ.get("PROJECT_MEM_DB_ROOT", "")
+
+
+def _project_mem_db(home):
+    """這個產品的 session.db 路徑。PROJECT_MEM_DB_ROOT 沒設 → 跟逐字稿同目錄(舊行為)。"""
+    if not PROJECT_MEM_DB_ROOT:
+        return os.path.join(home, "session.db")
+    d = os.path.join(PROJECT_MEM_DB_ROOT, os.path.basename(home.rstrip("/")))
+    try:
+        os.makedirs(d, exist_ok=True)
+    except OSError:
+        pass
+    return os.path.join(d, "session.db")
+
 
 def _project_mem_home(product):
     """Staging dir + db for one product. Absent product = no memory, not a shared one."""
@@ -3271,13 +3293,13 @@ def _project_mem_home(product):
 def project_memory_recall(product, query, limit=4):
     """Semantic recall over THIS product's own node conversations. Never raises."""
     home = _project_mem_home(product)
-    if not (PROJECT_MEM and home and query and os.path.isfile(os.path.join(home, "session.db"))):
+    if not (PROJECT_MEM and home and query and os.path.isfile(_project_mem_db(home))):
         return ""
     if not os.path.exists(PROJECT_MEM_CRS):
         return ""
     env = dict(os.environ)
     env.update({"HOME": home,
-                "CRS_DB": os.path.join(home, "session.db"),
+                "CRS_DB": _project_mem_db(home),
                 "CRS_OLLAMA_URL": PROJECT_MEM_OLLAMA})
     try:
         p = subprocess.run([PROJECT_MEM_CRS, "vsearch", "--json", "--limit", str(limit), query],
@@ -3333,7 +3355,7 @@ def project_memory_ingest(product, piid):
         return
     env = dict(os.environ)
     env.update({"HOME": home,
-                "CRS_DB": os.path.join(home, "session.db"),
+                "CRS_DB": _project_mem_db(home),
                 "CRS_OLLAMA_URL": PROJECT_MEM_OLLAMA})
     try:
         subprocess.run([PROJECT_MEM_CRS, "build", "--no-refresh", "--workers", "4"],
@@ -3448,11 +3470,11 @@ def _memory_brief(payload):
     if not PROJECT_MEM:
         return ""
     home = _project_mem_home(_project_slug(payload))
-    if not home or not os.path.isfile(os.path.join(home, "session.db")):
+    if not home or not os.path.isfile(_project_mem_db(home)):
         return ""
     if not os.path.exists(PROJECT_MEM_CRS):
         return ""
-    env = "HOME=%s CRS_DB=%s/session.db CRS_OLLAMA_URL=%s" % (home, home, PROJECT_MEM_OLLAMA)
+    env = "HOME=%s CRS_DB=%s CRS_OLLAMA_URL=%s" % (home, _project_mem_db(home), PROJECT_MEM_OLLAMA)
     return (
         "\n## 🚨 動工前先問這個產品的歷史\n"
         "**你不是這個產品的第一個節點。在你要重做、重猜、或重新發現任何事情之前,先查它。**\n"
@@ -3497,34 +3519,74 @@ def _with_memory(prompt, payload):
     return ("\n".join(parts) + "\n" + prompt) if parts else prompt
 
 
-def _project_slug(payload):
-    """Which product this run belongs to — the registry id when there is one, else the
-    repo name. Never a default: an unidentifiable run gets no memory rather than
-    somebody else's.
+_REGISTRY_CACHE = {"at": 0.0, "projects": None}
 
-    退回 repo 名時**要出聲**。這個 docstring 的意圖是「寧可沒記憶,也不要拿到別人的」,
-    但 fallback 的實際行為不是「沒記憶」—— 它是**開了第二份平行記憶**,會讀、會寫、
-    會回答,看起來完全正常。
 
-    2026-08-21 實測:一整天 26 個節點 session、2,171 筆逐字稿全部寫進
-    `_memory/arcana-ai-bpm/`,而產品的權威記憶 `_memory/aaf/` 當天是 0 筆。
-    兩邊各自長了十天(186 vs 195 個 session,只重疊 125),**兩邊都是殘的**,
-    而沒有任何一層說過一句話。
+def _registry_projects_cached(ttl=300):
+    """註冊表的專案清單,快取 ttl 秒。沒設或連不到 → None(失敗不快取)。"""
+    now = time.time()
+    if _REGISTRY_CACHE["projects"] is not None and now - _REGISTRY_CACHE["at"] < ttl:
+        return _REGISTRY_CACHE["projects"]
+    url = (os.environ.get("SDLC_REGISTRY_URL") or "").rstrip("/")
+    if not url:
+        return None
+    if not url.startswith("http"):
+        url = "http://" + url
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url, timeout=10) as r:
+            body = json.load(r)
+    except Exception:                                           # noqa: BLE001
+        return None
+    if not isinstance(body, dict) or body.get("error"):
+        return None
+    projects = body.get("projects") or []
+    _REGISTRY_CACHE.update(at=now, projects=projects)
+    return projects
 
-    「名單縮小可以是刻意的,不可以是無聲的」—— 這個 repo 對流程 id 的對帳
-    (reconcile_targets)已經是這個慣例,記憶這一格照抄。
+
+def _project_id_for_repo(projects, repo, base=""):
+    """repo(+整合分支)→ 註冊表裡的 projectId。純函式。
+
+    同一個 repo 只有一個專案 → 就是它;不只一個 → 用整合分支挑;還是分不出來 → ""。
     """
-    p = payload.get("_sdlc_project") or _pv(payload, "projectId")
+    hits = [p for p in (projects or [])
+            if (p.get("repo") or "").lower() == (repo or "").lower()]
+    if len(hits) > 1 and base:
+        hits = [p for p in hits if (p.get("integrationBranch") or "") == base] or hits
+    return str(hits[0].get("projectId") or "") if len(hits) == 1 else ""
+
+
+def _project_slug(payload):
+    """這一輪屬於哪個產品 —— 決定讀寫哪一份 session.db。一個產品只能有一份。
+
+    順序:`_sdlc_project`(preflight 從註冊表查到的整筆專案)→ payload 的 projectId →
+    用 repo 查註冊表 → 都沒有就**不用專案記憶**(回 "",大聲說)。
+
+    以前最後一步是「退回 repo 名」,而那不是「沒記憶」,是**開了第二份平行記憶**:
+    2026-08-21 一整天的逐字稿全部寫進 `_memory/arcana-ai-bpm/`,權威的 `_memory/aaf/` 當天 0 筆;
+    到 10-02 為止,31 輪 sdlc-code-flow 有節點寫到 arcana-ai-bpm —— 其中 23 輪明明帶著
+    projectId=aaf,只是那幾個節點的 payload 沒帶。註冊表本來就知道 jrjohn/arcana-ai-bpm 是 aaf,
+    所以去問它,而不是自己發明一個鍵。
+
+    另一個 bug 一起修:preflight 把整筆專案(dict)放進 `_sdlc_project`,這裡以前 `str(p)`
+    —— 得到 "{'projectId': 'aaf', ...}",過不了 _project_mem_home 的檢查,那個節點完全沒有記憶。
+    """
+    sp = payload.get("_sdlc_project")
+    if isinstance(sp, dict):
+        sp = sp.get("projectId")
+    p = sp or _pv(payload, "projectId")
     if p:
         return str(p)
     repo = _pv(payload, "repo")
-    slug = repo.split("/")[-1] if repo else ""
-    if slug:
-        print("[agent-task-node] ⚠ project-memory: payload 沒有 projectId,退回 repo 名 "
-              "`%s` 當產品鍵。若這個產品在註冊表裡另有 id,這一輪的逐字稿會寫進**另一份**"
-              "記憶,而讀的那一輪看不到。起流程時帶 projectId 可以避免。" % slug,
-              flush=True)
-    return slug
+    if not repo:
+        return ""
+    pid = _project_id_for_repo(_registry_projects_cached(), repo, _pv(payload, "base"))
+    if pid:
+        return pid
+    print("[agent-task-node] ⚠ project-memory: payload 沒有 projectId,註冊表也對不到 `%s` ——"
+          "這一輪不用專案記憶(不再退回 repo 名另開一份)。" % repo, flush=True)
+    return ""
 
 
 def run_claude(task, payload):
