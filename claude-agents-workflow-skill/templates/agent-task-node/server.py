@@ -3576,9 +3576,20 @@ def _project_slug(payload):
     if isinstance(sp, dict):
         sp = sp.get("projectId")
     p = sp or _pv(payload, "projectId")
-    if p:
-        return str(p)
     repo = _pv(payload, "repo")
+    if p:
+        p = str(p)
+        # 帶來的 id 不在註冊表裡(例如 2026-10-02 改名 aaf → arcana-ai-bpm 之前就開的輪還帶著 aaf),
+        # 而 repo 對得到 → 用註冊表的。否則改名的那一刻,記憶又會分成兩份。註冊表連不到就照用帶來的。
+        projects = _registry_projects_cached()
+        if projects is not None and repo and not any(
+                str(x.get("projectId") or "") == p for x in projects):
+            pid = _project_id_for_repo(projects, repo, _pv(payload, "base"))
+            if pid:
+                print("[agent-task-node] project-memory: projectId `%s` 不在註冊表裡,改用 repo 對到的 `%s`"
+                      % (p, pid), flush=True)
+                return pid
+        return p
     if not repo:
         return ""
     pid = _project_id_for_repo(_registry_projects_cached(), repo, _pv(payload, "base"))
@@ -7657,7 +7668,7 @@ def uiux_audit_flow(payload):
     requester = (payload.get("requester")
                  or os.environ.get("UIUX_AUDIT_REQUESTER", "")).strip()
     project_id = (payload.get("projectId")
-                  or os.environ.get("UIUX_AUDIT_PROJECT", "aaf")).strip()
+                  or os.environ.get("UIUX_AUDIT_PROJECT", "arcana-ai-bpm")).strip()
     unowned = []
     target_base = payload.get("target_base") or os.environ.get("UIUX_AUDIT_TARGET_BASE", "main")
     _cap = payload.get("cap")  # explicit None check so cap=0 (dry-run) is honoured, not falsy->default
