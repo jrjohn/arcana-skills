@@ -28,28 +28,33 @@ def check(label, cond):
     if cond: ok += 1; print("  ✓ %s" % label)
     else:    fail += 1; print("  ✗ %s" % label)
 
-REG = [{"projectId": "aaf", "repo": "jrjohn/arcana-ai-bpm", "integrationBranch": "main"},
+REG = [{"projectId": "arcana-ai-bpm", "repo": "jrjohn/arcana-ai-bpm", "integrationBranch": "main"},
        {"projectId": "s7", "repo": "jrjohn/other-product", "integrationBranch": "main"}]
 REPO = "jrjohn/arcana-ai-bpm"
 
 print("A 組 —— 產品鍵")
 m._registry_projects_cached = lambda ttl=300: REG
 check("preflight 放的整筆專案(dict)→ 取 projectId(以前會變成 \"{'projectId': ...}\" → 沒記憶)",
-      m._project_slug({"_sdlc_project": {"projectId": "aaf", "tier": "company"}, "repo": REPO}) == "aaf")
-check("_sdlc_project 是字串 → 照用", m._project_slug({"_sdlc_project": "aaf"}) == "aaf")
-check("payload 頂層有 projectId", m._project_slug({"projectId": "aaf", "repo": REPO}) == "aaf")
-check("projectId 放在 data 底下", m._project_slug({"data": {"projectId": "aaf", "repo": REPO}}) == "aaf")
-check("沒有 projectId、只有 repo → 查註冊表得到 aaf(以前會回 arcana-ai-bpm,開第二份記憶)",
-      m._project_slug({"repo": REPO, "base": "main"}) == "aaf")
-check("repo 大小寫不同也對得到", m._project_slug({"repo": "JRJohn/Arcana-AI-BPM"}) == "aaf")
+      m._project_slug({"_sdlc_project": {"projectId": "arcana-ai-bpm", "tier": "company"}, "repo": REPO}) == "arcana-ai-bpm")
+check("_sdlc_project 是字串 → 照用", m._project_slug({"_sdlc_project": "arcana-ai-bpm"}) == "arcana-ai-bpm")
+check("payload 頂層有已註冊的 projectId → 照用", m._project_slug({"projectId": "arcana-ai-bpm", "repo": REPO}) == "arcana-ai-bpm")
+check("projectId 放在 data 底下", m._project_slug({"data": {"projectId": "arcana-ai-bpm", "repo": REPO}}) == "arcana-ai-bpm")
+check("改名前開的輪還帶著 aaf(已不在註冊表)→ 用 repo 對到 arcana-ai-bpm,記憶不分裂",
+      m._project_slug({"projectId": "aaf", "repo": REPO, "base": "main"}) == "arcana-ai-bpm")
+check("已註冊的 id 不會被 repo 蓋掉(s7 帶 s7,即使 repo 寫錯)",
+      m._project_slug({"projectId": "s7", "repo": REPO}) == "s7")
+check("沒有 projectId、只有 repo → 查註冊表得到它的 id(以前會退回 repo 名,開第二份記憶)",
+      m._project_slug({"repo": REPO, "base": "main"}) == "arcana-ai-bpm")
+check("repo 大小寫不同也對得到", m._project_slug({"repo": "JRJohn/Arcana-AI-BPM"}) == "arcana-ai-bpm")
 m._registry_projects_cached = lambda ttl=300: None
 r = m._project_slug({"repo": REPO})
-check("註冊表連不到 → 不用記憶(\"\"),絕不退回 repo 名", r == "" and r != "arcana-ai-bpm")
+check("註冊表連不到、沒帶 id → 不用記憶(\"\"),絕不退回 repo 名", r == "")
+check("註冊表連不到、有帶 id → 照用帶來的", m._project_slug({"projectId": "aaf", "repo": REPO}) == "aaf")
 m._registry_projects_cached = lambda ttl=300: REG
 check("註冊表裡沒有這個 repo → 不用記憶", m._project_slug({"repo": "jrjohn/unknown"}) == "")
 check("沒有 repo 也沒有 projectId → \"\"", m._project_slug({}) == "")
-two = REG + [{"projectId": "aaf-rel", "repo": REPO, "integrationBranch": "release"}]
-check("同一個 repo 兩個專案 → 用整合分支挑", m._project_id_for_repo(two, REPO, "release") == "aaf-rel")
+two = REG + [{"projectId": "bpm-rel", "repo": REPO, "integrationBranch": "release"}]
+check("同一個 repo 兩個專案 → 用整合分支挑", m._project_id_for_repo(two, REPO, "release") == "bpm-rel")
 check("同一個 repo 兩個專案、沒有分支可挑 → 分不出來就不猜", m._project_id_for_repo(two, REPO, "") == "")
 
 print("B 組 —— 資料庫路徑")
@@ -75,7 +80,7 @@ url = os.environ.get("SDLC_REGISTRY_URL", "http://localhost:8088/api/v1/workflow
 try:
     with urllib.request.urlopen(url, timeout=10) as r:
         live = json.load(r).get("projects") or []
-    check("真的註冊表:jrjohn/arcana-ai-bpm@main → aaf", m._project_id_for_repo(live, REPO, "main") == "aaf")
+    check("真的註冊表:jrjohn/arcana-ai-bpm@main → arcana-ai-bpm", m._project_id_for_repo(live, REPO, "main") == "arcana-ai-bpm")
 except Exception as e:                                          # noqa: BLE001
     print("  ⚠ notRun —— 連不到註冊表(%s);不算通過" % e)
 
