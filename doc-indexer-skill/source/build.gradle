@@ -39,7 +39,9 @@ dependencies {
     implementation 'ch.qos.logback:logback-classic:1.4.14'
 
     // 測試
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
+    testImplementation platform('org.junit:junit-bom:6.1.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 application {
