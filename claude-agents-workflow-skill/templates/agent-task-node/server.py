@@ -1500,6 +1500,104 @@ def _repo_blobs(repo, ref, path):
     return out or None
 
 
+# ── 測試映像是打分數的尺 ──────────────────────────────────────────────────
+#
+# 2026-10-04 #539 那一輪:RootCause 判斷 rbacUiFail 讀的是烤在 aaf-test-runner:local
+# 裡的 main 版基準檔,PR 改了基準檔閘也看不到;implement 的 AI 於是自己跑
+# `docker tag … && docker build -t aaf-test-runner:local`(用 PR 的樹),讓閘讀到它改過的尺。
+# needs-human-merge 只看 PR 的檔案,擋不到這種側通道。後果:映像比 main 新,之後三輪的
+# preflight 全部「映像與 main 不一致」拒絕開工,三輪白跑。
+#
+# 兩層:(1) preflight 發現漂移就自己用 base 重建,不讓一輪死掉;
+#       (2) 每個 AI 節點前後比對映像 id,被換掉就還原並記在節點結果裡(PM 看得到)。
+# 閘讀 main 的版本是刻意的 —— PR 不能用自己改過的尺替自己打分。
+RUNNER_SELF_HEAL = os.environ.get("RUNNER_SELF_HEAL", "1") == "1"
+_RUNNER_REBUILD_LOCK = threading.Lock()
+_RUNNER_PLATFORM_GEN = [0]   # 平台自己重建的次數;守衛看到它變了就不還原
+
+
+def _runner_image_id(img):
+    """映像目前的 id;沒有映像 / 沒有 docker → None。"""
+    try:
+        r = subprocess.run(["docker", "image", "inspect", "-f", "{{.Id}}", img],
+                           capture_output=True, text=True, timeout=30)
+    except Exception:                                           # noqa: BLE001
+        return None
+    if r.returncode != 0:
+        return None
+    return (r.stdout or "").strip() or None
+
+
+def _rebuild_runner_from_base(img, repo, base, src="dashboard/e2e",
+                              dockerfile="dashboard/e2e/test-runner.Dockerfile"):
+    """用 base 的 src 重建共用測試映像。回 (ok, 說明)。一次只建一個。"""
+    with _RUNNER_REBUILD_LOCK:
+        tmp = tempfile.mkdtemp(prefix="runner-src-", dir=WORK_ROOT if os.path.isdir(WORK_ROOT) else None)
+        url = "https://x-access-token:%s@github.com/%s" % (os.environ.get("GH_TOKEN", ""), repo)
+        try:
+            c = subprocess.run(["git", "clone", "--depth", "1", "--branch", base,
+                                "--filter=blob:none", "--sparse", url, tmp],
+                               capture_output=True, text=True, timeout=600)
+            if c.returncode != 0:
+                return False, "clone %s@%s 失敗:%s" % (repo, base, (c.stderr or "")[-200:])
+            subprocess.run(["git", "-C", tmp, "sparse-checkout", "set", src],
+                           capture_output=True, text=True, timeout=300)
+            b = subprocess.run(["docker", "build", "-q", "-f", os.path.join(tmp, dockerfile),
+                                "-t", img, os.path.join(tmp, src)],
+                               capture_output=True, text=True, timeout=3600)
+            if b.returncode != 0:
+                return False, "docker build 失敗:%s" % ((b.stderr or b.stdout or "")[-300:])
+            _RUNNER_PLATFORM_GEN[0] += 1
+            return True, "已用 %s@%s 的 %s 重建 %s" % (repo, base, src, img)
+        except Exception as e:                                  # noqa: BLE001
+            return False, "重建時出錯:%s" % e
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+_EVALUATOR_RULE = (
+    "\n\n## 平台規則:測試映像是打分數的尺\n"
+    "`aaf-test-runner:local` 不准 `docker build`、`docker tag`、`docker rmi` 或用任何方式換掉。"
+    "閘讀的是 main 的版本是刻意的 —— PR 不能用自己改過的尺替自己打分。"
+    "你的修改若需要閘看到新的檢查或基準,寫進 PR-NOTES 交給人審。"
+    "節點結束後映像若被換掉,會自動還原並記錄在這個節點的結果裡。\n")
+
+
+def _guarded_runner(img):
+    """AI 節點的前後守衛。回 (before_id, guard_tag, gen) 給 _restore_runner 用。"""
+    before = _runner_image_id(img)
+    tag = None
+    if before:
+        # 同一個程序裡可能同時跑好幾個節點(執行緒),所以要帶執行緒編號才不會撞名
+        tag = "aaf-runner-guard:%d-%d-%d" % (os.getpid(), threading.get_ident() % 10**9,
+                                              int(time.time() * 1000))
+        r = subprocess.run(["docker", "tag", img, tag], capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            tag = None
+    return before, tag, _RUNNER_PLATFORM_GEN[0]
+
+
+def _restore_runner(img, before, tag, gen):
+    """節點跑完:映像被換掉(而且不是平台自己重建的)→ 還原。回 tamper 紀錄或 None。"""
+    try:
+        if not (before and tag):
+            return None
+        after = _runner_image_id(img)
+        if after == before or _RUNNER_PLATFORM_GEN[0] != gen:
+            return None
+        r = subprocess.run(["docker", "tag", tag, img], capture_output=True, text=True, timeout=30)
+        rec = {"image": img, "before": before[:19], "after": (after or "(不見了)")[:19],
+               "restored": r.returncode == 0,
+               "note": "AI 節點執行期間測試映像被換掉,已還原。測試映像是打分數的尺,節點不得重建或改標籤。"}
+        print("[agent-task-node] ⚠ runner-guard: %s 在 AI 節點期間被換掉(%s → %s),%s"
+              % (img, rec["before"], rec["after"], "已還原" if rec["restored"] else "還原失敗!"),
+              flush=True)
+        return rec
+    finally:
+        if tag:
+            subprocess.run(["docker", "image", "rm", tag], capture_output=True, text=True, timeout=60)
+
+
 def preflight(payload):
     """Can this pipeline legitimately run against this repo? Answered in seconds, before a
     single AI session is paid for. Returns {"ok": bool, "reason": str, "checks": [...]}.
@@ -1691,6 +1789,18 @@ def preflight(payload):
             continue
         drift = [p for p, sha in sorted(repo_blobs.items())
                  if img_blobs.get(p) != sha]
+        if drift and RUNNER_SELF_HEAL:
+            print("[agent-task-node] preflight: %s 與 %s 不一致(%s)—— 自動用 %s 重建"
+                  % (img, base, ", ".join(drift[:3]), base), flush=True)
+            healed, why = _rebuild_runner_from_base(img, repo, base)
+            if healed:
+                img_blobs = _image_blobs(img) or {}
+                drift = [p for p, sha in sorted(repo_blobs.items()) if img_blobs.get(p) != sha]
+                if not drift:
+                    checks.append("image %s: 原本與 %s 不一致,已自動重建,現在 %d 個檔逐檔相同"
+                                  % (img, base, len(repo_blobs)))
+                    continue
+            how = how + "\n  (自動重建沒有成功:%s)" % why
         if drift:
             shown = ", ".join(drift[:6]) + ("…(共 %d 個)" % len(drift) if len(drift) > 6 else "")
             return fail("映像 %s 裡的 %s 與 %s 上的不一致 —— 它烤進去的腳本不是現在 repo 裡的"
@@ -3162,6 +3272,20 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
     Kept as a wrapper so both call sites (run_claude / run_claude_generic) are gated
     without either knowing about it — a node cannot opt out by forgetting to ask.
     """
+    img = os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local")
+    guard = _guarded_runner(img)
+    out = None
+    try:
+        out = _invoke_claude_core(prompt + _EVALUATOR_RULE, schema, payload, wall, cwd)
+    finally:
+        tamper = _restore_runner(img, *guard)
+        if tamper and isinstance(out, dict):
+            out["_runnerTamper"] = tamper
+    return out
+
+
+def _invoke_claude_core(prompt, schema, payload, wall, cwd=None):
+    """confidence/reflection 迴圈本體(原本的 _invoke_claude)。"""
     pol = _confidence_policy(payload)
     if pol is None:
         out = _invoke_claude_once(prompt, schema, payload, wall, cwd)
