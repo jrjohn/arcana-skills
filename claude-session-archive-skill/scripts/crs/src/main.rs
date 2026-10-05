@@ -3958,6 +3958,7 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
     const CHUNK: usize = 10;
     let mut attempted: HashSet<i64> = HashSet::new();
     let mut total_done = 0usize;
+    let (mut run_stored, mut run_empty) = (0usize, 0usize);
     let t0 = std::time::Instant::now();
 
     loop {
@@ -3982,10 +3983,26 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
         if jobs.is_empty() { break; } // no fresh pending rows left
         for (id, _) in &jobs { attempted.insert(*id); }
 
+        // Two kinds of "nothing came back" must be kept apart:
+        //   • the model RAN and found no proposition  → record it (a tombstone),
+        //     so the row is never selected again;
+        //   • the call FAILED (timeout, Ollama down, embed error) → record nothing,
+        //     so the row is retried on a later pass.
+        //
+        // Until 2026-09-24 both were `return None`. `attempted` above hides empties
+        // for the rest of THIS process, but the Mac mini runs distill as a loop of
+        // short-lived processes (`--limit 40` per run), so every new process started
+        // with an empty `attempted` and re-selected the same newest rows. Those were
+        // overwhelmingly harness attachments — `{"attachment":{"type":"output_style"…}}`,
+        // token-budget reminders — that contain no proposition at all. The log showed
+        // it plainly: "chunk persisted: +1 → total 40", i.e. 40 generations to store
+        // one row. Measured throughput was 1,198 rows/day against 1,651 ingested, so
+        // the backlog was growing while the GPU re-chewed the same noise every run.
+        enum Outcome { Distilled(i64, String, String, Vec<String>, Vec<f32>), Empty(i64) }
         let done = AtomicUsize::new(0);
         let cn = jobs.len();
         let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
-        let results: Vec<(i64, String, String, Vec<String>, Vec<f32>)> = pool.install(|| {
+        let results: Vec<Outcome> = pool.install(|| {
             jobs.par_iter().filter_map(|(id, content)| {
                 let http = distill_http_client().ok()?;
                 let r = distill_text_gen(&http, content);
@@ -3994,36 +4011,71 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
                     n, cn, total_done, t0.elapsed().as_secs_f64(), id);
                 let (props, ids) = match r {
                     Ok(v) => v,
+                    // Transient: leave it unrecorded so a later pass retries it.
                     Err(e) => { eprintln!("    distill id={} err={}", id, e); return None; }
                 };
-                if props.is_empty() && ids.is_empty() { return None; } // raw covers it
+                if props.is_empty() && ids.is_empty() { return Some(Outcome::Empty(*id)); }
                 let props_text = props.join("\n");
                 let mut dt = props.join(" ");
                 if !ids.is_empty() { dt.push(' '); dt.push_str(&ids.join(" ")); }
                 let dt = dt.trim().to_string();
-                if dt.is_empty() { return None; }
+                if dt.is_empty() { return Some(Outcome::Empty(*id)); }
+                // Embedding failure is transient too — retry, don't tombstone.
                 let emb = embed_text(&http, &dt).ok()?;
-                Some((*id, props_text, dt, ids, emb))
+                Some(Outcome::Distilled(*id, props_text, dt, ids, emb))
             }).collect()
         });
 
         // INSERT this chunk now — the persistence checkpoint.
+        //
+        // A tombstone is a msg_distilled row with a NULL summary_embedding. The
+        // selection above (`NOT EXISTS … msg_distilled`) then skips it, and the orient
+        // leg already filters `summary_embedding IS NOT NULL`, so it can never surface
+        // in search. distill_ver is kept on it deliberately: if the prompt or model is
+        // ever improved enough to be worth a second look, those rows can be re-opened
+        // with `DELETE FROM msg_distilled WHERE summary_embedding IS NULL AND
+        // distill_ver < <new>` — one statement, no schema change.
         let mut pg = pg_connect()?;
-        for (id, props_text, dt, ids, emb) in &results {
-            let lit = vec_literal(emb);
-            let sql = format!(
-                "INSERT INTO msg_distilled (original_id, props, identifiers, distill_text, summary_embedding, distill_model, distill_ver) \
-                 VALUES ($1, $2, $3, $4, '{}'::vector, $5, $6) ON CONFLICT (original_id) DO NOTHING", lit);
-            if let Err(e) = pg.execute(&sql, &[id, props_text, ids, dt, &model, &DISTILL_VER]) {
-                eprintln!("insert id={} err={}", id, e);
+        let (mut stored, mut empties) = (0usize, 0usize);
+        for out in &results {
+            match out {
+                Outcome::Distilled(id, props_text, dt, ids, emb) => {
+                    let lit = vec_literal(emb);
+                    let sql = format!(
+                        "INSERT INTO msg_distilled (original_id, props, identifiers, distill_text, summary_embedding, distill_model, distill_ver) \
+                         VALUES ($1, $2, $3, $4, '{}'::vector, $5, $6) ON CONFLICT (original_id) DO NOTHING", lit);
+                    match pg.execute(&sql, &[id, props_text, ids, dt, &model, &DISTILL_VER]) {
+                        Ok(_) => stored += 1,
+                        Err(e) => eprintln!("insert id={} err={}", id, e),
+                    }
+                }
+                Outcome::Empty(id) => {
+                    let empty_ids: Vec<String> = Vec::new();
+                    match pg.execute(
+                        "INSERT INTO msg_distilled (original_id, props, identifiers, distill_text, summary_embedding, distill_model, distill_ver) \
+                         VALUES ($1, '', $2, '', NULL, $3, $4) ON CONFLICT (original_id) DO NOTHING",
+                        &[id, &empty_ids, &model, &DISTILL_VER]) {
+                        Ok(_) => empties += 1,
+                        Err(e) => eprintln!("tombstone id={} err={}", id, e),
+                    }
+                }
             }
         }
+        eprintln!("  chunk: {} distilled, {} empty (tombstoned, won't be re-selected)", stored, empties);
+        run_stored += stored;
+        run_empty += empties;
+        // total_done counts every row the model actually answered for, empties
+        // included: it is the --limit budget, and a run that did not count empties
+        // could spin on them.
         total_done += results.len();
         let el = t0.elapsed().as_secs_f64();
         println!("  chunk persisted: +{} → total {} ({:.0}s, {:.0}s/row)",
             results.len(), total_done, el, if total_done > 0 { el / total_done as f64 } else { 0.0 });
     }
-    println!("done. distilled {} rows this run.", total_done);
+    // Report the two separately. "distilled N" used to mean "answered N", which is
+    // how 39 empties per 40 stayed invisible for months.
+    println!("done. {} distilled + {} empty (tombstoned) = {} processed this run.",
+        run_stored, run_empty, total_done);
     Ok(())
 }
 
