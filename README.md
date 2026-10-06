@@ -126,6 +126,7 @@ Interactive mode shows the same status table as the bash version (`[+] new`, `[�
 | `claude-session-archive-skill` | Permanent local SQLite FTS5 archive of every Claude Code session (`~/claude-archive/sessions.db`) — cross-session full-text recall via `csearch`, auto-ingested every 15 min via launchd, with SQLite tuning and FTS5 syntax helpers |
 | `mis-management-skill` | Central MIS hub for SMB network — FortiGate threatfeed automation (auto-curate inbound attackers + nested addrgrp wrap for FG 6.2 600-member cap), NetBox-driven IP labeling, LibreNMS custom service checks, QNAP NAS ClamAV signature update proxy (legacy TLS workaround), AD LDAP queries from Linux, DNS-based AI usage tracking |
 | `luminous-skill` | Luminous (靈犀) — 思辨同理對話 persona for life decisions / emotional support / critical thinking practice. Combines First Principles + Golden Circle + Eastern philosophy (Zen / Taoism / Buddhist 因明學). Switches Claude into 「先同理後梳理」 mode with 4-stage internal processing (sense → retrieve → structure → self-verify). For human-emotional / philosophical scenarios — NOT for coding/technical work. |
+| `windows-ui-automation-skill` | Drive the UI of **any Windows desktop app that has no API** (ERP, Delphi/VB/PowerBuilder legacy systems, install wizards, MES/accounting/inventory apps) from Mac/Linux over **SSH + PsExec + pywinauto** — Claude "sees" via screenshots and "acts" via coordinates. Covers dynamic control location (IDs change every launch), self-drawn grids (maximize-for-fixed-coordinates), CJK input via clipboard, modal-dialog handling, ffmpeg screen recording (even-dimension fix + orphan-process guard), and 20+ battle-tested pitfalls (SSH/PsExec instability, cold-start timeouts, coordinate drift). Destructive actions stay human-gated. |
 
 ## Uninstallation
 
@@ -193,7 +194,8 @@ arcana-skills/
 ├── app-uiux-designer.skill/
 ├── doc-indexer-skill/
 ├── claude-session-archive-skill/
-└── mis-management-skill/
+├── mis-management-skill/
+└── windows-ui-automation-skill/
 ```
 
 ## System Requirements
