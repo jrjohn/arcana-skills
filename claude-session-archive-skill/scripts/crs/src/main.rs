@@ -368,10 +368,44 @@ fn ollama_generate_url() -> String {
 // a generous ceiling so rows aren't wasted to timeout (they'd be retried next
 // sweep anyway — distill-missing re-selects rows still lacking a msg_distilled
 // row — but re-running generation is wasteful). 300s.
+//
+// 2026-10-12: 300s → 120s (CRS_DISTILL_TIMEOUT_SECS), and generation is now
+// capped (CRS_DISTILL_NUM_PREDICT). The backfill on the Mac mini stalled for
+// days on a handful of rows: qwen2.5 fell into a degenerate loop on rows like
+// line-numbered Rust source (id 40975441, 441 chars) and emitted
+// `74, 75, 76, …` without end. With no num_predict the call only ever ended at
+// the client timeout, surfacing as "error sending request for url (…)", and a
+// failed row was not recorded, so every following batch picked it again.
+#[cfg(feature = "pg-backend")]
+fn env_u64(name: &str, default: u64) -> u64 {
+    std::env::var(name).ok().and_then(|v| v.trim().parse().ok()).filter(|v| *v > 0).unwrap_or(default)
+}
+
+#[cfg(feature = "pg-backend")]
+fn distill_timeout() -> std::time::Duration {
+    std::time::Duration::from_secs(env_u64("CRS_DISTILL_TIMEOUT_SECS", 120))
+}
+
+// Max tokens the model may generate per row. Sized from the 20k newest real
+// outputs (p99.9 ≈ 2.6k chars, max ≈ 4.4k chars incl. identifiers), so normal
+// rows are not cut; a runaway loop is. A cut answer is invalid JSON → parsed as
+// empty → tombstoned like any other empty answer.
+#[cfg(feature = "pg-backend")]
+fn distill_num_predict() -> u64 {
+    env_u64("CRS_DISTILL_NUM_PREDICT", 3072)
+}
+
+// Failed attempts (timeout, Ollama error) after which a row is tombstoned
+// instead of being retried by every future batch.
+#[cfg(feature = "pg-backend")]
+fn distill_max_fails() -> i32 {
+    env_u64("CRS_DISTILL_MAX_FAILS", 3).min(i32::MAX as u64) as i32
+}
+
 #[cfg(feature = "pg-backend")]
 fn distill_http_client() -> Result<reqwest::blocking::Client> {
     Ok(reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(300))
+        .timeout(distill_timeout())
         .build()?)
 }
 
@@ -423,12 +457,88 @@ fn distill_text_gen(client: &reqwest::blocking::Client, content: &str) -> Result
         "prompt": format!("{}{}", DISTILL_PROMPT, snippet),
         "stream": false,
         "format": "json",
-        "options": { "temperature": 0.1, "num_ctx": 4096 }
+        "options": { "temperature": 0.1, "num_ctx": 4096, "num_predict": distill_num_predict() }
     });
     let resp: GenResponse = client.post(&ollama_generate_url())
         .json(&body).send()?.error_for_status()?.json()?;
     let obj: DistillObj = serde_json::from_str(resp.response.trim()).unwrap_or_default();
     Ok((flat_strs(&obj.props), flat_strs(&obj.identifiers)))
+}
+
+// reqwest's Display stops at "error sending request for url (…)" and hides
+// whether it was a timeout, a refused connection or a reset. Keep the cause.
+#[cfg(feature = "pg-backend")]
+fn distill_err_text(e: &anyhow::Error) -> String {
+    let timeout = e.chain().any(|c| c.downcast_ref::<reqwest::Error>().is_some_and(reqwest::Error::is_timeout));
+    let s = format!("{:#}", e);
+    if timeout { format!("timeout after {}s: {}", distill_timeout().as_secs(), s) } else { s }
+}
+
+#[cfg(feature = "pg-backend")]
+fn counts_against_row(err: &str, outage: bool) -> bool {
+    err.starts_with("timeout after") && !outage
+}
+
+#[cfg(feature = "pg-backend")]
+fn should_tombstone(fails: i32, max_fails: i32) -> bool {
+    fails >= max_fails
+}
+
+#[cfg(all(test, feature = "pg-backend"))]
+mod distill_tests {
+    use super::*;
+
+    #[test]
+    fn tombstone_only_at_threshold() {
+        assert!(!should_tombstone(1, 3));
+        assert!(!should_tombstone(2, 3));
+        assert!(should_tombstone(3, 3));
+        assert!(should_tombstone(4, 3));
+        assert!(should_tombstone(1, 1));
+    }
+
+    #[test]
+    fn only_row_specific_timeouts_count() {
+        assert!(counts_against_row("timeout after 120s: x", false));
+        assert!(!counts_against_row("error sending request: connection refused", false));
+        assert!(!counts_against_row("timeout after 120s: x", true)); // nothing succeeded yet → outage
+    }
+
+    #[test]
+    fn env_knobs_default_and_override() {
+        unsafe { std::env::remove_var("CRS_DISTILL_TEST_KNOB"); }
+        assert_eq!(env_u64("CRS_DISTILL_TEST_KNOB", 120), 120);
+        unsafe { std::env::set_var("CRS_DISTILL_TEST_KNOB", "7"); }
+        assert_eq!(env_u64("CRS_DISTILL_TEST_KNOB", 120), 7);
+        unsafe { std::env::set_var("CRS_DISTILL_TEST_KNOB", "0"); }   // 0 / junk → default
+        assert_eq!(env_u64("CRS_DISTILL_TEST_KNOB", 120), 120);
+        unsafe { std::env::set_var("CRS_DISTILL_TEST_KNOB", "abc"); }
+        assert_eq!(env_u64("CRS_DISTILL_TEST_KNOB", 120), 120);
+        unsafe { std::env::remove_var("CRS_DISTILL_TEST_KNOB"); }
+    }
+
+    // Timeout path: an "Ollama" that accepts the request and never answers (what
+    // a runaway generation looks like from the client with stream=false) must
+    // fail within the timeout, and the error must say it was a timeout.
+    #[test]
+    fn generate_times_out_on_silent_server() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let _hold = std::thread::spawn(move || {
+            let conns: Vec<_> = listener.incoming().take(1).collect();
+            std::thread::sleep(std::time::Duration::from_secs(10));
+            drop(conns);
+        });
+        unsafe { std::env::set_var("CRS_OLLAMA_URL", format!("http://127.0.0.1:{}/api/embed", port)); }
+        unsafe { std::env::set_var("CRS_DISTILL_TIMEOUT_SECS", "1"); }
+        let client = distill_http_client().unwrap();
+        let t = std::time::Instant::now();
+        let r = distill_text_gen(&client, "some content that is long enough");
+        unsafe { std::env::remove_var("CRS_DISTILL_TIMEOUT_SECS"); }
+        let e = r.expect_err("silent server must error");
+        assert!(t.elapsed() < std::time::Duration::from_secs(5), "took {:?}", t.elapsed());
+        assert!(distill_err_text(&e).starts_with("timeout after"), "{}", distill_err_text(&e));
+    }
 }
 
 // ─────────────────────────── csearch ───────────────────────────
@@ -3901,6 +4011,16 @@ fn cmd_distill_init() -> Result<()> {
              USING (pg_has_role(current_user, owner, 'USAGE')) \
              WITH CHECK (owner = current_user)")?;
     }
+    // Per-row failure counter, kept across the short-lived distill processes so a
+    // row that always fails is tombstoned after CRS_DISTILL_MAX_FAILS attempts.
+    // Inspect: SELECT * FROM msg_distill_fail ORDER BY last_at DESC;
+    pg.batch_execute(
+        "CREATE TABLE IF NOT EXISTS msg_distill_fail (\
+           original_id BIGINT PRIMARY KEY, \
+           fails INT NOT NULL DEFAULT 0, \
+           last_err TEXT, \
+           tombstoned BOOLEAN NOT NULL DEFAULT false, \
+           last_at TIMESTAMPTZ NOT NULL DEFAULT now())")?;
     println!("msg_distilled ready (table + indexes + RLS policy rbac_hier).");
     Ok(())
 }
@@ -3939,7 +4059,7 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
     const CHUNK: usize = 10;
     let mut attempted: HashSet<i64> = HashSet::new();
     let mut total_done = 0usize;
-    let (mut run_stored, mut run_empty) = (0usize, 0usize);
+    let (mut run_stored, mut run_empty, mut run_poison) = (0usize, 0usize, 0usize);
     let t0 = std::time::Instant::now();
 
     loop {
@@ -3979,7 +4099,7 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
         // it plainly: "chunk persisted: +1 → total 40", i.e. 40 generations to store
         // one row. Measured throughput was 1,198 rows/day against 1,651 ingested, so
         // the backlog was growing while the GPU re-chewed the same noise every run.
-        enum Outcome { Distilled(i64, String, String, Vec<String>, Vec<f32>), Empty(i64) }
+        enum Outcome { Distilled(i64, String, String, Vec<String>, Vec<f32>), Empty(i64), Failed(i64, String) }
         let done = AtomicUsize::new(0);
         let cn = jobs.len();
         let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
@@ -3993,7 +4113,12 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
                 let (props, ids) = match r {
                     Ok(v) => v,
                     // Transient: leave it unrecorded so a later pass retries it.
-                    Err(e) => { eprintln!("    distill id={} err={}", id, e); return None; }
+                    // Counted in msg_distill_fail below; tombstoned after N.
+                    Err(e) => {
+                        let msg = distill_err_text(&e);
+                        eprintln!("    distill id={} err={}", id, msg);
+                        return Some(Outcome::Failed(*id, msg));
+                    }
                 };
                 if props.is_empty() && ids.is_empty() { return Some(Outcome::Empty(*id)); }
                 let props_text = props.join("\n");
@@ -4018,6 +4143,13 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
         // distill_ver < <new>` — one statement, no schema change.
         let mut pg = pg_connect()?;
         let (mut stored, mut empties) = (0usize, 0usize);
+        let mut answered = 0usize;
+        let max_fails = distill_max_fails();
+        // Only a timeout is evidence against the ROW. A refused connection, or a
+        // run in which nothing has succeeded yet, points at Ollama/GPU, not the
+        // content — counting those would tombstone healthy rows during an outage.
+        let all_failed = results.iter().all(|o| matches!(o, Outcome::Failed(..)));
+        let outage = all_failed && results.len() > 1 && run_stored + run_empty == 0;
         for out in &results {
             match out {
                 Outcome::Distilled(id, props_text, dt, ids, emb) => {
@@ -4040,7 +4172,34 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
                         Err(e) => eprintln!("tombstone id={} err={}", id, e),
                     }
                 }
+                Outcome::Failed(id, err) => {
+                    if !counts_against_row(err, outage) { continue; }
+                    let fails: i32 = match pg.query_one(
+                        "INSERT INTO msg_distill_fail (original_id, fails, last_err, last_at) VALUES ($1, 1, $2, now()) \
+                         ON CONFLICT (original_id) DO UPDATE SET fails = msg_distill_fail.fails + 1, \
+                           last_err = EXCLUDED.last_err, last_at = now() RETURNING fails",
+                        &[id, err]) {
+                        Ok(r) => r.get(0),
+                        Err(e) => { eprintln!("    fail-count id={} err={}", id, e); continue; }
+                    };
+                    if !should_tombstone(fails, max_fails) { continue; }
+                    let empty_ids: Vec<String> = Vec::new();
+                    let r = pg.execute(
+                        "INSERT INTO msg_distilled (original_id, props, identifiers, distill_text, summary_embedding, distill_model, distill_ver) \
+                         VALUES ($1, '', $2, '', NULL, $3, $4) ON CONFLICT (original_id) DO NOTHING",
+                        &[id, &empty_ids, &model, &DISTILL_VER])
+                        .and_then(|_| pg.execute(
+                            "UPDATE msg_distill_fail SET tombstoned = true WHERE original_id = $1", &[id]));
+                    match r {
+                        Ok(_) => {
+                            run_poison += 1;
+                            eprintln!("    POISON id={} failed {} times → tombstoned, won't be retried (last err: {})", id, fails, err);
+                        }
+                        Err(e) => eprintln!("    poison-tombstone id={} err={}", id, e),
+                    }
+                }
             }
+            if !matches!(out, Outcome::Failed(..)) { answered += 1; }
         }
         eprintln!("  chunk: {} distilled, {} empty (tombstoned, won't be re-selected)", stored, empties);
         run_stored += stored;
@@ -4048,7 +4207,10 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
         // total_done counts every row the model actually answered for, empties
         // included: it is the --limit budget, and a run that did not count empties
         // could spin on them.
-        total_done += results.len();
+        // Failed rows don't spend --limit budget (as before), but a chunk whose
+        // rows all failed must still end the run rather than loop: `attempted`
+        // already excludes them from the next select.
+        total_done += answered;
         let el = t0.elapsed().as_secs_f64();
         println!("  chunk persisted: +{} → total {} ({:.0}s, {:.0}s/row)",
             results.len(), total_done, el, if total_done > 0 { el / total_done as f64 } else { 0.0 });
@@ -4057,6 +4219,10 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
     // how 39 empties per 40 stayed invisible for months.
     println!("done. {} distilled + {} empty (tombstoned) = {} processed this run.",
         run_stored, run_empty, total_done);
+    if run_poison > 0 {
+        println!("poison: {} row(s) tombstoned after {} failed attempts (see msg_distill_fail).",
+            run_poison, distill_max_fails());
+    }
     Ok(())
 }
 
