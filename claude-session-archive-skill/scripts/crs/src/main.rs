@@ -475,8 +475,8 @@ fn distill_err_text(e: &anyhow::Error) -> String {
 }
 
 #[cfg(feature = "pg-backend")]
-fn counts_against_row(err: &str, all_failed: bool, chunk_len: usize) -> bool {
-    err.starts_with("timeout after") && !(all_failed && chunk_len > 1)
+fn counts_against_row(err: &str, outage: bool) -> bool {
+    err.starts_with("timeout after") && !outage
 }
 
 #[cfg(feature = "pg-backend")]
@@ -499,10 +499,9 @@ mod distill_tests {
 
     #[test]
     fn only_row_specific_timeouts_count() {
-        assert!(counts_against_row("timeout after 120s: x", false, 10));
-        assert!(!counts_against_row("error sending request: connection refused", false, 10));
-        assert!(!counts_against_row("timeout after 120s: x", true, 10)); // whole chunk → outage
-        assert!(counts_against_row("timeout after 120s: x", true, 1));   // lone poison row in a tail chunk
+        assert!(counts_against_row("timeout after 120s: x", false));
+        assert!(!counts_against_row("error sending request: connection refused", false));
+        assert!(!counts_against_row("timeout after 120s: x", true)); // nothing succeeded yet → outage
     }
 
     #[test]
@@ -4146,10 +4145,11 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
         let (mut stored, mut empties) = (0usize, 0usize);
         let mut answered = 0usize;
         let max_fails = distill_max_fails();
-        // Only a timeout is evidence against the ROW. A refused connection or a
-        // chunk where every row failed points at Ollama/GPU, not the content —
-        // counting those would tombstone healthy rows during an outage.
+        // Only a timeout is evidence against the ROW. A refused connection, or a
+        // run in which nothing has succeeded yet, points at Ollama/GPU, not the
+        // content — counting those would tombstone healthy rows during an outage.
         let all_failed = results.iter().all(|o| matches!(o, Outcome::Failed(..)));
+        let outage = all_failed && results.len() > 1 && run_stored + run_empty == 0;
         for out in &results {
             match out {
                 Outcome::Distilled(id, props_text, dt, ids, emb) => {
@@ -4173,7 +4173,7 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
                     }
                 }
                 Outcome::Failed(id, err) => {
-                    if !counts_against_row(err, all_failed, results.len()) { continue; }
+                    if !counts_against_row(err, outage) { continue; }
                     let fails: i32 = match pg.query_one(
                         "INSERT INTO msg_distill_fail (original_id, fails, last_err, last_at) VALUES ($1, 1, $2, now()) \
                          ON CONFLICT (original_id) DO UPDATE SET fails = msg_distill_fail.fails + 1, \
