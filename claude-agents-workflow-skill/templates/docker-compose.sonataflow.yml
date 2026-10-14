@@ -16,7 +16,7 @@
 
 services:
   kafka:
-    image: apache/kafka-native:3.9.1      # KRaft (no Zookeeper), multi-arch, ~50MB
+    image: apache/kafka-native:4.3.1      # KRaft (no Zookeeper), multi-arch, ~50MB
     container_name: kafka
     restart: unless-stopped
     networks: [devops_default]
