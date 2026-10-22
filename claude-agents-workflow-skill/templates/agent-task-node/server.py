@@ -6125,6 +6125,23 @@ def _start_pr_backend(repo, branch, base, piid, net):
 
 
 
+_SECRET_ENV = ("CLAUDE_CODE_OAUTH_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY")
+
+
+def _redact_secrets(text):
+    """`text` with this process's secret env values masked — for anything headed into a report.
+
+    The docker commands pass secrets by name only, so an exception's text no longer carries them;
+    this is the second layer, for whatever else might echo one (a runner's stderr tail, say).
+    """
+    out = text or ""
+    for k in _SECRET_ENV:
+        v = os.environ.get(k) or ""
+        if len(v) >= 8:
+            out = out.replace(v, "<%s redacted>" % k)
+    return out
+
+
 def _post_commit_status(repo, branch, rep):
     """Report the test node's verdict to GitHub as a commit status.
 
@@ -7295,7 +7312,10 @@ def test_flow(payload):
            # SAME long-lived OAuth token the agent uses (env, not a shared-home mount — the mount
            # caused a .credentials backup/corruption race). Empty/invalid -> the runner's
            # `command -v claude` + login check skips the AI pass (not fatal).
-           "-e", "CLAUDE_CODE_OAUTH_TOKEN=" + os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", ""),
+           # Name only: docker takes the value from this process's environment. With `NAME=value`
+           # here, a runner timeout put the whole command — token included — into
+           # testReport.reason and so into the Data Index (2026-10-21). GH_TOKEN below likewise.
+           "-e", "CLAUDE_CODE_OAUTH_TOKEN",
            "-e", "IS_SANDBOX=1",
            "-e", "MINIO_URL=" + os.environ.get("TEST_MINIO_URL", "http://aaf-minio:9000"),
            "-e", "MINIO_USER=" + os.environ.get("MINIO_ROOT_USER", "minioadmin"),
@@ -7346,7 +7366,7 @@ def test_flow(payload):
                 "navPath", "dashboard/src/app/core/navigation/nav.config.ts"))]
     if repo and branch:  # T4-1: build the PR branch and test its real code
         cmd += ["-e", "REPO=" + repo, "-e", "BRANCH=" + branch,
-                "-e", "GH_TOKEN=" + os.environ.get("GH_TOKEN", "")]
+                "-e", "GH_TOKEN"]   # name only — see CLAUDE_CODE_OAUTH_TOKEN above
     else:                # regression fallback: test the already-running app
         cmd += ["-e", "TARGET_URL=" + os.environ.get("TEST_TARGET_URL", "http://aaf-dashboard:80")]
     gen, tc_source = _resolve_testcases(_gen_testcases(payload), _testcases_cache_path(payload))
@@ -7425,13 +7445,14 @@ def test_flow(payload):
             _fold_ci(rep, _pr_ci(repo, branch, base))
             _post_commit_status(repo, branch, rep)
             return rep
-        tail = ((r.stderr or "") + (r.stdout or ""))[-400:]
+        tail = _redact_secrets(((r.stderr or "") + (r.stdout or ""))[-400:])
         bad = {"allPass": False, "total": 0, "passed": 0,
                "reason": "runner emitted no TESTREPORT (exit %s): %s" % (r.returncode, tail)}
         _post_commit_status(repo, branch, bad)
         return bad
     except Exception as e:
-        return {"allPass": False, "total": 0, "passed": 0, "reason": "test runner invoke failed: %s" % e}
+        return {"allPass": False, "total": 0, "passed": 0,
+                "reason": "test runner invoke failed: %s" % _redact_secrets(str(e))}
     finally:
         # Always: a leaked container/DB would poison every later run on this network.
         pr_teardown()
@@ -7810,7 +7831,7 @@ def uiux_audit_flow(payload):
 
     # 1. run the AI semantic gate in the test-runner (playwright screenshots + claude vision)
     cmd = ["docker", "run", "--rm", "--network", net,
-           "-e", "CLAUDE_CODE_OAUTH_TOKEN=" + os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", ""),
+           "-e", "CLAUDE_CODE_OAUTH_TOKEN",   # name only: the value comes from this process's env, never argv
            "-e", "IS_SANDBOX=1", "-e", "UIUX_BASE=" + base, "-e", "UIUX_ROUTES=" + routes,
            "--entrypoint", "node",
            os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local"), "/e2e/uiux-ai-review.mjs"]
