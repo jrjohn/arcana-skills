@@ -6125,6 +6125,26 @@ def _start_pr_backend(repo, branch, base, piid, net):
 
 
 
+def _runner_name(kind, piid):
+    """A unique name for a runner container, so a timeout can remove it.
+
+    `subprocess.run([...docker run --rm...], timeout=…)` kills only the docker CLI; the container
+    keeps running. 2026-10-21: an orphaned runner ran 40 more minutes on a Mac whose swap was nearly
+    full, and the next test timed out too. The instance id is in the name so `docker ps` says whose
+    it is; the random tail keeps a re-test of the same instance from colliding with a leftover.
+    """
+    tag = "".join(c for c in str(piid or "adhoc") if c.isalnum() or c in "-_")[:24] or "adhoc"
+    return "aaf-%s-%s-%s" % (kind, tag, os.urandom(3).hex())
+
+
+def _rm_container(name):
+    """Best effort — a container that already exited (and was --rm'd) is simply not there."""
+    try:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True, text=True, timeout=60)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 _SECRET_ENV = ("CLAUDE_CODE_OAUTH_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY")
 
 
@@ -7307,7 +7327,8 @@ def test_flow(payload):
         print("[agent-task-node] scenario autofill: filled=%s escalate=%s"
               % (autofill.get("filled"), autofill.get("escalate")), flush=True)
 
-    cmd = ["docker", "run", "--rm", "--network", net,
+    runner = _runner_name("test", piid)  # so a timeout can remove it — see _runner_name
+    cmd = ["docker", "run", "--rm", "--name", runner, "--network", net,
            # claude auth for the runner's AI semantic review step (uiux-ai-review.mjs): pass the
            # SAME long-lived OAuth token the agent uses (env, not a shared-home mount — the mount
            # caused a .credentials backup/corruption race). Empty/invalid -> the runner's
@@ -7451,6 +7472,8 @@ def test_flow(payload):
         _post_commit_status(repo, branch, bad)
         return bad
     except Exception as e:
+        if isinstance(e, subprocess.TimeoutExpired):
+            _rm_container(runner)  # the CLI died, the container did not
         return {"allPass": False, "total": 0, "passed": 0,
                 "reason": "test runner invoke failed: %s" % _redact_secrets(str(e))}
     finally:
@@ -7830,7 +7853,8 @@ def uiux_audit_flow(payload):
             return {}
 
     # 1. run the AI semantic gate in the test-runner (playwright screenshots + claude vision)
-    cmd = ["docker", "run", "--rm", "--network", net,
+    runner = _runner_name("uiux", "audit")  # so a timeout can remove it — see _runner_name
+    cmd = ["docker", "run", "--rm", "--name", runner, "--network", net,
            "-e", "CLAUDE_CODE_OAUTH_TOKEN",   # name only: the value comes from this process's env, never argv
            "-e", "IS_SANDBOX=1", "-e", "UIUX_BASE=" + base, "-e", "UIUX_ROUTES=" + routes,
            "--entrypoint", "node",
@@ -7838,6 +7862,7 @@ def uiux_audit_flow(payload):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
     except subprocess.TimeoutExpired:
+        _rm_container(runner)  # the CLI died, the container did not
         return {"findings": 0, "started": 0, "error": "audit gate timed out"}
     line = next((l for l in reversed((r.stdout or "").splitlines()) if l.startswith('{"routes')), "")
     try:

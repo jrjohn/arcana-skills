@@ -66,3 +66,8 @@ jobs:
       # token 曾因此進了 testReport.reason / Data Index。真的走一遍 test_flow,也掃原始碼。
       - name: secret_argv_selftest.py
         run: python3 secret_argv_selftest.py
+
+      # runner 逾時要把容器收掉(2026-10-22):timeout 只殺 docker CLI,容器照跑成孤兒,
+      # 吃記憶體害下一個測試也逾時。test_flow 與 uiux 稽核兩處都驗。
+      - name: runner_timeout_cleanup_selftest.py
+        run: python3 runner_timeout_cleanup_selftest.py
