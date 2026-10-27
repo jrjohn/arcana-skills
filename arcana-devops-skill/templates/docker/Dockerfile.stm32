@@ -17,7 +17,7 @@
 #   docker build --target artifacts -o ./firmware-output .
 # ============================================
 
-FROM ubuntu:24.04 AS builder
+FROM ubuntu:26.04 AS builder
 
 # Install ARM toolchain and build tools (including libstdc++ newlib)
 RUN apt-get update && apt-get install -y --no-install-recommends \

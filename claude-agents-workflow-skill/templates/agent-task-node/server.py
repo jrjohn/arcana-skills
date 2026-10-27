@@ -1266,6 +1266,77 @@ def pr_ready(payload):
             "reason": None if r.returncode == 0 else "gh pr ready failed: " + (r.stderr or "")[-200:]}
 
 
+# ── loop-drive:排程開輪(aaf 的 sdlc-loop-driver-flow → LoopDrive → 這裡) ──────────────
+#
+# 計時器每 6 小時叫一次;要不要真的開一輪由驅動器的四道上界決定(週預算 / 輪數 / 空轉 / 一次一輪)。
+# 驅動器**只有一份**:每次從 main 取 scripts/sdlc-loop-driver.py 來跑,不在這裡複製它的判準。
+#
+# 暫停:主機上 `touch ~/.claude/sdlc-loop-paused`(容器的 /root/.claude 就是主機的 ~/.claude),
+# 刪掉就恢復。不用重建任何容器 —— 要停的時候通常就是很急的時候。
+_LOOP_DRIVER_PATH = "scripts/sdlc-loop-driver.py"
+_LOOP_PAUSE_FILE = os.path.expanduser("~/.claude/sdlc-loop-paused")
+# 驅動器的預設網址是給主機跑的 localhost;在容器網路裡要換成服務名稱。已經有設的就不動。
+_LOOP_ENV_DEFAULTS = {"LOOP_READ_API": "http://aaf-arcana-cloud-rust:8080",
+                      "LOOP_DATA_INDEX": "http://aaf-data-index:8080",
+                      "LOOP_ENGINE": "http://kogito-bpmn:8080"}
+
+
+def _loop_drive_verdict(rc, stdout, start):
+    """驅動器的結束碼 + 輸出 → (判定, 實例 id 前 8 碼)。純函式。
+
+    驅動器的約定:0 = 開了一輪、或沒有單可開、或空跑;1 = 被上界擋下(它在工作,不是故障);
+    2 = 有東西讀不到(缺席不等於可以跑)。其他結束碼(逾時被砍等)一律當讀不到。
+    """
+    m = re.search(r"已開:([0-9a-f]{8})", stdout or "")
+    if rc == 0:
+        if m:
+            return "started", m.group(1)
+        return ("idle" if start else "dry"), None
+    if rc == 1:
+        return "braked", None
+    return "notRun", None
+
+
+def loop_drive(payload, fetch=None, run=None):
+    """跑一次驅動器。`fetch` / `run` 可注入(自檢用);預設是 gh 取檔、python3 執行。"""
+    if os.path.exists(_LOOP_PAUSE_FILE):
+        return {"verdict": "paused", "started": False, "exitCode": None,
+                "report": "排程已暫停(%s 存在);刪掉它就恢復" % _LOOP_PAUSE_FILE}
+    repo = str(payload.get("repo") or os.environ.get("LOOP_REPO") or "jrjohn/arcana-ai-bpm")
+    start = str(payload.get("dryRun") or _pv(payload, "dryRun") or "").strip().lower() != "true"
+    fetch = fetch or (lambda: subprocess.run(
+        ["gh", "api", "-H", "Accept: application/vnd.github.raw",
+         "repos/%s/contents/%s?ref=main" % (repo, _LOOP_DRIVER_PATH)],
+        capture_output=True, text=True, timeout=60))
+    f = fetch()
+    src = f.stdout if f.returncode == 0 else ""
+    # 拿到的東西要真的是驅動器。一個 404 的 JSON、一段錯誤訊息,都不能拿去當 python 執行。
+    if "def run(" not in src or "四道上界" not in src:
+        return {"verdict": "notRun", "started": False, "exitCode": None,
+                "report": "拿不到 main 上的驅動器(%s):%s" % (_LOOP_DRIVER_PATH, (f.stderr or src or "")[-300:])}
+    env = dict(os.environ)
+    for k, v in _LOOP_ENV_DEFAULTS.items():
+        env.setdefault(k, v)
+    env["LOOP_REPO"] = repo
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as tf:
+        tf.write(src)
+        path = tf.name
+    try:
+        run = run or (lambda argv, e: subprocess.run(argv, capture_output=True, text=True, timeout=300, env=e))
+        try:
+            p = run(["python3", path] + (["--start"] if start else []), env)
+            rc, out, err = p.returncode, p.stdout or "", p.stderr or ""
+        except subprocess.TimeoutExpired:
+            rc, out, err = None, "", "驅動器 300 秒沒有結束"
+    finally:
+        os.unlink(path)
+    verdict, iid = _loop_drive_verdict(rc, out, start)
+    issue = re.search(r"要開的單:#(\d+)", out)
+    return {"verdict": verdict, "started": verdict == "started", "instance": iid,
+            "issue": int(issue.group(1)) if issue else None, "exitCode": rc,
+            "dryRun": not start, "report": out[-3000:], "stderr": err[-800:]}
+
+
 def dispose_pr(payload):
     """Close out this run's PR according to how the run ended.
 
@@ -1427,6 +1498,104 @@ def _repo_blobs(repo, ref, path):
         if len(parts) == 2 and len(parts[0]) == 40:
             out[parts[1]] = parts[0]
     return out or None
+
+
+# ── 測試映像是打分數的尺 ──────────────────────────────────────────────────
+#
+# 2026-10-04 #539 那一輪:RootCause 判斷 rbacUiFail 讀的是烤在 aaf-test-runner:local
+# 裡的 main 版基準檔,PR 改了基準檔閘也看不到;implement 的 AI 於是自己跑
+# `docker tag … && docker build -t aaf-test-runner:local`(用 PR 的樹),讓閘讀到它改過的尺。
+# needs-human-merge 只看 PR 的檔案,擋不到這種側通道。後果:映像比 main 新,之後三輪的
+# preflight 全部「映像與 main 不一致」拒絕開工,三輪白跑。
+#
+# 兩層:(1) preflight 發現漂移就自己用 base 重建,不讓一輪死掉;
+#       (2) 每個 AI 節點前後比對映像 id,被換掉就還原並記在節點結果裡(PM 看得到)。
+# 閘讀 main 的版本是刻意的 —— PR 不能用自己改過的尺替自己打分。
+RUNNER_SELF_HEAL = os.environ.get("RUNNER_SELF_HEAL", "1") == "1"
+_RUNNER_REBUILD_LOCK = threading.Lock()
+_RUNNER_PLATFORM_GEN = [0]   # 平台自己重建的次數;守衛看到它變了就不還原
+
+
+def _runner_image_id(img):
+    """映像目前的 id;沒有映像 / 沒有 docker → None。"""
+    try:
+        r = subprocess.run(["docker", "image", "inspect", "-f", "{{.Id}}", img],
+                           capture_output=True, text=True, timeout=30)
+    except Exception:                                           # noqa: BLE001
+        return None
+    if r.returncode != 0:
+        return None
+    return (r.stdout or "").strip() or None
+
+
+def _rebuild_runner_from_base(img, repo, base, src="dashboard/e2e",
+                              dockerfile="dashboard/e2e/test-runner.Dockerfile"):
+    """用 base 的 src 重建共用測試映像。回 (ok, 說明)。一次只建一個。"""
+    with _RUNNER_REBUILD_LOCK:
+        tmp = tempfile.mkdtemp(prefix="runner-src-", dir=WORK_ROOT if os.path.isdir(WORK_ROOT) else None)
+        url = "https://x-access-token:%s@github.com/%s" % (os.environ.get("GH_TOKEN", ""), repo)
+        try:
+            c = subprocess.run(["git", "clone", "--depth", "1", "--branch", base,
+                                "--filter=blob:none", "--sparse", url, tmp],
+                               capture_output=True, text=True, timeout=600)
+            if c.returncode != 0:
+                return False, "clone %s@%s 失敗:%s" % (repo, base, (c.stderr or "")[-200:])
+            subprocess.run(["git", "-C", tmp, "sparse-checkout", "set", src],
+                           capture_output=True, text=True, timeout=300)
+            b = subprocess.run(["docker", "build", "-q", "-f", os.path.join(tmp, dockerfile),
+                                "-t", img, os.path.join(tmp, src)],
+                               capture_output=True, text=True, timeout=3600)
+            if b.returncode != 0:
+                return False, "docker build 失敗:%s" % ((b.stderr or b.stdout or "")[-300:])
+            _RUNNER_PLATFORM_GEN[0] += 1
+            return True, "已用 %s@%s 的 %s 重建 %s" % (repo, base, src, img)
+        except Exception as e:                                  # noqa: BLE001
+            return False, "重建時出錯:%s" % e
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+_EVALUATOR_RULE = (
+    "\n\n## 平台規則:測試映像是打分數的尺\n"
+    "`aaf-test-runner:local` 不准 `docker build`、`docker tag`、`docker rmi` 或用任何方式換掉。"
+    "閘讀的是 main 的版本是刻意的 —— PR 不能用自己改過的尺替自己打分。"
+    "你的修改若需要閘看到新的檢查或基準,寫進 PR-NOTES 交給人審。"
+    "節點結束後映像若被換掉,會自動還原並記錄在這個節點的結果裡。\n")
+
+
+def _guarded_runner(img):
+    """AI 節點的前後守衛。回 (before_id, guard_tag, gen) 給 _restore_runner 用。"""
+    before = _runner_image_id(img)
+    tag = None
+    if before:
+        # 同一個程序裡可能同時跑好幾個節點(執行緒),所以要帶執行緒編號才不會撞名
+        tag = "aaf-runner-guard:%d-%d-%d" % (os.getpid(), threading.get_ident() % 10**9,
+                                              int(time.time() * 1000))
+        r = subprocess.run(["docker", "tag", img, tag], capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            tag = None
+    return before, tag, _RUNNER_PLATFORM_GEN[0]
+
+
+def _restore_runner(img, before, tag, gen):
+    """節點跑完:映像被換掉(而且不是平台自己重建的)→ 還原。回 tamper 紀錄或 None。"""
+    try:
+        if not (before and tag):
+            return None
+        after = _runner_image_id(img)
+        if after == before or _RUNNER_PLATFORM_GEN[0] != gen:
+            return None
+        r = subprocess.run(["docker", "tag", tag, img], capture_output=True, text=True, timeout=30)
+        rec = {"image": img, "before": before[:19], "after": (after or "(不見了)")[:19],
+               "restored": r.returncode == 0,
+               "note": "AI 節點執行期間測試映像被換掉,已還原。測試映像是打分數的尺,節點不得重建或改標籤。"}
+        print("[agent-task-node] ⚠ runner-guard: %s 在 AI 節點期間被換掉(%s → %s),%s"
+              % (img, rec["before"], rec["after"], "已還原" if rec["restored"] else "還原失敗!"),
+              flush=True)
+        return rec
+    finally:
+        if tag:
+            subprocess.run(["docker", "image", "rm", tag], capture_output=True, text=True, timeout=60)
 
 
 def preflight(payload):
@@ -1620,6 +1789,18 @@ def preflight(payload):
             continue
         drift = [p for p, sha in sorted(repo_blobs.items())
                  if img_blobs.get(p) != sha]
+        if drift and RUNNER_SELF_HEAL:
+            print("[agent-task-node] preflight: %s 與 %s 不一致(%s)—— 自動用 %s 重建"
+                  % (img, base, ", ".join(drift[:3]), base), flush=True)
+            healed, why = _rebuild_runner_from_base(img, repo, base)
+            if healed:
+                img_blobs = _image_blobs(img) or {}
+                drift = [p for p, sha in sorted(repo_blobs.items()) if img_blobs.get(p) != sha]
+                if not drift:
+                    checks.append("image %s: 原本與 %s 不一致,已自動重建,現在 %d 個檔逐檔相同"
+                                  % (img, base, len(repo_blobs)))
+                    continue
+            how = how + "\n  (自動重建沒有成功:%s)" % why
         if drift:
             shown = ", ".join(drift[:6]) + ("…(共 %d 個)" % len(drift) if len(drift) > 6 else "")
             return fail("映像 %s 裡的 %s 與 %s 上的不一致 —— 它烤進去的腳本不是現在 repo 裡的"
@@ -1942,7 +2123,7 @@ _verb_registry_check()
 # 現在會在 import 時比對這份名單與分派鏈,漏一個就起不來。
 DETERMINISTIC_TASKS = ("release", "execute", "publish-flow", "implement", "test", "coverage",
                        "uiux-audit", "site", "smoke", "dispose-pr", "consult", "pr-ready",
-                       "scan-stale")
+                       "scan-stale", "loop-drive")
 
 
 
@@ -2274,11 +2455,11 @@ def _write_workspace_claude_md(root, payload):
     if not PROJECT_MEM:
         return
     home = _project_mem_home(_project_slug(payload))
-    if not home or not os.path.isfile(os.path.join(home, "session.db")):
+    if not home or not os.path.isfile(_project_mem_db(home)):
         return
     if not os.path.exists(PROJECT_MEM_CRS):
         return
-    env = "HOME=%s CRS_DB=%s/session.db CRS_OLLAMA_URL=%s" % (home, home, PROJECT_MEM_OLLAMA)
+    env = "HOME=%s CRS_DB=%s CRS_OLLAMA_URL=%s" % (home, _project_mem_db(home), PROJECT_MEM_OLLAMA)
     body = (
         "# 🚨 最高優先 — 動工前先問這個產品的歷史\n\n"
         "> **你不是這個產品的第一個節點。** 這條流水線在這裡跑過很多輪,每一輪的對話都在\n"
@@ -3091,6 +3272,20 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
     Kept as a wrapper so both call sites (run_claude / run_claude_generic) are gated
     without either knowing about it — a node cannot opt out by forgetting to ask.
     """
+    img = os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local")
+    guard = _guarded_runner(img)
+    out = None
+    try:
+        out = _invoke_claude_core(prompt + _EVALUATOR_RULE, schema, payload, wall, cwd)
+    finally:
+        tamper = _restore_runner(img, *guard)
+        if tamper and isinstance(out, dict):
+            out["_runnerTamper"] = tamper
+    return out
+
+
+def _invoke_claude_core(prompt, schema, payload, wall, cwd=None):
+    """confidence/reflection 迴圈本體(原本的 _invoke_claude)。"""
     pol = _confidence_policy(payload)
     if pol is None:
         out = _invoke_claude_once(prompt, schema, payload, wall, cwd)
@@ -3189,6 +3384,28 @@ PROJECT_MEM_ROOT = os.environ.get("PROJECT_MEM_ROOT", "/work/_memory")
 PROJECT_MEM_OLLAMA = os.environ.get(
     "PROJECT_MEM_OLLAMA", "http://host.docker.internal:11434/api/embed")
 
+# 逐字稿放哪裡和資料庫放哪裡是兩件事。2026-10-02 實測(4 個程序同時寫 WAL 模式的 sqlite,40 秒):
+#   Docker Desktop 從 Mac 掛進來的資料夾(virtiofs)→ 11 萬筆,integrity_check「Rowid out of order」
+#   Docker 自己的 volume                        → 61 萬筆,integrity_check ok
+# aaf 的 session.db 08-21、08-26、09-29 三次壞掉(第一頁被蓋成資料頁),10-02 重建的那顆 10 分鐘
+# 又壞 —— 都是這一種:-shm 共享記憶體與檔案鎖在 bind mount 上不可靠,同時寫的程序一多就寫錯頁。
+# 所以:逐字稿(純文字)留在 bind mount,主機看得到、不會壞;只有 db 放進 PROJECT_MEM_DB_ROOT
+# (compose 裡的 named volume)。db 是逐字稿的衍生物 —— 不見了,下一次 ingest 的 build 會從
+# 全部逐字稿整顆重建,所以不需要備份(John 2026-08-21、2026-10-02)。
+PROJECT_MEM_DB_ROOT = os.environ.get("PROJECT_MEM_DB_ROOT", "")
+
+
+def _project_mem_db(home):
+    """這個產品的 session.db 路徑。PROJECT_MEM_DB_ROOT 沒設 → 跟逐字稿同目錄(舊行為)。"""
+    if not PROJECT_MEM_DB_ROOT:
+        return os.path.join(home, "session.db")
+    d = os.path.join(PROJECT_MEM_DB_ROOT, os.path.basename(home.rstrip("/")))
+    try:
+        os.makedirs(d, exist_ok=True)
+    except OSError:
+        pass
+    return os.path.join(d, "session.db")
+
 
 def _project_mem_home(product):
     """Staging dir + db for one product. Absent product = no memory, not a shared one."""
@@ -3200,13 +3417,13 @@ def _project_mem_home(product):
 def project_memory_recall(product, query, limit=4):
     """Semantic recall over THIS product's own node conversations. Never raises."""
     home = _project_mem_home(product)
-    if not (PROJECT_MEM and home and query and os.path.isfile(os.path.join(home, "session.db"))):
+    if not (PROJECT_MEM and home and query and os.path.isfile(_project_mem_db(home))):
         return ""
     if not os.path.exists(PROJECT_MEM_CRS):
         return ""
     env = dict(os.environ)
     env.update({"HOME": home,
-                "CRS_DB": os.path.join(home, "session.db"),
+                "CRS_DB": _project_mem_db(home),
                 "CRS_OLLAMA_URL": PROJECT_MEM_OLLAMA})
     try:
         p = subprocess.run([PROJECT_MEM_CRS, "vsearch", "--json", "--limit", str(limit), query],
@@ -3262,7 +3479,7 @@ def project_memory_ingest(product, piid):
         return
     env = dict(os.environ)
     env.update({"HOME": home,
-                "CRS_DB": os.path.join(home, "session.db"),
+                "CRS_DB": _project_mem_db(home),
                 "CRS_OLLAMA_URL": PROJECT_MEM_OLLAMA})
     try:
         subprocess.run([PROJECT_MEM_CRS, "build", "--no-refresh", "--workers", "4"],
@@ -3377,11 +3594,11 @@ def _memory_brief(payload):
     if not PROJECT_MEM:
         return ""
     home = _project_mem_home(_project_slug(payload))
-    if not home or not os.path.isfile(os.path.join(home, "session.db")):
+    if not home or not os.path.isfile(_project_mem_db(home)):
         return ""
     if not os.path.exists(PROJECT_MEM_CRS):
         return ""
-    env = "HOME=%s CRS_DB=%s/session.db CRS_OLLAMA_URL=%s" % (home, home, PROJECT_MEM_OLLAMA)
+    env = "HOME=%s CRS_DB=%s CRS_OLLAMA_URL=%s" % (home, _project_mem_db(home), PROJECT_MEM_OLLAMA)
     return (
         "\n## 🚨 動工前先問這個產品的歷史\n"
         "**你不是這個產品的第一個節點。在你要重做、重猜、或重新發現任何事情之前,先查它。**\n"
@@ -3426,34 +3643,85 @@ def _with_memory(prompt, payload):
     return ("\n".join(parts) + "\n" + prompt) if parts else prompt
 
 
-def _project_slug(payload):
-    """Which product this run belongs to — the registry id when there is one, else the
-    repo name. Never a default: an unidentifiable run gets no memory rather than
-    somebody else's.
+_REGISTRY_CACHE = {"at": 0.0, "projects": None}
 
-    退回 repo 名時**要出聲**。這個 docstring 的意圖是「寧可沒記憶,也不要拿到別人的」,
-    但 fallback 的實際行為不是「沒記憶」—— 它是**開了第二份平行記憶**,會讀、會寫、
-    會回答,看起來完全正常。
 
-    2026-08-21 實測:一整天 26 個節點 session、2,171 筆逐字稿全部寫進
-    `_memory/arcana-ai-bpm/`,而產品的權威記憶 `_memory/aaf/` 當天是 0 筆。
-    兩邊各自長了十天(186 vs 195 個 session,只重疊 125),**兩邊都是殘的**,
-    而沒有任何一層說過一句話。
+def _registry_projects_cached(ttl=300):
+    """註冊表的專案清單,快取 ttl 秒。沒設或連不到 → None(失敗不快取)。"""
+    now = time.time()
+    if _REGISTRY_CACHE["projects"] is not None and now - _REGISTRY_CACHE["at"] < ttl:
+        return _REGISTRY_CACHE["projects"]
+    url = (os.environ.get("SDLC_REGISTRY_URL") or "").rstrip("/")
+    if not url:
+        return None
+    if not url.startswith("http"):
+        url = "http://" + url
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url, timeout=10) as r:
+            body = json.load(r)
+    except Exception:                                           # noqa: BLE001
+        return None
+    if not isinstance(body, dict) or body.get("error"):
+        return None
+    projects = body.get("projects") or []
+    _REGISTRY_CACHE.update(at=now, projects=projects)
+    return projects
 
-    「名單縮小可以是刻意的,不可以是無聲的」—— 這個 repo 對流程 id 的對帳
-    (reconcile_targets)已經是這個慣例,記憶這一格照抄。
+
+def _project_id_for_repo(projects, repo, base=""):
+    """repo(+整合分支)→ 註冊表裡的 projectId。純函式。
+
+    同一個 repo 只有一個專案 → 就是它;不只一個 → 用整合分支挑;還是分不出來 → ""。
     """
-    p = payload.get("_sdlc_project") or _pv(payload, "projectId")
-    if p:
-        return str(p)
+    hits = [p for p in (projects or [])
+            if (p.get("repo") or "").lower() == (repo or "").lower()]
+    if len(hits) > 1 and base:
+        hits = [p for p in hits if (p.get("integrationBranch") or "") == base] or hits
+    return str(hits[0].get("projectId") or "") if len(hits) == 1 else ""
+
+
+def _project_slug(payload):
+    """這一輪屬於哪個產品 —— 決定讀寫哪一份 session.db。一個產品只能有一份。
+
+    順序:`_sdlc_project`(preflight 從註冊表查到的整筆專案)→ payload 的 projectId →
+    用 repo 查註冊表 → 都沒有就**不用專案記憶**(回 "",大聲說)。
+
+    以前最後一步是「退回 repo 名」,而那不是「沒記憶」,是**開了第二份平行記憶**:
+    2026-08-21 一整天的逐字稿全部寫進 `_memory/arcana-ai-bpm/`,權威的 `_memory/aaf/` 當天 0 筆;
+    到 10-02 為止,31 輪 sdlc-code-flow 有節點寫到 arcana-ai-bpm —— 其中 23 輪明明帶著
+    projectId=aaf,只是那幾個節點的 payload 沒帶。註冊表本來就知道 jrjohn/arcana-ai-bpm 是 aaf,
+    所以去問它,而不是自己發明一個鍵。
+
+    另一個 bug 一起修:preflight 把整筆專案(dict)放進 `_sdlc_project`,這裡以前 `str(p)`
+    —— 得到 "{'projectId': 'aaf', ...}",過不了 _project_mem_home 的檢查,那個節點完全沒有記憶。
+    """
+    sp = payload.get("_sdlc_project")
+    if isinstance(sp, dict):
+        sp = sp.get("projectId")
+    p = sp or _pv(payload, "projectId")
     repo = _pv(payload, "repo")
-    slug = repo.split("/")[-1] if repo else ""
-    if slug:
-        print("[agent-task-node] ⚠ project-memory: payload 沒有 projectId,退回 repo 名 "
-              "`%s` 當產品鍵。若這個產品在註冊表裡另有 id,這一輪的逐字稿會寫進**另一份**"
-              "記憶,而讀的那一輪看不到。起流程時帶 projectId 可以避免。" % slug,
-              flush=True)
-    return slug
+    if p:
+        p = str(p)
+        # 帶來的 id 不在註冊表裡(例如 2026-10-02 改名 aaf → arcana-ai-bpm 之前就開的輪還帶著 aaf),
+        # 而 repo 對得到 → 用註冊表的。否則改名的那一刻,記憶又會分成兩份。註冊表連不到就照用帶來的。
+        projects = _registry_projects_cached()
+        if projects is not None and repo and not any(
+                str(x.get("projectId") or "") == p for x in projects):
+            pid = _project_id_for_repo(projects, repo, _pv(payload, "base"))
+            if pid:
+                print("[agent-task-node] project-memory: projectId `%s` 不在註冊表裡,改用 repo 對到的 `%s`"
+                      % (p, pid), flush=True)
+                return pid
+        return p
+    if not repo:
+        return ""
+    pid = _project_id_for_repo(_registry_projects_cached(), repo, _pv(payload, "base"))
+    if pid:
+        return pid
+    print("[agent-task-node] ⚠ project-memory: payload 沒有 projectId,註冊表也對不到 `%s` ——"
+          "這一輪不用專案記憶(不再退回 repo 名另開一份)。" % repo, flush=True)
+    return ""
 
 
 def run_claude(task, payload):
@@ -4575,6 +4843,51 @@ def _selftest_gaps(workdir):
     return gaps
 
 
+# ── 流程已經被中止,就不要替它留下痕跡(2026-09-27)──────────────────────────
+# 中止一個流程實例,不會停掉 agent 手上正在跑的工作。implement 一次要跑十幾分鐘,
+# 它做完之後照樣推 commit、開 PR —— 替一個已經沒有人在管的流程。
+#   09-24:4a2ace83 中止後,implement 自己做完開了 #451(遺孤 PR,手動關掉)
+#   09-25:d6fdedfd 中止時,是手動用工作資料夾找到 pid 停掉的,才沒有再冒一個
+# 所以在「留下痕跡」的兩個動作(push、開 PR)之前,先問一次這一輪還活著嗎。
+_GONE_STATES = ("ABORTED", "COMPLETED")
+
+
+def _instance_state(piid, query=None):
+    """Data Index 上這個實例的狀態;查不到回 None。`query` 可注入,自檢不必連線。"""
+    if not piid:
+        return None
+    if query is None:
+        di = (os.environ.get("DATA_INDEX_URL") or "http://aaf-data-index:8080").rstrip("/")
+
+        def query(q):
+            import urllib.request
+            req = urllib.request.Request(di + "/graphql", data=json.dumps({"query": q}).encode("utf-8"),
+                                         headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=15) as r:
+                return json.load(r)
+    try:
+        rows = ((query('{ ProcessInstances(where:{id:{equal:"%s"}}){ state } }' % piid)
+                 or {}).get("data") or {}).get("ProcessInstances") or []
+        return rows[0].get("state") if rows else None
+    except Exception:
+        return None
+
+
+def _refuse_if_instance_gone(payload, action, query=None):
+    """實例**確定**已中止/結束 → 回 error dict(不做這個動作);其他情況回 None(照做)。
+
+    只有確定不在才擋:查不到(網路、沒有 _piid)照做 —— 這道檢查是用來擋遺孤,
+    不能因為自己讀不到就把正常的工作擋掉。
+    """
+    piid = str(payload.get("_piid") or "").strip()
+    st = _instance_state(piid, query)
+    if st in _GONE_STATES:
+        msg = "instance %s is %s —— not %s(沒有流程在管這個結果,留下來只會是遺孤)" % (piid, st, action)
+        print("[agent-task-node] " + msg, flush=True)
+        return {"error": msg, "instanceGone": st, "ran": False}
+    return None
+
+
 def implement_flow(payload):
     """AI code-implementation → GATED PR.
 
@@ -4897,6 +5210,9 @@ def implement_flow(payload):
                     # 蓋不上不擋出貨 —— 但要說出來,不然「沒章」會被讀成「本來就不蓋」。
                     print("[agent-task-node] sdlc stamp: amend failed: %s"
                           % (_amr.stderr or _amr.stdout)[-300:], flush=True)
+        _gone = _refuse_if_instance_gone(payload, "pushing %s" % branch)
+        if _gone:
+            return _gone
         ps = _git("push", "-u", "origin", branch, "--force")
         if ps.returncode != 0:
             return {"error": "push failed: %s" % (ps.stderr or ps.stdout)[-500:]}
@@ -5001,6 +5317,9 @@ def implement_flow(payload):
                     "filesChanged": files_changed, "pushed": True,
                     "buildStatus": build_status, "selftestStatus": selftest_status, "prReused": True,
                     "supersededPrs": superseded}
+        _gone = _refuse_if_instance_gone(payload, "opening a PR for %s" % branch)
+        if _gone:
+            return _gone
         pr = subprocess.run(
             ["gh", "pr", "create", "-R", repo, "--base", base, "--head", branch,
              "--title", "feat: %s" % slug, "--body", body + _sdlc_pr_stamp_block(payload)],
@@ -5034,9 +5353,27 @@ def implement_flow(payload):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _pr_url_and_branch(payload):
+_PR_URL_RE = re.compile(r"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+")
+
+
+def _gh_pr_head_ref(url):
+    """The PR's head branch, asked from GitHub. "" when it cannot be read — never a guess."""
+    try:
+        return str((_gh_json(["pr", "view", url, "--json", "headRefName"], timeout=60) or {})
+                   .get("headRefName") or "")
+    except Exception:
+        return ""
+
+
+def _pr_url_and_branch(payload, recover=False):
     """The worker passes the implement node's result JSON (incl. prUrl + branch) as `prUrl`;
-    pull the real URL + branch out of it (or fall back to plain fields)."""
+    pull the real URL + branch out of it (or fall back to plain fields).
+
+    recover=True: when the result carries a PR URL but no branch, ask GitHub for the PR's head.
+    2026-10-22 (#750): an implement round that failed with "no structured_output" left only the
+    carried-forward prUrl, the test node got branch "", and fell back to testing the deployed
+    app — a report about the wrong code that read like a test of this PR. Only test_flow opts in;
+    the URL-only callers never pay for the lookup."""
     raw = payload.get("prUrl") or ""
     url = raw if isinstance(raw, str) else ""
     branch = ""
@@ -5047,7 +5384,15 @@ def _pr_url_and_branch(payload):
             branch = j.get("branch", "") or ""
         except Exception:
             pass
-    return url, (branch or payload.get("branch") or "")
+    branch = branch or payload.get("branch") or ""
+    if recover and not branch:
+        m = _PR_URL_RE.search(url or "")
+        if m:
+            branch = _gh_pr_head_ref(m.group(0))
+            if branch:
+                print("[agent-task-node] PR branch recovered from GitHub: %s -> %s"
+                      % (m.group(0), branch), flush=True)
+    return url, branch
 
 
 
@@ -5806,6 +6151,43 @@ def _start_pr_backend(repo, branch, base, piid, net):
 
 
 
+def _runner_name(kind, piid):
+    """A unique name for a runner container, so a timeout can remove it.
+
+    `subprocess.run([...docker run --rm...], timeout=…)` kills only the docker CLI; the container
+    keeps running. 2026-10-21: an orphaned runner ran 40 more minutes on a Mac whose swap was nearly
+    full, and the next test timed out too. The instance id is in the name so `docker ps` says whose
+    it is; the random tail keeps a re-test of the same instance from colliding with a leftover.
+    """
+    tag = "".join(c for c in str(piid or "adhoc") if c.isalnum() or c in "-_")[:24] or "adhoc"
+    return "aaf-%s-%s-%s" % (kind, tag, os.urandom(3).hex())
+
+
+def _rm_container(name):
+    """Best effort — a container that already exited (and was --rm'd) is simply not there."""
+    try:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True, text=True, timeout=60)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+_SECRET_ENV = ("CLAUDE_CODE_OAUTH_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY")
+
+
+def _redact_secrets(text):
+    """`text` with this process's secret env values masked — for anything headed into a report.
+
+    The docker commands pass secrets by name only, so an exception's text no longer carries them;
+    this is the second layer, for whatever else might echo one (a runner's stderr tail, say).
+    """
+    out = text or ""
+    for k in _SECRET_ENV:
+        v = os.environ.get(k) or ""
+        if len(v) >= 8:
+            out = out.replace(v, "<%s redacted>" % k)
+    return out
+
+
 def _post_commit_status(repo, branch, rep):
     """Report the test node's verdict to GitHub as a commit status.
 
@@ -6124,6 +6506,41 @@ _SONAR_SCANNER_IMAGE = os.environ.get("SONAR_SCANNER_IMAGE", "sonarsource/sonar-
 _SCANNER_BASE = "/usr/src"
 
 
+def _ce_task_id(stdout):
+    """掃描器印的「More about the report processing at …/api/ce/task?id=<id>」裡的 id;沒有就 None。"""
+    m = re.search(r"api/ce/task\?id=([A-Za-z0-9_-]+)", stdout or "")
+    return m.group(1) if m else None
+
+
+def _wait_ce_task(host, token, tid, timeout=300, interval=3, get=None):
+    """等 SonarQube 把這次分析處理完。回 "SUCCESS" / "FAILED" / "CANCELED" / "TIMEOUT"。
+
+    掃描器結束 ≠ 分析完成:報告送上去之後,伺服器要在背景處理(2026-09-25 實測約 10 秒)。
+    舊寫法掃完立刻讀數字 —— 新 key 讀到空的(`scan finished but returned no measures`),
+    舊 key 讀到**上一次**分析的數字,兩種都不是這一次的結果,而後者看起來完全正常。
+    `get` 可注入,自檢不必連真的伺服器。
+    """
+    if get is None:
+        import urllib.request, base64 as _b64
+
+        def get(url):
+            req = urllib.request.Request(url)
+            req.add_header("Authorization", "Basic " + _b64.b64encode((token + ":").encode()).decode())
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.loads(r.read().decode("utf-8", "replace"))
+    deadline = time.time() + timeout
+    while True:
+        try:
+            st = ((get("%s/api/ce/task?id=%s" % (host, tid)) or {}).get("task") or {}).get("status")
+        except Exception:                                        # noqa: BLE001
+            st = None
+        if st in ("SUCCESS", "FAILED", "CANCELED"):
+            return st
+        if time.time() >= deadline:
+            return "TIMEOUT"
+        time.sleep(interval)
+
+
 def _scanner_failure(run):
     """掃描器失敗時的理由:**錯誤行優先**,不論它印在 stdout 還是 stderr。
 
@@ -6438,6 +6855,17 @@ def _sonar(payload):
         out["scannerExit"] = run.returncode
         if run.returncode != 0:
             out["reason"] = "scanner failed: " + _scanner_failure(run)
+            return out
+        # 等伺服器處理完**這一次**分析再讀數字(見 _wait_ce_task)。
+        tid = _ce_task_id(run.stdout)
+        if not tid:
+            out["reason"] = ("scanner output has no CE task id —— 不知道要等哪一次分析,"
+                             "現在讀到的數字可能是上一次的")
+            return out
+        out["ceTask"] = tid
+        st = _wait_ce_task(host, token, tid)
+        if st != "SUCCESS":
+            out["reason"] = "analysis %s on the server (task %s)" % (st, tid)
             return out
     except Exception as e:                                       # noqa: BLE001
         out["reason"] = "sonar scan error: %s" % e
@@ -6852,6 +7280,29 @@ def _pr_ci(repo, branch, base="main"):
     return ci
 
 
+def _sdd_files(payload):
+    """SD 節點宣告的檔案清單(給 task-boundary)。讀不到回 []。
+
+    `sdd` 可能是物件或 JSON 字串,放在頂層或 `data` 底下(_pv 兩處都找);`files` 的每一項
+    可能是字串,也可能是 {"path": …} / {"file": …}。只回非空字串。
+    """
+    sdd = _pv(payload, "sdd")
+    if isinstance(sdd, str):
+        try:
+            sdd = json.loads(sdd)
+        except ValueError:
+            return []
+    files = (sdd or {}).get("files") if isinstance(sdd, dict) else None
+    out = []
+    for f in files or []:
+        if isinstance(f, dict):
+            f = f.get("path") or f.get("file") or ""
+        f = str(f or "").strip()
+        if f:
+            out.append(f)
+    return out
+
+
 def test_flow(payload):
     """do_test node (P-SDLC): run the dedicated playwright runner image via the mounted docker.sock.
     T4: when a PR branch is known, the runner clones + builds it and serves a preview so e2e run
@@ -6864,7 +7315,19 @@ def test_flow(payload):
     piid = keep(payload.get("_piid") or payload.get("slug") or "adhoc")
     net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
     repo = _pv(payload, "repo", "") or ""
-    _, branch = _pr_url_and_branch(payload)
+    pr_url, branch = _pr_url_and_branch(payload, recover=True)
+    pr_ref = _PR_URL_RE.search(pr_url or "")
+    if pr_ref and not branch:
+        # There IS a PR, but neither the flow nor GitHub can say which branch it is. The fallback
+        # below ("test the already-running app") would then test the deployed code and report it
+        # as this PR's result. Say it was not tested instead; escalate = the gate could not run,
+        # so PM blocks on the environment rather than sending Implement to fix code it never saw.
+        return {"testReport": json.dumps({
+            "allPass": False, "total": 0, "passed": 0, "disposition": "escalate",
+            "reason": "PR %s 查不到分支名稱(流程變數沒帶、向 GitHub 也問不到),"
+                      "沒有測到這個 PR 的程式碼" % pr_ref.group(0),
+            "blockingReasons": [{"gate": "test", "field": "prBranchUnknown",
+                                 "value": pr_ref.group(0)}]}, ensure_ascii=False)}
     base = _pv(payload, "base", "main") or "main"
     # A PR that changes the backend gets its OWN read-API built and pointed at; otherwise the
     # deployed one stays the right target and nothing extra is paid. `teardown` runs in the
@@ -6902,12 +7365,16 @@ def test_flow(payload):
         print("[agent-task-node] scenario autofill: filled=%s escalate=%s"
               % (autofill.get("filled"), autofill.get("escalate")), flush=True)
 
-    cmd = ["docker", "run", "--rm", "--network", net,
+    runner = _runner_name("test", piid)  # so a timeout can remove it — see _runner_name
+    cmd = ["docker", "run", "--rm", "--name", runner, "--network", net,
            # claude auth for the runner's AI semantic review step (uiux-ai-review.mjs): pass the
            # SAME long-lived OAuth token the agent uses (env, not a shared-home mount — the mount
            # caused a .credentials backup/corruption race). Empty/invalid -> the runner's
            # `command -v claude` + login check skips the AI pass (not fatal).
-           "-e", "CLAUDE_CODE_OAUTH_TOKEN=" + os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", ""),
+           # Name only: docker takes the value from this process's environment. With `NAME=value`
+           # here, a runner timeout put the whole command — token included — into
+           # testReport.reason and so into the Data Index (2026-10-21). GH_TOKEN below likewise.
+           "-e", "CLAUDE_CODE_OAUTH_TOKEN",
            "-e", "IS_SANDBOX=1",
            "-e", "MINIO_URL=" + os.environ.get("TEST_MINIO_URL", "http://aaf-minio:9000"),
            "-e", "MINIO_USER=" + os.environ.get("MINIO_ROOT_USER", "minioadmin"),
@@ -6958,13 +7425,19 @@ def test_flow(payload):
                 "navPath", "dashboard/src/app/core/navigation/nav.config.ts"))]
     if repo and branch:  # T4-1: build the PR branch and test its real code
         cmd += ["-e", "REPO=" + repo, "-e", "BRANCH=" + branch,
-                "-e", "GH_TOKEN=" + os.environ.get("GH_TOKEN", "")]
+                "-e", "GH_TOKEN"]   # name only — see CLAUDE_CODE_OAUTH_TOKEN above
     else:                # regression fallback: test the already-running app
         cmd += ["-e", "TARGET_URL=" + os.environ.get("TEST_TARGET_URL", "http://aaf-dashboard:80")]
     gen, tc_source = _resolve_testcases(_gen_testcases(payload), _testcases_cache_path(payload))
     # T4-2: feature-specific testcases; 生成失敗就沿用上一輪的(reused),都沒有才退回通用回歸
     if gen:
         cmd += ["-e", "TESTCASES_B64=" + base64.b64encode(gen.encode()).decode()]
+    # task-boundary 要比的是「SD 宣告的檔案」與「PR 真的改的檔案」。2026-09-30 查到這一行從來沒有:
+    # run-test.sh 等著 SDD_FILES_B64,這裡從沒給 → task-boundary 每一輪都 notRun,照三態規則擋。
+    # (aaf #509 補了另一半 —— 讓 runner 有 base 可以 diff;沒有這一行,那一半也量不到東西。)
+    sdd_files = _sdd_files(payload)
+    if sdd_files:
+        cmd += ["-e", "SDD_FILES_B64=" + base64.b64encode(json.dumps(sdd_files).encode()).decode()]
     jrn = _gen_journeys(payload)  # T4-3: goal-directed journeys for the walkthrough gate (UI features)
     if jrn:
         cmd += ["-e", "JOURNEYS_B64=" + base64.b64encode(jrn.encode()).decode()]
@@ -7031,13 +7504,16 @@ def test_flow(payload):
             _fold_ci(rep, _pr_ci(repo, branch, base))
             _post_commit_status(repo, branch, rep)
             return rep
-        tail = ((r.stderr or "") + (r.stdout or ""))[-400:]
+        tail = _redact_secrets(((r.stderr or "") + (r.stdout or ""))[-400:])
         bad = {"allPass": False, "total": 0, "passed": 0,
                "reason": "runner emitted no TESTREPORT (exit %s): %s" % (r.returncode, tail)}
         _post_commit_status(repo, branch, bad)
         return bad
     except Exception as e:
-        return {"allPass": False, "total": 0, "passed": 0, "reason": "test runner invoke failed: %s" % e}
+        if isinstance(e, subprocess.TimeoutExpired):
+            _rm_container(runner)  # the CLI died, the container did not
+        return {"allPass": False, "total": 0, "passed": 0,
+                "reason": "test runner invoke failed: %s" % _redact_secrets(str(e))}
     finally:
         # Always: a leaked container/DB would poison every later run on this network.
         pr_teardown()
@@ -7398,7 +7874,7 @@ def uiux_audit_flow(payload):
     requester = (payload.get("requester")
                  or os.environ.get("UIUX_AUDIT_REQUESTER", "")).strip()
     project_id = (payload.get("projectId")
-                  or os.environ.get("UIUX_AUDIT_PROJECT", "aaf")).strip()
+                  or os.environ.get("UIUX_AUDIT_PROJECT", "arcana-ai-bpm")).strip()
     unowned = []
     target_base = payload.get("target_base") or os.environ.get("UIUX_AUDIT_TARGET_BASE", "main")
     _cap = payload.get("cap")  # explicit None check so cap=0 (dry-run) is honoured, not falsy->default
@@ -7415,14 +7891,16 @@ def uiux_audit_flow(payload):
             return {}
 
     # 1. run the AI semantic gate in the test-runner (playwright screenshots + claude vision)
-    cmd = ["docker", "run", "--rm", "--network", net,
-           "-e", "CLAUDE_CODE_OAUTH_TOKEN=" + os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", ""),
+    runner = _runner_name("uiux", "audit")  # so a timeout can remove it — see _runner_name
+    cmd = ["docker", "run", "--rm", "--name", runner, "--network", net,
+           "-e", "CLAUDE_CODE_OAUTH_TOKEN",   # name only: the value comes from this process's env, never argv
            "-e", "IS_SANDBOX=1", "-e", "UIUX_BASE=" + base, "-e", "UIUX_ROUTES=" + routes,
            "--entrypoint", "node",
            os.environ.get("TEST_RUNNER_IMAGE", "aaf-test-runner:local"), "/e2e/uiux-ai-review.mjs"]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
     except subprocess.TimeoutExpired:
+        _rm_container(runner)  # the CLI died, the container did not
         return {"findings": 0, "started": 0, "error": "audit gate timed out"}
     line = next((l for l in reversed((r.stdout or "").splitlines()) if l.startswith('{"routes')), "")
     try:
@@ -8186,6 +8664,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = scan_stale(payload)   # plain code, no model (see scan_stale)
             elif task == "uiux-audit":
                 result = uiux_audit_flow(payload)
+            elif task == "loop-drive":
+                result = loop_drive(payload)   # 排程開輪:從 main 取驅動器來跑(見 loop_drive)
             else:
                 result = None
                 if task == "merge":

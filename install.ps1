@@ -65,6 +65,7 @@ $Skills = @(
     "arcana-devops-skill"
     "arcana-ai-agent-flow-skill"
     "arch-qube-skill"
+    "windows-ui-automation-skill"
 )
 
 # Skills renamed to the arcana-* prefix (2026-06). On install we remove any

@@ -60,4 +60,19 @@ EXPOSE 8090
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# Claude CLI 在**建置時**就裝最新版,不再只靠 entrypoint 啟動時升級。
+#
+# 2026-10-14:模型 claude-opus-5-5[1m] 開始要求 Claude Code ≥ 2.1.280,而基底映像
+# (daily-ci-agent,3 個月沒重建)裡是 2.1.185。entrypoint 的啟動升級只給 180 秒、失敗不擋 ——
+# 10-13 那次剛好逾時,於是每個 AI 節點都 `API Error: 400 … does not support this model`,
+# 進化圈連兩輪死在 IntakeReview(stderr 是空的,錯誤只在 /console 的 jsonl 裡)。
+# 映像本身帶著最新版,啟動升級失敗時退回的就不是三個月前的版本。
+#
+# 放在最後:CLAUDE_CLI_REFRESH 一變,只有這一層重做,前面的層都吃快取。
+# 每週重建(本機 ~/bin/aaf-agent-weekly-rebuild.sh)傳日期進來,讓這一層確實重抓。
+ARG CLAUDE_CLI_REFRESH=unset
+RUN echo "claude cli refresh: ${CLAUDE_CLI_REFRESH}" \
+ && npm i -g @anthropic-ai/claude-code@latest --silent \
+ && claude --version
+
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

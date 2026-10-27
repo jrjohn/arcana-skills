@@ -271,6 +271,51 @@ CREATE TABLE skill_asset (            -- large / binary files, fetched on demand
 -- only; nothing is fetched or executed automatically, and sha256 is verified on
 -- every fetch with `..`/absolute paths refused.
 
+-- Skill distribution (v1.31.0). `crs skill-init` creates these; skills are authored
+-- in git and published here, so a correction reaches every machine instead of
+-- living in one ~/.claude/skills copy. Two tables because their update rates differ
+-- ~280x: the knowledge is 38 KB and changes often, the templates are 15.8 MB and
+-- almost never do — fixing one line of a rule must not re-upload 16 MB.
+--
+-- bytea, NEVER Large Object: `lo` carries its own ACL in pg_largeobject_metadata,
+-- which RLS cannot see. The employee deployment (.204) is built entirely on RLS,
+-- so an `lo` would be a hole in the wall the rest of that design depends on.
+-- owner / visibility are written from day one but carry no policy on a single-user
+-- instance; a multi-tenant deploy adds ENABLE/FORCE ROW LEVEL SECURITY plus
+--   USING (visibility = 'all' OR pg_has_role(current_user, visibility, 'USAGE'))
+-- without any schema change.
+CREATE TABLE skill_registry (
+    name        TEXT PRIMARY KEY,
+    version     TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL,          -- what osearch's skill leg routes on
+    payload     BYTEA NOT NULL,         -- JSON {relative path -> file text}; TOAST compresses
+    sha256      TEXT NOT NULL,          -- skill-sync skips an unchanged skill on this
+    visibility  TEXT NOT NULL DEFAULT 'all',
+    owner       TEXT NOT NULL DEFAULT current_user,
+    description_embedding vector(1024),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX skill_registry_hnsw ON skill_registry USING hnsw (description_embedding vector_cosine_ops);
+
+CREATE TABLE skill_asset (            -- large / binary files, fetched on demand
+    skill_name TEXT NOT NULL REFERENCES skill_registry(name) ON DELETE CASCADE,
+    path       TEXT NOT NULL,
+    blob       BYTEA NOT NULL,
+    sha256     TEXT NOT NULL,          -- content-addressed: unchanged assets are not re-sent
+    owner      TEXT NOT NULL DEFAULT current_user,
+    PRIMARY KEY (skill_name, path)
+);
+-- Usage:
+--   crs skill-publish ~/.claude/skills/<name>     # git → PG
+--   crs skill-sync [name]                         # PG → ~/.claude/skill-library (sha-gated)
+--   crs skill-get <name> --asset templates/x.docx # one large file, on demand
+-- skill-sync writes to ~/.claude/skill-library, deliberately NOT ~/.claude/skills:
+-- a synced skill must not silently rejoin the always-loaded description list
+-- (14,528 chars for 35 skills) that publishing to PG exists to relieve. osearch
+-- prints a `📌 現成 SOP` pointer when a skill is within distance 0.62 — a pointer
+-- only; nothing is fetched or executed automatically, and sha256 is verified on
+-- every fetch with `..`/absolute paths refused.
+
 CREATE TABLE ingest_state (
     file_path TEXT PRIMARY KEY,
     mtime DOUBLE PRECISION NOT NULL,
