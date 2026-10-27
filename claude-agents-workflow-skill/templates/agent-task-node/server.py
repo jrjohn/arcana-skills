@@ -5353,9 +5353,27 @@ def implement_flow(payload):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _pr_url_and_branch(payload):
+_PR_URL_RE = re.compile(r"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+")
+
+
+def _gh_pr_head_ref(url):
+    """The PR's head branch, asked from GitHub. "" when it cannot be read — never a guess."""
+    try:
+        return str((_gh_json(["pr", "view", url, "--json", "headRefName"], timeout=60) or {})
+                   .get("headRefName") or "")
+    except Exception:
+        return ""
+
+
+def _pr_url_and_branch(payload, recover=False):
     """The worker passes the implement node's result JSON (incl. prUrl + branch) as `prUrl`;
-    pull the real URL + branch out of it (or fall back to plain fields)."""
+    pull the real URL + branch out of it (or fall back to plain fields).
+
+    recover=True: when the result carries a PR URL but no branch, ask GitHub for the PR's head.
+    2026-10-22 (#750): an implement round that failed with "no structured_output" left only the
+    carried-forward prUrl, the test node got branch "", and fell back to testing the deployed
+    app — a report about the wrong code that read like a test of this PR. Only test_flow opts in;
+    the URL-only callers never pay for the lookup."""
     raw = payload.get("prUrl") or ""
     url = raw if isinstance(raw, str) else ""
     branch = ""
@@ -5366,7 +5384,15 @@ def _pr_url_and_branch(payload):
             branch = j.get("branch", "") or ""
         except Exception:
             pass
-    return url, (branch or payload.get("branch") or "")
+    branch = branch or payload.get("branch") or ""
+    if recover and not branch:
+        m = _PR_URL_RE.search(url or "")
+        if m:
+            branch = _gh_pr_head_ref(m.group(0))
+            if branch:
+                print("[agent-task-node] PR branch recovered from GitHub: %s -> %s"
+                      % (m.group(0), branch), flush=True)
+    return url, branch
 
 
 
@@ -7289,7 +7315,19 @@ def test_flow(payload):
     piid = keep(payload.get("_piid") or payload.get("slug") or "adhoc")
     net = os.environ.get("TEST_NETWORK", "arcana-ai-agent-flow_default")
     repo = _pv(payload, "repo", "") or ""
-    _, branch = _pr_url_and_branch(payload)
+    pr_url, branch = _pr_url_and_branch(payload, recover=True)
+    pr_ref = _PR_URL_RE.search(pr_url or "")
+    if pr_ref and not branch:
+        # There IS a PR, but neither the flow nor GitHub can say which branch it is. The fallback
+        # below ("test the already-running app") would then test the deployed code and report it
+        # as this PR's result. Say it was not tested instead; escalate = the gate could not run,
+        # so PM blocks on the environment rather than sending Implement to fix code it never saw.
+        return {"testReport": json.dumps({
+            "allPass": False, "total": 0, "passed": 0, "disposition": "escalate",
+            "reason": "PR %s 查不到分支名稱(流程變數沒帶、向 GitHub 也問不到),"
+                      "沒有測到這個 PR 的程式碼" % pr_ref.group(0),
+            "blockingReasons": [{"gate": "test", "field": "prBranchUnknown",
+                                 "value": pr_ref.group(0)}]}, ensure_ascii=False)}
     base = _pv(payload, "base", "main") or "main"
     # A PR that changes the backend gets its OWN read-API built and pointed at; otherwise the
     # deployed one stays the right target and nothing extra is paid. `teardown` runs in the

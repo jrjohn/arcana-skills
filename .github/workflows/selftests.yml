@@ -71,3 +71,7 @@ jobs:
       # 吃記憶體害下一個測試也逾時。test_flow 與 uiux 稽核兩處都驗。
       - name: runner_timeout_cleanup_selftest.py
         run: python3 runner_timeout_cleanup_selftest.py
+      # 有 PR 卻沒分支名時不准默默改測本機站(2026-10-27,#750):先向 GitHub 問,
+      # 問不到就回報沒測到(disposition=escalate),不跑 runner。
+      - name: pr_branch_recover_selftest.py
+        run: python3 pr_branch_recover_selftest.py
