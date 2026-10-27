@@ -184,6 +184,23 @@ BEGIN
      OR NEW.content ~ '^\[THINKING\]\s*$' THEN
     RETURN NULL;
   END IF;
+  -- attachment (v1.32.0): drop ONLY the harness types verified as repetitive
+  -- boilerplate; everything else is stored, keeping the rule above for unknown
+  -- types. Human input and plan text are protected even if a noise type name
+  -- appears inside them; error-bearing types (hook_*_error, diagnostics) are kept.
+  IF NEW.role = 'attachment'
+     AND NOT (NEW.content LIKE '%"humanTurn":true%'
+              OR NEW.content ~ '"type":"(queued_command|text|structured_output|edited_text_file|plan_file_reference)"')
+     AND NEW.content ~ ('"type":"(output_style|output_style_instructions|total_tokens_reminder|task_reminder'
+                        '|silent_turn_reminder|batching_reminder_sent|deferred_tools_delta|deferred_tools_record'
+                        '|agent_listing_delta|skill_listing|mcp_instructions_delta|command_permissions'
+                        '|bash_output_audience_note|date_change|date|model|environment|session_context'
+                        '|prompt_snapshot|plan_mode|plan_mode_exit|plan_mode_reentry|auto_mode|auto_mode_exit'
+                        '|remote_session_change|hook_additional_context|hook_success|hook_cancelled'
+                        '|hook_system_message|invoked_skills|credential_org|task_status|workflow_keyword_request'
+                        '|thinking_drop|thinking_stripped|read_truncation_notice|compact_file_reference)"') THEN
+    RETURN NULL;
+  END IF;
   RETURN NEW;
 END $$;
 CREATE TRIGGER msg_drop_noise_bi BEFORE INSERT ON msg
@@ -191,6 +208,68 @@ CREATE TRIGGER msg_drop_noise_bi BEFORE INSERT ON msg
 -- New Claude Code event types are NOT dropped until added to the list (safer default:
 -- an unknown type is stored, never silently lost). Check periodically:
 --   SELECT role, count(*) FROM msg GROUP BY 1 ORDER BY 2 DESC;
+--
+-- attachment history (2026-09-24). The first version of the rule above left
+-- attachment alone, and 87K of them accumulated (18% of msg) — overwhelmingly one
+-- per turn of harness state: output_style, total_tokens_reminder, task_reminder,
+-- tool/skill listings, system-prompt snapshots. They were never searchable, but
+-- embed-missing and distill-missing did not filter on role, so they were embedded
+-- and queued for distillation all the same. Briefly the trigger was flipped to an
+-- attachment ALLOWLIST; that dropped unknown types by default and contradicted the
+-- rule above, so it was reverted to this denylist the same day. What actually fixed
+-- the compute cost is the other half: enrichment now filters on the searchable roles
+-- (see searchable_roles_sql! in main.rs), so an attachment kept here costs disk and
+-- nothing else. 81,959 boilerplate rows were deleted once, with a full copy kept in
+-- msg_attachment_purged_20260924 — 44 of them were plan_file_reference (plan text,
+-- also on disk under ~/.claude/plans/); restore with
+--   INSERT INTO msg (id,session_id,project,seq,ts,role,tool_name,content,importance)
+--   SELECT id,session_id,project,seq,ts,role,tool_name,content,importance
+--   FROM msg_attachment_purged_20260924 WHERE content LIKE '%plan_file_reference%';
+
+-- Skill distribution (v1.31.0). `crs skill-init` creates these; skills are authored
+-- in git and published here, so a correction reaches every machine instead of
+-- living in one ~/.claude/skills copy. Two tables because their update rates differ
+-- ~280x: the knowledge is 38 KB and changes often, the templates are 15.8 MB and
+-- almost never do — fixing one line of a rule must not re-upload 16 MB.
+--
+-- bytea, NEVER Large Object: `lo` carries its own ACL in pg_largeobject_metadata,
+-- which RLS cannot see. The employee deployment (.204) is built entirely on RLS,
+-- so an `lo` would be a hole in the wall the rest of that design depends on.
+-- owner / visibility are written from day one but carry no policy on a single-user
+-- instance; a multi-tenant deploy adds ENABLE/FORCE ROW LEVEL SECURITY plus
+--   USING (visibility = 'all' OR pg_has_role(current_user, visibility, 'USAGE'))
+-- without any schema change.
+CREATE TABLE skill_registry (
+    name        TEXT PRIMARY KEY,
+    version     TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL,          -- what osearch's skill leg routes on
+    payload     BYTEA NOT NULL,         -- JSON {relative path -> file text}; TOAST compresses
+    sha256      TEXT NOT NULL,          -- skill-sync skips an unchanged skill on this
+    visibility  TEXT NOT NULL DEFAULT 'all',
+    owner       TEXT NOT NULL DEFAULT current_user,
+    description_embedding vector(1024),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX skill_registry_hnsw ON skill_registry USING hnsw (description_embedding vector_cosine_ops);
+
+CREATE TABLE skill_asset (            -- large / binary files, fetched on demand
+    skill_name TEXT NOT NULL REFERENCES skill_registry(name) ON DELETE CASCADE,
+    path       TEXT NOT NULL,
+    blob       BYTEA NOT NULL,
+    sha256     TEXT NOT NULL,          -- content-addressed: unchanged assets are not re-sent
+    owner      TEXT NOT NULL DEFAULT current_user,
+    PRIMARY KEY (skill_name, path)
+);
+-- Usage:
+--   crs skill-publish ~/.claude/skills/<name>     # git → PG
+--   crs skill-sync [name]                         # PG → ~/.claude/skill-library (sha-gated)
+--   crs skill-get <name> --asset templates/x.docx # one large file, on demand
+-- skill-sync writes to ~/.claude/skill-library, deliberately NOT ~/.claude/skills:
+-- a synced skill must not silently rejoin the always-loaded description list
+-- (14,528 chars for 35 skills) that publishing to PG exists to relieve. osearch
+-- prints a `📌 現成 SOP` pointer when a skill is within distance 0.62 — a pointer
+-- only; nothing is fetched or executed automatically, and sha256 is verified on
+-- every fetch with `..`/absolute paths refused.
 
 -- Skill distribution (v1.31.0). `crs skill-init` creates these; skills are authored
 -- in git and published here, so a correction reaches every machine instead of

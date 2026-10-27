@@ -248,31 +248,14 @@ echo "    gen-recent-context.sh installed"
 # 7. Schedule 15-min ingest
 case "$PLATFORM" in
     Darwin)
-        USER_SHORT=$(whoami)
-        PLIST="$HOME/Library/LaunchAgents/com.${USER_SHORT}.claude-archive.plist"
-        if [ -f "$PLIST" ] && [ "$WITH_PG" = "1" ]; then
-            # Don't clobber a plist that already has the real CRS_PG_PASSWORD substituted.
-            # (Same protection logic as the pgsearchd block below.)
-            echo "==> claude-archive plist already present: $PLIST"
-            echo "    (leaving as-is so your CRS_PG_PASSWORD env value is preserved.)"
-            echo "    To regenerate from template: rm \"$PLIST\" then re-run."
-        else
-            echo "==> registering launchd plist: $PLIST"
-            sed "s|<USERNAME>|${USER_SHORT}|g" \
-                "$SKILL_DIR/scripts/launchd.plist.template" > "$PLIST"
-            if [ "$WITH_PG" = "1" ]; then
-                chmod 600 "$PLIST"
-                echo "    !! Edit $PLIST and replace these placeholders:"
-                echo "         CRS_PG_HOST       (default: arcana.example.com)"
-                echo "         CRS_PG_PASSWORD   (REPLACE_WITH_YOUR_PG_PASSWORD)"
-                echo "       Otherwise every launchd tick exits 1 with"
-                echo "         'Error: CRS_PG_PASSWORD env var required'"
-                echo "       and build.err silently accumulates while no new rows ingest/embed."
-            fi
-        fi
-        launchctl unload "$PLIST" 2>/dev/null || true
-        launchctl load "$PLIST"
-        echo "    launchd loaded"
+        # launchd runs crs-build-launcher, never crs directly; the plist holds no
+        # credentials (they live in ~/.config/crs/env.sh). This used to be done
+        # inline here with a template full of CRS_PG_* placeholders, and a re-run
+        # without --with-pg rewrote a working plist back to arcana.example.com
+        # (2026-07-23, unnoticed for two months). The helper is idempotent: a
+        # current install is left alone and not even reloaded.
+        echo "==> 15-minute ingest schedule (launchd)"
+        bash "$SKILL_DIR/scripts/install-launchd-schedule.sh" "$SKILL_DIR" "$WITH_PG"
         ;;
     Linux)
         CRON_LINE="*/15 * * * * $BIN build >/dev/null 2>&1"
@@ -443,9 +426,12 @@ else
 fi
 
 # 9. First ingest
-if [ "$WITH_PG" = "1" ] && [ -z "${CRS_PG_PASSWORD:-}" ]; then
+# Use the same credentials the scheduled job will use, so a first ingest that
+# works here means the 15-minute tick will work too.
+[ -f "$HOME/.config/crs/env.sh" ] && source "$HOME/.config/crs/env.sh"
+if [ "$WITH_PG" = "1" ] && { [ -z "${CRS_PG_PASSWORD:-}" ] || [ "${CRS_PG_PASSWORD:-}" = "REPLACE_WITH_YOUR_PG_PASSWORD" ]; }; then
     echo "==> skipping first ingest (--with-pg + CRS_PG_PASSWORD not set)"
-    echo "    Set CRS_PG_PASSWORD in your shell + the launchd plist, then run:"
+    echo "    Set it in ~/.config/crs/env.sh (the only place credentials live), then run:"
     echo "      $BIN build"
 else
     echo "==> first ingest"
@@ -510,7 +496,7 @@ if [ "$WITH_PG" = "1" ] && [ -n "${CRS_PG_PASSWORD:-}" ]; then
     if "$BIN" pgsearch "the" --limit 1 >/dev/null 2>&1; then
         echo "    ✓ PG reachable, query returned"
     else
-        echo "    ✗ PG query failed — check CRS_PG_PASSWORD and the plist's EnvironmentVariables"
+        echo "    ✗ PG query failed — check CRS_PG_HOST / CRS_PG_PASSWORD in ~/.config/crs/env.sh"
         SMOKE_FAIL=1
     fi
 fi
