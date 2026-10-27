@@ -271,51 +271,6 @@ CREATE TABLE skill_asset (            -- large / binary files, fetched on demand
 -- only; nothing is fetched or executed automatically, and sha256 is verified on
 -- every fetch with `..`/absolute paths refused.
 
--- Skill distribution (v1.31.0). `crs skill-init` creates these; skills are authored
--- in git and published here, so a correction reaches every machine instead of
--- living in one ~/.claude/skills copy. Two tables because their update rates differ
--- ~280x: the knowledge is 38 KB and changes often, the templates are 15.8 MB and
--- almost never do — fixing one line of a rule must not re-upload 16 MB.
---
--- bytea, NEVER Large Object: `lo` carries its own ACL in pg_largeobject_metadata,
--- which RLS cannot see. The employee deployment (.204) is built entirely on RLS,
--- so an `lo` would be a hole in the wall the rest of that design depends on.
--- owner / visibility are written from day one but carry no policy on a single-user
--- instance; a multi-tenant deploy adds ENABLE/FORCE ROW LEVEL SECURITY plus
---   USING (visibility = 'all' OR pg_has_role(current_user, visibility, 'USAGE'))
--- without any schema change.
-CREATE TABLE skill_registry (
-    name        TEXT PRIMARY KEY,
-    version     TEXT NOT NULL DEFAULT '',
-    description TEXT NOT NULL,          -- what osearch's skill leg routes on
-    payload     BYTEA NOT NULL,         -- JSON {relative path -> file text}; TOAST compresses
-    sha256      TEXT NOT NULL,          -- skill-sync skips an unchanged skill on this
-    visibility  TEXT NOT NULL DEFAULT 'all',
-    owner       TEXT NOT NULL DEFAULT current_user,
-    description_embedding vector(1024),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX skill_registry_hnsw ON skill_registry USING hnsw (description_embedding vector_cosine_ops);
-
-CREATE TABLE skill_asset (            -- large / binary files, fetched on demand
-    skill_name TEXT NOT NULL REFERENCES skill_registry(name) ON DELETE CASCADE,
-    path       TEXT NOT NULL,
-    blob       BYTEA NOT NULL,
-    sha256     TEXT NOT NULL,          -- content-addressed: unchanged assets are not re-sent
-    owner      TEXT NOT NULL DEFAULT current_user,
-    PRIMARY KEY (skill_name, path)
-);
--- Usage:
---   crs skill-publish ~/.claude/skills/<name>     # git → PG
---   crs skill-sync [name]                         # PG → ~/.claude/skill-library (sha-gated)
---   crs skill-get <name> --asset templates/x.docx # one large file, on demand
--- skill-sync writes to ~/.claude/skill-library, deliberately NOT ~/.claude/skills:
--- a synced skill must not silently rejoin the always-loaded description list
--- (14,528 chars for 35 skills) that publishing to PG exists to relieve. osearch
--- prints a `📌 現成 SOP` pointer when a skill is within distance 0.62 — a pointer
--- only; nothing is fetched or executed automatically, and sha256 is verified on
--- every fetch with `..`/absolute paths refused.
-
 CREATE TABLE ingest_state (
     file_path TEXT PRIMARY KEY,
     mtime DOUBLE PRECISION NOT NULL,
@@ -536,3 +491,28 @@ Client side:
   ~/claude-archive/build.log              cron output
   ~/claude-archive/pgsearchd.log          daemon output
 ```
+
+
+## Episode layer (`msg_episode`, v1.33.0)
+
+`msg_distilled` = one message's facts (a search index). `msg_episode` = one event read across a conversation (something a person can act on). Both are owner-scoped with the same `rbac_hier` RLS policy.
+
+| column | meaning |
+|---|---|
+| `session_id`, `seq_from`, `seq_to`, `ts_from`, `ts_to` | where in the transcript the event lives |
+| `kind` | `incident` / `procedure` / `decision` / `pending` |
+| `symptom`, `root_cause`, `fix`, `outcome`, `lesson` | the event |
+| `evidence`, `verified` | a quote and whether it is really in the transcript (`exact` / `partial` / `missing`) |
+| `summary_embedding`, `summary_tsv` | the osearch episode leg |
+
+`episode_state(session_id, seq_done)` records how far each session has been read, so a session that continues later only sends its new part.
+
+```bash
+crs episode-missing --session <id>            # one session, now
+crs episode-missing --dry-run                 # what tonight would send
+crs episode-missing --max-sessions 30 --days 90 --project-prefix=-Users-$(id -un)
+```
+
+Env: `CRS_EPISODE_MODEL` (default `sonnet`), `CRS_EPISODE_MAX_OUTPUT` (output-token budget per run, default 200000), `CRS_EPISODE_TIMEOUT` (per call, default 900s), `CRS_CLAUDE_BIN`.
+`claude -p` is run in an empty temp directory with `--no-session-persistence` and `--setting-sources project`: no user hooks, no tools, and no transcript — otherwise the extraction itself would be archived and become next night's input.
+A failed call (`is_error`, timeout, non-JSON) leaves `seq_done` untouched; the session is retried the next night.
