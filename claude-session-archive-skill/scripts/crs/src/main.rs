@@ -219,6 +219,29 @@ enum Cmd {
     },
     /// Distill msg rows lacking a msg_distilled entry: generative proposition
     /// extraction (Mac GPU / qwen2.5:7b) → embed → INSERT. Mirrors embed-missing. (pg-backend)
+    /// Extract EVENTS (symptom → cause → fix → outcome → lesson) from quiet sessions
+    /// with Claude (`claude -p`), verify each quote against the transcript, mask
+    /// secrets, embed, store in msg_episode. Resumable per session. (pg-backend)
+    #[cfg(feature = "pg-backend")]
+    EpisodeMissing {
+        /// Sessions per run, newest first.
+        #[arg(long, default_value = "30")]
+        max_sessions: usize,
+        /// Only sessions whose last message is within this many days.
+        #[arg(long, default_value = "90")]
+        days: i64,
+        /// A session counts as finished after this many quiet hours.
+        #[arg(long, default_value = "6")]
+        idle_hours: i64,
+        /// Process exactly this session (ignores days/idle).
+        #[arg(long)]
+        session: Option<String>,
+        #[arg(long = "project-prefix")]
+        project_prefix: Option<String>,
+        /// Show what would be sent, call nothing, write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     #[cfg(feature = "pg-backend")]
     DistillMissing {
         #[arg(long, default_value = "2")]
@@ -393,6 +416,28 @@ struct EmbedResponse {
 // enrichment, so it cannot drift between the three embed paths and distill.
 #[allow(unused_macros)]
 macro_rules! searchable_roles_sql { () => { "role IN ('user', 'assistant')" } }
+
+// Which rows are worth DISTILLING (v1.33.0, 2026-10-27). Harness notices and
+// one-line replies carry no proposition; the model squeezes out a "fact" anyway,
+// so they never showed up as empties — they just cost GPU.
+//
+// Tool rows are KEPT, by measurement. 71% of distill work is tool calls (35.6%)
+// and tool output (35.5%), so dropping them was the obvious saving. osearch-eval
+// with the orient leg filtered (CRS_ORIENT_NO_TOOLS) against both question sets
+// (the incident set is private — built from real sessions, kept out of the repo),
+// k=15, recall:
+//                         keep tools   no tool output   no tool rows
+//   incident-queryset(37)    0.838         0.865            0.838
+//   queryset (15)            0.251         0.220            0.202
+// The gate was "neither set drops more than 2 points"; both cuts fail it on the
+// keyword set (its answers include the command rows that name the thing). Queue:
+// 70,203 now → 57,801 with this rule (-18%) vs 34,740 dropping tool output.
+// Revisit once the episode layer has run long enough to be measured.
+#[allow(unused_macros)]
+macro_rules! distill_worthy_sql { () => { concat!(
+    searchable_roles_sql!(),
+    " AND content !~ '^(Another Claude session sent a message|<task-notification|\\[Request interrupted|This session is being continued)'",
+    " AND length(content) >= 80") } }
 
 fn http_client() -> Result<reqwest::blocking::Client> {
     Ok(reqwest::blocking::Client::builder()
@@ -4273,8 +4318,8 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
         let mut pg = pg_connect()?;
         let cnt_sql = format!(
             concat!("SELECT COUNT(*) FROM msg WHERE NOT EXISTS \
-             (SELECT 1 FROM msg_distilled d WHERE d.original_id = msg.id) AND length(content) >= 20 AND ",
-             searchable_roles_sql!(), "{}"),
+             (SELECT 1 FROM msg_distilled d WHERE d.original_id = msg.id) AND ",
+             distill_worthy_sql!(), "{}"),
             prefix_clause);
         let binds: Vec<&(dyn postgres::types::ToSql + Sync)> =
             prefix_binds.iter().map(|s| s as &(dyn postgres::types::ToSql + Sync)).collect();
@@ -4301,7 +4346,7 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
         let select_sql = format!(
             concat!("SELECT id, content FROM msg \
              WHERE NOT EXISTS (SELECT 1 FROM msg_distilled d WHERE d.original_id = msg.id) \
-               AND length(content) >= 20 AND ", searchable_roles_sql!(),
+               AND ", distill_worthy_sql!(),
                "{} ORDER BY id DESC LIMIT {}"),
             prefix_clause, sel_lim);
         let binds: Vec<&(dyn postgres::types::ToSql + Sync)> =
@@ -4463,6 +4508,22 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
 // Best-effort — returns Err if the table doesn't exist yet (osearch then runs
 // recall+pin only). Mirrors pg_vec's HNSW-first MATERIALIZED plan.
 #[cfg(feature = "pg-backend")]
+fn orient_no_tools() -> bool {
+    std::env::var("CRS_ORIENT_NO_TOOLS").map(|v| v == "1" || v == "results").unwrap_or(false)
+}
+
+/// "1" = drop tool calls and tool output from the orient leg; "results" = drop
+/// only tool output (keep the short command rows).
+#[cfg(feature = "pg-backend")]
+fn orient_tool_clause() -> &'static str {
+    match std::env::var("CRS_ORIENT_NO_TOOLS").as_deref() {
+        Ok("1") => " AND m.content NOT LIKE '[TOOL_%'",
+        Ok("results") => " AND m.content NOT LIKE '[TOOL_RESULT]%'",
+        _ => "",
+    }
+}
+
+#[cfg(feature = "pg-backend")]
 fn pg_distill_orient(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str, project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
     let emb = embed_pg_query(http, query)?;
     let lit = vec_literal(&emb);
@@ -4470,6 +4531,10 @@ fn pg_distill_orient(client: &mut postgres::Client, http: &reqwest::blocking::Cl
     let over_fetch = ((limit * 20).max(100)) as i64;
     let ef = std::cmp::max(over_fetch as i32, 100);
     client.execute(&format!("SET hnsw.ef_search = {ef}"), &[]).ok();
+    // Control arm for the 2026-10-27 measurement: 71% of distilled rows are tool
+    // calls / tool output. Before the distiller stops producing them, this shows
+    // what search loses without them. Same over-fetch, so the leg still fills.
+    let tool_clause = orient_tool_clause();
     let sql = format!(
         "WITH knn AS MATERIALIZED (
              SELECT d.original_id, d.summary_embedding <=> '{lit}'::vector AS dist
@@ -4480,7 +4545,7 @@ fn pg_distill_orient(client: &mut postgres::Client, http: &reqwest::blocking::Cl
          )
          SELECT m.id, m.ts, m.project, m.session_id, m.role, m.tool_name, m.content, knn.dist
          FROM knn JOIN msg m ON m.id = knn.original_id
-         WHERE ($1::text IS NULL OR m.project LIKE $1)
+         WHERE ($1::text IS NULL OR m.project LIKE $1){tool_clause}
          ORDER BY knn.dist LIMIT $3");
     let rows = client.query(&sql, &[&proj_like, &over_fetch, &(limit as i64)])?;
     Ok(rows.iter().map(|r| PgRow {
@@ -4537,7 +4602,7 @@ fn osearch_ranked(pg: &mut postgres::Client, http: &reqwest::blocking::Client,
     // Measured after restarting the daemon on the new binary: warm 4482ms -> 1615ms
     // (~2.7x). Cold did not improve (4340 -> 5885 on one sample) — three handshakes now
     // contend for the same uplink. Warm is what the hook actually hits.
-    let (pin, recall, orient) = std::thread::scope(|sc| {
+    let (pin, recall, orient, episode) = std::thread::scope(|sc| {
         let h_pin = sc.spawn(|| {
             if let Some((rows, _)) = try_daemon("fts", query, project, pool, include_img) { return rows; }
             let Ok(mut c) = pg_connect() else { return Vec::new() };
@@ -4552,16 +4617,28 @@ fn osearch_ranked(pg: &mut postgres::Client, http: &reqwest::blocking::Client,
         // join-filter on msg.ts would collapse (iterative_scan can't help). ADD-only;
         // union's pin+recall carry date-scoped queries.
         let h_orient = sc.spawn(|| {
-            if let Some((rows, _)) = try_daemon("orient", query, project, pool, include_img) { return rows; }
+            // The daemon is a separate process and does not see CRS_ORIENT_NO_TOOLS,
+            // so the control arm must take the direct path or it measures nothing.
+            if !orient_no_tools() {
+                if let Some((rows, _)) = try_daemon("orient", query, project, pool, include_img) { return rows; }
+            }
             let (Ok(mut c), Ok(h)) = (pg_connect(), http_client()) else { return Vec::new() };
             match pg_distill_orient(&mut c, &h, query, project, pool) {
                 Ok(v) => v,
                 Err(e) => { eprintln!("  (orient skipped: {e})"); Vec::new() }
             }
         });
+        // episode: one row per EVENT (msg_episode), direct connection — the daemon
+        // has no episode route. CRS_NO_EPISODE=1 is the control arm.
+        let h_episode = sc.spawn(|| {
+            if std::env::var("CRS_NO_EPISODE").map(|v| v == "1").unwrap_or(false) { return Vec::new(); }
+            let (Ok(mut c), Ok(h)) = (pg_connect(), http_client()) else { return Vec::new() };
+            pg_episode_leg(&mut c, &h, query, project, pool).unwrap_or_default()
+        });
         (h_pin.join().unwrap_or_default(),
          h_recall.join().unwrap_or_default(),
-         h_orient.join().unwrap_or_default())
+         h_orient.join().unwrap_or_default(),
+         h_episode.join().unwrap_or_default())
     });
 
     // Adaptive weighted RRF — cheap query routing without a classifier:
@@ -4575,12 +4652,13 @@ fn osearch_ranked(pg: &mut postgres::Client, http: &reqwest::blocking::Client,
     let mut score: HashMap<i64, f64> = HashMap::new();
     let mut legs_of: HashMap<i64, Vec<&str>> = HashMap::new();
     let mut row_of: HashMap<i64, &PgRow> = HashMap::new();
-    for (tag, leg, w) in [("pin", &pin, 1.0_f64), ("recall", &recall, recall_w), ("orient", &orient, 1.0)] {
+    for (tag, leg, w) in [("pin", &pin, 1.0_f64), ("recall", &recall, recall_w), ("orient", &orient, 1.0), ("episode", &episode, 1.0)] {
         for (rank, r) in leg.iter().enumerate() {
             let key = match r.id { Some(k) if k >= 0 => k, _ => continue };
             *score.entry(key).or_insert(0.0) += w / (RRF_K + rank as f64);
             legs_of.entry(key).or_default().push(tag);
-            row_of.entry(key).or_insert(r);
+            // An episode card says more than the raw message it points at: show it.
+            if tag == "episode" { row_of.insert(key, r); } else { row_of.entry(key).or_insert(r); }
         }
     }
     // Importance boost. This is a RE-RANK, not a retrieval change: it multiplies
@@ -5522,7 +5600,13 @@ fn skill_leg(client: &mut postgres::Client, emb: &[f32], limit: usize)
 #[derive(serde::Deserialize)]
 struct EvalQuery {
     nl: String,
+    #[serde(default)]
     entity: String,
+    /// Incident mode: the answer is "the conversation where this happened", not a
+    /// keyword. A hit is any top-k row whose session_id starts with one of these
+    /// (prefixes allowed — extraction kept 8-char ids). When set, `entity` is unused.
+    #[serde(default)]
+    gt_sessions: Vec<String>,
     category: String,
     #[serde(default)]
     project: Option<String>,
@@ -5563,6 +5647,22 @@ fn cmd_osearch_eval(queryset_path: &str, k: usize, variant: &str) -> Result<()> 
         // A fresh connection per query is robust (eval is not perf-critical).
         pg = match pg_connect() { Ok(c) => c, Err(e) => { eprintln!("  [reconnect err: {}]", e); continue; } };
         // GT: lexical oracle for the entity, filtered by project (via pg_fts) + date.
+        if !q.gt_sessions.is_empty() {
+            let res = osearch_ranked(&mut pg, &http, &q.nl, None, k, false, None, None);
+            let is_hit = |r: &PgRow| q.gt_sessions.iter().any(|g| r.session_id.starts_with(g.as_str()));
+            let first = res.ranked.iter().position(|(r, _)| is_hit(r));
+            // One right conversation in the top k is the whole answer: recall = success@k.
+            let recall = if first.is_some() { 1.0 } else { 0.0 };
+            let hits = res.ranked.iter().filter(|(r, _)| is_hit(r)).count();
+            let precision = hits as f64 / k as f64;
+            let mrr = first.map_or(0.0, |p| 1.0 / (p as f64 + 1.0));
+            println!("{:<12} {:>5.3} {:>5.3} {:>5.3} {:>5}  {}",
+                q.category, precision, recall, mrr, q.gt_sessions.len(), q.nl);
+            let e = by_cat.entry(q.category.clone()).or_insert((0.0, 0.0, 0.0, 0));
+            e.0 += precision; e.1 += recall; e.2 += mrr; e.3 += 1;
+            ov.0 += precision; ov.1 += recall; ov.2 += mrr; ov.3 += 1;
+            continue;
+        }
         let since = q.since.as_deref().and_then(parse_day);
         let until = q.until.as_deref().and_then(parse_day);
         let gt_rows = match pg_fts(&mut pg, &q.entity, q.project.as_deref(), 300, false, None, None) {
@@ -5599,7 +5699,7 @@ fn cmd_osearch_eval(queryset_path: &str, k: usize, variant: &str) -> Result<()> 
         ov.0 += precision; ov.1 += recall; ov.2 += mrr; ov.3 += 1;
     }
     println!("{}", "-".repeat(78));
-    println!("=== averages (variant={}, k={}) ===", variant, k);
+    println!("=== averages (variant={}, k={}, orient_no_tools={}) ===", variant, k, std::env::var("CRS_ORIENT_NO_TOOLS").unwrap_or_else(|_| "0".into()));
     for (cat, (p, r, m, n)) in &by_cat {
         println!("  {:<14} n={:<2} P@k={:.3}  R@k={:.3}  MRR={:.3}", cat, n, p/ *n as f64, r/ *n as f64, m/ *n as f64);
     }
@@ -5611,6 +5711,458 @@ fn cmd_osearch_eval(queryset_path: &str, k: usize, variant: &str) -> Result<()> 
         for s in &skipped { println!("  - {}", s); }
     }
     Ok(())
+}
+
+// ─────────────────────────── episode layer (v1.33.0) ───────────────────────────
+// A distilled row is one message's facts; an episode is one EVENT: symptom → root
+// cause → fix → outcome → lesson, read across the whole conversation. Built because
+// both real uses of the archive on 2026-10-13 (experience map) and 2026-10-27
+// (network handover) skipped msg_distilled and went back to the raw transcript:
+// a per-message summary cannot know how the story ended.
+//
+// Generated by Claude (`claude -p`), not the local qwen: a 7B model with a 16K
+// window has to read a session in slices, which is exactly the context loss this
+// layer exists to fix. Runs on the Mac, nightly, sessions that went quiet.
+
+#[cfg(feature = "pg-backend")]
+const MSG_EPISODE_DDL: &str = "
+CREATE TABLE IF NOT EXISTS msg_episode (
+  id BIGSERIAL PRIMARY KEY,
+  owner TEXT NOT NULL DEFAULT current_user,
+  session_id TEXT NOT NULL,
+  project TEXT,
+  seq_from INT,
+  seq_to INT,
+  ts_from TIMESTAMPTZ,
+  ts_to TIMESTAMPTZ,
+  kind TEXT,
+  topic TEXT,
+  title TEXT NOT NULL,
+  symptom TEXT,
+  root_cause TEXT,
+  fix TEXT,
+  outcome TEXT,
+  lesson TEXT,
+  identifiers TEXT[],
+  evidence TEXT,
+  verified TEXT,
+  model TEXT,
+  ver INT,
+  summary_embedding vector(1024),
+  summary_tsv tsvector GENERATED ALWAYS AS (to_tsvector('simple',
+      coalesce(title,'') || ' ' || coalesce(symptom,'') || ' ' || coalesce(root_cause,'') || ' ' ||
+      coalesce(fix,'') || ' ' || coalesce(lesson,''))) STORED,
+  created TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS msg_episode_session ON msg_episode(session_id);
+CREATE INDEX IF NOT EXISTS msg_episode_tsv ON msg_episode USING gin(summary_tsv);
+CREATE INDEX IF NOT EXISTS msg_episode_hnsw ON msg_episode USING hnsw(summary_embedding vector_cosine_ops);
+ALTER TABLE msg_episode ENABLE ROW LEVEL SECURITY;
+ALTER TABLE msg_episode FORCE ROW LEVEL SECURITY;
+CREATE TABLE IF NOT EXISTS episode_state (
+  session_id TEXT PRIMARY KEY,
+  owner TEXT NOT NULL DEFAULT current_user,
+  seq_done INT NOT NULL,
+  episodes INT NOT NULL DEFAULT 0,
+  updated TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE episode_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE episode_state FORCE ROW LEVEL SECURITY;
+";
+
+#[cfg(feature = "pg-backend")]
+const EPISODE_VER: i32 = 1;
+
+#[cfg(feature = "pg-backend")]
+const EPISODE_PROMPT: &str = r#"你會讀到一段 Claude Code 對話的逐字稿(只有使用者的話和 AI 的說明,工具輸出已拿掉)。每則前面有 [日期 時間 角色 #序號]。
+
+任務:抽出這段對話裡的「事件」。一個事件 = 一段「出了事 → 查出真正原因 → 修好(或決定不修)」,或一個定下來的做法/決定,而且換個人接手也學得到東西。
+
+要:踩到的坑、被推翻的誤判、看起來成功其實沒做到、設計取捨與理由、還沒解決的事。
+不要:純進度回報、閒聊、純操作步驟、沒有原因的現象。寧缺勿濫,0 條也正常。同一件事講好幾次只算一條,以最後的結論為準。
+
+安全:絕對不可寫出任何密碼、token、金鑰、PSK 的值,一律寫「密碼由 MIS 保管」。
+
+不要使用任何工具,直接輸出。只輸出 JSON Lines(一行一個 JSON 物件,不要 markdown、不要其他文字):
+{"kind":"incident|procedure|decision|pending","topic":"<系統或領域,2~8 字>","title":"<15 字內>","seq_from":<開始的序號>,"seq_to":<結束的序號>,"symptom":"<看到什麼>","root_cause":"<真正原因;沒有就空字串>","fix":"<怎麼修;沒修寫 未修 + 原因>","outcome":"<最後結果:修好了沒、怎麼驗證的>","lesson":"<一句換個專案也適用的教訓>","identifiers":["IP、主機、PR 編號、錯誤訊息等,最多 8 個"],"evidence":"<原文照抄 30~150 字,可用 ... 省略中間;密碼改成 ***>"}
+全部用繁體中文,指令與專有名詞照原樣。"#;
+
+/// One extracted episode, as the model returned it.
+#[cfg(feature = "pg-backend")]
+#[derive(Debug, Deserialize, Default)]
+struct EpisodeOut {
+    #[serde(default)] kind: String,
+    #[serde(default)] topic: String,
+    #[serde(default)] title: String,
+    #[serde(default)] seq_from: Option<i64>,
+    #[serde(default)] seq_to: Option<i64>,
+    #[serde(default)] symptom: String,
+    #[serde(default)] root_cause: String,
+    #[serde(default)] fix: String,
+    #[serde(default)] outcome: String,
+    #[serde(default)] lesson: String,
+    #[serde(default)] identifiers: Vec<String>,
+    #[serde(default)] evidence: String,
+}
+
+/// Letters, digits and CJK only. Measured on the first real run (2026-10-27):
+/// Claude copies quotes faithfully but turns full-width punctuation into
+/// half-width (`（`→`(`, `，`→`,`), and keeps or drops markdown `**` at will —
+/// 6 of 17 genuine quotes were scored "missing" by a whitespace-only compare.
+/// Words are what prove a quote; punctuation proves nothing.
+fn evidence_norm(s: &str) -> String {
+    s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+/// Is the quoted evidence really in the transcript? The model may elide with `...`,
+/// `…` or `⋯` and masks secrets with `***`, so the quote is split on those and every
+/// piece of 10+ chars must appear. "partial" = some pieces found; "missing" = none.
+fn verify_evidence(evidence: &str, source_norm: &str) -> &'static str {
+    let pieces: Vec<String> = evidence
+        .split("***").flat_map(|p| p.split("...")).flat_map(|p| p.split('…')).flat_map(|p| p.split('⋯'))
+        .map(evidence_norm)
+        .filter(|p| p.chars().count() >= 10)
+        .collect();
+    if pieces.is_empty() { return "missing"; }
+    let found = pieces.iter().filter(|p| source_norm.contains(p.as_str())).count();
+    if found == pieces.len() { "exact" } else if found > 0 { "partial" } else { "missing" }
+}
+
+/// Mask secrets before anything is written. `known` = literal secrets this machine
+/// knows (CRS_PG_PASSWORD plus lines of ~/.config/crs/secret-literals.txt). Patterns
+/// catch common token shapes. Returns (masked text, whether anything was masked).
+fn redact_secrets(text: &str, known: &[String]) -> (String, bool) {
+    let mut out = text.to_string();
+    let mut hit = false;
+    for k in known {
+        if k.len() >= 6 && out.contains(k.as_str()) { out = out.replace(k.as_str(), "***"); hit = true; }
+    }
+    let pats = [
+        r"ghp_[A-Za-z0-9]{20,}", r"github_pat_[A-Za-z0-9_]{20,}", r"sk-[A-Za-z0-9_-]{20,}",
+        r"xox[abpr]-[A-Za-z0-9-]{10,}", r"AKIA[0-9A-Z]{16}", r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
+        r"\b[A-Fa-f0-9]{32,}\b",
+        r"(?i)((?:password|passwd|pwd|密碼|psk|secret|token)\s*[:=：]\s*)[^\s,，。)）\]」]{4,}",
+    ];
+    for p in pats {
+        let re = regex::Regex::new(p).expect("static regex");
+        let masked = re.replace_all(&out, |c: &regex::Captures| {
+            match c.get(1) { Some(prefix) => format!("{}***", prefix.as_str()), None => "***".to_string() }
+        });
+        if masked != out { hit = true; out = masked.into_owned(); }
+    }
+    (out, hit)
+}
+
+/// Pull JSON objects out of the model's reply, tolerating fences or stray prose.
+#[cfg(feature = "pg-backend")]
+fn parse_episode_lines(reply: &str) -> Vec<EpisodeOut> {
+    reply.lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with('{') && l.ends_with('}'))
+        .filter_map(|l| serde_json::from_str::<EpisodeOut>(l).ok())
+        .filter(|e| !e.title.trim().is_empty())
+        .collect()
+}
+
+#[cfg(feature = "pg-backend")]
+fn episode_known_secrets() -> Vec<String> {
+    let mut v: Vec<String> = Vec::new();
+    if let Ok(p) = std::env::var("CRS_PG_PASSWORD") { v.push(p); }
+    if let Some(home) = dirs_home() {
+        if let Ok(s) = fs::read_to_string(home.join(".config/crs/secret-literals.txt")) {
+            v.extend(s.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).map(String::from));
+        }
+    }
+    v
+}
+
+#[cfg(feature = "pg-backend")]
+fn dirs_home() -> Option<std::path::PathBuf> { std::env::var_os("HOME").map(std::path::PathBuf::from) }
+
+/// Run `claude -p` on one transcript chunk. No tools, no hooks of the user's, no
+/// session file written (or the archive would ingest the extraction as a new
+/// conversation and the next night would extract episodes from it).
+#[cfg(feature = "pg-backend")]
+fn run_claude_episode(transcript: &str, model: &str, timeout_s: u64) -> Result<(String, u64)> {
+    use std::io::Write as _;
+    use std::process::{Command, Stdio};
+    let dir = std::env::temp_dir().join(format!("crs-episode-{}", std::process::id()));
+    fs::create_dir_all(&dir)?;
+    let claude = std::env::var("CRS_CLAUDE_BIN").unwrap_or_else(|_| "claude".into());
+    let mut child = Command::new(claude)
+        .current_dir(&dir)
+        .args(["-p", "--output-format", "json", "--model", model, "--no-session-persistence",
+               "--setting-sources", "project",
+               "--disallowedTools", "Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch", "Task", "Agent"])
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .spawn().context("spawn claude")?;
+    let mut stdin = child.stdin.take().ok_or_else(|| anyhow!("no stdin"))?;
+    let input = format!("{EPISODE_PROMPT}\n\n===== 逐字稿 =====\n{transcript}");
+    let writer = std::thread::spawn(move || { let _ = stdin.write_all(input.as_bytes()); });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_s);
+    loop {
+        if child.try_wait()?.is_some() { break; }
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            bail!("claude timed out after {timeout_s}s");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    let _ = writer.join();
+    let out = child.wait_with_output()?;
+    let _ = fs::remove_dir_all(&dir);
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    let v: Value = serde_json::from_str(stdout.trim())
+        .map_err(|e| anyhow!("claude output not JSON ({e}); stderr: {}", String::from_utf8_lossy(&out.stderr).chars().take(300).collect::<String>()))?;
+    // Auth failures have been seen to exit 0 (see aaf-agent-flow memory): trust is_error, not the exit code.
+    if v.get("is_error").and_then(Value::as_bool).unwrap_or(false) {
+        bail!("claude reported error: {}", v.get("result").and_then(Value::as_str).unwrap_or("").chars().take(300).collect::<String>());
+    }
+    let text = v.get("result").and_then(Value::as_str).unwrap_or("").to_string();
+    let out_tok = v.pointer("/usage/output_tokens").and_then(Value::as_u64).unwrap_or(0);
+    Ok((text, out_tok))
+}
+
+#[cfg(feature = "pg-backend")]
+fn cmd_episode_init() -> Result<()> {
+    let mut pg = pg_connect()?;
+    pg.batch_execute(MSG_EPISODE_DDL)?;
+    for t in ["msg_episode", "episode_state"] {
+        let exists: bool = pg.query_one(
+            "SELECT EXISTS(SELECT 1 FROM pg_policies WHERE tablename=$1 AND policyname='rbac_hier')",
+            &[&t])?.get(0);
+        if !exists {
+            pg.batch_execute(&format!(
+                "CREATE POLICY rbac_hier ON {t} USING (pg_has_role(current_user, owner, 'USAGE')) WITH CHECK (owner = current_user)"))?;
+        }
+    }
+    Ok(())
+}
+
+/// Find quiet sessions with new content, extract episodes with Claude, verify,
+/// redact, embed, store. Resumable per session via episode_state.seq_done.
+#[cfg(feature = "pg-backend")]
+#[allow(clippy::too_many_arguments)]
+fn cmd_episode_missing(max_sessions: usize, days: i64, idle_hours: i64, only_session: Option<String>,
+                       project_prefix: Option<String>, dry_run: bool) -> Result<()> {
+    cmd_episode_init()?;
+    let model = std::env::var("CRS_EPISODE_MODEL").unwrap_or_else(|_| "sonnet".into());
+    let max_out: u64 = std::env::var("CRS_EPISODE_MAX_OUTPUT").ok().and_then(|s| s.parse().ok()).unwrap_or(200_000);
+    let timeout_s: u64 = std::env::var("CRS_EPISODE_TIMEOUT").ok().and_then(|s| s.parse().ok()).unwrap_or(900);
+    const CHUNK_CHARS: usize = 250_000;
+    const PER_MSG: usize = 2500;
+    let known = episode_known_secrets();
+    let http = http_client()?;
+    let mut pg = pg_connect()?;
+
+    let prefixes: Vec<String> = project_prefix.as_deref().unwrap_or("")
+        .split(',').map(str::trim).filter(|s| !s.is_empty()).map(|s| format!("{s}%")).collect();
+    let sessions: Vec<(String, String, i32)> = if let Some(s) = &only_session {
+        pg.query("SELECT session_id, max(project), coalesce((SELECT seq_done FROM episode_state e WHERE e.session_id=$1), -1)
+                  FROM msg WHERE session_id = $1 GROUP BY session_id", &[s])?
+            .iter().map(|r| (r.get(0), r.get(1), r.get(2))).collect()
+    } else {
+        pg.query(
+            "SELECT m.session_id, max(m.project), coalesce(max(e.seq_done), -1)
+             FROM msg m LEFT JOIN episode_state e ON e.session_id = m.session_id
+             WHERE m.role IN ('user','assistant')
+               AND (cardinality($3::text[]) = 0 OR m.project LIKE ANY($3))
+             GROUP BY m.session_id
+             HAVING max(m.ts) > now() - make_interval(days => $1::int)
+                AND max(m.ts) < now() - make_interval(hours => $2::int)
+                AND max(m.seq) > coalesce(max(e.seq_done), -1)
+             ORDER BY max(m.ts) DESC LIMIT $4",
+            &[&(days as i32), &(idle_hours as i32), &prefixes, &(max_sessions as i64)])?
+            .iter().map(|r| (r.get(0), r.get(1), r.get(2))).collect()
+    };
+    println!("episode-missing: {} session(s) to process (model={model}, max_output={max_out})", sessions.len());
+
+    let (mut total_out, mut total_eps, mut total_redacted) = (0u64, 0usize, 0usize);
+    let mut verified_count: std::collections::BTreeMap<&str, usize> = Default::default();
+    'sessions: for (sid, project, seq_done) in sessions {
+        let rows = pg.query(
+            "SELECT seq, ts, role, content FROM msg
+             WHERE session_id = $1 AND seq > $2 AND role IN ('user','assistant')
+               AND content NOT LIKE '[TOOL_%'
+               AND content !~ '^(Another Claude session sent a message|<task-notification|\\[Request interrupted|This session is being continued|<local-command|<command-name)'
+             ORDER BY seq", &[&sid, &seq_done])?;
+        let max_seq: i32 = pg.query_one("SELECT coalesce(max(seq), $2) FROM msg WHERE session_id=$1", &[&sid, &seq_done])?.get(0);
+        if rows.is_empty() {
+            if !dry_run {
+                pg.execute("INSERT INTO episode_state(session_id, seq_done) VALUES ($1,$2)
+                            ON CONFLICT (session_id) DO UPDATE SET seq_done=EXCLUDED.seq_done, updated=now()", &[&sid, &max_seq])?;
+            }
+            continue;
+        }
+        // Build transcript chunks; each chunk carries the last seq it covers so
+        // progress is saved per chunk (a kill loses at most one chunk).
+        let mut chunks: Vec<(String, i32)> = Vec::new();
+        let mut cur = String::new();
+        let mut cur_last = seq_done;
+        for r in &rows {
+            let seq: i32 = r.get(0);
+            let ts: Option<chrono::DateTime<Utc>> = r.get(1);
+            let role: String = r.get(2);
+            let content: String = r.get(3);
+            let when = ts.map(|t| t.with_timezone(&chrono::FixedOffset::east_opt(8 * 3600).unwrap()).format("%m-%d %H:%M").to_string()).unwrap_or_default();
+            let body: String = content.chars().take(PER_MSG).collect();
+            let line = format!("[{when} {role} #{seq}] {body}\n\n");
+            if cur.len() + line.len() > CHUNK_CHARS && !cur.is_empty() {
+                chunks.push((std::mem::take(&mut cur), cur_last));
+            }
+            cur.push_str(&line);
+            cur_last = seq;
+        }
+        if !cur.is_empty() { chunks.push((cur, cur_last)); }
+
+        for (i, (chunk, last_seq)) in chunks.iter().enumerate() {
+            if total_out >= max_out {
+                println!("  output budget reached ({total_out} ≥ {max_out}); stopping, resumes next run");
+                break 'sessions;
+            }
+            if dry_run {
+                println!("  [dry-run] {} chunk {}/{}: {} chars, seq ≤ {}", &sid[..sid.len().min(8)], i + 1, chunks.len(), chunk.len(), last_seq);
+                continue;
+            }
+            let (reply, out_tok) = match run_claude_episode(chunk, &model, timeout_s) {
+                Ok(v) => v,
+                Err(e) => { eprintln!("  !! {} chunk {}: {e}", &sid[..sid.len().min(8)], i + 1); continue 'sessions; }
+            };
+            total_out += out_tok;
+            let source_norm = evidence_norm(chunk);
+            let eps = parse_episode_lines(&reply);
+            let mut stored = 0usize;
+            for ep in eps {
+                let v = verify_evidence(&ep.evidence, &source_norm);
+                let mut fields = [ep.title, ep.symptom, ep.root_cause, ep.fix, ep.outcome, ep.lesson, ep.evidence, ep.topic];
+                let mut red = false;
+                for f in fields.iter_mut() { let (m, h) = redact_secrets(f, &known); *f = m; red |= h; }
+                let ids: Vec<String> = ep.identifiers.iter().map(|x| redact_secrets(x, &known).0).take(8).collect();
+                if red { total_redacted += 1; }
+                let [title, symptom, root_cause, fix, outcome, lesson, evidence, topic] = fields;
+                let emb_text = format!("{title}\n{symptom}\n{root_cause}\n{fix}\n{lesson}");
+                let emb = embed_text(&http, &emb_text.chars().take(4000).collect::<String>()).ok().map(|e| vec_literal(&e));
+                let (sf, st) = (ep.seq_from.map(|x| x as i32), ep.seq_to.map(|x| x as i32));
+                let ts_range = pg.query_opt(
+                    "SELECT min(ts), max(ts) FROM msg WHERE session_id=$1 AND seq BETWEEN coalesce($2, -1) AND coalesce($3, 2147483647)",
+                    &[&sid, &sf, &st])?;
+                let (tf, tt): (Option<chrono::DateTime<Utc>>, Option<chrono::DateTime<Utc>>) =
+                    ts_range.map(|r| (r.get(0), r.get(1))).unwrap_or((None, None));
+                let emb_sql = emb.map(|l| format!("'{l}'::vector")).unwrap_or_else(|| "NULL".into());
+                pg.execute(&format!(
+                    "INSERT INTO msg_episode(session_id, project, seq_from, seq_to, ts_from, ts_to, kind, topic, title,
+                        symptom, root_cause, fix, outcome, lesson, identifiers, evidence, verified, model, ver, summary_embedding)
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,{emb_sql})"),
+                    &[&sid, &project, &sf, &st, &tf, &tt, &ep.kind, &topic, &title, &symptom, &root_cause, &fix,
+                      &outcome, &lesson, &ids, &evidence, &v, &model, &EPISODE_VER])?;
+                *verified_count.entry(v).or_default() += 1;
+                stored += 1;
+            }
+            total_eps += stored;
+            let done = if i + 1 == chunks.len() { max_seq } else { *last_seq };
+            pg.execute("INSERT INTO episode_state(session_id, seq_done, episodes) VALUES ($1,$2,$3)
+                        ON CONFLICT (session_id) DO UPDATE SET seq_done=EXCLUDED.seq_done,
+                          episodes=episode_state.episodes+EXCLUDED.episodes, updated=now()",
+                       &[&sid, &done, &(stored as i32)])?;
+            println!("  {} chunk {}/{}: {} episode(s), {} output tokens",
+                     &sid[..sid.len().min(8)], i + 1, chunks.len(), stored, out_tok);
+        }
+    }
+    println!("done. {total_eps} episode(s) stored, verified={verified_count:?}, redacted={total_redacted}, output_tokens={total_out}");
+    Ok(())
+}
+
+/// osearch leg 4: episodes, by meaning (KNN) and by words (FTS), each mapped to the
+/// message where the episode starts so RRF can fuse it with the other legs by msg id.
+/// The row's content is replaced by an episode card — that is what the reader sees.
+#[cfg(feature = "pg-backend")]
+fn pg_episode_leg(client: &mut postgres::Client, http: &reqwest::blocking::Client, query: &str,
+                  project: Option<&str>, limit: usize) -> Result<Vec<PgRow>> {
+    let emb = embed_pg_query(http, query)?;
+    let lit = vec_literal(&emb);
+    let proj_like: Option<String> = project.map(|p| format!("%{}%", p));
+    let sql = format!(
+        "WITH k AS (
+            SELECT id, summary_embedding <=> '{lit}'::vector AS dist FROM msg_episode
+            WHERE summary_embedding IS NOT NULL ORDER BY summary_embedding <=> '{lit}'::vector LIMIT $2),
+         f AS (
+            SELECT id, 1.0 - ts_rank(summary_tsv, plainto_tsquery('simple', $3)) AS dist FROM msg_episode
+            WHERE summary_tsv @@ plainto_tsquery('simple', $3) LIMIT $2),
+         u AS (SELECT id, min(dist) AS dist FROM (SELECT * FROM k UNION ALL SELECT * FROM f) x GROUP BY id)
+         SELECT m.id, m.ts, m.project, m.session_id, m.role, m.tool_name,
+                '🧭 [事件] ' || e.title || ' — 真因:' || coalesce(nullif(e.root_cause,''),'?') ||
+                ' / 修法:' || coalesce(nullif(e.fix,''),'?') || ' / 結局:' || coalesce(nullif(e.outcome,''),'?') ||
+                ' / 教訓:' || coalesce(e.lesson,'') AS card, u.dist
+         FROM u JOIN msg_episode e ON e.id = u.id
+         JOIN LATERAL (SELECT * FROM msg mm WHERE mm.session_id = e.session_id
+                         AND mm.seq >= coalesce(e.seq_from, 0) ORDER BY mm.seq LIMIT 1) m ON true
+         WHERE ($1::text IS NULL OR e.project LIKE $1)
+         ORDER BY u.dist LIMIT $2");
+    let rows = client.query(&sql, &[&proj_like, &(limit as i64), &query])?;
+    Ok(rows.iter().map(|r| PgRow {
+        id: r.get(0), ts: r.get(1), project: r.get(2), session_id: r.get(3),
+        role: r.get(4), tool_name: r.get(5), content: r.get(6), score: r.get(7),
+    }).collect())
+}
+
+#[cfg(test)]
+mod episode_tests {
+    use super::*;
+
+    #[test]
+    fn evidence_exact_partial_missing() {
+        let src = evidence_norm("前一天才修好 LibreNMS 容器,圖表又歸零了。真正原因是 RRD 欄位名稱被改成 top。");
+        assert_eq!(verify_evidence("前一天才修好 LibreNMS 容器,圖表又歸零了", &src), "exact");
+        assert_eq!(verify_evidence("前一天才修好 LibreNMS 容器 ... 真正原因是 RRD 欄位名稱", &src), "exact");
+        assert_eq!(verify_evidence("前一天才修好 LibreNMS 容器 ... 這句話原文沒有出現過喔", &src), "partial");
+        assert_eq!(verify_evidence("這整句都是模型自己編出來的內容", &src), "missing");
+        assert_eq!(verify_evidence("短", &src), "missing", "too short to prove anything");
+    }
+
+    #[test]
+    fn evidence_ignores_markdown_and_spaces() {
+        let src = evidence_norm("| 項目 | **狀態** |\n| WiFi | `已調成 5G` |");
+        assert_eq!(verify_evidence("WiFi 已調成 5G 項目 狀態", &src), "missing", "order matters");
+        assert_eq!(verify_evidence("項目狀態WiFi已調成5G", &src), "exact");
+    }
+
+    #[test]
+    fn evidence_survives_full_to_half_width_punctuation() {
+        let src = evidence_norm("反查 `10.0.0.x` 的 PTR 是**不存在的記錄**（內網 IP 沒有 PTR），所以 HiNet DNS 不會回應");
+        assert_eq!(verify_evidence("反查 10.0.0.x 的 PTR 是不存在的記錄(內網 IP 沒有 PTR),所以 HiNet DNS 不會回應", &src), "exact");
+    }
+
+    #[test]
+    fn secrets_are_masked() {
+        let known = vec!["Hunter2Secret".to_string()];
+        let (t, h) = redact_secrets("ssh 用 Hunter2Secret 登入", &known);
+        assert!(h && !t.contains("Hunter2Secret"), "{t}");
+        let (t, h) = redact_secrets("token: ghp_abcdefghijklmnopqrstuvwxyz0123", &[]);
+        assert!(h && !t.contains("ghp_abcdef"), "{t}");
+        let (t, h) = redact_secrets("密碼:abc12345 之後要改", &[]);
+        assert!(h && t.contains("密碼:***") && !t.contains("abc12345"), "{t}");
+        let (t, h) = redact_secrets("key 0123456789abcdef0123456789abcdef end", &[]);
+        assert!(h && !t.contains("0123456789abcdef0123"), "{t}");
+    }
+
+    #[test]
+    fn harmless_text_is_untouched() {
+        let s = "密碼由 MIS 保管;內網 DNS 回應 4 ms;PR #749 已合";
+        let (t, h) = redact_secrets(s, &["abc".to_string()]);
+        assert!(!h, "masked something harmless: {t}");
+        assert_eq!(t, s);
+    }
+
+    #[test]
+    #[cfg(feature = "pg-backend")]
+    fn parses_jsonl_with_noise() {
+        let reply = "好的,以下是結果:\n```json\n{\"kind\":\"incident\",\"title\":\"精練塞車\",\"seq_from\":3}\n{bad json}\n{\"title\":\"\"}\n```";
+        let v = parse_episode_lines(reply);
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].title, "精練塞車");
+        assert_eq!(v[0].seq_from, Some(3));
+    }
 }
 
 // ─────────────────────────── main ───────────────────────────
@@ -5656,6 +6208,9 @@ fn main() -> Result<()> {
         Cmd::SkillList => cmd_skill_list(),
         Cmd::SkillSuggest { min_count, min_days, radius, covered, days } =>
             cmd_skill_suggest(min_count, min_days, radius, covered, days),
+        #[cfg(feature = "pg-backend")]
+        Cmd::EpisodeMissing { max_sessions, days, idle_hours, session, project_prefix, dry_run } =>
+            cmd_episode_missing(max_sessions, days, idle_hours, session, project_prefix, dry_run),
         #[cfg(feature = "pg-backend")]
         Cmd::DistillMissing { workers, limit, project_prefix } => cmd_distill_missing(workers, limit, project_prefix),
         #[cfg(feature = "pg-backend")]

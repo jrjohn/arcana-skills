@@ -491,3 +491,28 @@ Client side:
   ~/claude-archive/build.log              cron output
   ~/claude-archive/pgsearchd.log          daemon output
 ```
+
+
+## Episode layer (`msg_episode`, v1.33.0)
+
+`msg_distilled` = one message's facts (a search index). `msg_episode` = one event read across a conversation (something a person can act on). Both are owner-scoped with the same `rbac_hier` RLS policy.
+
+| column | meaning |
+|---|---|
+| `session_id`, `seq_from`, `seq_to`, `ts_from`, `ts_to` | where in the transcript the event lives |
+| `kind` | `incident` / `procedure` / `decision` / `pending` |
+| `symptom`, `root_cause`, `fix`, `outcome`, `lesson` | the event |
+| `evidence`, `verified` | a quote and whether it is really in the transcript (`exact` / `partial` / `missing`) |
+| `summary_embedding`, `summary_tsv` | the osearch episode leg |
+
+`episode_state(session_id, seq_done)` records how far each session has been read, so a session that continues later only sends its new part.
+
+```bash
+crs episode-missing --session <id>            # one session, now
+crs episode-missing --dry-run                 # what tonight would send
+crs episode-missing --max-sessions 30 --days 90 --project-prefix=-Users-$(id -un)
+```
+
+Env: `CRS_EPISODE_MODEL` (default `sonnet`), `CRS_EPISODE_MAX_OUTPUT` (output-token budget per run, default 200000), `CRS_EPISODE_TIMEOUT` (per call, default 900s), `CRS_CLAUDE_BIN`.
+`claude -p` is run in an empty temp directory with `--no-session-persistence` and `--setting-sources project`: no user hooks, no tools, and no transcript — otherwise the extraction itself would be archived and become next night's input.
+A failed call (`is_error`, timeout, non-JSON) leaves `seq_done` untouched; the session is retried the next night.
