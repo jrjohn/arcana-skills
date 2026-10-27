@@ -61,3 +61,17 @@ jobs:
       # 同一組 head+base 只開一次、一輪上限、問不到引擎就不開。
       - name: scan_stale_selftest.py
         run: python3 scan_stale_selftest.py
+
+      # 祕密只以名字傳給 docker(2026-10-21):runner 逾時時,str(TimeoutExpired) 帶出整條指令,
+      # token 曾因此進了 testReport.reason / Data Index。真的走一遍 test_flow,也掃原始碼。
+      - name: secret_argv_selftest.py
+        run: python3 secret_argv_selftest.py
+
+      # runner 逾時要把容器收掉(2026-10-22):timeout 只殺 docker CLI,容器照跑成孤兒,
+      # 吃記憶體害下一個測試也逾時。test_flow 與 uiux 稽核兩處都驗。
+      - name: runner_timeout_cleanup_selftest.py
+        run: python3 runner_timeout_cleanup_selftest.py
+      # 有 PR 卻沒分支名時不准默默改測本機站(2026-10-27,#750):先向 GitHub 問,
+      # 問不到就回報沒測到(disposition=escalate),不跑 runner。
+      - name: pr_branch_recover_selftest.py
+        run: python3 pr_branch_recover_selftest.py
