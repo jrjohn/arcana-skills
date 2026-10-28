@@ -2977,11 +2977,64 @@ def _rate_limited(status, text):
     return bool(text and _RATE_RE.search(str(text)))
 
 
+# 圖片直接交給 Claude 看(2026-10-28,John 選 A):AI 對話上傳的圖片由後端放在 payload["images"],
+# 這裡把它們跟文字提示放進**同一則**使用者訊息(`--input-format stream-json`),不是存成檔案再請模型
+# 去 Read —— 那樣模型可以不讀,而結構化輸出看不出它讀了沒有。
+# 實測(agent 的 claude 2.1.311):`--input-format stream-json` 與 `--json-schema`、`--resume` 可並用,
+# 輸出不回顯圖片內容(一張 240 KB 的 PNG,輸出 12 KB);接續的回合仍看得到前一回合的圖。
+_IMAGE_MEDIA_TYPES = ("image/png", "image/jpeg", "image/gif", "image/webp")
+_MAX_IMAGES = 5
+_MAX_IMAGE_B64 = 7_000_000          # 約 5 MB 原檔(後端已擋 5 MB;這是第二道)
+
+
+def _image_blocks(payload):
+    """payload["images"] → Claude 訊息的 image 內容塊。不合格的整批拒絕(ValueError),不默默略過 ——
+    略過一張圖等於讓模型回答一個它沒看到的問題,而回覆看不出少了什麼。"""
+    imgs = payload.get("images") or []
+    if not imgs:
+        return []
+    if not isinstance(imgs, list) or len(imgs) > _MAX_IMAGES:
+        raise ValueError("images 要是最多 %d 張的清單" % _MAX_IMAGES)
+    out = []
+    for i, im in enumerate(imgs):
+        mt = str((im or {}).get("media_type") or "")
+        data = (im or {}).get("data")
+        if mt not in _IMAGE_MEDIA_TYPES:
+            raise ValueError("第 %d 張圖的格式 %r 不支援" % (i + 1, mt))
+        if not isinstance(data, str) or not data or len(data) > _MAX_IMAGE_B64:
+            raise ValueError("第 %d 張圖是空的或太大" % (i + 1))
+        out.append({"type": "image", "source": {"type": "base64", "media_type": mt, "data": data}})
+    return out
+
+
+def _user_message_jsonl(prompt, blocks):
+    """`--input-format stream-json` 的一則使用者訊息:文字在前、圖片在後。"""
+    return json.dumps({"type": "user", "message": {"role": "user",
+                       "content": [{"type": "text", "text": prompt}] + blocks}},
+                      ensure_ascii=False) + "\n"
+
+
+def _result_event(stdout):
+    """stream-json 輸出裡的 result 事件;沒有就 {}。"""
+    env = {}
+    for line in (stdout or "").splitlines():
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(ev, dict) and ev.get("type") == "result":
+            env = ev
+    return env
+
+
 def _invoke_claude_once(prompt, schema, payload, wall, cwd=None):
     """Core Claude invocation shared by the static-verb path (run_claude) and the
     control-inverted generic executor (run_claude_generic). `prompt` + `schema`
     (a JSON string) are already resolved; `wall` is the wall-clock kill in seconds.
     Returns the validated structured_output with `_usage`/`_sid` attached."""
+    blocks = _image_blocks(payload)
+    stdin_text = _user_message_jsonl(prompt, blocks) if blocks else prompt
+    in_flags = ["--input-format", "stream-json"] if blocks else []
     # Live console: if the worker passed _piid/_node and CONSOLE_DIR is set,
     # stream the Claude conversation (stream-json) line-by-line to a shared log
     # so the dashboard shows it like a Jenkins console; else plain json mode.
@@ -3022,7 +3075,7 @@ def _invoke_claude_once(prompt, schema, payload, wall, cwd=None):
         # small enough. Raising it to make room for a real specification uncovered the wall
         # behind it. stdin has no such ceiling, so the size question goes back to being about
         # the model's context, which is where it belongs.
-        cmd = [CLAUDE, "-p", "--json-schema", schema,
+        cmd = [CLAUDE, "-p", "--json-schema", schema] + in_flags + [
                "--output-format", "stream-json", "--verbose"] + _resume(payload) + _skill_flags(payload) + _perm_flags(payload) + _dir_flags(payload)
         if _model_for(payload):
             cmd += ["--model", _model_for(payload)]
@@ -3040,7 +3093,7 @@ def _invoke_claude_once(prompt, schema, payload, wall, cwd=None):
         # would block on the 64 KB pipe buffer while this side is not yet reading stdout,
         # and the deadlock would look like a hang rather than an error.
         _pf = tempfile.NamedTemporaryFile("w", suffix=".prompt", delete=False, encoding="utf-8")
-        _pf.write(prompt)
+        _pf.write(stdin_text)
         _pf.close()
         with open(console_path, "w") as cf, open(_pf.name, "r", encoding="utf-8") as _pin:
             proc = subprocess.Popen(cmd, stdin=_pin, stdout=subprocess.PIPE,
@@ -3082,17 +3135,18 @@ def _invoke_claude_once(prompt, schema, payload, wall, cwd=None):
                 env = ev
     else:
         # Same reason as the streaming path above: prompt on stdin, never argv.
-        cmd = [CLAUDE, "-p", "--json-schema", schema,
-               "--output-format", "json"] + _resume(payload) + _skill_flags(payload) + _perm_flags(payload) + _dir_flags(payload)
+        # 有圖片時輸入要用 stream-json,而它只能配 stream-json 輸出 —— 從裡面取 result 事件。
+        out_flags = ["--output-format", "stream-json", "--verbose"] if blocks else ["--output-format", "json"]
+        cmd = [CLAUDE, "-p", "--json-schema", schema] + in_flags + out_flags + _resume(payload) + _skill_flags(payload) + _perm_flags(payload) + _dir_flags(payload)
         if _model_for(payload):
             cmd += ["--model", _model_for(payload)]
-        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+        proc = subprocess.run(cmd, input=stdin_text, capture_output=True, text=True,
                               timeout=wall, cwd=cwd, env=run_env)
         if proc.returncode != 0:
             if _rate_limited(None, proc.stderr):
                 raise RateLimitError(f"claude rate-limited (exit {proc.returncode}): {proc.stderr[:500]}")
             raise RuntimeError(f"claude exit {proc.returncode}: {proc.stderr[:500]}")
-        env = json.loads(proc.stdout.strip())
+        env = _result_event(proc.stdout) if blocks else json.loads(proc.stdout.strip())
     if env.get("is_error") or env.get("api_error_status"):
         _aerr = env.get("api_error_status")
         _amsg = str(env.get("result", ""))[:300]
