@@ -9,6 +9,7 @@ aaf 的 sdlc-loop-driver-flow 每 6 小時叫一次 LoopDrive,worker 轉給這�
   B 組:取檔與執行(注入假的)—— 取不到或取到的不是驅動器就不跑;空跑不帶 --start;
         容器網址只補沒設的
   C 組:暫停檔存在 → 不取檔、不執行
+  E 組:同一時間只准一次驅動 —— 第二次回 braked、不執行;跑完 / 逾時後鎖會放開
   D 組:真的從 GitHub main 取驅動器,對本機服務空跑一次(連不到時明說沒跑,不算通過)
 
 注意:arcana-skills 沒有 CI,這支不會自動跑。
@@ -22,6 +23,10 @@ spec = importlib.util.spec_from_file_location("atn_server", os.path.join(D, "ser
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 print("  server.py import 成功(分派名單與分派鏈一致)")
+# 這台機器真的暫停中(~/.claude/sdlc-loop-paused 存在)時,每一次 loop_drive 都會先回 paused,
+# 除了 C 組以外全部假紅(2026-10-28 就這樣)。測試不該看機器當下的排程狀態 —— 指到一個不存在的路徑;
+# C 組自己會換成真的暫停檔。
+m._LOOP_PAUSE_FILE = os.path.join(tempfile.mkdtemp(), "no-such-pause-file")
 
 ok = fail = 0
 def check(label, cond):
@@ -88,6 +93,30 @@ r = m.loop_drive({}, fetch=lambda: fetched.append(1) or proc(0, DRIVER), run=run
 check("暫停檔存在 → paused,不取檔、不執行", r["verdict"] == "paused" and not fetched)
 os.unlink(pause.name)
 m._LOOP_PAUSE_FILE = orig
+
+print("E 組 —— 同一時間只准一次驅動(2026-10-28:20 個卡住的重送同時放行,對同一張單開了 20 輪)")
+import threading
+gate, entered = threading.Event(), threading.Event()
+runs = []
+def slow(argv, env):
+    runs.append(1); entered.set(); gate.wait(10)
+    return proc(0, "  → 要開的單:#774 x\n     ✓ 已開:aaaaaaaa\n")
+first = {}
+t = threading.Thread(target=lambda: first.update(m.loop_drive({}, fetch=lambda: proc(0, DRIVER), run=slow)))
+t.start(); entered.wait(5)
+second = m.loop_drive({}, fetch=lambda: proc(0, DRIVER), run=slow)
+check("第一次還在跑 → 第二次回 braked,不執行驅動器",
+      second["verdict"] == "braked" and second["started"] is False and len(runs) == 1)
+why = [l.strip() for l in second["report"].splitlines() if l.strip().startswith("✘")]
+check("braked 有一行 ✘ 說明原因(worker 記的就是這行)", bool(why) and "還在跑" in why[0])
+gate.set(); t.join(5)
+check("第一次照常跑完、開了輪", first.get("verdict") == "started" and first.get("instance") == "aaaaaaaa")
+runs.clear()
+third = m.loop_drive({}, fetch=lambda: proc(0, DRIVER), run=runner(0, "→ 沒有可開的單"))
+check("第一次結束後 → 下一次照常執行(鎖有放開)", third["verdict"] == "idle")
+r = m.loop_drive({}, fetch=lambda: proc(0, DRIVER), run=boom)
+after = m.loop_drive({}, fetch=lambda: proc(0, DRIVER), run=runner(0, "→ 沒有可開的單"))
+check("驅動器逾時之後鎖也會放開(下一次不是 braked)", r["verdict"] == "notRun" and after["verdict"] == "idle")
 
 print("D 組 —— 真的從 main 取驅動器,對本機服務空跑")
 for k, v in (("LOOP_READ_API", "http://localhost:8088"), ("LOOP_DATA_INDEX", "http://localhost:8180"),
