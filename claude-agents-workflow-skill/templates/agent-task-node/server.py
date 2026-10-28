@@ -1297,11 +1297,32 @@ def _loop_drive_verdict(rc, stdout, start):
     return "notRun", None
 
 
+# 同一時間只准一次驅動(2026-10-28)。驅動器的「一次一輪」只數**已經看得到**的回合;同時跑的兩次驅動
+# 都看不到對方剛開的那一輪(讀取模型要幾秒才跟上),於是各開一輪。那天 worker 的同一個 LoopDrive 在
+# agent 裡卡了 3.7 小時,逾時重送了 20 次,20 個請求在 09:28:17 同時放行,9 秒內對同一張單開了 20 輪。
+# 第二次以後的驅動直接回 braked(✘ 那一行就是 worker 記下的原因),不排隊、不執行。
+_LOOP_DRIVE_LOCK = threading.Lock()
+_LOOP_DRIVE_SINCE = [None]
+
+
 def loop_drive(payload, fetch=None, run=None):
     """跑一次驅動器。`fetch` / `run` 可注入(自檢用);預設是 gh 取檔、python3 執行。"""
     if os.path.exists(_LOOP_PAUSE_FILE):
         return {"verdict": "paused", "started": False, "exitCode": None,
                 "report": "排程已暫停(%s 存在);刪掉它就恢復" % _LOOP_PAUSE_FILE}
+    if not _LOOP_DRIVE_LOCK.acquire(blocking=False):
+        return {"verdict": "braked", "started": False, "exitCode": None, "instance": None, "issue": None,
+                "report": "  ✘ 一次一次驅動:上一次驅動(%s 開始)還在跑 —— 這次不開,開不開輪由那一次決定\n"
+                          % (_LOOP_DRIVE_SINCE[0] or "?"), "stderr": ""}
+    _LOOP_DRIVE_SINCE[0] = time.strftime("%H:%M:%S")
+    try:
+        return _loop_drive_once(payload, fetch, run)
+    finally:
+        _LOOP_DRIVE_SINCE[0] = None
+        _LOOP_DRIVE_LOCK.release()
+
+
+def _loop_drive_once(payload, fetch, run):
     repo = str(payload.get("repo") or os.environ.get("LOOP_REPO") or "jrjohn/arcana-ai-bpm")
     start = str(payload.get("dryRun") or _pv(payload, "dryRun") or "").strip().lower() != "true"
     fetch = fetch or (lambda: subprocess.run(
