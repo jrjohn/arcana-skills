@@ -603,7 +603,51 @@ fn distill_err_text(e: &anyhow::Error) -> String {
 
 #[cfg(feature = "pg-backend")]
 fn counts_against_row(err: &str, outage: bool) -> bool {
-    err.starts_with("timeout after") && !outage
+    // "insert:" is only ever recorded for a database-reported error (constraint,
+    // encoding) — something about THIS row's output, never a dropped connection.
+    (err.starts_with("timeout after") || err.starts_with("insert:")) && !outage
+}
+
+/// Text PG will accept. Postgres `text` rejects NUL. The model's JSON can carry the
+/// escape `\u0000` — it copies it from conversations ABOUT that escape — and serde
+/// decodes it into a real NUL. Found 2026-10-28: three such rows had failed their
+/// insert on every batch since 09-25 (~650 regenerations each, ~7% of the GPU),
+/// because a failed insert was neither stored nor counted toward the 3-strike rule.
+fn pg_text(s: &str) -> String {
+    s.replace('\u{0000}', "")
+}
+
+
+/// Count one failure against a row; tombstone it once it reaches `max_fails`.
+/// The single place this rule lives — generation timeouts and database-refused
+/// inserts both come through here. Returns true if the row was tombstoned now.
+#[cfg(feature = "pg-backend")]
+fn record_row_failure(pg: &mut postgres::Client, id: i64, err: &str, outage: bool,
+                      max_fails: i32, model: &str) -> bool {
+    if !counts_against_row(err, outage) { return false; }
+    let fails: i32 = match pg.query_one(
+        "INSERT INTO msg_distill_fail (original_id, fails, last_err, last_at) VALUES ($1, 1, $2, now()) \
+         ON CONFLICT (original_id) DO UPDATE SET fails = msg_distill_fail.fails + 1, \
+           last_err = EXCLUDED.last_err, last_at = now() RETURNING fails",
+        &[&id, &err]) {
+        Ok(r) => r.get(0),
+        Err(e) => { eprintln!("    fail-count id={} err={}", id, e); return false; }
+    };
+    if !should_tombstone(fails, max_fails) { return false; }
+    let empty_ids: Vec<String> = Vec::new();
+    let r = pg.execute(
+        "INSERT INTO msg_distilled (original_id, props, identifiers, distill_text, summary_embedding, distill_model, distill_ver) \
+         VALUES ($1, '', $2, '', NULL, $3, $4) ON CONFLICT (original_id) DO NOTHING",
+        &[&id, &empty_ids, &model, &DISTILL_VER])
+        .and_then(|_| pg.execute(
+            "UPDATE msg_distill_fail SET tombstoned = true WHERE original_id = $1", &[&id]));
+    match r {
+        Ok(_) => {
+            eprintln!("    POISON id={} failed {} times → tombstoned, won't be retried (last err: {})", id, fails, err);
+            true
+        }
+        Err(e) => { eprintln!("    poison-tombstone id={} err={}", id, e); false }
+    }
 }
 
 #[cfg(feature = "pg-backend")]
@@ -614,6 +658,22 @@ fn should_tombstone(fails: i32, max_fails: i32) -> bool {
 #[cfg(all(test, feature = "pg-backend"))]
 mod distill_tests {
     use super::*;
+
+    #[test]
+    fn nul_is_removed_before_pg() {
+        let decoded: String = serde_json::from_str(r#""寫了 \u0000 進去""#).unwrap();
+        assert!(decoded.contains('\u{0000}'), "serde really does decode the escape to NUL");
+        assert_eq!(pg_text(&decoded), "寫了  進去");
+        assert_eq!(pg_text("沒事的文字"), "沒事的文字");
+    }
+
+    #[test]
+    fn refused_insert_counts_against_the_row_but_not_during_outage() {
+        assert!(counts_against_row("insert: invalid byte sequence for encoding \"UTF8\": 0x00", false));
+        assert!(!counts_against_row("insert: anything", true));
+        assert!(counts_against_row("timeout after 120s: x", false));
+        assert!(!counts_against_row("error sending request: connection refused", false));
+    }
 
     #[test]
     fn tombstone_only_at_threshold() {
@@ -4389,7 +4449,8 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
                 eprintln!("  [chunk {}/{}  total_done={}  {:.0}s] gen id={}",
                     n, cn, total_done, t0.elapsed().as_secs_f64(), id);
                 let (props, ids) = match r {
-                    Ok(v) => v,
+                    Ok((p, i)) => (p.iter().map(|x| pg_text(x)).collect::<Vec<_>>(),
+                                   i.iter().map(|x| pg_text(x)).collect::<Vec<_>>()),
                     // Transient: leave it unrecorded so a later pass retries it.
                     // Counted in msg_distill_fail below; tombstoned after N.
                     Err(e) => {
@@ -4427,6 +4488,7 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
         // run in which nothing has succeeded yet, points at Ollama/GPU, not the
         // content — counting those would tombstone healthy rows during an outage.
         let all_failed = results.iter().all(|o| matches!(o, Outcome::Failed(..)));
+        let mut insert_failed: Vec<(i64, String)> = Vec::new();
         let outage = all_failed && results.len() > 1 && run_stored + run_empty == 0;
         for out in &results {
             match out {
@@ -4437,7 +4499,12 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
                          VALUES ($1, $2, $3, $4, '{}'::vector, $5, $6) ON CONFLICT (original_id) DO NOTHING", lit);
                     match pg.execute(&sql, &[id, props_text, ids, dt, &model, &DISTILL_VER]) {
                         Ok(_) => stored += 1,
-                        Err(e) => eprintln!("insert id={} err={}", id, e),
+                        Err(e) => {
+                            // "db error" alone hid the cause for a month; print the server's message.
+                            let detail = e.as_db_error().map(|d| d.message().to_string());
+                            eprintln!("    insert id={} err={}", id, detail.as_deref().unwrap_or(&e.to_string()));
+                            if let Some(d) = detail { insert_failed.push((*id, format!("insert: {d}"))); }
+                        }
                     }
                 }
                 Outcome::Empty(id) => {
@@ -4451,33 +4518,15 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
                     }
                 }
                 Outcome::Failed(id, err) => {
-                    if !counts_against_row(err, outage) { continue; }
-                    let fails: i32 = match pg.query_one(
-                        "INSERT INTO msg_distill_fail (original_id, fails, last_err, last_at) VALUES ($1, 1, $2, now()) \
-                         ON CONFLICT (original_id) DO UPDATE SET fails = msg_distill_fail.fails + 1, \
-                           last_err = EXCLUDED.last_err, last_at = now() RETURNING fails",
-                        &[id, err]) {
-                        Ok(r) => r.get(0),
-                        Err(e) => { eprintln!("    fail-count id={} err={}", id, e); continue; }
-                    };
-                    if !should_tombstone(fails, max_fails) { continue; }
-                    let empty_ids: Vec<String> = Vec::new();
-                    let r = pg.execute(
-                        "INSERT INTO msg_distilled (original_id, props, identifiers, distill_text, summary_embedding, distill_model, distill_ver) \
-                         VALUES ($1, '', $2, '', NULL, $3, $4) ON CONFLICT (original_id) DO NOTHING",
-                        &[id, &empty_ids, &model, &DISTILL_VER])
-                        .and_then(|_| pg.execute(
-                            "UPDATE msg_distill_fail SET tombstoned = true WHERE original_id = $1", &[id]));
-                    match r {
-                        Ok(_) => {
-                            run_poison += 1;
-                            eprintln!("    POISON id={} failed {} times → tombstoned, won't be retried (last err: {})", id, fails, err);
-                        }
-                        Err(e) => eprintln!("    poison-tombstone id={} err={}", id, e),
-                    }
+                    if record_row_failure(&mut pg, *id, err, outage, max_fails, &model) { run_poison += 1; }
                 }
             }
             if !matches!(out, Outcome::Failed(..)) { answered += 1; }
+        }
+        // A row whose output the database refuses fails the same way every time;
+        // without this it was regenerated on every batch, forever.
+        for (id, err) in &insert_failed {
+            if record_row_failure(&mut pg, *id, err, outage, max_fails, &model) { run_poison += 1; }
         }
         eprintln!("  chunk: {} distilled, {} empty (tombstoned, won't be re-selected)", stored, empties);
         run_stored += stored;
@@ -6037,8 +6086,8 @@ fn cmd_episode_missing(max_sessions: usize, days: i64, idle_hours: i64, only_ses
                 let v = verify_evidence(&ep.evidence, &source_norm);
                 let mut fields = [ep.title, ep.symptom, ep.root_cause, ep.fix, ep.outcome, ep.lesson, ep.evidence, ep.topic];
                 let mut red = false;
-                for f in fields.iter_mut() { let (m, h) = redact_secrets(f, &known); *f = m; red |= h; }
-                let ids: Vec<String> = ep.identifiers.iter().map(|x| redact_secrets(x, &known).0).take(8).collect();
+                for f in fields.iter_mut() { let (m, h) = redact_secrets(&pg_text(f), &known); *f = m; red |= h; }
+                let ids: Vec<String> = ep.identifiers.iter().map(|x| redact_secrets(&pg_text(x), &known).0).take(8).collect();
                 if red { total_redacted += 1; }
                 let [title, symptom, root_cause, fix, outcome, lesson, evidence, topic] = fields;
                 let emb_text = format!("{title}\n{symptom}\n{root_cause}\n{fix}\n{lesson}");
