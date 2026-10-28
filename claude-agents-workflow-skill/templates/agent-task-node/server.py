@@ -3034,7 +3034,9 @@ def _invoke_claude_once(prompt, schema, payload, wall, cwd=None):
             _killer.start()
             try:
                 for line in proc.stdout:
-                    cf.write(line)
+                    # The console is served by the read-API and read by people; the agent can echo
+                    # anything it sees (`env`, a config file). Mask before it lands on disk.
+                    cf.write(_redact_secrets(line))
                     cf.flush()
                     collected.append(line)
                 proc.wait(timeout=TIMEOUT)
@@ -6172,20 +6174,25 @@ def _rm_container(name):
 
 
 _SECRET_ENV = ("CLAUDE_CODE_OAUTH_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY")
+# Token SHAPES, for secrets that are not this process's env values (one the agent read from a file,
+# a second account's). GitHub: ghp_/gho_/ghu_/ghs_/ghr_ + 36, fine-grained github_pat_…; Anthropic sk-ant-….
+_SECRET_SHAPES = re.compile(r"\b(?:gh[opusr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|sk-ant-[A-Za-z0-9_-]{20,})")
 
 
 def _redact_secrets(text):
-    """`text` with this process's secret env values masked — for anything headed into a report.
+    """`text` with secrets masked — for anything headed into a report or the live console.
 
     The docker commands pass secrets by name only, so an exception's text no longer carries them;
-    this is the second layer, for whatever else might echo one (a runner's stderr tail, say).
+    this is the second layer, for whatever else might echo one (a runner's stderr tail, an agent
+    that runs `env` — 2026-10-27 a merge-flow agent did exactly that and GH_TOKEN went into the
+    console log verbatim, which the read-API serves).
     """
     out = text or ""
     for k in _SECRET_ENV:
         v = os.environ.get(k) or ""
         if len(v) >= 8:
             out = out.replace(v, "<%s redacted>" % k)
-    return out
+    return _SECRET_SHAPES.sub("<token redacted>", out)
 
 
 def _post_commit_status(repo, branch, rep):

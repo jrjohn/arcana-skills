@@ -67,6 +67,11 @@ jobs:
       - name: secret_argv_selftest.py
         run: python3 secret_argv_selftest.py
 
+      # 即時 console 寫入前遮罩祕密(2026-10-27):merge-flow 的 agent 跑了 `env | grep gh_`,
+      # GH_TOKEN 原樣寫進 console(read-API 會提供給畫面)。真的走一遍 console 路徑,含不在 env 的 token。
+      - name: console_redact_selftest.py
+        run: python3 console_redact_selftest.py
+
       # runner 逾時要把容器收掉(2026-10-22):timeout 只殺 docker CLI,容器照跑成孤兒,
       # 吃記憶體害下一個測試也逾時。test_flow 與 uiux 稽核兩處都驗。
       - name: runner_timeout_cleanup_selftest.py

@@ -95,7 +95,9 @@ docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d "${SERVICES[@]}"
 info "Waiting for health (up to ~150s)"
 ready=0
 for i in $(seq 1 50); do
-  proxy=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${DASHBOARD_PORT}/api/v1/workflows/processes" 2>/dev/null || echo 000)
+  # /definitions 刻意匿名可讀(API + DB 都要活著才 200)。不要改回 /workflows/processes ——
+  # 2026-10-27 起它要登入(arcana-ai-bpm #778),不帶憑證永遠 401,這個迴圈就永遠等不到 200。
+  proxy=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${DASHBOARD_PORT}/api/v1/definitions" 2>/dev/null || echo 000)
   if [[ "$proxy" == "200" ]]; then ready=1; break; fi
   sleep 3
 done
@@ -107,7 +109,7 @@ docker compose -f "$COMPOSE_FILE" ps
 echo
 if (( ready )); then
   green "✓ read-API reachable via dashboard proxy (http://localhost:${DASHBOARD_PORT})"
-  echo "  sample:"; curl -s "http://localhost:${DASHBOARD_PORT}/api/v1/workflows/processes" | head -c 300; echo
+  echo "  sample:"; curl -s "http://localhost:${DASHBOARD_PORT}/api/v1/definitions" | head -c 300; echo
   echo
   green "Deploy complete. Front the dashboard (127.0.0.1:${DASHBOARD_PORT}) with Authelia for external access."
 else
