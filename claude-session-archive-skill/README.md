@@ -322,6 +322,10 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.33.2 — distillations are stored in Traditional Chinese
+
+- **Simplified characters in distill output are converted to Traditional before storing** (`zhconv`, character level only — `这→這`, never a regional word swap like `内存→記憶體`; ASCII such as IPs, paths and code is untouched). Qwen is trained mostly on Simplified text: of 2,000 recent distillations of all-Traditional messages, 43 (2.2%) came back with Simplified characters mixed in, which a Traditional query cannot match.
+
 ### v1.33.1 — a row the database refuses no longer loops forever
 
 - **Distill strips NUL before writing, and a refused insert now counts toward the 3-strike rule.** Three rows whose conversations were *about* the `\u0000` escape made the model emit that escape; serde decoded it into a real NUL, and Postgres `text` rejects NUL. The insert failed, but a failed insert was neither stored nor counted, so each row was regenerated on every batch since 2026-09-25 — ~650 times each, about 7% of the GPU. `pg_text()` now cleans model output at the source (distill and episodes), and database-reported insert errors go through the same `record_row_failure()` as timeouts (a dropped connection still does not count). The log now prints the server's message instead of a bare `db error`.

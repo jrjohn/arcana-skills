@@ -617,6 +617,15 @@ fn pg_text(s: &str) -> String {
     s.replace('\u{0000}', "")
 }
 
+/// Simplified → Traditional, character level only (zh-Hant: 这→這, never
+/// 内存→記憶體). Qwen is trained mostly on Simplified text: measured 2026-11-03,
+/// 43 of 2,000 distillations of all-Traditional messages came back with
+/// Simplified characters mixed in, and a Traditional query cannot match those.
+/// ASCII (IPs, paths, code, identifiers) passes through untouched.
+fn to_traditional(s: &str) -> String {
+    zhconv::zhconv(s, zhconv::Variant::ZhHant)
+}
+
 
 /// Count one failure against a row; tombstone it once it reaches `max_fails`.
 /// The single place this rule lives — generation timeouts and database-refused
@@ -658,6 +667,15 @@ fn should_tombstone(fails: i32, max_fails: i32) -> bool {
 #[cfg(all(test, feature = "pg-backend"))]
 mod distill_tests {
     use super::*;
+
+    #[test]
+    fn simplified_becomes_traditional_and_ascii_is_untouched() {
+        assert_eq!(to_traditional("这个设定会发送到 192.168.1.10:8080"), "這個設定會發送到 192.168.1.10:8080");
+        assert_eq!(to_traditional("已經是繁體的句子"), "已經是繁體的句子");
+        assert_eq!(to_traditional("crs distill-missing --limit 40 `fn main()`"), "crs distill-missing --limit 40 `fn main()`");
+        // character level only: no regional word swaps
+        assert_eq!(to_traditional("内存"), "內存");
+    }
 
     #[test]
     fn nul_is_removed_before_pg() {
@@ -4449,8 +4467,8 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
                 eprintln!("  [chunk {}/{}  total_done={}  {:.0}s] gen id={}",
                     n, cn, total_done, t0.elapsed().as_secs_f64(), id);
                 let (props, ids) = match r {
-                    Ok((p, i)) => (p.iter().map(|x| pg_text(x)).collect::<Vec<_>>(),
-                                   i.iter().map(|x| pg_text(x)).collect::<Vec<_>>()),
+                    Ok((p, i)) => (p.iter().map(|x| to_traditional(&pg_text(x))).collect::<Vec<_>>(),
+                                   i.iter().map(|x| to_traditional(&pg_text(x))).collect::<Vec<_>>()),
                     // Transient: leave it unrecorded so a later pass retries it.
                     // Counted in msg_distill_fail below; tombstoned after N.
                     Err(e) => {
