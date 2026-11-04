@@ -1584,6 +1584,36 @@ _EVALUATOR_RULE = (
     "節點結束後映像若被換掉,會自動還原並記錄在這個節點的結果裡。\n")
 
 
+# 2026-11-03 06:51Z,進化圈 ac991299 的 implement 節點為了需求裡的「必須實跑確認」,在這個
+# 容器裡寫了一支沒進版控的 harness,用 host.docker.internal:8086 / :8081 在正式環境起了一張
+# 請假單,再直接對引擎 DELETE 收掉。10-28 一個 SA 節點的 /tmp/sa-probe.mjs 也起單、送出、撤回過。
+# 這個容器連得到的只有正式環境,而之前沒有任何一句話說不能寫。
+#
+# aaf repo 裡會寫入的閘已經 fail-closed(dashboard/e2e/lib/target-guard.mjs,位址清單與下表
+# 同源:compose 檔發布的 port 與 aaf-* 容器名)。節點**自己寫的**腳本沒有任何機制擋,只有這一條,
+# 所以它用命令句、說出代價、而且明說「靠你」(claude-md-design-skill §2 §4)。
+# 走 _invoke_claude,每一個 AI 節點(implement / SA / SD / uiux / test 生成 / pm-review /
+# root-cause / consult …)都帶著它;no_prod_writes_selftest.py 驗的是組好的提示,不是這個常數。
+# localhost:8090(agent 自己,consult 用)刻意不在表上。
+_NO_PROD_WRITES_RULE = (
+    "\n\n## 平台規則:正式環境只准讀\n"
+    "> **對下表的位址一律只准 GET**(登入 `POST /api/v1/auth/login` 除外)。\n\n"
+    "這個容器連不到任何拋棄式環境,下表全是正式環境,上面有真的使用者、真的引擎、真的 Odoo:\n\n"
+    "| 位址 | 是什麼 |\n|---|---|\n"
+    "| `host.docker.internal`、`localhost`、`127.0.0.1` 的 :8086 :8087 :8088 :8081 :8180"
+    " | 入口、PR 預覽(它的 /api 是正式 API)、API、引擎、Data Index |\n"
+    "| `aaf-*`(含 `aaf-pr-api-*`)、`arcana-cloud-rust`、`kogito-bpmn`、`data-index`、`dashboard`"
+    " | 同一組服務在 docker 網路上的名字 |\n\n"
+    "不准對上表送 POST / PUT / PATCH / DELETE,"
+    "不准起單、核准、駁回、送出、撤回、中止、刪除,也不准用瀏覽器按會做這些事的按鈕(含確認對話框的確定鈕)。"
+    "不准設任何 `*_ALLOW_TARGET` 去放行上表的位址 —— 那是給人點名拋棄式環境用的。\n"
+    "需求要求「實跑確認」而只有上表可用時:只做唯讀的部分,在你的報告寫「寫入路徑沒跑(沒有拋棄式環境)」;"
+    "不要自己寫腳本、harness 或 curl 繞過。\n"
+    "repo 裡的閘會擋寫入;你自己寫的腳本沒有任何機制擋 —— 這一條靠你。"
+    "2026-11-03 一個 implement 節點就是自己寫了 harness,在正式環境開了一張請假單又對引擎 DELETE 收掉;"
+    "那種收尾會連別人剛開的單一起刪。\n")
+
+
 def _guarded_runner(img):
     """AI 節點的前後守衛。回 (before_id, guard_tag, gen) 給 _restore_runner 用。"""
     before = _runner_image_id(img)
@@ -3353,7 +3383,8 @@ def _invoke_claude(prompt, schema, payload, wall, cwd=None):
     guard = _guarded_runner(img)
     out = None
     try:
-        out = _invoke_claude_core(prompt + _EVALUATOR_RULE, schema, payload, wall, cwd)
+        out = _invoke_claude_core(prompt + _EVALUATOR_RULE + _NO_PROD_WRITES_RULE,
+                                  schema, payload, wall, cwd)
     finally:
         tamper = _restore_runner(img, *guard)
         if tamper and isinstance(out, dict):
