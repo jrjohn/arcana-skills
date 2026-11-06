@@ -322,6 +322,10 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.34.0 — new rows with the 7B model, the backlog with 3B
+
+- **The distill loop can alternate two models** (`CRS_DISTILL_SMALL_MODEL=qwen2.5:3b`): one batch of rows from the last `CRS_DISTILL_SPLIT_DAYS` days (default 14) with the main model, then one batch of older rows with the small one. On the Mac mini M4 the 7B model only just kept pace with new rows (~5,300/day vs ~4,800 arriving), so a 42K backlog would never clear. Measured on 100 real messages: 3B is ~3x faster (8.9s vs 26.8s) but less faithful (similarity to the source 0.833 vs 0.886, identifiers copied 84% vs 88%), so it only gets rows search mostly reaches through episodes and raw text. `distill_model` records which model wrote each row. Qwen3 4B (2507) and Qwen3.5 4B were tested too and rejected: no faster than 7B on this machine (40.6s, 28.1s), and Qwen3 4B copied the prompt's rules into 14% of its output.
+
 ### v1.33.2 — distillations are stored in Traditional Chinese
 
 - **Simplified characters in distill output are converted to Traditional before storing** (`zhconv`, character level only — `这→這`, never a regional word swap like `内存→記憶體`; ASCII such as IPs, paths and code is untouched). Qwen is trained mostly on Simplified text: of 2,000 recent distillations of all-Traditional messages, 43 (2.2%) came back with Simplified characters mixed in, which a Traditional query cannot match.

@@ -12,6 +12,12 @@
 #                 CRS_DISTILL_WORKERS        parallel generations      (default 2)
 #                 CRS_DISTILL_WATCHDOG       max seconds per batch     (default 1800)
 #                 CRS_DISTILL_PROJECT_PREFIX only distill these projects (default: all)
+#                 CRS_DISTILL_SMALL_MODEL    if set (e.g. qwen2.5:3b): alternate one batch of
+#                                            rows from the last CRS_DISTILL_SPLIT_DAYS days
+#                                            (default 14) with the main model, then one batch
+#                                            of older rows with this smaller, ~3x faster model
+#                                            (measured 2026-11-03 on the M4; less faithful,
+#                                            so it only gets the backlog)
 # Pause entirely: launchctl unload ~/Library/LaunchAgents/com.jrjohn.crs-distill.plist
 #
 # ── 2026-09-24: why the watchdog, the timestamps and the "0 pending" fix ──────
@@ -60,13 +66,19 @@ trap 'rm -rf "$LOCK" 2>/dev/null' EXIT
 STATE="$HOME/claude-archive/distill-backfill.state"
 
 echo "=== $(date '+%F %T') distill-backfill CONTINUOUS (batch=$BATCH gap=${GAP}s watchdog=${WATCHDOG}s prefix=${CRS_DISTILL_PROJECT_PREFIX:-all}) ==="
+phase=new; empty_new=0; empty_old=0
 while true; do
+  PHASE_ENV=()
+  if [ -n "${CRS_DISTILL_SMALL_MODEL:-}" ]; then
+    if [ "$phase" = new ]; then PHASE_ENV=(CRS_DISTILL_AGE=new)
+    else PHASE_ENV=(CRS_DISTILL_AGE=old "CRS_DISTILL_MODEL=$CRS_DISTILL_SMALL_MODEL"); fi
+  fi
   curl -s --max-time 4 http://localhost:11434/api/tags >/dev/null 2>&1 \
     || { echo "$(date '+%F %T') ollama down, exit (launchd KeepAlive will relaunch)"; exit 0; }
 
   # macOS ships no `timeout`; perl's alarm survives exec, so SIGALRM lands on crs
   # itself and terminates it (exit 142 = 128 + SIGALRM).
-  out=$(perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$WATCHDOG" \
+  out=$(env ${PHASE_ENV[@]+"${PHASE_ENV[@]}"} perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$WATCHDOG" \
         "$CRS" distill-missing --limit "$BATCH" --workers "${CRS_DISTILL_WORKERS:-2}" \
         ${PREFIX_ARG[@]+"${PREFIX_ARG[@]}"} 2>&1)
   rc=$?
@@ -77,11 +89,21 @@ while true; do
   if [ "$rc" -eq 142 ]; then
     echo "$(date '+%F %T') ⏱ WATCHDOG killed batch after ${WATCHDOG}s (pending=${pending:-?}) — something stalled; next batch starts fresh"
   else
-    echo "$(date '+%F %T') rc=$rc pending=${pending:-?} errs=$errs | ${summary:-(no done line)}"
+    echo "$(date '+%F %T') rc=$rc ${CRS_DISTILL_SMALL_MODEL:+[$phase] }pending=${pending:-?} errs=$errs | ${summary:-(no done line)}"
   fi
   # Surface errors instead of filtering them out: an insert that fails every row
   # used to leave only "done. distilled 40 rows" in this log.
   [ "$errs" -gt 0 ] && printf '%s\n' "$out" | grep 'err=' | head -3 | sed 's/^/    /'
+
+  # Split mode: switch phase each batch; idle only when BOTH queues are empty.
+  if [ -n "${CRS_DISTILL_SMALL_MODEL:-}" ]; then
+    if [ "${pending:-x}" = "0" ]; then eval "empty_$phase=1"; else eval "empty_$phase=0"; fi
+    if [ "$empty_new" = 1 ] && [ "$empty_old" = 1 ]; then
+      echo "$(date '+%F %T') both queues empty — idle 10 min"; sleep 600; empty_new=0; empty_old=0
+    fi
+    [ "$phase" = new ] && phase=old || phase=new
+    sleep "$GAP"; continue
+  fi
 
   # --- milestone markers (every 10k 📍, every 50k 🎯) ---
   if [ -n "${pending:-}" ]; then

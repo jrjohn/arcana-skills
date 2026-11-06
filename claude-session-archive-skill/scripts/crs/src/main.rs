@@ -660,6 +660,16 @@ fn record_row_failure(pg: &mut postgres::Client, id: i64, err: &str, outage: boo
 }
 
 #[cfg(feature = "pg-backend")]
+fn distill_age_clause() -> String {
+    let days = env_u64("CRS_DISTILL_SPLIT_DAYS", 14);
+    match std::env::var("CRS_DISTILL_AGE").as_deref() {
+        Ok("new") => format!(" AND ts >= now() - interval '{days} days'"),
+        Ok("old") => format!(" AND ts < now() - interval '{days} days'"),
+        _ => String::new(),
+    }
+}
+
+#[cfg(feature = "pg-backend")]
 fn should_tombstone(fails: i32, max_fails: i32) -> bool {
     fails >= max_fails
 }
@@ -4389,6 +4399,13 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
     use std::collections::HashSet;
 
     let (prefix_clause, prefix_binds) = project_prefix_filter_pg(project_prefix.as_deref(), 1);
+    // Age split (v1.33.3): CRS_DISTILL_AGE=new → only rows from the last
+    // CRS_DISTILL_SPLIT_DAYS days; old → only rows before that. distill-backfill.sh
+    // alternates a 7B batch on new rows with a 3B batch on the backlog: measured
+    // 2026-11-03 on the M4, 3B is ~3x faster but less faithful (similarity to the
+    // source 0.833 vs 0.886), so the small model only gets rows search reaches
+    // mostly through episodes and raw text. distill_model records which ran.
+    let prefix_clause = format!("{}{}", prefix_clause, distill_age_clause());
     let model = distill_model();
 
     // Scale context: how many rows still lack a distilled entry.
