@@ -617,6 +617,15 @@ fn pg_text(s: &str) -> String {
     s.replace('\u{0000}', "")
 }
 
+/// Simplified → Traditional, character level only (zh-Hant: 这→這, never
+/// 内存→記憶體). Qwen is trained mostly on Simplified text: measured 2026-11-03,
+/// 43 of 2,000 distillations of all-Traditional messages came back with
+/// Simplified characters mixed in, and a Traditional query cannot match those.
+/// ASCII (IPs, paths, code, identifiers) passes through untouched.
+fn to_traditional(s: &str) -> String {
+    zhconv::zhconv(s, zhconv::Variant::ZhHant)
+}
+
 
 /// Count one failure against a row; tombstone it once it reaches `max_fails`.
 /// The single place this rule lives — generation timeouts and database-refused
@@ -651,6 +660,16 @@ fn record_row_failure(pg: &mut postgres::Client, id: i64, err: &str, outage: boo
 }
 
 #[cfg(feature = "pg-backend")]
+fn distill_age_clause() -> String {
+    let days = env_u64("CRS_DISTILL_SPLIT_DAYS", 14);
+    match std::env::var("CRS_DISTILL_AGE").as_deref() {
+        Ok("new") => format!(" AND ts >= now() - interval '{days} days'"),
+        Ok("old") => format!(" AND ts < now() - interval '{days} days'"),
+        _ => String::new(),
+    }
+}
+
+#[cfg(feature = "pg-backend")]
 fn should_tombstone(fails: i32, max_fails: i32) -> bool {
     fails >= max_fails
 }
@@ -658,6 +677,15 @@ fn should_tombstone(fails: i32, max_fails: i32) -> bool {
 #[cfg(all(test, feature = "pg-backend"))]
 mod distill_tests {
     use super::*;
+
+    #[test]
+    fn simplified_becomes_traditional_and_ascii_is_untouched() {
+        assert_eq!(to_traditional("这个设定会发送到 192.168.1.10:8080"), "這個設定會發送到 192.168.1.10:8080");
+        assert_eq!(to_traditional("已經是繁體的句子"), "已經是繁體的句子");
+        assert_eq!(to_traditional("crs distill-missing --limit 40 `fn main()`"), "crs distill-missing --limit 40 `fn main()`");
+        // character level only: no regional word swaps
+        assert_eq!(to_traditional("内存"), "內存");
+    }
 
     #[test]
     fn nul_is_removed_before_pg() {
@@ -4371,6 +4399,13 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
     use std::collections::HashSet;
 
     let (prefix_clause, prefix_binds) = project_prefix_filter_pg(project_prefix.as_deref(), 1);
+    // Age split (v1.33.3): CRS_DISTILL_AGE=new → only rows from the last
+    // CRS_DISTILL_SPLIT_DAYS days; old → only rows before that. distill-backfill.sh
+    // alternates a 7B batch on new rows with a 3B batch on the backlog: measured
+    // 2026-11-03 on the M4, 3B is ~3x faster but less faithful (similarity to the
+    // source 0.833 vs 0.886), so the small model only gets rows search reaches
+    // mostly through episodes and raw text. distill_model records which ran.
+    let prefix_clause = format!("{}{}", prefix_clause, distill_age_clause());
     let model = distill_model();
 
     // Scale context: how many rows still lack a distilled entry.
@@ -4449,8 +4484,8 @@ fn cmd_distill_missing(workers: usize, limit: usize, project_prefix: Option<Stri
                 eprintln!("  [chunk {}/{}  total_done={}  {:.0}s] gen id={}",
                     n, cn, total_done, t0.elapsed().as_secs_f64(), id);
                 let (props, ids) = match r {
-                    Ok((p, i)) => (p.iter().map(|x| pg_text(x)).collect::<Vec<_>>(),
-                                   i.iter().map(|x| pg_text(x)).collect::<Vec<_>>()),
+                    Ok((p, i)) => (p.iter().map(|x| to_traditional(&pg_text(x))).collect::<Vec<_>>(),
+                                   i.iter().map(|x| to_traditional(&pg_text(x))).collect::<Vec<_>>()),
                     // Transient: leave it unrecorded so a later pass retries it.
                     // Counted in msg_distill_fail below; tombstoned after N.
                     Err(e) => {
