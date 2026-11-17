@@ -1794,42 +1794,62 @@ fn cmd_embed_missing_direct(workers: usize, limit: usize, project_prefix: Option
         println!("nothing to embed (prefix={:?})", project_prefix);
         return Ok(());
     }
-    let limit_clause = if limit > 0 { format!("LIMIT {}", limit) } else { String::new() };
-    let select_sql = format!(
-        concat!("SELECT id, content FROM msg WHERE embedding IS NULL AND length(content) >= 5 AND ",
-                searchable_roles_sql!(), "{} ORDER BY id DESC {}"),
-        prefix_clause, limit_clause
-    );
-    let rows = pg.query(&select_sql, &prefix_params[..])?;
-    let jobs: Vec<(i64, String)> = rows.iter().map(|r| (r.get(0), r.get(1))).collect();
-    drop(pg); // ← no connection held during the embed phase
-
-    println!("embed-missing (direct): {} jobs over {} workers", jobs.len(), workers);
+    drop(pg);
+    // Chunked and resumable (v1.34.1, 2026-11-17). Before this, one SELECT pulled
+    // EVERY pending row with its content, then embedded all of them, then wrote.
+    // Once the backlog passed ~50K rows (busy days 11-11/12) the SELECT alone
+    // exceeded the 30s statement timeout, so embedding was skipped entirely on most
+    // runs; on runs where it did succeed, ~7h of work ran before the first write and
+    // the 45-min build watchdog killed it with nothing saved. The backlog then only
+    // grew: 57,977 rows without a vector in 10 days, invisible to meaning search.
+    // Now: keyset pages of CHUNK rows (id below the last page, newest first — so a
+    // row whose embed fails is not re-selected forever), each page written before
+    // the next is read, and the whole run stops at a time budget so the build
+    // finishes and the next one continues.
+    let chunk = env_u64("CRS_EMBED_CHUNK", 200) as i64;
+    let budget = std::time::Duration::from_secs(env_u64("CRS_EMBED_BUDGET_SECS", 1500));
+    let t0 = std::time::Instant::now();
+    let mut cursor: i64 = i64::MAX;
+    let mut updated = 0usize;
+    let mut seen = 0usize;
+    println!("embed-missing (direct): {} pending, chunks of {}, budget {:?}", pending, chunk, budget);
     use rayon::prelude::*;
     let pool = rayon::ThreadPoolBuilder::new().num_threads(workers).build()?;
-    let results: Vec<(i64, Vec<f32>)> = pool.install(|| {
-        jobs.par_iter().filter_map(|(id, content)| {
-            let client = http_client().ok()?;
-            let snippet: String = content.chars().take(8000).collect();
-            match embed_text(&client, &snippet) {
-                Ok(v) => Some((*id, v)),
-                Err(e) => { eprintln!("embed id={} err={}", id, e); None }
+    loop {
+        if limit > 0 && seen >= limit { break; }
+        if t0.elapsed() >= budget { println!("  time budget reached; next run continues"); break; }
+        let take = if limit > 0 { chunk.min((limit - seen) as i64) } else { chunk };
+        let select_sql = format!(
+            concat!("SELECT id, content FROM msg WHERE embedding IS NULL AND length(content) >= 5 AND ",
+                    searchable_roles_sql!(), "{} AND id < {} ORDER BY id DESC LIMIT {}"),
+            prefix_clause, cursor, take
+        );
+        let mut pg = AsyncPg::connect()?;
+        let rows = pg.query(&select_sql, &prefix_params[..])?;
+        drop(pg);
+        let jobs: Vec<(i64, String)> = rows.iter().map(|r| (r.get(0), r.get(1))).collect();
+        if jobs.is_empty() { break; }
+        cursor = jobs.iter().map(|j| j.0).min().unwrap_or(cursor);
+        seen += jobs.len();
+        let results: Vec<(i64, Vec<f32>)> = pool.install(|| {
+            jobs.par_iter().filter_map(|(id, content)| {
+                let client = http_client().ok()?;
+                let snippet: String = content.chars().take(8000).collect();
+                match embed_text(&client, &snippet) {
+                    Ok(v) => Some((*id, v)),
+                    Err(e) => { eprintln!("embed id={} err={}", id, e); None }
+                }
+            }).collect()
+        });
+        const UPD_BATCH: usize = 100;
+        let mut pg = AsyncPg::connect()?;
+        for batch in results.chunks(UPD_BATCH) {
+            match pg.update_embeddings(batch) {
+                Ok(()) => updated += batch.len(),
+                Err(e) => eprintln!("update batch err={}", e),
             }
-        }).collect()
-    });
-
-    // Batch UPDATE through AsyncPg (each batch one timed tx with reconnect-retry).
-    // No connection is held during the rayon embed phase above; we open a fresh one
-    // here only for the writes.
-    const UPD_BATCH: usize = 100;
-    let mut pg = AsyncPg::connect()?;
-    let mut updated = 0usize;
-    for batch in results.chunks(UPD_BATCH) {
-        if let Err(e) = pg.update_embeddings(batch) {
-            eprintln!("update batch err={}", e);
         }
-        updated += batch.len();
-        println!("  updated {}/{}", updated, results.len());
+        println!("  updated {} so far ({} seen, {:.0}s)", updated, seen, t0.elapsed().as_secs_f64());
     }
     println!("done. updated {} rows.", updated);
     Ok(())

@@ -322,6 +322,10 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.34.1 — embedding can no longer stall on its own backlog
+
+- **`embed-missing` works in pages of 200, writes each page before reading the next, and stops at a time budget** (`CRS_EMBED_CHUNK`, `CRS_EMBED_BUDGET_SECS`, default 1500s). It used to select every pending row with its content in one query, embed them all, then write. Once the backlog passed ~50K rows the select exceeded the 30s statement timeout and the step was skipped; when it did succeed, hours of work ran before the first write and the 45-min build watchdog killed it with nothing saved. Found 2026-11-17 with 57,977 rows (two-thirds of ten days' messages) invisible to meaning search and the count unchanged across two runs. Pages are keyset (`id` below the last page) so a row that fails to embed is not re-selected forever.
+
 ### v1.34.0 — new rows with the 7B model, the backlog with 3B
 
 - **The distill loop can alternate two models** (`CRS_DISTILL_SMALL_MODEL=qwen2.5:3b`): one batch of rows from the last `CRS_DISTILL_SPLIT_DAYS` days (default 14) with the main model, then one batch of older rows with the small one. On the Mac mini M4 the 7B model only just kept pace with new rows (~5,300/day vs ~4,800 arriving), so a 42K backlog would never clear. Measured on 100 real messages: 3B is ~3x faster (8.9s vs 26.8s) but less faithful (similarity to the source 0.833 vs 0.886, identifiers copied 84% vs 88%), so it only gets rows search mostly reaches through episodes and raw text. `distill_model` records which model wrote each row. Qwen3 4B (2507) and Qwen3.5 4B were tested too and rejected: no faster than 7B on this machine (40.6s, 28.1s), and Qwen3 4B copied the prompt's rules into 14% of its output.
