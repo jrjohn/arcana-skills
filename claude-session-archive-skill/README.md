@@ -322,6 +322,15 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.35.0 — every uploaded row records which Claude account sent it
+
+`msg` gains `claude_email` and `claude_org`, read from the uploader's `~/.claude.json`
+and passed as connect-time settings that the column defaults pick up — so the three
+INSERT paths needed no change, and an instance without the columns is unaffected.
+Lets an operator match the archive against Claude's own per-session telemetry
+(OpenTelemetry `session.id` + `user.email`) to find sessions that were never uploaded.
+Self-reported by the client: for lookup, not proof. Schema steps in references/pg-backend.md.
+
 ### v1.34.2 — Windows sync works on per-employee instances, and the Windows build compiles again
 
 - **`crs build` on Windows no longer issues `CREATE TABLE` when `ingest_state` already exists.** Postgres checks the schema CREATE privilege before it evaluates `IF NOT EXISTS`, so on an instance where employee roles have INSERT/UPDATE on `ingest_state` but no CREATE on `public` (by design), every Windows sync failed with `permission denied for schema public` while the same account synced fine from a Mac — the unix path never issued that DDL. Reproduced and verified on the real instance under a role with the same grants.
