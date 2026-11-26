@@ -322,6 +322,11 @@ Most of the 2026-05-04 v1.7.3 audit roadmap shipped in v1.8.0–v1.13.0. What's 
 
 ## What's new
 
+### v1.34.2 — Windows sync works on per-employee instances, and the Windows build compiles again
+
+- **`crs build` on Windows no longer issues `CREATE TABLE` when `ingest_state` already exists.** Postgres checks the schema CREATE privilege before it evaluates `IF NOT EXISTS`, so on an instance where employee roles have INSERT/UPDATE on `ingest_state` but no CREATE on `public` (by design), every Windows sync failed with `permission denied for schema public` while the same account synced fine from a Mac — the unix path never issued that DDL. Reproduced and verified on the real instance under a role with the same grants.
+- **The Windows target compiled on no recent commit**: `rows_to_json` was gated to unix but called from shared code. Now built and checked with `--target x86_64-pc-windows-gnu`.
+
 ### v1.34.1 — embedding can no longer stall on its own backlog
 
 - **`embed-missing` works in pages of 200, writes each page before reading the next, and stops at a time budget** (`CRS_EMBED_CHUNK`, `CRS_EMBED_BUDGET_SECS`, default 1500s). It used to select every pending row with its content in one query, embed them all, then write. Once the backlog passed ~50K rows the select exceeded the 30s statement timeout and the step was skipped; when it did succeed, hours of work ran before the first write and the 45-min build watchdog killed it with nothing saved. Found 2026-11-17 with 57,977 rows (two-thirds of ten days' messages) invisible to meaning search and the count unchanged across two runs. Pages are keyset (`id` below the last page) so a row that fails to embed is not re-selected forever.

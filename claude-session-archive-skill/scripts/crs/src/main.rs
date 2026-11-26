@@ -1863,13 +1863,22 @@ fn cmd_build(no_embed: bool, no_refresh: bool, workers: usize, project_prefix: O
     fs::create_dir_all(&archive)?;
 
     let mut pg = pg_connect()?;
-    pg.batch_execute(
-        "CREATE TABLE IF NOT EXISTS ingest_state (
-            file_path TEXT PRIMARY KEY,
-            mtime DOUBLE PRECISION NOT NULL,
-            lines BIGINT NOT NULL
-        );",
-    )?;
+    // Create only when missing (2026-11-26). Postgres checks the CREATE privilege on
+    // the schema BEFORE it looks at IF NOT EXISTS, so on a per-employee instance
+    // (.204: roles get INSERT/UPDATE on ingest_state but no CREATE on public, by
+    // design) every Windows sync failed with "permission denied for schema public"
+    // although the table was already there. The unix path never issued this DDL,
+    // which is why the same account synced fine from a Mac.
+    let exists: bool = pg.query_one("SELECT to_regclass('ingest_state') IS NOT NULL", &[])?.get(0);
+    if !exists {
+        pg.batch_execute(
+            "CREATE TABLE IF NOT EXISTS ingest_state (
+                file_path TEXT PRIMARY KEY,
+                mtime DOUBLE PRECISION NOT NULL,
+                lines BIGINT NOT NULL
+            );",
+        )?;
+    }
 
     let files = collect_jsonl_files()?;
     let mut total_new = 0usize;
@@ -3923,7 +3932,7 @@ fn build_pool(size: u32) -> Result<PgPool> {
         .build(mgr)?)
 }
 
-#[cfg(all(feature = "pg-backend", unix))]
+#[cfg(feature = "pg-backend")]
 fn rows_to_json(rows: &[PgRow]) -> Vec<serde_json::Value> {
     rows.iter().map(|r| serde_json::json!({
         "id": r.id,
