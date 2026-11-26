@@ -3335,7 +3335,7 @@ const PG_VEC_DIM: usize = 1024;
 fn pg_config_url() -> Result<String> {
     if let Ok(url) = env::var("CRS_PG_URL") {
         if !url.is_empty() {
-            return Ok(url);
+            return Ok(with_account_options(url));
         }
     }
     let host = env::var("CRS_PG_HOST").unwrap_or_else(|_| "localhost".to_string());
@@ -3345,9 +3345,58 @@ fn pg_config_url() -> Result<String> {
         anyhow!("CRS_PG_PASSWORD env var required (or set CRS_PG_URL). See references/pg-backend.md")
     })?;
     let db = env::var("CRS_PG_DB").unwrap_or_else(|_| "archive_main".to_string());
-    Ok(format!(
+    Ok(with_account_options(format!(
         "host={host} port={port} user={user} password={pass} dbname={db} sslmode=require"
-    ))
+    )))
+}
+
+/// The Claude account this machine is logged in as (`~/.claude.json` →
+/// `oauthAccount.emailAddress` / `organizationUuid`). Sent as session settings
+/// `crs.claude_email` / `crs.claude_org` at connect time; `msg` columns
+/// `claude_email` / `claude_org` default to them, so every INSERT path (direct,
+/// async batch, daemon RPC) is tagged without touching the INSERTs. A DB without
+/// those columns simply ignores the settings. Self-reported by the client, so it
+/// is for lookup and catching mistakes, not proof of identity.
+#[cfg(feature = "pg-backend")]
+fn claude_account() -> (Option<String>, Option<String>) {
+    let path = env::var("CLAUDE_CONFIG_DIR").ok().filter(|d| !d.is_empty())
+        .map(|d| PathBuf::from(d).join(".claude.json"))
+        .or_else(|| dirs::home_dir().map(|h| h.join(".claude.json")));
+    let Some(text) = path.and_then(|p| fs::read_to_string(p).ok()) else { return (None, None) };
+    parse_claude_account(&text)
+}
+
+#[cfg(feature = "pg-backend")]
+fn parse_claude_account(text: &str) -> (Option<String>, Option<String>) {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(text) else { return (None, None) };
+    let acct = &v["oauthAccount"];
+    let get = |k: &str| acct.get(k).and_then(|x| x.as_str()).map(str::to_string).filter(|s| safe_option_value(s));
+    (get("emailAddress"), get("organizationUuid"))
+}
+
+/// Only characters that need no escaping inside libpq `options='-c k=v'`.
+#[cfg(feature = "pg-backend")]
+fn safe_option_value(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 200
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || "@._+-".contains(c))
+}
+
+#[cfg(feature = "pg-backend")]
+fn with_account_options(url: String) -> String {
+    if env::var("CRS_NO_ACCOUNT_TAG").is_ok_and(|v| !v.is_empty()) { return url; }
+    let (email, org) = claude_account();
+    account_options_url(url, email.as_deref(), org.as_deref())
+}
+
+#[cfg(feature = "pg-backend")]
+fn account_options_url(url: String, email: Option<&str>, org: Option<&str>) -> String {
+    // A caller-supplied options= wins; a second one would silently replace it.
+    if url.contains("options=") { return url; }
+    let mut opts = Vec::new();
+    if let Some(e) = email.filter(|s| safe_option_value(s)) { opts.push(format!("-c crs.claude_email={e}")); }
+    if let Some(o) = org.filter(|s| safe_option_value(s)) { opts.push(format!("-c crs.claude_org={o}")); }
+    if opts.is_empty() { return url; }
+    format!("{url} options='{}'", opts.join(" "))
 }
 
 #[cfg(feature = "pg-backend")]
@@ -6343,5 +6392,40 @@ fn main() -> Result<()> {
         Cmd::Pgsearch { query, fts, vec, hybrid, limit, json, no_daemon, no_img } => cmd_pgsearch(&query, fts, vec, hybrid, limit, json, no_daemon, no_img),
         #[cfg(all(feature = "pg-backend", unix))]
         Cmd::Pgsearchd { pool_size, foreground: _ } => cmd_pgsearchd(pool_size),
+    }
+}
+
+#[cfg(all(test, feature = "pg-backend"))]
+mod account_tag_tests {
+    use super::*;
+
+    #[test]
+    fn reads_email_and_org_from_claude_json() {
+        let j = r#"{"oauthAccount":{"emailAddress":"amy@example.com","organizationUuid":"0f1e2d3c-aaaa-bbbb-cccc-1234567890ab"}}"#;
+        assert_eq!(parse_claude_account(j),
+            (Some("amy@example.com".into()), Some("0f1e2d3c-aaaa-bbbb-cccc-1234567890ab".into())));
+    }
+
+    #[test]
+    fn missing_or_broken_file_gives_nothing() {
+        assert_eq!(parse_claude_account("{}"), (None, None));
+        assert_eq!(parse_claude_account("not json"), (None, None));
+    }
+
+    #[test]
+    fn value_that_could_break_out_of_options_is_dropped() {
+        let j = r#"{"oauthAccount":{"emailAddress":"x' sslmode=disable","organizationUuid":"a b"}}"#;
+        assert_eq!(parse_claude_account(j), (None, None));
+        let url = account_options_url("host=h".into(), Some("x' -c role=archive"), None);
+        assert_eq!(url, "host=h");
+    }
+
+    #[test]
+    fn appends_options_once_and_respects_existing() {
+        let u = account_options_url("host=h".into(), Some("amy@example.com"), Some("org-1"));
+        assert_eq!(u, "host=h options='-c crs.claude_email=amy@example.com -c crs.claude_org=org-1'");
+        let keep = account_options_url("host=h options='-c x=1'".into(), Some("amy@example.com"), None);
+        assert_eq!(keep, "host=h options='-c x=1'");
+        assert_eq!(account_options_url("host=h".into(), None, None), "host=h");
     }
 }

@@ -115,6 +115,8 @@ CREATE TABLE msg (
     content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('simple', COALESCE(content,''))) STORED,
     embedding   vector(1024),     -- bge-m3
     importance  SMALLINT,         -- 0-4, since v1.31.0; NULL = not scored yet
+    claude_email TEXT DEFAULT NULLIF(current_setting('crs.claude_email', true), ''),  -- v1.35.0
+    claude_org   TEXT DEFAULT NULLIF(current_setting('crs.claude_org', true), ''),    -- v1.35.0
     UNIQUE (session_id, seq)
 );
 CREATE INDEX msg_ts_idx       ON msg (ts);
@@ -123,6 +125,20 @@ CREATE INDEX msg_tool_idx     ON msg (tool_name);
 CREATE INDEX msg_tsv_idx      ON msg USING GIN  (content_tsv);
 CREATE INDEX msg_emb_idx      ON msg USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX msg_importance_null ON msg (id) WHERE importance IS NULL;
+
+-- claude_email / claude_org (v1.35.0): which Claude account uploaded the row.
+-- crs reads ~/.claude.json (oauthAccount.emailAddress / organizationUuid) and sends
+-- them as connect-time settings (libpq options '-c crs.claude_email=…'); the column
+-- DEFAULTs pick them up, so all three INSERT sites are tagged with no SQL change.
+-- An instance without these columns ignores the settings. Existing instances:
+--   ALTER TABLE msg ADD COLUMN IF NOT EXISTS claude_email text;
+--   ALTER TABLE msg ADD COLUMN IF NOT EXISTS claude_org text;
+--   ALTER TABLE msg ALTER COLUMN claude_email SET DEFAULT NULLIF(current_setting('crs.claude_email', true), '');
+--   ALTER TABLE msg ALTER COLUMN claude_org   SET DEFAULT NULLIF(current_setting('crs.claude_org', true), '');
+-- (ADD without default, then SET DEFAULT: old rows stay NULL, no table rewrite.)
+-- Client-reported, so it is for lookup and catching mistakes, not proof of identity.
+-- CRS_NO_ACCOUNT_TAG=1 turns it off. On the Mac the build goes through pgsearchd,
+-- so the DAEMON's ~/.claude.json is what gets recorded: restart it after upgrading.
 
 -- importance (v1.31.0). Filled by `crs importance-backfill`, NOT at ingest: there
 -- are three separate INSERT INTO msg sites and the rule must live in exactly one
